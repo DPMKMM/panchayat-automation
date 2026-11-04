@@ -1,24 +1,38 @@
 """
 Exact Automated Pipeline for e-Panchayat DSR Report
 Downloads in sequence:
-  1. GM-R 1.2.7 DSR Raw Data Report -> Saved as-is with original filename
-  2. Select GP Monitoring -> GM-R 1.2.11 Report on Presenties Data -> Saved as-is with original filename
-  3. Select GP Monitoring -> GM-R 1.2.10 Report on Absentees Data -> Saved as-is with original filename
+  1. GM-R 1.2.7 DSR Raw Data Report
+  2. Select GP Monitoring -> GM-R 1.2.11 Report on Presenties Data
+  3. Select GP Monitoring -> GM-R 1.2.10 Report on Absentees Data
 And prepares report using newly downloaded files ONLY (no saved/bundled files, no renaming).
+Raw portal workbooks are read into memory and are not saved in the project tree.
 """
 
 import os
-import sys
 import time
 import shutil
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Callable, Optional
 
-from epts_automation import EPTSAutomation, BASE_DIR, DOWNLOADS_DIR, OTP_FILE
+from .epts_automation import EPTSAutomation, RUNTIME_DIR, DOWNLOADS_DIR, OTP_FILE
+from .report_generator import process_attendance_file, generate_pdf
+from shared.paths import REPORTS_DIR
 
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-REPORTS_SCREENSHOT = BASE_DIR / "enlarged_reports.png"
+REPORTS_SCREENSHOT = RUNTIME_DIR / "enlarged_reports.png"
 MENU_URL = "https://tgprepanchayat.telangana.gov.in/PSPerformance/DynamicReportsMenu2Array"
+
+
+@dataclass(frozen=True)
+class DownloadedReport:
+    filename: str
+    contents: bytes
+
+    @property
+    def name(self) -> str:
+        return self.filename
 
 
 def get_my_iframe(page):
@@ -44,7 +58,12 @@ def format_portal_date(date_val: str) -> str:
     return clean
 
 
-def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
+def download_single_report_with_menu(
+    bot,
+    code: str,
+    target_date: str,
+    on_remark: Optional[Callable[[str], None]] = None,
+) -> Optional[DownloadedReport]:
     """
     Downloads a single report from e-Panchayat portal:
     1. Selects 'GP Monitoring' from the top navigation to load/reset the reports iframe.
@@ -57,9 +76,21 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
     page = bot.page
     date_formatted = format_portal_date(target_date)
 
+    portal_dialog_messages: list[str] = []
+
+    def emit_remark(message: str) -> None:
+        print(message, flush=True)
+        if on_remark:
+            try:
+                on_remark(message)
+            except Exception:
+                pass
+
     # Automatically dismiss any alert dialogs from portal so they don't block
     def on_dialog(dialog):
-        print(f"[!] Portal alert dialog: '{dialog.message}' - accepting...", flush=True)
+        msg = (dialog.message or "").strip()
+        emit_remark(f"[!] Portal alert dialog: '{msg}' - accepting...")
+        portal_dialog_messages.append(msg)
         try:
             dialog.accept()
         except Exception:
@@ -67,8 +98,8 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
 
     page.on("dialog", on_dialog)
 
-    print(f"\n[*] Re-selecting 'GP Monitoring' from top menu for report {code}...", flush=True)
-    bot.select_menu("GP Monitoring")
+    emit_remark(f"[*] Re-selecting 'GP Monitoring' from top menu for report {code}...")
+    bot.select_menu("GP Monitoring", on_remark=on_remark)
     time.sleep(2.5)
 
     iframe = get_my_iframe(page)
@@ -84,27 +115,27 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
         pass
 
     # Click 'Enlarge All' to expand all folders
-    print("[*] Clicking 'Enlarge All'...", flush=True)
+    emit_remark("[*] Clicking 'Enlarge All'...")
     try:
         enlarge_btn = iframe.locator("text='Enlarge All'").first
         if enlarge_btn.is_visible(timeout=3000):
             enlarge_btn.click()
             time.sleep(1)
     except Exception as e:
-        print(f"[-] Note on Enlarge All: {e}", flush=True)
+        emit_remark(f"[-] Note on Enlarge All: {e}")
 
     # Expand 'DSR REPORTS' section
-    print("[*] Expanding 'DSR REPORTS'...", flush=True)
+    emit_remark("[*] Expanding 'DSR REPORTS'...")
     try:
         dsr_header = iframe.locator("text='DSR REPORTS'").first
         if dsr_header.is_visible(timeout=3000):
             dsr_header.click()
             time.sleep(1.5)
     except Exception as e:
-        print(f"[-] Note on DSR REPORTS: {e}", flush=True)
+        emit_remark(f"[-] Note on DSR REPORTS: {e}")
 
     # Locate report link matching code
-    print(f"[*] Locating link for {code}...", flush=True)
+    emit_remark(f"[*] Locating link for {code}...")
     selectors = [f"a:has-text('{code}')"]
     if "1.2.7" in code:
         selectors.append("a:has-text('Raw Data')")
@@ -127,20 +158,20 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
         link = iframe.locator(selectors[0]).first
         link.wait_for(state="visible", timeout=12000)
 
-    print(f"[+] Found link for {code}. Clicking...", flush=True)
+    emit_remark(f"[+] Found link for {code}. Clicking...")
     link.click()
     time.sleep(3)
 
     # Screenshot initial view
-    ss_path = BASE_DIR / f"page_{code.replace('.', '_')}.png"
+    ss_path = RUNTIME_DIR / f"page_{code.replace('.', '_')}.png"
     try:
         page.screenshot(path=str(ss_path))
-        print(f"[+] Saved view screenshot to {ss_path}", flush=True)
+        emit_remark(f"[+] Saved view screenshot to {ss_path}")
     except Exception:
         pass
 
     # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 02-Nov-2026)
-    print(f"[*] Setting date to {date_formatted} in iframe...", flush=True)
+    emit_remark(f"[*] Setting date to {date_formatted} in iframe...")
     iframe.evaluate(f"""() => {{
         const inputs = document.querySelectorAll("input[type='text'], input[name*='Date' i], input[id*='Date' i]");
         for (const inp of inputs) {{
@@ -166,18 +197,18 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             txt_loc.press("Tab")
             time.sleep(0.5)
     except Exception as e:
-        print(f"[-] Note on fill: {e}", flush=True)
+        emit_remark(f"[-] Note on fill: {e}")
 
     # Save verification screenshot showing date filled in
-    after_date_ss = BASE_DIR / f"after_date_{code.replace('.', '_')}.png"
+    after_date_ss = RUNTIME_DIR / f"after_date_{code.replace('.', '_')}.png"
     try:
         page.screenshot(path=str(after_date_ss))
-        print(f"[+] Saved date verification screenshot to {after_date_ss}", flush=True)
+        emit_remark(f"[+] Saved date verification screenshot to {after_date_ss}")
     except Exception:
         pass
 
     # Locate and click Download button
-    print(f"[*] Waiting for download button for {code}...", flush=True)
+    emit_remark(f"[*] Waiting for download button for {code}...")
     dl_selectors = [
         "input[value='Download']",
         "input[value='Download Excel']",
@@ -190,24 +221,36 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
     dl_btn = iframe.locator(", ".join(dl_selectors)).first
     dl_btn.wait_for(state="visible", timeout=15000)
 
-    print(f"[*] Triggering download for {code}...", flush=True)
-    with page.expect_download(timeout=60000) as dl_info:
-        dl_btn.click()
+    emit_remark(f"[*] Triggering download for {code}...")
+    portal_dialog_messages.clear()
 
-    download = dl_info.value
-    # USE THE ORIGINAL SUGGESTED FILENAME AS-IS WITHOUT RENAMING
-    portal_filename = download.suggested_filename
-    dest = DOWNLOADS_DIR / portal_filename
-    download.save_as(str(dest))
-    print(f"[SUCCESS] Downloaded file as-is from portal: {portal_filename} ({dest.stat().st_size:,} bytes)", flush=True)
+    try:
+        with page.expect_download(timeout=15000) as dl_info:
+            dl_btn.click()
+            # If an alert appeared immediately (like 'Sorry! No Data Found..'), check dialog list
+            time.sleep(1)
+            for m in portal_dialog_messages:
+                if "no data found" in m.lower():
+                    emit_remark(f"[-] Portal dialog: '{m}' for {code}. No records found.")
+                    return None
 
-    return dest
-
-
-# Backward compatibility alias
-def download_single_report(page, iframe, code, key, today_str):
-    dest = DOWNLOADS_DIR / f"{key}.xls"
-    return dest
+        download = dl_info.value
+        portal_filename = download.suggested_filename
+        temp_path = Path(download.path())
+        contents = temp_path.read_bytes()
+        temp_path.unlink(missing_ok=True)
+        emit_remark(f"[SUCCESS] Downloaded file into memory: {portal_filename} ({len(contents):,} bytes)")
+        return DownloadedReport(filename=portal_filename, contents=contents)
+    except Exception as exc:
+        for m in portal_dialog_messages:
+            if "no data found" in m.lower():
+                emit_remark(f"[-] Portal alert '{m}' received for {code}. No records exist.")
+                return None
+        # For absentees and presentees, lack of a download is normal if 0 records match
+        if "1.2.10" in code or "1.2.11" in code:
+            emit_remark(f"[-] Optional report {code} download note: {exc}. Proceeding without it.")
+            return None
+        raise
 
 
 def run_pipeline(target_date: str = ""):
@@ -232,7 +275,7 @@ def run_pipeline(target_date: str = ""):
     try:
         app.ensure_logged_in()
 
-        downloaded_paths = {}
+        downloaded_reports: dict[str, DownloadedReport | None] = {}
 
         # Step 1: Select GP Monitoring -> Download GM-R 1.2.7 (DSR Raw Data Report)
         print("\n" + "=" * 50, flush=True)
@@ -240,7 +283,7 @@ def run_pipeline(target_date: str = ""):
         print("=" * 50, flush=True)
         try:
             p1 = download_single_report_with_menu(app, "1.2.7", date_formatted)
-            downloaded_paths["raw_dsr"] = p1
+            downloaded_reports["raw_dsr"] = p1
         except Exception as e:
             print(f"[ERROR] Failed downloading GM-R 1.2.7: {e}", flush=True)
             raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR Raw Data from portal: {e}")
@@ -251,7 +294,7 @@ def run_pipeline(target_date: str = ""):
         print("=" * 50, flush=True)
         try:
             p2 = download_single_report_with_menu(app, "1.2.11", date_formatted)
-            downloaded_paths["presentees"] = p2
+            downloaded_reports["presentees"] = p2
         except Exception as e:
             print(f"[WARNING] Could not download GM-R 1.2.11: {e}", flush=True)
 
@@ -261,42 +304,38 @@ def run_pipeline(target_date: str = ""):
         print("=" * 50, flush=True)
         try:
             p3 = download_single_report_with_menu(app, "1.2.10", date_formatted)
-            downloaded_paths["absentees"] = p3
+            downloaded_reports["absentees"] = p3
         except Exception as e:
             print(f"[WARNING] Could not download GM-R 1.2.10: {e}", flush=True)
 
         print("\n" + "=" * 55, flush=True)
-        print("[+] Download Summary (Original Filenames Preserved):", flush=True)
-        for k, v in downloaded_paths.items():
-            if v and v.exists():
-                print(f"    - {k}: {v.name} ({v.stat().st_size:,} bytes)", flush=True)
+        print("[+] Download Summary (source files kept in memory):", flush=True)
+        for k, report_data in downloaded_reports.items():
+            if report_data:
+                print(f"    - {k}: {report_data.name} ({len(report_data.contents):,} bytes)", flush=True)
 
         # Step 4: Prepare Report Using ONLY Newly Downloaded Files
-        raw_dsr_path = downloaded_paths.get("raw_dsr")
-        if not raw_dsr_path or not raw_dsr_path.exists():
+        raw_dsr = downloaded_reports.get("raw_dsr")
+        if not raw_dsr:
             raise FileNotFoundError("DSR Raw Data file was not downloaded. Aborting report preparation.")
 
         print("\n" + "=" * 55, flush=True)
-        print(f"[*] Preparing Official 7-Section Report from newly downloaded file: {raw_dsr_path.name} ...", flush=True)
-        sys.path.insert(0, str(BASE_DIR.parent.resolve()))
-        from report_generator import process_attendance_file, generate_pdf
+        print(f"[*] Preparing Official 7-Section Report from live download: {raw_dsr.name} ...", flush=True)
+        p_report = downloaded_reports.get("presentees")
+        presentees_source = (p_report.name, p_report.contents) if p_report and p_report.contents else None
 
-        p_path = downloaded_paths.get("presentees")
-        presentees_source = (p_path.name, p_path.read_bytes()) if p_path and p_path.exists() and p_path.stat().st_size > 0 else None
-
-        a_path = downloaded_paths.get("absentees")
-        absentees_source = (a_path.name, a_path.read_bytes()) if a_path and a_path.exists() and a_path.stat().st_size > 0 else None
+        a_report = downloaded_reports.get("absentees")
+        absentees_source = (a_report.name, a_report.contents) if a_report and a_report.contents else None
 
         report = process_attendance_file(
-            raw_dsr_path.name,
-            raw_dsr_path.read_bytes(),
+            raw_dsr.name,
+            raw_dsr.contents,
             presentees_source=presentees_source,
             absentees_source=absentees_source,
         )
 
-        reports_dir = BASE_DIR.parent / "data" / "reports"
-        reports_dir.mkdir(parents=True, exist_ok=True)
-        output_pdf = reports_dir / f"{report.district_name.replace(' ', '_')}_Official_DSR_Report_{date_formatted}.pdf"
+        REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+        output_pdf = REPORTS_DIR / f"{report.district_name.replace(' ', '_')}_Official_DSR_Report_{date_formatted}.pdf"
         generate_pdf(report, output_pdf)
 
         cached_pdf = DOWNLOADS_DIR / f"Official_DSR_Report_{date_formatted}.pdf"

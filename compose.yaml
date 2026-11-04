@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+      PUBLIC_ACCESS_REQUIRED: "true"
+      MAX_ACTIVE_PORTAL_SESSIONS: "3"
+    volumes:
+      # Persists the SQLite database and generated reports across container restarts.
+      - ./data:/app/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-localhost}
+    profiles:
+      - domain
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  # No-domain preview option. The generated trycloudflare URL changes on restart.
+  cloudflared-preview:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://app:8080
+    profiles:
+      - quick-tunnel
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,84 +1,162 @@
-# Khammam PS Attendance Analytics
+# Telangana e-Panchayat Automated Console (PRKMM)
+### Office of the District Panchayat Officer, Khammam District, Telangana
 
-A FastAPI web application for uploading Gram Panchayat attendance files and downloading formatted A4 PDF reports. The application uses local SQLite for report history and the webserver filesystem for generated PDFs.
+A comprehensive, production-grade automated intelligence and reporting portal for Telangana Gram Panchayats. Built with **FastAPI**, **Playwright headless browser automation**, **DDDDOCR deep learning neural network**, **Pandas**, **ReportLab**, and **PyPDF**.
 
-## Features
+---
 
-- Accepts .xls, .xlsx, .csv, and HTML tables saved as .xls.
-- Self-contained LGD discovery: extracts unique Panchayat LGD codes and Mandals directly from the uploaded RAW data file.
-- Look up Panchayat Secretary details (PS Name, Mobile Number, Nature of Posting, Employee ID, Designation) from uploaded Presentees & Absentees files using Panchayat LGD codes.
-- **Attendance Pending List** includes Panchayat Secretary Name, Nature of Posting (Regular / Incharge), and Mobile Number to call directly for remarks.
-- **GPs that Submitted Attendance After 9 AM** includes Panchayat Secretary Name, Nature of Posting, Mobile Number, and Attendance Timestamp.
-- Deduplicates Gram Panchayat records by Panchayat LGD and flags conflicting names.
-- Shows both submitted-attendance percentage and attendance-before-9-AM percentage in the Mandal abstract.
-- Builds a DSR abstract using GPs where `First Attendence Status` or `Second Attendence Status` is `Present`.
-- Counts DSR submissions only for eligible present PSs; Leave, Meeting, Training, and other statuses are excluded.
-- Sorts the DSR abstract by DSR-pending GP count in ascending order.
-- Places the DSR-pending GP list immediately after the attendance-pending list.
-- Downloads the PDF automatically as `PS_Attendance_Report_YYYY-MM-DD_HH-MM-SS.pdf`.
-- Keeps each report download private to the browser session that uploaded it.
+## 🏛️ System Architecture & Core Modules
 
-## File Uploads
+The platform unites three core government reporting workflows into a single unified console:
 
-1. **Attendance & DSR Raw Data File (Required)**: Contains `Panchayat LGD`, `Mandal Name`, `Panchayat Name`, `First Attendence Status`, `First Attendence Datetime`, `Second Attendence Status`, and `DSR Entry Status`.
-2. **Presentees PS Details File (Recommended)**: Contains `Panchayat LGD Code`, `Panchayat Secretary Name`, `Nature of Posting`, `Mobile Number`, etc., for secretaries who marked attendance.
-3. **Absentees PS Details File (Optional)**: Contains details for absent secretaries. Optional if all secretaries marked attendance.
+```mermaid
+flowchart TD
+    User["🏛️ Department Officer / District Admin"] --> UI["🖥️ Unified Automated Console (UI/home.py)"]
 
-## Run locally on Windows
+    subgraph Web_Layer["FastAPI Application Core (app.py)"]
+        UI --> Endpoints["FastAPI Endpoints"]
+        Endpoints --> Mod1["1. DSR Attendance Robot Station"]
+        Endpoints --> Mod2["2. House Tax Collection (DCB) Station"]
+        Endpoints --> Mod3["3. GP Thursday Balance Entry Module"]
+    end
 
-Use Python 3.11 or newer. In PowerShell, from the repository folder:
+    subgraph Automation_Pipeline["Browser Automation & AI OCR Engine (DSR/)"]
+        Mod1 --> BotThread["Dedicated Bot Thread Worker (greenlet-safe)"]
+        BotThread --> PW["Playwright Browser Controller (Chrome / MS Edge)"]
+        PW --> OCR["DDDDOCR Neural Engine (auto-solves #img1 Captcha)"]
+        PW --> Portal["Telangana e-Panchayat Portal (epanchayat.telangana.gov.in)"]
+        Portal --> Scrape["ASP.NET Iframe Scraper (my-iframe)"]
+        Scrape --> Downloader["Downloads GM-R 1.2.7, 1.2.11 & 1.2.10"]
+        Downloader --> DSRGen["7-Section District Attendance PDF (DSR/report_generator.py)"]
+    end
 
-~~~powershell
-py -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
-Copy-Item .env.example .env
-~~~
+    subgraph Live_Tax_Engine["Real-Time House Tax DCB Engine (DCB/tax_service.py)"]
+        Mod2 --> LiveFetch["Live Portal Ingestion (epmis/allgpdata.jsp)"]
+        LiveFetch --> LiveData["12,760 GPs across all 31 Telangana Districts"]
+        LiveData --> Sorter["Mandal Abstract Sorter (% Collected Ascending)"]
+        Sorter --> LowTop["Lowest Collected Mandals at Top (Yerrupalem #1)"]
+        LowTop --> DCBPdf["Landscape Multi-Page Official PDF (DCB/dcb_pdf_generator.py)"]
+        LowTop --> PBIPdf["PowerBI Executive Visual PDF (DCB/powerbi_pdf_generator.py)"]
+    end
 
-Generate a session secret and add it to .env as WEB_SESSION_SECRET:
+    subgraph Storage["Runtime Data (data/)"]
+        DSRGen --> OutRep["data/reports/*.pdf"]
+        DCBPdf --> OutRep
+        PBIPdf --> OutRep
+        BotThread --> SessionState["data/attendance_jobs.sqlite3 (jobs/progress only)"]
+    end
+```
 
-~~~powershell
-python -c "import secrets; print(secrets.token_hex(32))"
-~~~
+---
 
-Start the server:
+## ⚡ Key Modules & Capabilities
 
-~~~powershell
-uvicorn app:app --reload --port 8080 --env-file .env
-~~~
+### 1. DSR & Attendance Robot Station (`DSR/`)
+* **AI CAPTCHA Solving**: Automatically extracts the `#img1` challenge image from the e-Panchayat login modal, evaluates it via the `ddddocr` ONNX neural model, and types the solution in milliseconds with up to 5 auto-retries.
+* **OTP Authentication**: Triggers and verifies the 6-digit SMS OTP. Authenticated state lives only in the running server process; a restart requires a fresh login.
+* **Frame-Aware Portal Automation**: Traverses ASP.NET iframes (`my-iframe` / `PSPerformance`), expands `DSR REPORTS`, unlocks `readonly` calendar date fields, and extracts:
+  * **GM-R 1.2.7**: Attendance Status & DSR Raw Data
+  * **GM-R 1.2.11**: Presentees Data of Panchayat Secretaries
+  * **GM-R 1.2.10**: Absentees Data of Panchayat Secretaries
+* **Official 7-Section PDF Generator**:
+  1. District Attendance Abstract (Total GPs, Submitted, Attendance Before 9 AM %)
+  2. Mandal-wise Attendance Abstract
+  3. GPs with Attendance Pending (Secretary Name, Nature of Posting, Mobile Phone)
+  4. GPs with Attendance Marked After 9 AM
+  5. Mandal-wise DSR Submission Abstract (Ranked by pending count)
+  6. GPs with DSR Entry Pending (Secretary Name & Phone for follow-up)
+  7. Absent Secretaries List with leave/deputation remarks
 
-Open http://127.0.0.1:8080/ and upload an attendance file. The PDF downloads when report generation completes. /health provides the service health check; API documentation routes are disabled.
+### 2. House Tax Collection (DCB) Analytics Station (`DCB/tax_service.py`)
+* **100% Live Portal Data**: Fetches real-time Demand, Collection, and Balance (DCB) directly from `https://epanchayat.telangana.gov.in/epmis/allgpdata.jsp`.
+* **Zero Stale Files**: No offline or pre-saved Excel files are used; every analysis reflects live government portal records across **12,760 GPs and 31 Districts**.
+* **Strict Ranking Rule**: On both the Web Console and the Official Landscape PDF, Page 1 displays the Mandal Abstract **sorted ascending by % Collected** (lowest collection on top):
+  * **Rank 1**: Yerrupalem (Lowest % collected)
+  * ...
+  * **Rank 20**: Penuballi (Highest % collected)
+* **Dual PDF Export**:
+  * **Official Landscape DCB Report**: Page 1 Mandal Abstract + Mandals & GP details with running page numbers (`Page X of Y`).
+  * **PowerBI Executive Visual Report**: Visual analytics charts with color-coded performance bars.
 
-Jobs are stored in `data/attendance_jobs.sqlite3`; generated reports are stored in `data/reports/`. Set `DATA_DIR` in `.env` to move this local webserver data.
+### 3. Thursday GP Balance Entry Module (`GPBalance/`)
+* Scrapes and compiles weekly Gram Panchayat balance entries across 6 major bank accounts:
+  1. GP PD Account (General Fund, 15th FC, SFC - IFMIS)
+  2. State Matching Grant (TG-bPASS Account)
+  3. 15th Finance Commission Grant - Tied (e-Gram Swaraj)
+  4. 15th Finance Commission Grant - Untied (e-Gram Swaraj)
+  5. Village Water and Sanitation Committee (VWSC / SBM)
+  6. MGNREGS (Material Component)
+* Automatically cross-references non-entered Gram Panchayats with secretary phone numbers for follow-up calls.
 
-## Test
+---
 
-Tests use synthetic attendance data only:
+## 🛠️ API Reference
 
-~~~powershell
-pytest -q
-~~~
+### Department Authentication & DSR Automation (`/api/naresh/*`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/naresh/login` | Connects browser bot, solves Captcha with AI OCR, triggers OTP |
+| `POST` | `/api/naresh/verify-otp` | Validates 6-digit OTP and authenticates officer session |
+| `GET`  | `/api/naresh/session-status`| Returns live background browser engine status & authenticated officer |
+| `POST` | `/api/naresh/logout` | Clicks portal logout when available, clears portal cookies, stops the background browser, and clears session state |
+| `POST` | `/api/naresh/generate` | Executes live download of GM-R 1.2.7, 1.2.11, 1.2.10 and generates PDF |
+| `GET`  | `/api/naresh/view` | Streams latest official 7-section DSR PDF for in-browser viewing |
+| `GET`  | `/api/naresh/download` | Downloads latest official DSR PDF |
 
-## Docker
+### House Tax Collection (DCB) Analytics (`/api/tax/*`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET`  | `/api/tax/districts` | Returns all 31 Telangana districts with totals and GP counts |
+| `GET`  | `/api/tax/mandals` | Returns list of mandals for selected district (`?district=Khammam`) |
+| `GET`  | `/api/tax/data` | Returns live DCB summary, sorted mandal abstract, and GP records |
+| `GET`  | `/api/tax/report.pdf` | Streams official Landscape multi-page House Tax DCB PDF |
+| `GET`  | `/api/tax/powerbi-report.pdf` | Streams executive PowerBI visualization PDF report |
+| `GET`  | `/api/tax/download` | Exports consolidated Excel spreadsheet for the district |
+| `POST` | `/api/tax/refresh` | Forces live re-download directly from e-Panchayat portal |
 
-Build and run the webserver locally:
+### Thursday GP Balance Entry (`/api/balance/*`)
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET`  | `/api/balance/dates` | Reads available Thursday dates from the authenticated live portal session |
+| `GET`  | `/api/balance/data` | Returns Thursday balance entry summary and pending GP list |
+| `GET`  | `/api/balance/view-pdf` | Streams official GP Balance Entry PDF |
+| `GET`  | `/api/balance/download-pdf`| Downloads GP Balance Entry PDF |
+| `GET`  | `/api/balance/download-excel`| Downloads GP Balance Entry Excel workbook |
 
-~~~powershell
-docker build -t khammam-ps-attendance .
-docker run --rm -p 8080:8080 -e WEB_SESSION_SECRET=replace-with-a-random-secret-of-at-least-32-characters -e DATA_DIR=/tmp/khammam-attendance-data khammam-ps-attendance
-~~~
+---
 
-## Deploy to Render
+## 💻 How to Run Locally
 
-The repository includes a `render.yaml` Blueprint for the `prkmm` web service on the Free plan. For exact deployment details and storage limits, see `README_Render.md`.
+### Option 1: 1-Click Desktop Launcher
+Double-click `Start_ePanchayat_Server.bat` on your Desktop.
 
-Render Free uses ephemeral local storage. Reports and SQLite job history can be removed on restart, redeploy, or spin-down. Download reports and save copies. For durable server-side storage, attach an appropriate persistent storage solution and review its current cost before enabling it.
+### Option 2: PowerShell (Developer Mode)
+```powershell
+Set-Location "C:\Users\dpmkm\Desktop\Reportsept"
+$env:DATA_DIR = Join-Path (Get-Location) "data"
+$env:PYTHONDONTWRITEBYTECODE = "1"
+.\.venv\Scripts\Activate.ps1
+uvicorn app:app --host 127.0.0.1 --port 8000
+```
+Open your browser to: `http://127.0.0.1:8000/`
 
-## Files
+### Cloud deployment for remote users
 
-- `app.py` — browser upload UI (3 file inputs), report job handling, HMAC session cookies, and health endpoint.
-- `report_generator.py` — spreadsheet parsing, LGD-based PS directory lookup, attendance analytics, and PDF generation.
-- `integrations.py` — local SQLite and filesystem storage only.
-- `tests/` — synthetic-data processing, PS directory lookup, PDF, and web upload tests.
-- `Dockerfile`, `render.yaml`, `.env.example` — container, Render, and runtime configuration.
+The root `Dockerfile`, `compose.yaml`, `render.yaml`, and `Caddyfile` contain the deployment configuration. Verify portal network reachability from the selected cloud host before sharing the console.
+
+## Project layout
+
+```text
+app.py          FastAPI entry point and API routes
+UI/             Home and login console page
+DSR/            e-Panchayat login, DSR automation, and Attendance PDF generation
+DCB/            Live House Tax data and DCB PDF reports
+GPBalance/      GM-R 14.2 balance automation and reports
+shared/         Common storage, database, and path helpers
+data/           Runtime state, temporary portal data, and generated reports
+```
+
+---
+
+## 🛡️ License & Confidentiality
+Designed and developed exclusively for the **Office of the District Panchayat Officer, Khammam District, Government of Telangana**. All rights reserved.

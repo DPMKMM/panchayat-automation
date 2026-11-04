@@ -15,3 +15,7 @@ services:
         value: /tmp/khammam-attendance-data
       - key: MAX_UPLOAD_BYTES
         value: "31457280"
+      - key: DCB_PORTAL_PROXY_URL
+        sync: false
+      - key: DCB_PORTAL_PROXY_TOKEN
+        sync: false

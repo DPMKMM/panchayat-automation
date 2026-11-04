@@ -1,6 +1,8 @@
 @echo off
 title Telangana Panchayat Raj - Automated DSR Portal
 cd /d "%~dp0"
+set "DATA_DIR=%~dp0data"
+set "PYTHONDONTWRITEBYTECODE=1"
 echo ===================================================================
 echo   Telangana Panchayat Raj - Automated DSR Portal
 echo   Launching local server with Real-Time e-Panchayat Browser Robot...

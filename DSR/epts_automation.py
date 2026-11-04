@@ -1,36 +1,72 @@
 """
 e-Panchayat Telangana (EPTS) Automated Login & Report Downloader
-Module: automate_epts/epts_automation.py
+Module: DSR/epts_automation.py
 
 Features:
-- Persistent browser session in automate_epts/browser_profile
+- Browser runtime data in data/DSR/browser_profile
 - Automated login with ddddocr captcha solving
-- OTP reception via automate_epts/otp.txt or prompt
-- Interactive command execution via automate_epts/command.txt or CLI
-- File downloads saved in automate_epts/downloads/
+- OTP reception via data/DSR/otp.txt or prompt
+- Interactive command execution via data/DSR/command.txt or CLI
+- Portal workbook downloads are read in memory and removed from temporary storage
 """
 
 import os
 import sys
 import json
+import re
 import time
+import shutil
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import ddddocr
+from shared.paths import DSR_DATA_DIR
 
-BASE_DIR = Path(__file__).resolve().parent
-DOWNLOADS_DIR = BASE_DIR / "downloads"
-CONFIG_FILE = BASE_DIR / "config.json"
-CAPTCHA_CACHE_FILE = BASE_DIR / "temp_captcha.png"
-OTP_FILE = BASE_DIR / "otp.txt"
-COMMAND_FILE = BASE_DIR / "command.txt"
-OTP_SCREENSHOT = BASE_DIR / "otp_screen.png"
-DASHBOARD_SCREENSHOT = BASE_DIR / "dashboard_screen.png"
-CURRENT_SCREENSHOT = BASE_DIR / "current_screen.png"
-PROFILE_DIR = BASE_DIR / "browser_profile"
+RUNTIME_DIR = DSR_DATA_DIR
+DOWNLOADS_DIR = RUNTIME_DIR / "downloads"
+CONFIG_FILE = RUNTIME_DIR / "config.json"
+CAPTCHA_CACHE_FILE = RUNTIME_DIR / "temp_captcha.png"
+OTP_FILE = RUNTIME_DIR / "otp.txt"
+COMMAND_FILE = RUNTIME_DIR / "command.txt"
+OTP_SCREENSHOT = RUNTIME_DIR / "otp_screen.png"
+DASHBOARD_SCREENSHOT = RUNTIME_DIR / "dashboard_screen.png"
+CURRENT_SCREENSHOT = RUNTIME_DIR / "current_screen.png"
+PROFILE_DIR = RUNTIME_DIR / "browser_profile"
 
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
 PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def format_otp_delivery_message(portal_text):
+    """Return a user-facing OTP notice that reveals only the phone's last four digits."""
+    text = re.sub(r"\s+", " ", str(portal_text or "")).strip()
+    otp_was_sent = re.search(r"\botp\b.{0,120}\bsent\b|\bsent\b.{0,120}\botp\b", text, re.IGNORECASE)
+    if not otp_was_sent:
+        return ""
+
+    phone_match = re.search(
+        r"(?:registered\s+)?(?:mobile|phone)(?:\s+(?:number|no\.?|#))?\s*(?:is|:|-)?\s*([^.!]{1,60})",
+        text,
+        re.IGNORECASE,
+    )
+    if not phone_match:
+        phone_match = re.search(r"\b(?:sent|delivered)\s+(?:to|on)\s+([^.!]{1,60})", text, re.IGNORECASE)
+    if phone_match:
+        phone_text = re.split(
+            r"\b(?:enter|to continue)\b",
+            phone_match.group(1),
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
+        phone_digits = re.sub(r"\D", "", phone_text)
+        if len(phone_digits) >= 4:
+            masked_phone = f"xxxxxx{phone_digits[-4:]}"
+            return (
+                "A 6 digit OTP has been sent to your registered mobile number "
+                f"{masked_phone}. Enter OTP to continue."
+            )
+
+    return "A 6 digit OTP has been sent to your registered mobile number. Enter OTP to continue."
 
 
 def load_config():
@@ -49,12 +85,45 @@ def save_config(config_data):
 
 
 class EPTSAutomation:
-    def __init__(self, headless=False):
+    def __init__(self, headless=False, profile_dir: Path | None = None):
         self.headless = headless
+        self.profile_dir = Path(profile_dir) if profile_dir else PROFILE_DIR
+        # The standalone CLI must begin logged out on every process start.
+        # The web service passes its own short-lived per-session profile and
+        # clears it on server startup and explicit logout.
+        if profile_dir is None and self.profile_dir.exists():
+            shutil.rmtree(self.profile_dir, ignore_errors=True)
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.playwright = None
         self.context = None
         self.page = None
+        self.otp_message = ""
         self.ocr = ddddocr.DdddOcr(show_ad=False)
+
+    def get_otp_delivery_message(self):
+        """Read the portal's OTP notice without exposing an unmasked phone number."""
+        if not self.page:
+            return "OTP request accepted by e-Panchayat. Enter the 6-digit OTP to continue."
+
+        messages = []
+        for selector in ("body", "#pvals"):
+            try:
+                text = self.page.locator(selector).inner_text(timeout=2000)
+            except Exception:
+                continue
+            message = format_otp_delivery_message(text)
+            if message:
+                messages.append(message)
+
+        # Prefer a number-bearing notice from the full page over a shorter
+        # generic confirmation that may be present in #pvals.
+        for message in messages:
+            if re.search(r"\bxxxxxx\d{4}\b", message, re.IGNORECASE):
+                return message
+        if messages:
+            return messages[0]
+
+        return "OTP request accepted by e-Panchayat. Enter the 6-digit OTP to continue."
 
     def start_browser(self):
         print(f"[*] Launching Chrome with persistent profile (Headless: {self.headless})...", flush=True)
@@ -62,20 +131,30 @@ class EPTSAutomation:
         launch_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"]
         try:
             self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(PROFILE_DIR),
+                user_data_dir=str(self.profile_dir),
                 channel="chrome",
                 headless=self.headless,
                 accept_downloads=True,
                 args=launch_args,
             )
         except Exception as e:
-            print(f"[-] Chrome channel launch failed ({e}), falling back to default Chromium...", flush=True)
-            self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(PROFILE_DIR),
-                headless=self.headless,
-                accept_downloads=True,
-                args=launch_args,
-            )
+            print(f"[-] Chrome channel launch failed ({e}), attempting msedge channel...", flush=True)
+            try:
+                self.context = self.playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(self.profile_dir),
+                    channel="msedge",
+                    headless=self.headless,
+                    accept_downloads=True,
+                    args=launch_args,
+                )
+            except Exception as e_edge:
+                print(f"[-] msedge channel launch failed ({e_edge}), falling back to default Chromium...", flush=True)
+                self.context = self.playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(self.profile_dir),
+                    headless=self.headless,
+                    accept_downloads=True,
+                    args=launch_args,
+                )
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
     def is_logged_in(self):
@@ -159,6 +238,7 @@ class EPTSAutomation:
             if "login" in self.page.url.lower() or self.page.locator("#otp").is_visible() or self.page.locator("input[placeholder*='otp' i]").is_visible():
                 print("[+] OTP generation triggered successfully! Reached OTP verification screen.", flush=True)
                 time.sleep(1)
+                self.otp_message = self.get_otp_delivery_message()
                 self.page.screenshot(path=str(OTP_SCREENSHOT))
                 print(f"[+] Saved OTP screen to {OTP_SCREENSHOT}", flush=True)
                 return True
@@ -241,11 +321,6 @@ class EPTSAutomation:
         self.page.screenshot(path=str(DASHBOARD_SCREENSHOT))
         print(f"[+] Saved dashboard screenshot to {DASHBOARD_SCREENSHOT}", flush=True)
 
-        try:
-            self.context.storage_state(path=str(STORAGE_STATE_FILE))
-            print(f"[+] Session state saved to {STORAGE_STATE_FILE}", flush=True)
-        except Exception as e:
-            print(f"[-] Note on saving storage state: {e}", flush=True)
         return True
 
     def ensure_logged_in(self):
@@ -265,8 +340,16 @@ class EPTSAutomation:
         self.prompt_and_validate_otp()
         return True
 
-    def select_menu(self, menu_name):
-        print(f"[*] Selecting menu item: '{menu_name}' ...", flush=True)
+    def select_menu(self, menu_name, on_remark=None):
+        def emit_remark(message):
+            print(message, flush=True)
+            if on_remark:
+                try:
+                    on_remark(message)
+                except Exception:
+                    pass
+
+        emit_remark(f"[*] Selecting menu item: '{menu_name}' ...")
         # Check if direct text match exists
         target = self.page.locator(f"text='{menu_name}'").first
         if not target.is_visible():
@@ -281,14 +364,83 @@ class EPTSAutomation:
         time.sleep(2)
         
         self.page.screenshot(path=str(CURRENT_SCREENSHOT))
-        print(f"[+] Clicked '{menu_name}'. Current URL: {self.page.url}", flush=True)
-        print(f"[+] Screenshot saved to {CURRENT_SCREENSHOT}", flush=True)
+        emit_remark(f"[+] Clicked '{menu_name}'. Current URL: {self.page.url}")
+        emit_remark(f"[+] Screenshot saved to {CURRENT_SCREENSHOT}")
+
+    def logout_from_portal(self) -> bool:
+        """Click the portal's logout control without refreshing or reloading the page."""
+        page = self.page
+        if not page:
+            return False
+        try:
+            if page.is_closed():
+                return False
+        except Exception:
+            return False
+
+        logout_selectors = (
+            "a[href*='logout' i]",
+            "a[onclick*='logout' i]",
+            "button[onclick*='logout' i]",
+            "[onclick*='logout' i]",
+            "input[type='submit'][value*='logout' i]",
+            "input[type='button'][value*='logout' i]",
+            "[aria-label*='logout' i]",
+            "[title*='logout' i]",
+            "a:has-text('Logout')",
+            "button:has-text('Logout')",
+            "[role='button']:has-text('Logout')",
+            "a:has-text('Log out')",
+            "button:has-text('Log out')",
+            "a:has-text('Sign out')",
+            "button:has-text('Sign out')",
+        )
+
+        for frame in list(page.frames):
+            for selector in logout_selectors:
+                try:
+                    control = frame.locator(selector).first
+                    if control.count() == 0 or not control.is_visible():
+                        continue
+
+                    def accept_logout_confirmation(dialog):
+                        try:
+                            dialog.accept()
+                        except Exception:
+                            pass
+
+                    page.once("dialog", accept_logout_confirmation)
+                    try:
+                        control.click(timeout=5000)
+                    finally:
+                        try:
+                            page.remove_listener("dialog", accept_logout_confirmation)
+                        except Exception:
+                            pass
+                    try:
+                        page.wait_for_timeout(1000)
+                    except Exception:
+                        pass
+                    print("[+] Clicked the e-Panchayat portal logout control.", flush=True)
+                    return True
+                except Exception:
+                    continue
+
+        print("[-] No visible e-Panchayat logout control was found.", flush=True)
+        return False
 
     def close(self):
-        if self.context:
-            self.context.close()
-        if self.playwright:
-            self.playwright.stop()
+        try:
+            if self.context:
+                self.context.close()
+        finally:
+            try:
+                if self.playwright:
+                    self.playwright.stop()
+            finally:
+                self.page = None
+                self.context = None
+                self.playwright = None
 
 
 def main():
@@ -347,9 +499,14 @@ def main():
                 with app.page.expect_download() as download_info:
                     app.page.goto(target_url)
                 download = download_info.value
-                dest = DOWNLOADS_DIR / download.suggested_filename
-                download.save_as(str(dest))
-                print(f"[+] Report downloaded: {dest}", flush=True)
+                temp_path = Path(download.path())
+                content_size = temp_path.stat().st_size
+                temp_path.unlink(missing_ok=True)
+                print(
+                    f"[+] Report received from portal: {download.suggested_filename} "
+                    f"({content_size:,} bytes; kept in memory only)",
+                    flush=True,
+                )
             elif cmd.lower().startswith("click "):
                 selector = cmd[6:].strip()
                 print(f"Clicking selector: {selector} ...", flush=True)

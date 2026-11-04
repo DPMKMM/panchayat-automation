@@ -29,7 +29,8 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.lib.utils import ImageReader
 
-import tax_service
+from . import tax_service
+from shared.paths import REPORTS_DIR
 
 PAGE_W, PAGE_H = landscape(A4)  # 841.89 x 595.28 pt
 
@@ -525,10 +526,9 @@ def get_or_generate_powerbi_pdf(
     india_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
     date_str = india_now.strftime("%d-%m-%Y")
 
-    reports_dir = Path(__file__).resolve().parent / "data" / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     pdf_filename = f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}.pdf"
-    cache_path = reports_dir / f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}_v5.pdf"
+    cache_path = REPORTS_DIR / f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}_v5.pdf"
 
     if not force_regenerate and cache_path.exists() and cache_path.stat().st_size > 10_000:
         return pdf_filename, cache_path.read_bytes()
