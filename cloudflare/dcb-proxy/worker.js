@@ -1,5 +1,9 @@
 const PORTAL_URL = "https://epanchayat.telangana.gov.in/epmis/allgpdata.jsp";
 const MIN_WORKBOOK_BYTES = 50_000;
+const PORTAL_HOSTS = new Set([
+  "epanchayat.telangana.gov.in",
+  "tgprepanchayat.telangana.gov.in",
+]);
 
 function json(body, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(body), {
@@ -12,6 +16,69 @@ function json(body, status = 200, extraHeaders = {}) {
   });
 }
 
+async function proxyPortalRequest(request, env) {
+  const expectedToken = env.DCB_PROXY_TOKEN;
+  const authorization = request.headers.get("authorization") ?? "";
+  if (!expectedToken || authorization !== `Bearer ${expectedToken}`) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
+  const targetValue = request.headers.get("x-portal-target") ?? "";
+  let target;
+  try {
+    target = new URL(targetValue);
+  } catch {
+    return json({ error: "A valid e-Panchayat target URL is required." }, 400);
+  }
+  if (target.protocol !== "https:" || !PORTAL_HOSTS.has(target.hostname.toLowerCase()) || target.username || target.password) {
+    return json({ error: "The requested host is not an allowed e-Panchayat portal." }, 403);
+  }
+
+  const method = request.method.toUpperCase();
+  const headers = new Headers(request.headers);
+  const portalAuthorization = headers.get("x-portal-authorization");
+  for (const name of [
+    "authorization", "x-portal-target", "x-portal-authorization", "host",
+    "content-length", "connection", "transfer-encoding", "accept-encoding",
+  ]) {
+    headers.delete(name);
+  }
+  if (portalAuthorization) headers.set("authorization", portalAuthorization);
+
+  try {
+    const upstream = await fetch(target.toString(), {
+      method,
+      headers,
+      body: method === "GET" || method === "HEAD" ? undefined : request.body,
+      redirect: "manual",
+      cf: { cacheEverything: false, cacheTtl: 0 },
+    });
+    const responseHeaders = new Headers(upstream.headers);
+    for (const name of [
+      "content-encoding", "content-length", "connection", "keep-alive",
+      "transfer-encoding", "upgrade", "cf-ray", "cf-cache-status",
+    ]) {
+      responseHeaders.delete(name);
+    }
+    const cookies = typeof upstream.headers.getSetCookie === "function"
+      ? upstream.headers.getSetCookie()
+      : [];
+    if (cookies.length) {
+      responseHeaders.delete("set-cookie");
+      for (const cookie of cookies) responseHeaders.append("set-cookie", cookie);
+    }
+    responseHeaders.set("cache-control", "no-store, no-cache, must-revalidate");
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    console.error("Live e-Panchayat browser request failed", error?.name ?? "Error", target.hostname);
+    return json({ error: "Could not connect to the live e-Panchayat portal." }, 502);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -22,6 +89,13 @@ export default {
         service: "e-Panchayat live DCB proxy",
         colo: request.cf?.colo ?? "unknown",
       });
+    }
+
+    if (url.pathname === "/v1/portal") {
+      if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(request.method)) {
+        return json({ error: "Method not allowed" }, 405);
+      }
+      return proxyPortalRequest(request, env);
     }
 
     if (url.pathname !== "/v1/dcb/raw") {

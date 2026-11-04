@@ -17,6 +17,7 @@ import re
 import time
 import shutil
 from pathlib import Path
+from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import ddddocr
 from shared.paths import DSR_DATA_DIR
@@ -31,6 +32,7 @@ OTP_SCREENSHOT = RUNTIME_DIR / "otp_screen.png"
 DASHBOARD_SCREENSHOT = RUNTIME_DIR / "dashboard_screen.png"
 CURRENT_SCREENSHOT = RUNTIME_DIR / "current_screen.png"
 PROFILE_DIR = RUNTIME_DIR / "browser_profile"
+PORTAL_PROXY_HOSTS = {"epanchayat.telangana.gov.in", "tgprepanchayat.telangana.gov.in"}
 
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
@@ -98,7 +100,42 @@ class EPTSAutomation:
         self.context = None
         self.page = None
         self.otp_message = ""
+        self.portal_proxy_url = os.getenv("DCB_PORTAL_PROXY_URL", "").strip().rstrip("/")
+        self.portal_proxy_token = os.getenv("DCB_PORTAL_PROXY_TOKEN", "").strip()
         self.ocr = ddddocr.DdddOcr(show_ad=False)
+
+    def _route_portal_request(self, route):
+        """Relay e-Panchayat browser traffic through the India-region Worker when configured."""
+        request = route.request
+        hostname = (urlparse(request.url).hostname or "").lower()
+        if not self.portal_proxy_url or hostname not in PORTAL_PROXY_HOSTS:
+            route.continue_()
+            return
+        if not self.portal_proxy_token:
+            raise RuntimeError("DCB_PORTAL_PROXY_TOKEN is required when the e-Panchayat regional proxy is configured.")
+
+        headers = dict(request.headers)
+        for header_name in ("host", "content-length", "connection", "transfer-encoding", "accept-encoding"):
+            headers.pop(header_name, None)
+        portal_authorization = headers.pop("authorization", None)
+        headers["x-portal-target"] = request.url
+        if portal_authorization:
+            headers["x-portal-authorization"] = portal_authorization
+        headers["authorization"] = f"Bearer {self.portal_proxy_token}"
+
+        try:
+            response = route.fetch(
+                url=f"{self.portal_proxy_url}/v1/portal",
+                method=request.method,
+                headers=headers,
+                post_data=request.post_data_buffer,
+                max_redirects=0,
+                timeout=60_000,
+            )
+            route.fulfill(response=response)
+        except Exception as exc:
+            print(f"[-] Regional portal proxy request failed for {hostname}: {type(exc).__name__}", flush=True)
+            route.abort("failed")
 
     def get_otp_delivery_message(self):
         """Read the portal's OTP notice without exposing an unmasked phone number."""
@@ -156,6 +193,11 @@ class EPTSAutomation:
                     args=launch_args,
                 )
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+        if self.portal_proxy_url:
+            if not self.portal_proxy_token:
+                raise RuntimeError("DCB_PORTAL_PROXY_TOKEN is required when the e-Panchayat regional proxy is configured.")
+            self.context.route("**/*", self._route_portal_request)
+            print("[*] e-Panchayat browser traffic will use the configured regional proxy.", flush=True)
 
     def is_logged_in(self):
         try:

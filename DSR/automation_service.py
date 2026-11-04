@@ -247,14 +247,25 @@ _PORTAL_STATE_STORE.reset_after_process_restart()
 
 
 def check_epts_reachability(timeout: float = 3.0) -> tuple[bool, str]:
-    """Test if the current server has network reachability to epanchayat.telangana.gov.in."""
+    """Test e-Panchayat reachability directly or through the configured India-region proxy."""
     url = "https://epanchayat.telangana.gov.in/cs"
+    proxy_base = (os.getenv("DCB_PORTAL_PROXY_URL") or "").strip().rstrip("/")
+    proxy_token = (os.getenv("DCB_PORTAL_PROXY_TOKEN") or "").strip()
+    headers = {"User-Agent": "Mozilla/5.0"}
+    if proxy_base:
+        if not proxy_token:
+            return False, "The e-Panchayat regional proxy is configured without its access token."
+        request_url = f"{proxy_base}/v1/portal"
+        headers["Authorization"] = f"Bearer {proxy_token}"
+        headers["X-Portal-Target"] = url
+    else:
+        request_url = url
     try:
         with httpx.Client(verify=False, timeout=timeout) as client:
-            resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code == 200:
-                return True, "Reachable"
-            return True, f"HTTP {resp.status_code}"
+            resp = client.get(request_url, headers=headers)
+            if resp.status_code < 500:
+                return True, "Reachable through regional proxy" if proxy_base else "Reachable"
+            return False, f"HTTP {resp.status_code}"
     except httpx.ConnectTimeout:
         return False, "ConnectTimeout (the cloud server's outbound IP may not be allowed by the e-Panchayat network)"
     except Exception as exc:
@@ -332,7 +343,7 @@ def _start_server_login_impl(
         )
 
     # 1. Test portal reachability
-    reachable, reason = check_epts_reachability(timeout=3.0)
+    reachable, reason = check_epts_reachability(timeout=15.0)
 
     # 2. Check if playwright and ddddocr are available
     playwright_available = False
