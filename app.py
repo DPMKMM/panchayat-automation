@@ -332,9 +332,15 @@ def create_app(
             return dsr_automation_service.start_server_login(u, p, headless=True, session_id=portal_session_id(request))
         except Exception as exc:
             logger.exception("Error during server login: %s", exc)
+            detail = "Live e-Panchayat login failed. Check portal connectivity and browser automation dependencies."
+            if "captcha image is not visible" in str(exc).lower():
+                detail = (
+                    "e-Panchayat opened the login form, but its CAPTCHA image was not visible to the automation. "
+                    "Please retry; if it continues, the portal may not be serving a usable CAPTCHA challenge."
+                )
             raise HTTPException(
                 status_code=502,
-                detail="Live e-Panchayat login failed. Check portal connectivity and browser automation dependencies.",
+                detail=detail,
             ) from None
 
     @api.post("/api/naresh/verify-otp", include_in_schema=False)

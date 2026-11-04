@@ -132,6 +132,13 @@ class EPTSAutomation:
                 max_redirects=0,
                 timeout=60_000,
             )
+            if "CaptchaServlet" in request.url:
+                content_type = response.headers.get("content-type", "unknown")
+                print(
+                    f"[*] e-Panchayat captcha response via regional proxy: "
+                    f"HTTP {response.status}, {content_type}.",
+                    flush=True,
+                )
             route.fulfill(response=response)
         except Exception as exc:
             print(f"[-] Regional portal proxy request failed for {hostname}: {type(exc).__name__}", flush=True)
@@ -227,10 +234,57 @@ class EPTSAutomation:
         print("[+] Department Login modal is open.", flush=True)
 
     def solve_captcha(self, retries=5):
+        def visible_captcha_image():
+            for selector in (
+                "#img1:visible",
+                "img[src*='CaptchaServlet']:visible",
+                "img[id*='captcha']:visible",
+                "img[class*='captcha']:visible",
+            ):
+                candidate = self.page.locator(selector).first
+                if candidate.count() and candidate.is_visible():
+                    return candidate
+            return None
+
         for attempt in range(1, retries + 1):
             time.sleep(0.5)
-            captcha_img = self.page.locator("#img1")
-            captcha_img.wait_for(state="visible", timeout=5000)
+            captcha_img = visible_captcha_image()
+            if captcha_img is None and attempt == 1:
+                # Some portal sessions leave the first captcha element hidden
+                # until the refresh action requests a fresh challenge.
+                refresh_btn = self.page.locator("button.fa-refresh:visible").first
+                if refresh_btn.count() and refresh_btn.is_visible():
+                    try:
+                        with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=5000):
+                            refresh_btn.click()
+                    except Exception:
+                        pass
+                    time.sleep(1)
+                    captcha_img = visible_captcha_image()
+            if captcha_img is None:
+                captcha_state = self.page.locator("img").evaluate_all(
+                    """images => images
+                      .filter(img => (img.id || '').toLowerCase().includes('captcha') ||
+                        /captchaservlet/i.test(img.getAttribute('src') || ''))
+                      .map(img => {
+                        const style = getComputedStyle(img);
+                        const srcPath = new URL(img.src, location.href).pathname.split(';')[0];
+                        return {
+                          id: img.id,
+                          srcPath,
+                          display: style.display,
+                          visibility: style.visibility,
+                          complete: img.complete,
+                          naturalWidth: img.naturalWidth,
+                          parentDisplay: img.parentElement ? getComputedStyle(img.parentElement).display : null
+                        };
+                      })"""
+                )
+                print(f"[-] No visible e-Panchayat captcha image. Candidates: {captcha_state}", flush=True)
+                raise RuntimeError(
+                    "The e-Panchayat login form opened, but its captcha image is not visible. "
+                    "The portal did not provide a usable captcha challenge."
+                )
             img_bytes = captcha_img.screenshot()
             
             with open(CAPTCHA_CACHE_FILE, "wb") as f:
