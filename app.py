@@ -338,6 +338,11 @@ def create_app(
                     "e-Panchayat opened the login form, but its CAPTCHA image was not visible to the automation. "
                     "Please retry; if it continues, the portal may not be serving a usable CAPTCHA challenge."
                 )
+            elif "page.goto: timeout" in str(exc).lower():
+                detail = (
+                    "The e-Panchayat login page did not finish opening through the regional connection. "
+                    "No OTP was generated. Please retry shortly."
+                )
             raise HTTPException(
                 status_code=502,
                 detail=detail,

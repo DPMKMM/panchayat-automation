@@ -124,6 +124,10 @@ class EPTSAutomation:
         headers["authorization"] = f"Bearer {self.portal_proxy_token}"
 
         try:
+            is_document = request.resource_type == "document"
+            target_path = urlparse(request.url).path
+            if is_document:
+                print(f"[*] Proxying e-Panchayat page request: {hostname}{target_path}", flush=True)
             response = route.fetch(
                 url=f"{self.portal_proxy_url}/v1/portal",
                 method=request.method,
@@ -132,6 +136,12 @@ class EPTSAutomation:
                 max_redirects=0,
                 timeout=60_000,
             )
+            if is_document:
+                print(
+                    f"[*] e-Panchayat page response via regional proxy: "
+                    f"HTTP {response.status}, {response.headers.get('content-type', 'unknown')}.",
+                    flush=True,
+                )
             if "CaptchaServlet" in request.url:
                 content_type = response.headers.get("content-type", "unknown")
                 print(
@@ -222,7 +232,9 @@ class EPTSAutomation:
     def navigate_home(self):
         url = "https://epanchayat.telangana.gov.in/cs"
         print(f"[*] Navigating to {url} ...", flush=True)
-        self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        response = self.page.goto(url, wait_until="commit", timeout=30000)
+        if response and response.status >= 400:
+            raise RuntimeError(f"The e-Panchayat home page returned HTTP {response.status}.")
         time.sleep(1)
 
     def open_department_login_modal(self):
