@@ -1713,7 +1713,7 @@ def create_app(
         )
 
     @api.get("/api/tax/powerbi-report.pdf")
-    def download_powerbi_pdf(district: str = "Khammam", mandal: str = "all", force: bool = False) -> Response:
+    def download_powerbi_pdf(district: str = "Khammam", mandal: str = "all", force: bool = True) -> Response:
         filename, pdf_bytes = powerbi_pdf_generator.get_or_generate_powerbi_pdf(district, mandal, force_regenerate=force)
         return Response(
             content=pdf_bytes,

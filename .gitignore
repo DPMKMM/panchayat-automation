@@ -26,3 +26,11 @@ automate_epts/command.txt
 automate_epts/downloads/
 cloudflared.exe
 *.log
+
+*.xlsx
+*.xlsm
+*.xlsb
+**/*.xls
+**/*.xlsx
+**/*.xlsm
+**/*.xlsb

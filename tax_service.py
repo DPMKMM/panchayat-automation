@@ -4,30 +4,15 @@ from __future__ import annotations
 
 import io
 import logging
-import sys
 import time
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
 import pandas as pd
 
 logger = logging.getLogger("epmis_tax_service")
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
-
-BASE_DIR = get_base_dir()
-DATA_DIR = BASE_DIR / "data"
-RAW_TAX_FILE = DATA_DIR / "allgpdata_raw.xls"
-CONSOLIDATED_EXCEL = DATA_DIR / "telangana_house_tax_dcb_consolidated.xlsx"
-
 URL_ALL_GP_DATA = "https://epanchayat.telangana.gov.in/epmis/allgpdata.jsp"
 URL_DISTRICT_LIVE = "https://epanchayat.telangana.gov.in/epmis/epmisPRHTAXDCBLive.jsp"
-
-# Ensure data directory exists
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 _LIVE_BYTES_CACHE: Optional[bytes] = None
 _LAST_FETCH_TIME: float = 0.0
@@ -51,10 +36,6 @@ def download_portal_raw_data() -> bytes:
 
         _LIVE_BYTES_CACHE = content
         _LAST_FETCH_TIME = time.time()
-        try:
-            RAW_TAX_FILE.write_bytes(content)
-        except Exception:
-            pass
         logger.info("Successfully fetched live portal DCB data: %d bytes", len(content))
         return content
 
@@ -70,18 +51,8 @@ def get_raw_data_bytes(force_download: bool = False) -> bytes:
     try:
         return download_portal_raw_data()
     except Exception as exc:
-        logger.error("Live portal download attempt encountered error: %s", exc)
-        # If live connection fails (e.g. temporary network blip), use the last fetched live file if it exists
-        if _LIVE_BYTES_CACHE:
-            return _LIVE_BYTES_CACHE
-        if RAW_TAX_FILE.exists() and RAW_TAX_FILE.stat().st_size > 100_000:
-            logger.warning("Using last live fetched file from disk due to portal timeout.")
-            return RAW_TAX_FILE.read_bytes()
-        for candidate in [BASE_DIR / "bundled_allgpdata.xls", BASE_DIR / "allgpdata.xls"]:
-            if candidate.exists() and candidate.stat().st_size > 100_000:
-                logger.warning("Using bundled data fallback: %s", candidate.name)
-                return candidate.read_bytes()
-        raise RuntimeError(f"Could not connect to Telangana e-Panchayat portal: {exc}") from exc
+        logger.error("Live portal download attempt failed: %s", exc)
+        raise RuntimeError(f"Could not fetch live data from Telangana e-Panchayat portal: {exc}") from exc
 
 
 def parse_and_clean_data(raw_bytes: Optional[bytes] = None) -> pd.DataFrame:

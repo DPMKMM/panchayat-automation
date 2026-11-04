@@ -515,7 +515,7 @@ def generate_powerbi_pdf(
 def get_or_generate_powerbi_pdf(
     district_name: str = "Khammam",
     mandal_name: Optional[str] = None,
-    force_regenerate: bool = False,
+    force_regenerate: bool = True,
 ) -> tuple[str, bytes]:
     """Return filename and bytes of the Power BI report for district or mandal."""
     safe_dist = district_name.strip().replace(" ", "_").title()
