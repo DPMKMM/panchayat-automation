@@ -230,19 +230,55 @@ class EPTSAutomation:
         return False
 
     def navigate_home(self):
-        url = "https://epanchayat.telangana.gov.in/cs"
-        print(f"[*] Navigating to {url} ...", flush=True)
+        url = "https://epanchayat.telangana.gov.in/login"
+        print(f"[*] Opening the e-Panchayat login page {url} ...", flush=True)
         response = self.page.goto(url, wait_until="commit", timeout=30000)
         if response and response.status >= 400:
-            raise RuntimeError(f"The e-Panchayat home page returned HTTP {response.status}.")
+            print(
+                f"[-] The direct login page returned HTTP {response.status}; "
+                "the Department Login link on the home page will be tried instead.",
+                flush=True,
+            )
+            self.page.goto("https://epanchayat.telangana.gov.in/cs", wait_until="commit", timeout=30000)
         time.sleep(1)
 
     def open_department_login_modal(self):
+        user_field = self.page.locator("#userId:visible").first
+        if user_field.count() and user_field.is_visible():
+            print("[+] Department Login form is already open.", flush=True)
+            return
+
         print("[*] Opening 'Department Login' modal...", flush=True)
-        dept_link = self.page.locator("a:has-text('Department Login')").first
-        dept_link.wait_for(state="visible", timeout=10000)
+        dept_link = self.page.locator(
+            "a:has-text('Department Login'), "
+            "button:has-text('Department Login'), "
+            "[role='button']:has-text('Department Login')"
+        ).first
+        try:
+            dept_link.wait_for(state="visible", timeout=5000)
+        except PlaywrightTimeoutError:
+            if urlparse(self.page.url).path.rstrip("/") != "/cs":
+                print("[*] Direct login page did not expose the form; falling back to the portal home page.", flush=True)
+                self.page.goto(
+                    "https://epanchayat.telangana.gov.in/cs",
+                    wait_until="commit",
+                    timeout=30000,
+                )
+                dept_link.wait_for(state="visible", timeout=15000)
+            else:
+                visible_links = self.page.locator("a:visible").evaluate_all(
+                    "links => links.map(link => link.innerText.trim()).filter(Boolean).slice(0, 25)"
+                )
+                print(
+                    f"[-] Department Login link was not visible. "
+                    f"Page title: {self.page.title()!r}; visible links: {visible_links!r}",
+                    flush=True,
+                )
+                raise RuntimeError(
+                    "The e-Panchayat page loaded, but the Department Login link was not visible."
+                )
         dept_link.click()
-        self.page.wait_for_selector("#userId", state="visible", timeout=10000)
+        self.page.locator("#userId:visible").first.wait_for(state="visible", timeout=10000)
         print("[+] Department Login modal is open.", flush=True)
 
     def solve_captcha(self, retries=5):

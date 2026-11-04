@@ -343,6 +343,11 @@ def create_app(
                     "The e-Panchayat login page did not finish opening through the regional connection. "
                     "No OTP was generated. Please retry shortly."
                 )
+            elif "department login link was not visible" in str(exc).lower():
+                detail = (
+                    "The e-Panchayat page loaded, but its Department Login option was not visible. "
+                    "No OTP was generated. Please retry shortly."
+                )
             raise HTTPException(
                 status_code=502,
                 detail=detail,
