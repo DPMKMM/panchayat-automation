@@ -14,8 +14,6 @@ logger = logging.getLogger("epmis_tax_service")
 
 URL_ALL_GP_DATA = "https://epanchayat.telangana.gov.in/epmis/allgpdata.jsp"
 URL_DISTRICT_LIVE = "https://epanchayat.telangana.gov.in/epmis/epmisPRHTAXDCBLive.jsp"
-PORTAL_PROXY_URL = os.getenv("DCB_PORTAL_PROXY_URL", "").strip()
-PORTAL_PROXY_TOKEN = os.getenv("DCB_PORTAL_PROXY_TOKEN", "").strip()
 
 _LIVE_BYTES_CACHE: Optional[bytes] = None
 _LAST_FETCH_TIME: float = 0.0
@@ -24,24 +22,27 @@ _LAST_FETCH_TIME: float = 0.0
 def download_portal_raw_data() -> bytes:
     """Fetch a fresh live DCB workbook from e-Panchayat, through the regional proxy when configured."""
     global _LIVE_BYTES_CACHE, _LAST_FETCH_TIME
-    proxy_url = PORTAL_PROXY_URL
-    if proxy_url and not PORTAL_PROXY_TOKEN:
-        raise RuntimeError("DCB portal proxy is configured without its access token.")
+    proxy_base = (os.getenv("DCB_PORTAL_PROXY_URL") or "").strip().rstrip("/")
+    proxy_token = (os.getenv("DCB_PORTAL_PROXY_TOKEN") or "").strip()
+    if proxy_base:
+        if not proxy_token:
+            raise RuntimeError("DCB_PORTAL_PROXY_TOKEN is required when the live DCB proxy is configured.")
+        request_url = f"{proxy_base}/v1/dcb/raw"
+        logger.info("Fetching live DCB workbook through the configured e-Panchayat proxy.")
+    else:
+        request_url = URL_ALL_GP_DATA
+        logger.info("Connecting directly to Telangana portal to fetch fresh live DCB data: %s", URL_ALL_GP_DATA)
 
-    request_url = proxy_url or URL_ALL_GP_DATA
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept": "application/vnd.ms-excel,application/octet-stream,*/*",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
     }
-    if proxy_url:
-        headers["Authorization"] = f"Bearer {PORTAL_PROXY_TOKEN}"
-        logger.info("Fetching fresh live DCB data through the configured e-Panchayat regional proxy.")
-    else:
-        logger.info("Connecting to Telangana portal to fetch fresh live DCB data: %s", URL_ALL_GP_DATA)
+    if proxy_base:
+        headers["Authorization"] = f"Bearer {proxy_token}"
 
-    with httpx.Client(verify=False, timeout=60.0) as client:
+    with httpx.Client(verify=False, timeout=90.0) as client:
         resp = client.get(request_url, headers=headers)
         resp.raise_for_status()
         content = resp.content
