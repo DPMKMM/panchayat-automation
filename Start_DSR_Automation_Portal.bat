@@ -1,12 +1,20 @@
 @echo off
-title Telangana Panchayat Raj - Automated DSR Portal
+TITLE Telangana Panchayat Raj - Automated DSR Portal & Public Gateway
+COLOR 0A
+
 cd /d "%~dp0"
-echo ===================================================================
-echo   Telangana Panchayat Raj - Automated DSR Portal
-echo   Launching local server with Real-Time e-Panchayat Browser Robot...
-echo ===================================================================
+
+echo =====================================================================
+echo    Telangana Panchayat Raj - Automated DSR Portal ^& Public Gateway
+echo    Starting local server and generating single clean Public URL...
+echo =====================================================================
 echo.
-echo Starting server on http://localhost:8000/ ...
-start "" "http://localhost:8000/"
-".venv\Scripts\python.exe" -m uvicorn app:app --host 127.0.0.1 --port 8000
+
+if exist ".venv\Scripts\python.exe" (
+    set "PY_CMD=.venv\Scripts\python.exe"
+) else (
+    set "PY_CMD=python"
+)
+
+"%PY_CMD%" run_cloudflare_portal.py
 pause

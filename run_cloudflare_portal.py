@@ -40,12 +40,51 @@ if not token_from_env and env_file.exists():
 
 TUNNEL_TOKEN = token_from_env or ""  # Leave empty for free trycloudflare quick tunnel
 
-if not CLOUDFLARED_EXE.exists():
-    # Try finding in system PATH
+
+def ensure_cloudflared() -> Path:
+    """Ensures cloudflared.exe is present and valid; auto-downloads if missing."""
+    global CLOUDFLARED_EXE
+    if CLOUDFLARED_EXE.exists() and CLOUDFLARED_EXE.stat().st_size > 10_000_000:
+        return CLOUDFLARED_EXE
+
     import shutil
     cand = shutil.which("cloudflared")
-    if cand:
+    if cand and Path(cand).exists():
         CLOUDFLARED_EXE = Path(cand)
+        return CLOUDFLARED_EXE
+
+    print("[*] cloudflared.exe not found locally. Auto-downloading from Cloudflare...", flush=True)
+    target = BASE_DIR / "cloudflared.exe"
+    dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    try:
+        import urllib.request
+        req = urllib.request.Request(dl_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=90) as resp, open(target, "wb") as f:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            while True:
+                chunk = resp.read(1024 * 512)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total > 0:
+                    pct = int(downloaded * 100 / total)
+                    print(f"\r[*] Downloading Cloudflare Tunnel engine: {pct}% ({downloaded // (1024*1024)}MB / {total // (1024*1024)}MB)...", end="", flush=True)
+        print("\n[+] cloudflared.exe downloaded and verified successfully!", flush=True)
+        CLOUDFLARED_EXE = target
+        return CLOUDFLARED_EXE
+    except Exception as exc:
+        print(f"\n[!] Failed to auto-download cloudflared.exe: {exc}", flush=True)
+        return target
+
+
+def kill_stale_cloudflared():
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
 
 
 def is_port_in_use(port: int = 8000) -> bool:
@@ -77,11 +116,15 @@ def main():
                 print("[+] Local server started successfully.")
                 break
 
+    # 2. Verify cloudflared executable is present
+    ensure_cloudflared()
     if not CLOUDFLARED_EXE.exists():
-        print("[ERROR] cloudflared.exe not found. Please ensure cloudflared is downloaded.")
+        print("[ERROR] cloudflared.exe could not be downloaded. Please check internet connection.")
         sys.exit(1)
 
-    # 2. Launch Cloudflare Tunnel
+    kill_stale_cloudflared()
+
+    # 3. Launch Cloudflare Tunnel
     if TUNNEL_TOKEN:
         print("[*] Launching permanent Cloudflare Zero Trust tunnel with your connector token...")
         cf_proc = subprocess.Popen(
@@ -128,7 +171,7 @@ def main():
 
         # Read output to capture the public tunnel URL
         start_time = time.time()
-        while time.time() - start_time < 30:
+        while time.time() - start_time < 60:
             line = cf_proc.stdout.readline()
             if not line:
                 if cf_proc.poll() is not None:
@@ -136,13 +179,17 @@ def main():
                 time.sleep(0.1)
                 continue
 
-            match = url_pattern.search(line)
+            clean_line = line.strip()
+            match = url_pattern.search(clean_line)
             if match:
                 tunnel_url = match.group(0)
                 break
+            elif any(k in clean_line for k in ["INF", "Connection", "Registered", "trycloudflare", "Initial protocol"]):
+                # Print connection progress
+                print(f"    {clean_line[:85]}", flush=True)
 
         if not tunnel_url:
-            print("[ERROR] Could not extract tunnel URL from Cloudflare output.")
+            print("\n[ERROR] Could not extract tunnel URL from Cloudflare output within 60s.")
             if cf_proc.poll() is not None:
                 print("Process exited with code:", cf_proc.returncode)
             sys.exit(1)
@@ -165,7 +212,14 @@ def main():
         print("  🛡️ Traffic to e-Panchayat originates from your local Indian IP,")
         print("     so Telangana State Data Center firewall will NEVER block it.")
         print("=" * 68)
-        print("  Press Ctrl+C at any time to shut down the public tunnel.\n")
+
+        # Copy to clipboard if on Windows
+        try:
+            if sys.platform == "win32":
+                subprocess.run(["clip"], input=public_url, text=True, check=False)
+                print("  📋 Public URL copied to clipboard automatically!\n")
+        except Exception:
+            pass
 
         # Automatically open in browser
         try:
