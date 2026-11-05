@@ -23,6 +23,8 @@ load_dotenv()
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
+import pymupdf
+
 from integrations import (
     ALLOWED_EXTENSIONS,
     JobRecord,
@@ -448,7 +450,7 @@ UPLOAD_PAGE_HTML = """<!doctype html>
 
       <div class="section-heading">
         <h2>Departmental Reporting Modules</h2>
-        <span>Select an active module or explore upcoming tools</span>
+        <span>Active modules: DSR Attendance and House Tax DCB</span>
       </div>
 
       <div class="modules-grid">
@@ -949,10 +951,42 @@ UPLOAD_PAGE_HTML = """<!doctype html>
           link.click();
           link.remove();
 
+          let downloadSummary = `${fileName} saved to Downloads.`;
+          let jpegDownloadWarning = '';
+          if (modeLabel === 'Mandal') {
+            try {
+              const pageInfo = await apiJson(`/api/web/reports/${encodeURIComponent(jobId)}/jpeg-pages`);
+              const pageCount = Number(pageInfo.page_count) || 0;
+              for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+                showToastLoading(`Downloading Mandal JPEG ${pageNumber}/${pageCount}...`, 'Preparing a JPEG image for each Mandal PDF page...');
+                const imageResponse = await fetch(`/api/web/reports/${encodeURIComponent(jobId)}/jpeg-pages/${pageNumber}`, {
+                  credentials: 'same-origin'
+                });
+                if (!imageResponse.ok) await readResponse(imageResponse);
+                const imageBlob = await imageResponse.blob();
+                const imageUrl = URL.createObjectURL(imageBlob);
+                const imageDisposition = imageResponse.headers.get('Content-Disposition') || '';
+                const imageFilename = /filename="?([^";]+)"?/i.exec(imageDisposition)?.[1]
+                  || `${fileName.replace(/\\.pdf$/i, '')}_Page_${String(pageNumber).padStart(2, '0')}.jpg`;
+                const imageLink = document.createElement('a');
+                imageLink.href = imageUrl;
+                imageLink.download = imageFilename;
+                document.body.appendChild(imageLink);
+                imageLink.click();
+                imageLink.remove();
+                setTimeout(() => URL.revokeObjectURL(imageUrl), 300000);
+                if (pageNumber < pageCount) await new Promise(resolve => setTimeout(resolve, 300));
+              }
+              downloadSummary += ` ${pageCount} JPEG page image${pageCount === 1 ? '' : 's'} also saved.`;
+            } catch (imageError) {
+              jpegDownloadWarning = ` The PDF downloaded, but the Mandal JPEG pages could not be downloaded: ${imageError.message || 'Please try again.'}`;
+            }
+          }
+
           // Show floating toast and banner notification with direct view URL
           const viewUrl = `/api/web/reports/${encodeURIComponent(jobId)}/view`;
-          showToastSuccess('Download Complete!', `${fileName} saved to Downloads.`, fileName, viewUrl);
-          showMessage(messageEl, 'Report downloaded successfully! You can upload another file or view the PDF.', 'success', viewUrl, fileName);
+          showToastSuccess('Download Complete!', `${downloadSummary}${jpegDownloadWarning}`, fileName, viewUrl);
+          showMessage(messageEl, jpegDownloadWarning || `${downloadSummary} You can upload another file or view the PDF.`, jpegDownloadWarning ? 'error' : 'success', viewUrl, fileName);
 
           // Keep blob URL active for 5 minutes for direct viewing
           setTimeout(() => {
@@ -1203,6 +1237,19 @@ def create_app(
             raise HTTPException(status_code=404, detail="Report job was not found.")
         return record
 
+    def _read_completed_mandal_pdf(job_id: str, request: Request) -> tuple[JobRecord, bytes]:
+        record = _get_web_job(job_id, request)
+        if "; Mode: mandal;" not in record.notes:
+            raise HTTPException(status_code=404, detail="JPEG page downloads are available for Mandal reports only.")
+        if record.status != "Completed" or not record.output_pdf:
+            raise HTTPException(status_code=409, detail=f"Report is not ready (status: {record.status}).")
+        try:
+            pdf_bytes = storage.read_pdf(record.output_pdf, record.local_pdf_path)
+        except Exception as exc:
+            status_code, message = _safe_error(exc)
+            raise HTTPException(status_code=status_code, detail=message) from None
+        return record, pdf_bytes
+
     def _new_record(job_id: str, filename: str, requested_by: str) -> JobRecord:
         return JobRecord(
             job_id=job_id,
@@ -1429,6 +1476,41 @@ def create_app(
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f'{disposition}; filename="{_record_report_filename(record)}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
+
+    @api.get("/api/web/reports/{job_id}/jpeg-pages", include_in_schema=False)
+    def get_mandal_jpeg_page_count(job_id: str, request: Request) -> dict[str, int]:
+        _, pdf_bytes = _read_completed_mandal_pdf(job_id, request)
+        try:
+            with pymupdf.open(stream=pdf_bytes, filetype="pdf") as document:
+                return {"page_count": document.page_count}
+        except Exception:
+            raise HTTPException(status_code=500, detail="Could not read the generated Mandal PDF.") from None
+
+    @api.get("/api/web/reports/{job_id}/jpeg-pages/{page_number}", include_in_schema=False)
+    def download_mandal_jpeg_page(job_id: str, page_number: int, request: Request) -> Response:
+        record, pdf_bytes = _read_completed_mandal_pdf(job_id, request)
+        try:
+            with pymupdf.open(stream=pdf_bytes, filetype="pdf") as document:
+                if page_number < 1 or page_number > document.page_count:
+                    raise HTTPException(status_code=404, detail="Mandal report page was not found.")
+                page = document.load_page(page_number - 1)
+                pixmap = page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5), alpha=False)
+                jpeg_bytes = pixmap.tobytes("jpeg")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=500, detail="Could not convert the Mandal PDF page to JPEG.") from None
+
+        filename = f"{Path(_record_report_filename(record)).stem}_Page_{page_number:02d}.jpg"
+        return Response(
+            content=jpeg_bytes,
+            media_type="image/jpeg",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
                 "Access-Control-Expose-Headers": "Content-Disposition",
             },
         )

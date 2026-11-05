@@ -15,7 +15,7 @@ A FastAPI web application for uploading Gram Panchayat attendance files and down
 - Counts DSR submissions only for eligible present PSs; Leave, Meeting, Training, and other statuses are excluded.
 - Sorts the DSR abstract by DSR-pending GP count in ascending order.
 - Places the DSR-pending GP list immediately after the attendance-pending list.
-- Downloads the PDF automatically as `PS_Attendance_Report_YYYY-MM-DD_HH-MM-SS.pdf`.
+- Downloads the District report as a PDF; Mandal reports download the PDF plus one JPEG image for each PDF page.
 - Keeps each report download private to the browser session that uploaded it.
 
 ## File Uploads

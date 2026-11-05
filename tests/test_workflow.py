@@ -474,6 +474,7 @@ def test_web_upload_processes_synchronously_and_downloads_private_pdf(
     )
     assert download.content.startswith(b"%PDF")
     assert (config.data_dir / "reports" / "PS_Attendance_Report_2026-10-28_08-34-05.pdf").is_file()
+    assert client.get(f"/api/web/reports/{job_id}/jpeg-pages").status_code == 404
     assert client.get(f"/api/reports/{job_id}").status_code == 404
     assert client.get("/docs").status_code == 404
 
@@ -677,6 +678,17 @@ def test_web_upload_mandal_mode_downloads_mandal_pdf(tmp_path: Path, monkeypatch
     download_resp = client.get(f"/api/web/reports/{job_id}/download")
     assert download_resp.status_code == 200
     assert "Mandal_A_Attendance_Report" in download_resp.headers["content-disposition"]
+
+    images_resp = client.get(f"/api/web/reports/{job_id}/jpeg-pages")
+    assert images_resp.status_code == 200
+    page_count = images_resp.json()["page_count"]
+    assert page_count >= 2
+    for page_number in range(1, page_count + 1):
+        image_resp = client.get(f"/api/web/reports/{job_id}/jpeg-pages/{page_number}")
+        assert image_resp.status_code == 200
+        assert image_resp.headers["content-type"] == "image/jpeg"
+        assert f"_Page_{page_number:02d}.jpg" in image_resp.headers["content-disposition"]
+        assert image_resp.content.startswith(b"\xff\xd8")
 
 
 def test_mandal_report_excludes_ps_name_and_mobile(tmp_path: Path):
