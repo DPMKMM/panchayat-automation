@@ -1878,23 +1878,39 @@ NARESH_PAGE_HTML = """<!doctype html>
   </footer>
 
   <script>
-    // Multi-Session Client ID Manager (Cookie + LocalStorage + Fetch Interceptor)
+    // Multi-Session Client ID Manager (sessionStorage + localStorage + Cookie + Fetch Interceptor)
     window.getEptsSessionId = function() {
+      // 1. Check sessionStorage (strictly isolated per browser tab / window)
       let sid = "";
       try {
-        sid = localStorage.getItem("epts_session_id") || "";
+        sid = sessionStorage.getItem("epts_session_id") || "";
       } catch(e) {}
+
+      // 2. Fall back to localStorage (unique per browser profile)
+      if (!sid) {
+        try {
+          sid = localStorage.getItem("epts_session_id") || "";
+        } catch(e) {}
+      }
+
+      // 3. Fall back to cookie
       if (!sid) {
         const match = document.cookie.match(/(?:^|;\\s*)epts_session_id=([^;]+)/);
-        if (match) sid = decodeURIComponent(match[1]);
+        if (match) {
+          const cand = decodeURIComponent(match[1].trim());
+          if (cand && cand.length >= 8) sid = cand;
+        }
       }
+
+      // 4. If missing or invalid, generate a unique client UUID with timestamp
       if (!sid || sid.length < 8) {
-        sid = "sid_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        try { localStorage.setItem("epts_session_id", sid); } catch(e) {}
-        document.cookie = "epts_session_id=" + encodeURIComponent(sid) + "; path=/; max-age=2592000; SameSite=Lax";
-      } else {
-        try { localStorage.setItem("epts_session_id", sid); } catch(e) {}
+        sid = "sid_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
       }
+
+      // Keep storage layers synchronized for this specific browser
+      try { sessionStorage.setItem("epts_session_id", sid); } catch(e) {}
+      try { localStorage.setItem("epts_session_id", sid); } catch(e) {}
+      document.cookie = "epts_session_id=" + encodeURIComponent(sid) + "; path=/; max-age=2592000; SameSite=Lax";
       return sid;
     };
 
@@ -3142,6 +3158,11 @@ NARESH_PAGE_HTML = """<!doctype html>
       sessionStorage.clear();
       localStorage.removeItem('epts_portal_auth');
       localStorage.removeItem('epts_officer_id');
+      // Decouple this browser by generating a fresh unique session ID on logout
+      const freshSid = "sid_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+      try { sessionStorage.setItem("epts_session_id", freshSid); } catch(e) {}
+      try { localStorage.setItem("epts_session_id", freshSid); } catch(e) {}
+      document.cookie = "epts_session_id=" + encodeURIComponent(freshSid) + "; path=/; max-age=2592000; SameSite=Lax";
       const resultsEl = document.getElementById('results-section');
       if (resultsEl) resultsEl.style.display = 'none';
       reportData = null;
@@ -3517,9 +3538,19 @@ NARESH_PAGE_HTML = """<!doctype html>
 
     async function checkServerSessionStatus() {
       try {
-        const res = await fetch('/api/naresh/session-status');
+        const mySid = window.getEptsSessionId();
+        const res = await fetch('/api/naresh/session-status?_ts=' + Date.now(), {
+          cache: 'no-store',
+          headers: { 'X-Session-ID': mySid }
+        });
         if (res.ok) {
           const data = await res.json();
+          // Security Guard: If any intermediate proxy served another session's data, reject it
+          if (data && data.session_id && data.session_id !== mySid) {
+            console.warn("Session ID mismatch: server returned", data.session_id, "expected", mySid);
+            return false;
+          }
+
           window.updateGlobalBrowserStatus(data);
           if (data && data.authenticated) {
             const officer = data.user_id || sessionStorage.getItem('epts_officer_id') || 'Officer';

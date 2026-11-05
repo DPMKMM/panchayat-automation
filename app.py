@@ -189,10 +189,11 @@ def create_app(
 
     @api.middleware("http")
     async def session_cookie_middleware(request: Request, call_next):
-        # Extract session ID from cookie, header, or query param
+        # 1. Header takes strict priority over cookie (prevents proxy / Cloudflare cookie poisoning)
         sid = (
-            request.cookies.get("epts_session_id")
-            or request.headers.get("X-Session-ID")
+            request.headers.get("X-Session-ID")
+            or request.headers.get("x-session-id")
+            or request.cookies.get("epts_session_id")
             or request.query_params.get("session_id")
             or ""
         ).strip()
@@ -205,7 +206,13 @@ def create_app(
         request.state.session_id = sid
         response = await call_next(request)
 
-        # Ensure cookie is set on client browser for multi-session support
+        # 2. Strict anti-caching headers for ALL endpoints (Cloudflare, proxies, CDNs, and browsers)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        response.headers["X-Session-ID"] = sid
+
+        # Set cookie if new or missing
         if is_new or not request.cookies.get("epts_session_id"):
             response.set_cookie(
                 key="epts_session_id",
@@ -215,14 +222,15 @@ def create_app(
                 samesite="lax",
                 path="/",
             )
-        response.headers["X-Session-ID"] = sid
         return response
 
     def _get_sid(request: Request) -> str:
+        # Prioritize client X-Session-ID header, then request.state, then cookie
         return (
-            getattr(request.state, "session_id", None)
+            request.headers.get("X-Session-ID")
+            or request.headers.get("x-session-id")
+            or getattr(request.state, "session_id", None)
             or request.cookies.get("epts_session_id")
-            or request.headers.get("X-Session-ID")
             or request.query_params.get("session_id")
             or "default"
         )
