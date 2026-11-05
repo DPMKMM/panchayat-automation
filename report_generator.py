@@ -589,7 +589,7 @@ def analyze_attendance(
         )
 
     # Detect district name dynamically from the uploaded data
-    district_name = "Khammam"
+    district_name = "District"
     if "District Name" in frame.columns:
         dist_series = frame["District Name"].dropna().map(_clean_string)
         dist_series = dist_series[dist_series != ""]

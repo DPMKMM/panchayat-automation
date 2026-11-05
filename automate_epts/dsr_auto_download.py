@@ -57,9 +57,13 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
     page = bot.page
     date_formatted = format_portal_date(target_date)
 
+    portal_dialog_messages: list[str] = []
+
     # Automatically dismiss any alert dialogs from portal so they don't block
     def on_dialog(dialog):
-        print(f"[!] Portal alert dialog: '{dialog.message}' - accepting...", flush=True)
+        msg = (dialog.message or "").strip()
+        print(f"[!] Portal alert dialog: '{msg}' - accepting...", flush=True)
+        portal_dialog_messages.append(msg)
         try:
             dialog.accept()
         except Exception:
@@ -191,17 +195,36 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
     dl_btn.wait_for(state="visible", timeout=15000)
 
     print(f"[*] Triggering download for {code}...", flush=True)
-    with page.expect_download(timeout=60000) as dl_info:
-        dl_btn.click()
+    portal_dialog_messages.clear()
 
-    download = dl_info.value
-    # USE THE ORIGINAL SUGGESTED FILENAME AS-IS WITHOUT RENAMING
-    portal_filename = download.suggested_filename
-    dest = DOWNLOADS_DIR / portal_filename
-    download.save_as(str(dest))
-    print(f"[SUCCESS] Downloaded file as-is from portal: {portal_filename} ({dest.stat().st_size:,} bytes)", flush=True)
+    try:
+        with page.expect_download(timeout=15000) as dl_info:
+            dl_btn.click()
+            # If an alert appeared immediately (like 'Sorry! No Data Found..'), check dialog list
+            time.sleep(1)
+            for m in portal_dialog_messages:
+                if "no data found" in m.lower():
+                    print(f"[-] Portal dialog: '{m}' for {code}. No records found.", flush=True)
+                    return None
 
-    return dest
+        download = dl_info.value
+        # USE THE ORIGINAL SUGGESTED FILENAME AS-IS WITHOUT RENAMING
+        portal_filename = download.suggested_filename
+        target_dir = getattr(bot, "downloads_dir", DOWNLOADS_DIR)
+        dest = target_dir / portal_filename
+        download.save_as(str(dest))
+        print(f"[SUCCESS] Downloaded file as-is from portal: {portal_filename} ({dest.stat().st_size:,} bytes)", flush=True)
+        return dest
+    except Exception as exc:
+        for m in portal_dialog_messages:
+            if "no data found" in m.lower():
+                print(f"[-] Portal alert '{m}' received for {code}. No records exist.", flush=True)
+                return None
+        # For absentees and presentees, lack of a download is normal if 0 records match
+        if "1.2.10" in code or "1.2.11" in code:
+            print(f"[-] Optional report {code} download note: {exc}. Proceeding without it.", flush=True)
+            return None
+        raise
 
 
 # Backward compatibility alias

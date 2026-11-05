@@ -49,33 +49,50 @@ def save_config(config_data):
 
 
 class EPTSAutomation:
-    def __init__(self, headless=False):
+    def __init__(self, headless=False, profile_dir=None, downloads_dir=None):
         self.headless = headless
+        self.profile_dir = Path(profile_dir) if profile_dir else PROFILE_DIR
+        self.downloads_dir = Path(downloads_dir) if downloads_dir else DOWNLOADS_DIR
+        self.profile_dir.mkdir(parents=True, exist_ok=True)
+        self.downloads_dir.mkdir(parents=True, exist_ok=True)
         self.playwright = None
         self.context = None
         self.page = None
         self.ocr = ddddocr.DdddOcr(show_ad=False)
 
     def start_browser(self):
-        print(f"[*] Launching Chrome with persistent profile (Headless: {self.headless})...", flush=True)
+        print(f"[*] Launching Chrome with persistent profile at {self.profile_dir} (Headless: {self.headless})...", flush=True)
         self.playwright = sync_playwright().start()
         launch_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"]
         try:
             self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(PROFILE_DIR),
+                user_data_dir=str(self.profile_dir),
                 channel="chrome",
                 headless=self.headless,
                 accept_downloads=True,
+                downloads_path=str(self.downloads_dir),
                 args=launch_args,
             )
         except Exception as e:
-            print(f"[-] Chrome channel launch failed ({e}), falling back to default Chromium...", flush=True)
-            self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(PROFILE_DIR),
-                headless=self.headless,
-                accept_downloads=True,
-                args=launch_args,
-            )
+            print(f"[-] Chrome channel launch failed ({e}), attempting msedge channel...", flush=True)
+            try:
+                self.context = self.playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(self.profile_dir),
+                    channel="msedge",
+                    headless=self.headless,
+                    accept_downloads=True,
+                    downloads_path=str(self.downloads_dir),
+                    args=launch_args,
+                )
+            except Exception as e_edge:
+                print(f"[-] msedge channel launch failed ({e_edge}), falling back to default Chromium...", flush=True)
+                self.context = self.playwright.chromium.launch_persistent_context(
+                    user_data_dir=str(self.profile_dir),
+                    headless=self.headless,
+                    accept_downloads=True,
+                    downloads_path=str(self.downloads_dir),
+                    args=launch_args,
+                )
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
     def is_logged_in(self):
@@ -254,7 +271,7 @@ class EPTSAutomation:
             return True
 
         config = load_config()
-        username = config.get("username", "DPOA3698")
+        username = config.get("username", "")
         password = config.get("password")
         if not password:
             raise ValueError("Password not found in config.json")

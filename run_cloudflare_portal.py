@@ -21,7 +21,24 @@ if not PYTHON_EXE.exists():
     PYTHON_EXE = Path(sys.executable)
 
 CLOUDFLARED_EXE = BASE_DIR / "cloudflared.exe"
-TUNNEL_TOKEN = ""  # Leave empty for free instant trycloudflare tunnel (no domain required)
+
+# 1. Read token from environment variable or .env file
+env_file = BASE_DIR / ".env"
+token_from_env = os.getenv("CLOUDFLARE_TUNNEL_TOKEN", "").strip()
+custom_domain = os.getenv("CUSTOM_DOMAIN", "panchayatautomation.in").strip()
+
+if not token_from_env and env_file.exists():
+    try:
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("CLOUDFLARE_TUNNEL_TOKEN="):
+                token_from_env = line.split("=", 1)[1].strip().strip('"').strip("'")
+            elif line.startswith("CUSTOM_DOMAIN="):
+                custom_domain = line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+
+TUNNEL_TOKEN = token_from_env or ""  # Leave empty for free trycloudflare quick tunnel
 
 if not CLOUDFLARED_EXE.exists():
     # Try finding in system PATH
@@ -77,14 +94,22 @@ def main():
             errors="replace",
             bufsize=1,
         )
+        perm_url = f"https://{custom_domain}"
+        try:
+            url_file = BASE_DIR / "latest_public_url.txt"
+            url_file.write_text(f"Permanent Domain: {perm_url}/\nLocal Access: http://127.0.0.1:8000/\nStatus: Connected via Cloudflare Zero Trust Tunnel\nConnected: {time.ctime()}\n", encoding="utf-8")
+        except Exception:
+            pass
+
         print("\n" + "=" * 68)
         print("  🚀 PERMANENT CLOUDFLARE ZERO TRUST TUNNEL IS CONNECTED!")
         print("=" * 68)
-        print("  Status   : Connected to Hyderabad & Mumbai edge nodes (hyd03/bom10)")
-        print("  Local    : http://127.0.0.1:8000/naresh")
+        print(f"  Permanent Domain :  {perm_url}")
+        print("  Status           :  Connected to Hyderabad & Mumbai edge nodes (hyd03/bom10)")
+        print("  Local Access     :  http://127.0.0.1:8000/")
         print("=" * 68)
-        print("  Your tunnel is permanently active in your Cloudflare dashboard!")
-        print("  Press Ctrl+C at any time to disconnect.\n")
+        print(f"  Your permanent website is live at {perm_url} !")
+        print("  Running silently in background.\n")
     else:
         print("[*] Establishing Cloudflare Tunnel to Hyderabad edge...")
         cf_proc = subprocess.Popen(
@@ -124,6 +149,12 @@ def main():
 
         portal_url = f"{tunnel_url}/naresh"
         home_url = tunnel_url
+
+        try:
+            url_file = BASE_DIR / "latest_public_url.txt"
+            url_file.write_text(f"Public Naresh URL: {portal_url}\nPublic Home URL: {home_url}\nGenerated: {time.ctime()}\n", encoding="utf-8")
+        except Exception:
+            pass
 
         print("\n" + "=" * 68)
         print("  🚀 PORTAL IS LIVE ONLINE VIA CLOUDFLARE HYDERABAD EDGE!")

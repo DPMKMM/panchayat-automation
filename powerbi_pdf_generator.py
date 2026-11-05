@@ -279,7 +279,7 @@ def draw_district_page(c: canvas.Canvas, district_name: str, data: dict[str, Any
             format_inr(m.get("demand_total", 0)),
             format_inr(m.get("collection_total", 0)),
             format_inr(m.get("balance_total", 0)),
-            str(int(round(p))),
+            f"{p:.1f}%",
         ])
         style_cmds.append(("BACKGROUND", (5, idx), (5, idx), colors.HexColor(bg_hex)))
         style_cmds.append(("TEXTCOLOR", (5, idx), (5, idx), colors.HexColor(fg_hex)))
@@ -294,7 +294,7 @@ def draw_district_page(c: canvas.Canvas, district_name: str, data: dict[str, Any
         format_inr(s.get("total_demand", 0)),
         format_inr(s.get("total_collection", 0)),
         format_inr(s.get("total_balance", 0)),
-        str(int(round(tot_pct))),
+        f"{tot_pct:.1f}%",
     ])
     style_cmds.append(("BACKGROUND", (5, tot_row_idx), (5, tot_row_idx), colors.HexColor(tot_bg)))
     style_cmds.append(("TEXTCOLOR", (5, tot_row_idx), (5, tot_row_idx), colors.HexColor(tot_fg)))
@@ -407,7 +407,7 @@ def draw_mandal_page(c: canvas.Canvas, mandal_name: str, m_data: dict[str, Any])
             format_inr(r.get("demand_total", 0)),
             format_inr(r.get("collection_total", 0)),
             format_inr(r.get("balance_total", 0)),
-            str(int(round(p))),
+            f"{p:.1f}%",
         ])
         style_cmds.append(("BACKGROUND", (4, idx), (4, idx), colors.HexColor(bg_hex)))
         style_cmds.append(("TEXTCOLOR", (4, idx), (4, idx), colors.HexColor(fg_hex)))
@@ -421,7 +421,7 @@ def draw_mandal_page(c: canvas.Canvas, mandal_name: str, m_data: dict[str, Any])
         format_inr(s.get("total_demand", 0)),
         format_inr(s.get("total_collection", 0)),
         format_inr(s.get("total_balance", 0)),
-        str(int(round(m_pct))),
+        f"{m_pct:.1f}%",
     ])
     style_cmds.append(("BACKGROUND", (4, tot_row_idx), (4, tot_row_idx), colors.HexColor(m_tot_bg)))
     style_cmds.append(("TEXTCOLOR", (4, tot_row_idx), (4, tot_row_idx), colors.HexColor(m_tot_fg)))
@@ -472,7 +472,7 @@ def draw_mandal_page(c: canvas.Canvas, mandal_name: str, m_data: dict[str, Any])
 
 
 def generate_powerbi_pdf(
-    district_name: str = "Khammam",
+    district_name: str = "District",
     mandal_name: Optional[str] = None,
     output_path_or_buffer: Any = None,
 ) -> bytes:
@@ -513,7 +513,7 @@ def generate_powerbi_pdf(
 
 
 def get_or_generate_powerbi_pdf(
-    district_name: str = "Khammam",
+    district_name: str = "District",
     mandal_name: Optional[str] = None,
     force_regenerate: bool = False,
 ) -> tuple[str, bytes]:

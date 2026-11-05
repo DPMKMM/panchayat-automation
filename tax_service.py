@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import logging
+import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
@@ -11,9 +13,8 @@ import pandas as pd
 
 logger = logging.getLogger("epmis_tax_service")
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
-RAW_TAX_FILE = DATA_DIR / "allgpdata_raw.xls"
-CONSOLIDATED_EXCEL = DATA_DIR / "telangana_house_tax_dcb_consolidated.xlsx"
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 
 URL_ALL_GP_DATA = "https://epanchayat.telangana.gov.in/epmis/allgpdata.jsp"
 URL_DISTRICT_LIVE = "https://epanchayat.telangana.gov.in/epmis/epmisPRHTAXDCBLive.jsp"
@@ -21,34 +22,47 @@ URL_DISTRICT_LIVE = "https://epanchayat.telangana.gov.in/epmis/epmisPRHTAXDCBLiv
 # Ensure data directory exists
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+_LIVE_BYTES_CACHE: Optional[bytes] = None
+_LAST_FETCH_TIME: float = 0.0
+
 
 def download_portal_raw_data() -> bytes:
-    """Download fresh raw Excel data from epanchayat portal."""
-    logger.info("Downloading raw DCB data from %s", URL_ALL_GP_DATA)
+    """Download fresh raw data directly from Telangana epanchayat portal into memory (zero saved files)."""
+    global _LIVE_BYTES_CACHE, _LAST_FETCH_TIME
+    logger.info("Connecting to Telangana portal to fetch fresh live DCB data: %s", URL_ALL_GP_DATA)
     with httpx.Client(verify=False, timeout=60.0) as client:
         resp = client.get(URL_ALL_GP_DATA, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
         })
         resp.raise_for_status()
-        RAW_TAX_FILE.write_bytes(resp.content)
-        return resp.content
+        content = resp.content
+        if len(content) < 50_000:
+            raise ValueError(f"Portal returned invalid or empty data ({len(content)} bytes)")
+
+        _LIVE_BYTES_CACHE = content
+        _LAST_FETCH_TIME = time.time()
+        logger.info("Successfully fetched live portal DCB data: %d bytes (held in-memory)", len(content))
+        return content
 
 
 def get_raw_data_bytes(force_download: bool = False) -> bytes:
-    """Return cached raw bytes or download if requested / missing."""
-    if not force_download and RAW_TAX_FILE.exists() and RAW_TAX_FILE.stat().st_size > 100_000:
-        return RAW_TAX_FILE.read_bytes()
-    # Check if bundled_allgpdata.xls or root allgpdata.xls exists
-    base_dir = Path(__file__).resolve().parent
-    for candidate in [base_dir / "bundled_allgpdata.xls", base_dir / "allgpdata.xls"]:
-        if not force_download and candidate.exists() and candidate.stat().st_size > 100_000:
-            content = candidate.read_bytes()
-            try:
-                RAW_TAX_FILE.write_bytes(content)
-            except Exception:
-                pass
-            return content
-    return download_portal_raw_data()
+    """Always fetch live real-time data from portal. Short 2-minute memory cache prevents duplicate downloads during rapid page navigation."""
+    global _LIVE_BYTES_CACHE, _LAST_FETCH_TIME
+
+    # If force_download is requested, or cache is older than 2 minutes, fetch live from portal
+    if not force_download and _LIVE_BYTES_CACHE and (time.time() - _LAST_FETCH_TIME < 120):
+        return _LIVE_BYTES_CACHE
+
+    try:
+        return download_portal_raw_data()
+    except Exception as exc:
+        logger.error("Live portal download attempt encountered error: %s", exc)
+        if _LIVE_BYTES_CACHE:
+            return _LIVE_BYTES_CACHE
+        raise RuntimeError(f"Could not connect to Telangana e-Panchayat portal: {exc}") from exc
 
 
 def parse_and_clean_data(raw_bytes: Optional[bytes] = None) -> pd.DataFrame:
@@ -114,8 +128,8 @@ _DF_CACHE: Optional[pd.DataFrame] = None
 
 def get_df(force_reload: bool = False) -> pd.DataFrame:
     global _DF_CACHE
-    if _DF_CACHE is None or force_reload:
-        raw = get_raw_data_bytes(force_download=force_reload) if force_reload else None
+    if _DF_CACHE is None or force_reload or (_LAST_FETCH_TIME and (time.time() - _LAST_FETCH_TIME > 120)):
+        raw = get_raw_data_bytes(force_download=force_reload)
         _DF_CACHE = parse_and_clean_data(raw)
     return _DF_CACHE
 

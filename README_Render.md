@@ -15,7 +15,7 @@ The existing service keeps its current session-signing secret for compatibility.
 
 ## Important storage limit
 
-Render Free does not provide persistent local disks. Files under /tmp/khammam-attendance-data can be cleared when the service restarts, redeploys, or spins down. Download each report and keep your own copy. If report history and PDFs must survive service restarts, choose a persistent storage option and review any associated charges before enabling it.
+Render Free does not provide persistent local disks. Files under /tmp/epanchayat-attendance-data can be cleared when the service restarts, redeploys, or spins down. Download each report and keep your own copy. If report history and PDFs must survive service restarts, choose a persistent storage option and review any associated charges before enabling it.
 
 ## Deploy updates
 
@@ -29,8 +29,8 @@ Keep the legacy service available until the new service has been verified. Do no
 ## Local Docker check
 
 ~~~powershell
-docker build -t khammam-ps-attendance .
-docker run --rm -p 8080:8080 -e WEB_SESSION_SECRET=replace-with-a-random-secret-of-at-least-32-characters -e DATA_DIR=/tmp/khammam-attendance-data khammam-ps-attendance
+docker build -t epanchayat-ps-attendance .
+docker run --rm -p 8080:8080 -e WEB_SESSION_SECRET=replace-with-a-random-secret-of-at-least-32-characters -e DATA_DIR=/tmp/epanchayat-attendance-data epanchayat-ps-attendance
 ~~~
 
 Open http://localhost:8080/ and http://localhost:8080/health.

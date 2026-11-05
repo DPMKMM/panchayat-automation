@@ -1076,7 +1076,7 @@ TAX_PAGE_HTML = """<!doctype html>
       <div class="kpi-card">
         <span class="kpi-title">Total Mandals</span>
         <div class="kpi-val" id="kpi-mandals">--</div>
-        <div class="kpi-sub" id="kpi-district-name">Khammam District</div>
+        <div class="kpi-sub" id="kpi-district-name">Select District</div>
       </div>
       <div class="kpi-card">
         <span class="kpi-title">Total Gram Panchayats</span>
@@ -1186,7 +1186,7 @@ TAX_PAGE_HTML = """<!doctype html>
             <!-- Header Banner (Soft Blue #D2E3FC) -->
             <div class="pbi-banner-district">
               <div class="pbi-banner-district-title" id="pbi-dist-banner-title">
-                DEMAND, COLLECTION, BALANCE OF KHAMMAM DISTRICT
+                DEMAND, COLLECTION, BALANCE OF SELECTED DISTRICT
               </div>
             </div>
 
@@ -1424,7 +1424,7 @@ TAX_PAGE_HTML = """<!doctype html>
   </div>
 
   <footer>
-    Executive Analytics &amp; Monitoring Portal Owned, maintained and updated by DPM Khammam
+    Executive Analytics &amp; Monitoring Portal | Telangana Panchayat Raj &amp; Rural Development
   </footer>
 
   <script>

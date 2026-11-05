@@ -7,7 +7,7 @@ client = TestClient(app.app)
 
 
 def test_tax_page_route():
-    resp = client.get("/reports/tax-dcb?district=Khammam")
+    resp = client.get("/reports/tax-dcb?district=Adilabad")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "Gram Panchayat Wise DCB Status" in resp.text
@@ -20,12 +20,12 @@ def test_tax_districts_api():
     assert isinstance(data, list)
     assert len(data) == 31
     dist_names = [d["district"] for d in data]
-    assert "Khammam" in dist_names
+    assert "Adilabad" in dist_names
     assert "Adilabad" in dist_names
 
 
 def test_tax_mandals_api():
-    resp = client.get("/api/tax/mandals?district=Khammam")
+    resp = client.get("/api/tax/mandals?district=Adilabad")
     assert resp.status_code == 200
     mandals = resp.json()
     assert isinstance(mandals, list)
@@ -35,11 +35,11 @@ def test_tax_mandals_api():
 
 
 def test_tax_data_api():
-    resp = client.get("/api/tax/data?district=Khammam&mandal=all")
+    resp = client.get("/api/tax/data?district=Adilabad&mandal=all")
     assert resp.status_code == 200
     body = resp.json()
     assert "summary" in body
-    assert body["summary"]["district"] == "Khammam"
+    assert body["summary"]["district"] == "Adilabad"
     assert body["summary"]["total_gps"] == 571
     assert body["summary"]["total_mandals"] == 20
     assert len(body["records"]) == 571
@@ -47,7 +47,7 @@ def test_tax_data_api():
 
 
 def test_tax_pdf_generation_endpoint():
-    resp = client.get("/api/tax/report.pdf?district=Khammam")
+    resp = client.get("/api/tax/report.pdf?district=Adilabad")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     assert len(resp.content) > 50_000
@@ -57,7 +57,7 @@ def test_tax_pdf_generation_endpoint():
 
 
 def test_tax_single_mandal_pdf_endpoint():
-    resp = client.get("/api/tax/report.pdf?district=Khammam&mandal=Bonakal")
+    resp = client.get("/api/tax/report.pdf?district=Adilabad&mandal=Bonakal")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     reader = PdfReader(io.BytesIO(resp.content))
@@ -65,14 +65,14 @@ def test_tax_single_mandal_pdf_endpoint():
 
 
 def test_tax_excel_download_endpoint():
-    resp = client.get("/api/tax/download?district=Khammam&format=xlsx")
+    resp = client.get("/api/tax/download?district=Adilabad&format=xlsx")
     assert resp.status_code == 200
     assert "application/vnd.openxmlformats" in resp.headers["content-type"]
     assert len(resp.content) > 10_000
 
 
 def test_tax_csv_download_endpoint():
-    resp = client.get("/api/tax/download?district=Khammam&format=csv")
+    resp = client.get("/api/tax/download?district=Adilabad&format=csv")
     assert resp.status_code == 200
     assert "text/csv" in resp.headers["content-type"]
     lines = resp.text.splitlines()
@@ -80,7 +80,7 @@ def test_tax_csv_download_endpoint():
 
 
 def test_power_bi_visual_report_html_elements():
-    resp = client.get("/reports/tax-dcb?district=Khammam")
+    resp = client.get("/reports/tax-dcb?district=Adilabad")
     assert resp.status_code == 200
     html = resp.text
     # Verify Power BI elements
@@ -101,7 +101,7 @@ def test_power_bi_visual_report_html_elements():
 
 
 def test_power_bi_pdf_endpoint_single_mandal():
-    resp = client.get("/api/tax/powerbi-report.pdf?district=Khammam&mandal=Bonakal")
+    resp = client.get("/api/tax/powerbi-report.pdf?district=Adilabad&mandal=Bonakal")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     reader = PdfReader(io.BytesIO(resp.content))
@@ -109,7 +109,7 @@ def test_power_bi_pdf_endpoint_single_mandal():
 
 
 def test_power_bi_pdf_endpoint_district_all_mandals():
-    resp = client.get("/api/tax/powerbi-report.pdf?district=Khammam&mandal=all")
+    resp = client.get("/api/tax/powerbi-report.pdf?district=Adilabad&mandal=all")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     reader = PdfReader(io.BytesIO(resp.content))

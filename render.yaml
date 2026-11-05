@@ -12,6 +12,6 @@ services:
       - key: WEB_SESSION_SECRET
         generateValue: true
       - key: DATA_DIR
-        value: /tmp/khammam-attendance-data
+        value: /tmp/epanchayat-attendance-data
       - key: MAX_UPLOAD_BYTES
         value: "31457280"

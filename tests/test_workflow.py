@@ -28,28 +28,28 @@ from report_generator import (
 
 def attendance_rows() -> pd.DataFrame:
     return pd.DataFrame([
-        {"District Name": "Khammam", "Panchayat LGD": 1, "Mandal Name": "Mandal A", "Panchayat Name": "GP One",
+        {"District Name": "Test District", "Panchayat LGD": 1, "Mandal Name": "Mandal A", "Panchayat Name": "GP One",
          "First Attendence Status": "Present", "Second Attendence Status": "",
          "First Attendence Datetime": "28-10-2026 09:00", "DSR Entry Status": "Submitted"},
-        {"District Name": "Khammam", "Panchayat LGD": 2, "Mandal Name": "Mandal A", "Panchayat Name": "GP Two",
+        {"District Name": "Test District", "Panchayat LGD": 2, "Mandal Name": "Mandal A", "Panchayat Name": "GP Two",
          "First Attendence Status": "Present", "Second Attendence Status": "",
          "First Attendence Datetime": "28-10-2026 08:59", "DSR Entry Status": "Submitted"},
-        {"District Name": "Khammam", "Panchayat LGD": 3, "Mandal Name": "Mandal A", "Panchayat Name": "GP Three",
+        {"District Name": "Test District", "Panchayat LGD": 3, "Mandal Name": "Mandal A", "Panchayat Name": "GP Three",
          "First Attendence Status": "Present", "Second Attendence Status": "",
          "First Attendence Datetime": "28-10-2026 09:01", "DSR Entry Status": "Pending"},
-        {"District Name": "Khammam", "Panchayat LGD": 4, "Mandal Name": "Mandal B", "Panchayat Name": "GP Four",
+        {"District Name": "Test District", "Panchayat LGD": 4, "Mandal Name": "Mandal B", "Panchayat Name": "GP Four",
          "First Attendence Status": "", "Second Attendence Status": "",
          "First Attendence Datetime": "", "DSR Entry Status": ""},
-        {"District Name": "Khammam", "Panchayat LGD": 5, "Mandal Name": "Mandal B", "Panchayat Name": "GP Five",
+        {"District Name": "Test District", "Panchayat LGD": 5, "Mandal Name": "Mandal B", "Panchayat Name": "GP Five",
          "First Attendence Status": "On Leave", "Second Attendence Status": "",
          "First Attendence Datetime": "28-10-2026 08:30", "DSR Entry Status": "Submitted"},
-        {"District Name": "Khammam", "Panchayat LGD": 6, "Mandal Name": "Mandal B", "Panchayat Name": "GP Six",
+        {"District Name": "Test District", "Panchayat LGD": 6, "Mandal Name": "Mandal B", "Panchayat Name": "GP Six",
          "First Attendence Status": "Training", "Second Attendence Status": "",
          "First Attendence Datetime": "28-10-2026 09:05", "DSR Entry Status": "Submitted"},
-        {"District Name": "Khammam", "Panchayat LGD": 7, "Mandal Name": "Mandal B", "Panchayat Name": "GP Seven",
+        {"District Name": "Test District", "Panchayat LGD": 7, "Mandal Name": "Mandal B", "Panchayat Name": "GP Seven",
          "First Attendence Status": "", "Second Attendence Status": "",
          "First Attendence Datetime": "", "DSR Entry Status": ""},
-        {"District Name": "Khammam", "Panchayat LGD": 7, "Mandal Name": "Mandal C", "Panchayat Name": "GP Seven Conflict",
+        {"District Name": "Test District", "Panchayat LGD": 7, "Mandal Name": "Mandal C", "Panchayat Name": "GP Seven Conflict",
          "First Attendence Status": "Meeting", "Second Attendence Status": "",
          "First Attendence Datetime": "28-10-2026 09:00", "DSR Entry Status": "Submitted"},
     ])
@@ -58,7 +58,7 @@ def attendance_rows() -> pd.DataFrame:
 def presentees_rows() -> pd.DataFrame:
     return pd.DataFrame([
         {
-            "S.No.": 1, "District Name": "Khammam", "Division Name": "KHAMMAM",
+            "S.No.": 1, "District Name": "Test District", "Division Name": "TEST DISTRICT",
             "Mandal Name": "Mandal A", "Panchayat Name": "GP One", "Panchayat LGD Code": 1,
             "Panchayat Secretary Employee Id": "EMP101",
             "Panchayat Secretary Name": "RAYALALA NAGARAJU",  # Test all caps name
@@ -66,7 +66,7 @@ def presentees_rows() -> pd.DataFrame:
             "Mobile Number": "8897632431",
         },
         {
-            "S.No.": 2, "District Name": "Khammam", "Division Name": "KHAMMAM",
+            "S.No.": 2, "District Name": "Test District", "Division Name": "TEST DISTRICT",
             "Mandal Name": "Mandal A", "Panchayat Name": "GP Three", "Panchayat LGD Code": 3,
             "Panchayat Secretary Employee Id": "EMP103",
             "Panchayat Secretary Name": "kola rajeswari",  # Test all lower name
@@ -79,7 +79,7 @@ def presentees_rows() -> pd.DataFrame:
 def absentees_rows() -> pd.DataFrame:
     return pd.DataFrame([
         {
-            "S.No.": 1, "District Name": "Khammam", "Division Name": "KHAMMAM",
+            "S.No.": 1, "District Name": "Test District", "Division Name": "TEST DISTRICT",
             "Mandal Name": "Mandal B", "Panchayat Name": "GP Four", "Panchayat LGD Code": 4,
             "Panchayat Secretary Employee Id": "EMP104",
             "Panchayat Secretary Name": "TALLURU BHARGAVI",
@@ -112,7 +112,7 @@ def make_settings(tmp_path: Path) -> Settings:
 def test_valid_xlsx_generates_unique_mandal_abstract_and_categories():
     report = process_attendance_file("synthetic.xlsx", bytes_for(attendance_rows(), ".xlsx"))
 
-    assert report.district_name == "Khammam"
+    assert report.district_name == "Test District"
     assert report.unique_gp_count == 7
     assert report.duplicate_lgd_rows == 1
     assert len(report.conflicts) == 1
@@ -373,7 +373,7 @@ def test_empty_sections_are_rendered_and_district_totals_remain_correct(tmp_path
     reader = PdfReader(str(pdf_path))
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
     normalized_text = " ".join(text.split())
-    assert "KHAMMAM DISTRICT" in text
+    assert "TEST DISTRICT" in text
     assert "No pending GPs found." in text
     assert "No GPs submitted attendance after 9 AM." in text
     assert "No eligible GPs have pending DSR." in text
@@ -631,7 +631,7 @@ def test_local_tracker_claims_once_and_recovers_a_stale_processing_job(tmp_path:
 def test_mandal_pdf_generation_and_metadata_detection(tmp_path: Path):
     source_bytes = bytes_for(attendance_rows(), ".xlsx")
     meta = detect_file_metadata("attendance.xlsx", source_bytes)
-    assert meta["district_name"] == "Khammam"
+    assert meta["district_name"] == "Test District"
     assert "Mandal A" in meta["mandals"]
     assert "Mandal B" in meta["mandals"]
 
@@ -663,7 +663,7 @@ def test_web_upload_mandal_mode_downloads_mandal_pdf(tmp_path: Path, monkeypatch
     )
     assert detect_resp.status_code == 200
     data = detect_resp.json()
-    assert data["district_name"] == "Khammam"
+    assert data["district_name"] == "Test District"
     assert "Mandal A" in data["mandals"]
 
     # Test Mandal mode report creation

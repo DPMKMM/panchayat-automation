@@ -132,7 +132,7 @@ class NumberedCanvas(canvas.Canvas):
 
 
 def get_or_generate_dcb_pdf(
-    district_name: str = "Khammam",
+    district_name: str = "District",
     mandal_name: Optional[str] = None,
     force_regenerate: bool = True,
     report_date_str: Optional[str] = None,
@@ -164,7 +164,7 @@ def get_or_generate_dcb_pdf(
 
 
 def generate_dcb_pdf(
-    district_name: str = "Khammam",
+    district_name: str = "District",
     mandal_name: Optional[str] = None,
     output_path_or_buffer: Any = None,
     report_date_str: Optional[str] = None,
@@ -316,6 +316,195 @@ def generate_dcb_pdf(
     mandals = sorted(df_dist["mandal"].unique())
     is_first_page = True
 
+    # PAGE 1: MANDAL-WISE ABSTRACT TABLE (For District-Level Reports)
+    if not is_single_mandal and len(mandals) > 1:
+        abstract_title = f"{clean_dist} District - Mandal Wise House Tax DCB Abstract as on {report_date_str}"
+        flowables.append(Paragraph(abstract_title, title_style))
+        flowables.append(Spacer(1, 4))
+
+        abs_col_widths = [28, 120, 44, 58, 62, 66, 58, 62, 66, 58, 62, 66, 44]
+        abs_headers = [
+            "S No",
+            "Mandal Name",
+            "Total\nGPs",
+            "Demand\nArrears",
+            "Demand\nCurrent",
+            "Demand\nTotal",
+            "Collection\nArrears",
+            "Collection\nCurrent",
+            "Collection\nTotal",
+            "Balance\nArrears",
+            "Balance\nCurrent",
+            "Balance\nTotal",
+            "%",
+        ]
+        abs_header_row = [Paragraph(h.replace("\n", "<br/>"), cell_hdr_style) for h in abs_headers]
+        abs_table_data = [abs_header_row]
+
+        dist_d_arr = 0
+        dist_d_cur = 0
+        dist_d_tot = 0
+        dist_c_arr = 0
+        dist_c_cur = 0
+        dist_c_tot = 0
+        dist_b_arr = 0
+        dist_b_cur = 0
+        dist_b_tot = 0
+        dist_gps_tot = 0
+
+        h_abs_row = 19.5 if len(mandals) <= 22 else max(15.0, (500.0 - 24.0) / (len(mandals) + 2))
+        abs_row_heights = [24.0]
+
+        abs_table_styles = [
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#333333")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E2E8F0")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 2.5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 2.5),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("ALIGN", (1, 0), (1, -1), "LEFT"),
+            ("ALIGN", (2, 0), (2, -1), "CENTER"),
+            ("ALIGN", (3, 0), (-2, -1), "RIGHT"),
+            ("ALIGN", (-1, 0), (-1, -1), "CENTER"),
+        ]
+
+        # Collect mandal statistics for abstract table
+        abs_mandals = []
+        for m_name in mandals:
+            m_sub = df_dist[df_dist["mandal"] == m_name]
+            m_gps = len(m_sub)
+            m_d_arr = int(m_sub["demand_arrear"].sum())
+            m_d_cur = int(m_sub["demand_current"].sum())
+            m_d_tot = int(m_sub["demand_total"].sum())
+            m_c_arr = int(m_sub["collection_arrear"].sum())
+            m_c_cur = int(m_sub["collection_current"].sum())
+            m_c_tot = int(m_sub["collection_total"].sum())
+            m_b_arr = int(m_sub["balance_arrear"].sum())
+            m_b_cur = int(m_sub["balance_current"].sum())
+            m_b_tot = int(m_sub["balance_total"].sum())
+            m_pct_float = (m_c_tot / m_d_tot * 100.0) if m_d_tot > 0 else 0.0
+            m_pct = int(round(m_pct_float))
+            abs_mandals.append({
+                "name": m_name,
+                "gps": m_gps,
+                "d_arr": m_d_arr,
+                "d_cur": m_d_cur,
+                "d_tot": m_d_tot,
+                "c_arr": m_c_arr,
+                "c_cur": m_c_cur,
+                "c_tot": m_c_tot,
+                "b_arr": m_b_arr,
+                "b_cur": m_b_cur,
+                "b_tot": m_b_tot,
+                "pct_float": m_pct_float,
+                "pct": m_pct,
+            })
+
+        # Sort mandal abstract by % Collected ascending: lowest collected mandal on top
+        abs_mandals.sort(key=lambda x: (x["pct_float"], x["d_tot"], x["name"]))
+
+        for idx, m_stat in enumerate(abs_mandals, start=1):
+            m_name = m_stat["name"]
+            m_gps = m_stat["gps"]
+            m_d_arr = m_stat["d_arr"]
+            m_d_cur = m_stat["d_cur"]
+            m_d_tot = m_stat["d_tot"]
+            m_c_arr = m_stat["c_arr"]
+            m_c_cur = m_stat["c_cur"]
+            m_c_tot = m_stat["c_tot"]
+            m_b_arr = m_stat["b_arr"]
+            m_b_cur = m_stat["b_cur"]
+            m_b_tot = m_stat["b_tot"]
+            m_pct = m_stat["pct"]
+
+            dist_d_arr += m_d_arr
+            dist_d_cur += m_d_cur
+            dist_d_tot += m_d_tot
+            dist_c_arr += m_c_arr
+            dist_c_cur += m_c_cur
+            dist_c_tot += m_c_tot
+            dist_b_arr += m_b_arr
+            dist_b_cur += m_b_cur
+            dist_b_tot += m_b_tot
+            dist_gps_tot += m_gps
+
+            m_bg_hex, m_fg_hex = get_gradient_color(m_pct_float)
+            m_pct_style = ParagraphStyle(
+                f"AbsPct_{idx}",
+                parent=styles["Normal"],
+                fontName="Helvetica-Bold",
+                fontSize=7.5,
+                leading=9,
+                alignment=1,
+                textColor=colors.HexColor(m_fg_hex),
+            )
+
+            r_idx = len(abs_table_data)
+            bg_color = colors.HexColor("#F8FAFC") if idx % 2 == 0 else colors.white
+
+            abs_row = [
+                Paragraph(str(idx), cell_body_center),
+                Paragraph(f"<b>{m_name}</b>", cell_body_left),
+                Paragraph(str(m_gps), cell_body_center),
+                Paragraph(format_indian_currency(m_d_arr), cell_body_right),
+                Paragraph(format_indian_currency(m_d_cur), cell_body_right),
+                Paragraph(format_indian_currency(m_d_tot), cell_body_right),
+                Paragraph(format_indian_currency(m_c_arr), cell_body_right),
+                Paragraph(format_indian_currency(m_c_cur), cell_body_right),
+                Paragraph(format_indian_currency(m_c_tot), cell_body_right),
+                Paragraph(format_indian_currency(m_b_arr), cell_body_right),
+                Paragraph(format_indian_currency(m_b_cur), cell_body_right),
+                Paragraph(format_indian_currency(m_b_tot), cell_body_right),
+                Paragraph(f"{m_pct_float:.1f}%", m_pct_style),
+            ]
+            abs_table_data.append(abs_row)
+            abs_row_heights.append(h_abs_row)
+            abs_table_styles.append(("BACKGROUND", (0, r_idx), (-2, r_idx), bg_color))
+            abs_table_styles.append(("BACKGROUND", (-1, r_idx), (-1, r_idx), colors.HexColor(m_bg_hex)))
+
+        # District Total Row
+        dist_pct_float = (dist_c_tot / dist_d_tot * 100.0) if dist_d_tot > 0 else 0.0
+        d_bg_hex, d_fg_hex = get_gradient_color(dist_pct_float)
+        d_pct_style = ParagraphStyle(
+            "DistTotPct",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=8,
+            leading=9.5,
+            alignment=1,
+            textColor=colors.HexColor(d_fg_hex),
+        )
+
+        tot_r_idx = len(abs_table_data)
+        dist_tot_row = [
+            Paragraph("", cell_total_label),
+            Paragraph("<b>DISTRICT TOTAL</b>", cell_total_label),
+            Paragraph(f"<b>{dist_gps_tot}</b>", cell_total_label),
+            Paragraph(format_indian_currency(dist_d_arr), cell_total_num),
+            Paragraph(format_indian_currency(dist_d_cur), cell_total_num),
+            Paragraph(format_indian_currency(dist_d_tot), cell_total_num),
+            Paragraph(format_indian_currency(dist_c_arr), cell_total_num),
+            Paragraph(format_indian_currency(dist_c_cur), cell_total_num),
+            Paragraph(format_indian_currency(dist_c_tot), cell_total_num),
+            Paragraph(format_indian_currency(dist_b_arr), cell_total_num),
+            Paragraph(format_indian_currency(dist_b_cur), cell_total_num),
+            Paragraph(format_indian_currency(dist_b_tot), cell_total_num),
+            Paragraph(f"{dist_pct_float:.1f}%", d_pct_style),
+        ]
+        abs_table_data.append(dist_tot_row)
+        abs_row_heights.append(h_abs_row + 2.0)
+        abs_table_styles.extend([
+            ("BACKGROUND", (0, tot_r_idx), (-2, tot_r_idx), colors.HexColor("#FEF3C7")),
+            ("BACKGROUND", (-1, tot_r_idx), (-1, tot_r_idx), colors.HexColor(d_bg_hex)),
+            ("LINEABOVE", (0, tot_r_idx), (-1, tot_r_idx), 1.2, colors.HexColor("#1E293B")),
+            ("LINEBELOW", (0, tot_r_idx), (-1, tot_r_idx), 1.5, colors.HexColor("#1E293B")),
+        ])
+
+        t_abs = Table(abs_table_data, colWidths=abs_col_widths, rowHeights=abs_row_heights, repeatRows=1)
+        t_abs.setStyle(TableStyle(abs_table_styles))
+        flowables.append(t_abs)
+        is_first_page = False
+
     # Row capacity per page
     # Page 1 has title so max rows is 22; subsequent pages have no title so max rows is 24
     for m_idx, mandal_name in enumerate(mandals):
@@ -333,9 +522,9 @@ def generate_dcb_pdf(
         tot_b_arr = m_df["balance_arrear"].sum()
         tot_b_cur = m_df["balance_current"].sum()
         tot_b_tot = m_df["balance_total"].sum()
-        tot_pct = int(round(tot_c_tot / tot_d_tot * 100)) if tot_d_tot > 0 else 0
+        tot_pct_float = (tot_c_tot / tot_d_tot * 100.0) if tot_d_tot > 0 else 0.0
 
-        tot_bg_hex, tot_fg_hex = get_gradient_color(tot_pct)
+        tot_bg_hex, tot_fg_hex = get_gradient_color(tot_pct_float)
         tot_pct_style = ParagraphStyle(
             f"TotPct_{m_idx}",
             parent=styles["Normal"],
@@ -359,7 +548,7 @@ def generate_dcb_pdf(
             Paragraph(format_indian_currency(tot_b_arr), cell_total_num),
             Paragraph(format_indian_currency(tot_b_cur), cell_total_num),
             Paragraph(format_indian_currency(tot_b_tot), cell_total_num),
-            Paragraph(str(tot_pct), tot_pct_style),
+            Paragraph(f"{tot_pct_float:.1f}%", tot_pct_style),
         ]
 
         # Chunk the mandal rows into pages using best fit
@@ -418,8 +607,8 @@ def generate_dcb_pdf(
 
             for idx, r in enumerate(chunk):
                 s_no = cursor + idx + 1
-                pct_val = int(round(r.get("calc_percentage", 0)))
-                row_bg_hex, row_fg_hex = get_gradient_color(pct_val)
+                pct_float = float(r.get("calc_percentage", 0.0))
+                row_bg_hex, row_fg_hex = get_gradient_color(pct_float)
                 row_pct_style = ParagraphStyle(
                     f"RowPct_{s_no}_{cursor}_{idx}",
                     parent=styles["Normal"],
@@ -444,7 +633,7 @@ def generate_dcb_pdf(
                     Paragraph(format_indian_currency(r.get("balance_arrear", 0)), cur_cell_right),
                     Paragraph(format_indian_currency(r.get("balance_current", 0)), cur_cell_right),
                     Paragraph(format_indian_currency(r.get("balance_total", 0)), cur_cell_right),
-                    Paragraph(str(pct_val), row_pct_style),
+                    Paragraph(f"{pct_float:.1f}%", row_pct_style),
                 ]
                 table_data.append(row)
                 row_heights.append(h_row)
@@ -465,7 +654,7 @@ def generate_dcb_pdf(
                     Paragraph(format_indian_currency(tot_b_arr), tot_cell_num),
                     Paragraph(format_indian_currency(tot_b_cur), tot_cell_num),
                     Paragraph(format_indian_currency(tot_b_tot), tot_cell_num),
-                    Paragraph(str(tot_pct), tot_pct_style),
+                    Paragraph(f"{tot_pct_float:.1f}%", tot_pct_style),
                 ]
                 table_data.append(cur_total_row)
                 row_heights.append(h_row)
