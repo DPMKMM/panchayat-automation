@@ -15,6 +15,16 @@ import webbrowser
 import subprocess
 from pathlib import Path
 
+# Force safe encoding on Windows consoles to prevent charmap UnicodeEncodeError
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 BASE_DIR = Path(__file__).resolve().parent
 PYTHON_EXE = BASE_DIR / ".venv" / "Scripts" / "python.exe"
 if not PYTHON_EXE.exists():
@@ -145,7 +155,7 @@ def main():
             pass
 
         print("\n" + "=" * 68)
-        print("  🚀 PERMANENT CLOUDFLARE ZERO TRUST TUNNEL IS CONNECTED!")
+        print("  [+] PERMANENT CLOUDFLARE ZERO TRUST TUNNEL IS CONNECTED!")
         print("=" * 68)
         print(f"  Public URL       :  {perm_url}")
         print("  Status           :  Connected to Hyderabad & Mumbai edge nodes (hyd03/bom10)")
@@ -185,7 +195,6 @@ def main():
                 tunnel_url = match.group(0)
                 break
             elif any(k in clean_line for k in ["INF", "Connection", "Registered", "trycloudflare", "Initial protocol"]):
-                # Print connection progress
                 print(f"    {clean_line[:85]}", flush=True)
 
         if not tunnel_url:
@@ -203,21 +212,21 @@ def main():
             pass
 
         print("\n" + "=" * 68)
-        print("  🚀 PORTAL IS LIVE ONLINE VIA CLOUDFLARE HYDERABAD EDGE!")
+        print("  [+] PORTAL IS LIVE ONLINE VIA CLOUDFLARE HYDERABAD EDGE!")
         print("=" * 68)
         print(f"  Public URL       :  {public_url}")
         print(f"  Local Access URL :  http://127.0.0.1:8000/")
         print("=" * 68)
-        print("  📱 Open the Public URL above on your phone or any PC.")
-        print("  🛡️ Traffic to e-Panchayat originates from your local Indian IP,")
-        print("     so Telangana State Data Center firewall will NEVER block it.")
+        print("  [*] Open the Public URL above on your phone or any PC.")
+        print("  [*] Traffic to e-Panchayat originates from your local Indian IP,")
+        print("      so Telangana State Data Center firewall will NEVER block it.")
         print("=" * 68)
 
         # Copy to clipboard if on Windows
         try:
             if sys.platform == "win32":
                 subprocess.run(["clip"], input=public_url, text=True, check=False)
-                print("  📋 Public URL copied to clipboard automatically!\n")
+                print("  [+] Public URL copied to clipboard automatically!\n")
         except Exception:
             pass
 
