@@ -24,12 +24,16 @@ git fetch origin main
 echo [*] Resetting to latest commit...
 git reset --hard origin/main
 
+echo [*] Cleaning stale server processes on port 8000...
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }" >nul 2>&1
+
 echo.
 echo =====================================================================
-echo  Current commit is now:
+echo  SUCCESS! Updated to latest commit:
 git log -n 1 --oneline
 echo =====================================================================
 echo.
-echo You can now close this window or launch Start_ePanchayat_Server.bat!
-echo.
-pause
+echo Launching Start_DSR_Automation_Portal.bat now...
+start "" "Start_DSR_Automation_Portal.bat"
+timeout /t 3 >nul
+exit

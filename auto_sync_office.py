@@ -26,7 +26,7 @@ POLL_INTERVAL_SECONDS = 60
 # Prevent Git from hanging on interactive prompts in background
 ENV = os.environ.copy()
 ENV["GIT_TERMINAL_PROMPT"] = "0"
-ENV["GIT_ASKPASS"] = "echo"
+ENV["GIT_OPTIONAL_LOCKS"] = "0"
 
 
 def log(msg: str) -> None:

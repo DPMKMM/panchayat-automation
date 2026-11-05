@@ -867,57 +867,12 @@ NARESH_PAGE_HTML = """<!doctype html>
 
         <!-- Logged-in Links (Shown after login) -->
         <div id="nav-portal-links" style="display: none; align-items: center; gap: 8px;">
-          <!-- Automated Reports Menu -->
-          <div class="dropdown" id="dropdown-automated-reports">
-            <button type="button" class="dropdown-btn active" onclick="togglePortalDropdown('dropdown-automated-reports')">
-              ⚡ Automated Reports <span class="caret">▾</span>
-            </button>
-            <div class="dropdown-menu">
-              <div class="dropdown-header">Active Robot Pipelines</div>
-              <a class="dropdown-item" href="javascript:void(0)" onclick="openDsrRobot()">
-                <span class="dropdown-item-icon">⚡</span>
-                <div class="dropdown-item-content">
-                  <strong>Automated DSR Report</strong>
-                  <span>Daily Status &amp; Morning Attendance Robot</span>
-                  <span class="badge-pill-live">● Live</span>
-                </div>
-              </a>
-              <a class="dropdown-item" href="javascript:void(0)" onclick="openBalanceRobot()">
-                <span class="dropdown-item-icon">🏦</span>
-                <div class="dropdown-item-content">
-                  <strong>GP Balance Entry Report</strong>
-                  <span>Thursday Balance Entry Tracking (GM-R 14.2)</span>
-                  <span class="badge-pill-live">● Live</span>
-                </div>
-              </a>
-              <div class="dropdown-divider"></div>
-              <div class="dropdown-header">Upcoming Automated Modules</div>
-              <a class="dropdown-item" href="javascript:void(0)" onclick="showUpcomingModal('Monthly Activity Statement (MAS)', '📑', 'Automated monthly progress report, developmental expenditure, and milestone submissions directly from ePanchayat Portal.')">
-                <span class="dropdown-item-icon">📑</span>
-                <div class="dropdown-item-content">
-                  <strong>Monthly Activity Statement (MAS)</strong>
-                  <span>Automated monthly progress &amp; activity statement</span>
-                  <span class="badge-soon">Upcoming</span>
-                </div>
-              </a>
-              <a class="dropdown-item" href="javascript:void(0)" onclick="showUpcomingModal('Citizen Services', '👥', 'Automated tracking of citizen applications, service delivery SLAs, and certificates issuance from ePanchayat Portal.')">
-                <span class="dropdown-item-icon">👥</span>
-                <div class="dropdown-item-content">
-                  <strong>Citizen Services</strong>
-                  <span>Panchayat citizen applications &amp; service delivery</span>
-                  <span class="badge-soon">Upcoming</span>
-                </div>
-              </a>
-              <a class="dropdown-item" href="javascript:void(0)" onclick="showUpcomingModal('Trade Licences', '🏷️', 'Automated trade licence renewal tracking, fees reconciliation, and business register monitoring.')">
-                <span class="dropdown-item-icon">🏷️</span>
-                <div class="dropdown-item-content">
-                  <strong>Trade Licences</strong>
-                  <span>Business &amp; trade licence renewal status</span>
-                  <span class="badge-soon">Upcoming</span>
-                </div>
-              </a>
-            </div>
-          </div>
+          <!-- DSR Module Direct Link -->
+          <button type="button" class="dropdown-btn active" onclick="openDsrRobot()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            ⚡ DSR Module
+          </button>
+
+
 
           <a class="nav-link" href="javascript:void(0)" onclick="logoutPortalSession()" style="color:#fca5a5; font-weight:700;" title="Logout session">🔒 Logout</a>
         </div>
@@ -1295,18 +1250,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           <div class="form-group" style="flex:2;">
             <label>Reporting Workflow</label>
             <select id="auto-module">
-              <optgroup label="⚡ Active Robot Workflows">
-                <option value="dsr_full" selected>Automated DSR + 1.2.11 Presentees + 1.2.10 Absentees (Official 7-Section District PDF)</option>
-                <option value="gp_balance">GM-R 14.2 GP Bank Balance Entry Report (Thursday Entries)</option>
-                <option value="dsr_raw">GM-R 1.2.7 DSR Raw Data Only</option>
-                <option value="dsr_presentees">GM-R 1.2.7 + GM-R 1.2.11 Presenties Data</option>
-                <option value="dsr_absentees">GM-R 1.2.7 + GM-R 1.2.10 Absentees Data</option>
-              </optgroup>
-              <optgroup label="Upcoming Automated Modules">
-                <option value="mas" disabled>Monthly Activity Statement (MAS) — Coming Soon</option>
-                <option value="citizen_services" disabled>Citizen Services — Coming Soon</option>
-                <option value="trade_licences" disabled>Trade Licences — Coming Soon</option>
-              </optgroup>
+              <option value="dsr_full" selected>⚡ Automated DSR Module (Official 7-Section District PDF)</option>
             </select>
           </div>
           <div class="form-group" style="flex:1;">

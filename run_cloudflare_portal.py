@@ -94,19 +94,19 @@ def main():
             errors="replace",
             bufsize=1,
         )
-        perm_url = f"https://{custom_domain}"
+        perm_url = f"https://{custom_domain}/"
         try:
             url_file = BASE_DIR / "latest_public_url.txt"
-            url_file.write_text(f"Permanent Domain: {perm_url}/\nLocal Access: http://127.0.0.1:8000/\nStatus: Connected via Cloudflare Zero Trust Tunnel\nConnected: {time.ctime()}\n", encoding="utf-8")
+            url_file.write_text(f"Public URL: {perm_url}\nLocal Access: http://127.0.0.1:8000/\nStatus: Connected via Cloudflare Zero Trust Tunnel\nConnected: {time.ctime()}\n", encoding="utf-8")
         except Exception:
             pass
 
         print("\n" + "=" * 68)
         print("  🚀 PERMANENT CLOUDFLARE ZERO TRUST TUNNEL IS CONNECTED!")
         print("=" * 68)
-        print(f"  Permanent Domain :  {perm_url}")
+        print(f"  Public URL       :  {perm_url}")
         print("  Status           :  Connected to Hyderabad & Mumbai edge nodes (hyd03/bom10)")
-        print("  Local Access     :  http://127.0.0.1:8000/")
+        print("  Local Access URL :  http://127.0.0.1:8000/")
         print("=" * 68)
         print(f"  Your permanent website is live at {perm_url} !")
         print("  Running silently in background.\n")
@@ -147,23 +147,21 @@ def main():
                 print("Process exited with code:", cf_proc.returncode)
             sys.exit(1)
 
-        portal_url = f"{tunnel_url}/naresh"
-        home_url = tunnel_url
+        public_url = f"{tunnel_url}/"
 
         try:
             url_file = BASE_DIR / "latest_public_url.txt"
-            url_file.write_text(f"Public Naresh URL: {portal_url}\nPublic Home URL: {home_url}\nGenerated: {time.ctime()}\n", encoding="utf-8")
+            url_file.write_text(f"Public URL: {public_url}\nLocal Access: http://127.0.0.1:8000/\nGenerated: {time.ctime()}\n", encoding="utf-8")
         except Exception:
             pass
 
         print("\n" + "=" * 68)
         print("  🚀 PORTAL IS LIVE ONLINE VIA CLOUDFLARE HYDERABAD EDGE!")
         print("=" * 68)
-        print(f"  Public Naresh Portal URL  :  {portal_url}")
-        print(f"  Public Home Page URL      :  {home_url}")
-        print(f"  Local Access URL          :  http://127.0.0.1:8000/naresh")
+        print(f"  Public URL       :  {public_url}")
+        print(f"  Local Access URL :  http://127.0.0.1:8000/")
         print("=" * 68)
-        print("  📱 You can open the Public URL on your phone or any PC.")
+        print("  📱 Open the Public URL above on your phone or any PC.")
         print("  🛡️ Traffic to e-Panchayat originates from your local Indian IP,")
         print("     so Telangana State Data Center firewall will NEVER block it.")
         print("=" * 68)
@@ -171,7 +169,7 @@ def main():
 
         # Automatically open in browser
         try:
-            webbrowser.open(portal_url)
+            webbrowser.open(public_url)
         except Exception:
             pass
 
