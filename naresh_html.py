@@ -2046,7 +2046,7 @@ NARESH_PAGE_HTML = """<!doctype html>
     };
 
     window.handleSessionExpired = async function() {
-      alert("⏰ Session Expired (Time Limit Reached)\n\nTo reduce server load and conserve memory, your browser automation session has been closed automatically after reaching the allowed duration (10 mins, or 20 mins if extended).\n\nPlease log in again whenever you need to generate reports.");
+      alert("⏰ Session Expired (Time Limit Reached)\\n\\nTo reduce server load and conserve memory, your browser automation session has been closed automatically after reaching the allowed duration (10 mins, or 20 mins if extended).\\n\\nPlease log in again whenever you need to generate reports.");
       try {
         await fetch('/api/naresh/logout', { method: 'POST' });
       } catch(e) {}
@@ -2066,7 +2066,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           window.sessionExpiresIn = data.expires_in;
           window.sessionCanExtend = data.can_extend;
           window.updateTimerDisplay();
-          alert("✅ Session Extended!\n\nYour session has been extended by 10 additional minutes (Total allowed time: 20 minutes).\nThe browser will automatically close when the countdown reaches 0 to conserve server memory.");
+          alert("✅ Session Extended!\\n\\nYour session has been extended by 10 additional minutes (Total allowed time: 20 minutes).\\nThe browser will automatically close when the countdown reaches 0 to conserve server memory.");
         } else {
           alert(data.message || data.detail || "Could not extend session.");
           window.updateTimerDisplay();
