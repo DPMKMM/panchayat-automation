@@ -24,7 +24,6 @@ load_dotenv()
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, RedirectResponse
 
-import pymupdf
 
 from integrations import (
     ALLOWED_EXTENSIONS,
