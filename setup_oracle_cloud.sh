@@ -2,11 +2,25 @@
 set -e
 
 echo "====================================================================="
-echo "  e-Panchayat Automated Portal - Oracle Cloud Always-Free Installer"
-echo "  Target: Ubuntu 22.04 / 24.04 LTS (AMD or ARM Ampere A1)"
+echo "  e-Panchayat Automated Portal - Cloud Production Installer"
+echo "  Target: Ubuntu 22.04 / 24.04 LTS (AWS Lightsail / Oracle Cloud)"
 echo "====================================================================="
 
+# 0. Setup 2GB Swap Memory (vital for 512MB/1GB VPS instances running Chromium)
+if [ ! -f /swapfile ]; then
+    echo "[*] Creating 2GB swap memory for stable Playwright execution..."
+    sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+    echo "[+] 2GB swap memory configured successfully."
+else
+    echo "[+] Swap file already exists."
+fi
+
 # 1. Update system & install dependencies
+echo "[*] Installing system dependencies and Python 3..."
 sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     python3 python3-pip python3-venv git curl wget build-essential \
@@ -28,7 +42,7 @@ cd /opt/epanchayat
 
 # 3. Create virtual environment
 if [ ! -d "/opt/epanchayat/.venv" ]; then
-    echo "[*] Creating Python virtualenv..."
+    echo "[*] Creating Python virtual environment..."
     python3 -m venv /opt/epanchayat/.venv
 fi
 
@@ -40,13 +54,14 @@ pip install -r requirements.txt
 echo "[*] Installing Playwright Chromium browser & Linux system libraries..."
 playwright install --with-deps chromium
 
-# 5. Open Oracle Linux firewall for port 8000 & 80 & 443
+# 5. Open firewall for port 8000 & 80 & 443
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT || true
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT || true
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT || true
 sudo netfilter-persistent save || true
 
 # 6. Configure systemd 24/7 background service
+echo "[*] Configuring systemd background service (auto-starts on boot)..."
 sudo tee /etc/systemd/system/epanchayat.service > /dev/null <<EOF
 [Unit]
 Description=e-Panchayat Automated Portal Service
@@ -71,8 +86,13 @@ sudo systemctl restart epanchayat.service
 
 echo ""
 echo "====================================================================="
-echo "  ORACLE CLOUD INSTALLATION COMPLETED!"
+echo "  INSTALLATION COMPLETED SUCCESSFULLY!"
 echo "  * Service running 24/7 in background (auto-starts on boot)."
 echo "  * Check service status : sudo systemctl status epanchayat"
-echo "  * View live URL        : cat /opt/epanchayat/latest_public_url.txt"
+echo "  * Check live URL       : cat /opt/epanchayat/latest_public_url.txt"
 echo "====================================================================="
+sleep 4
+if [ -f /opt/epanchayat/latest_public_url.txt ]; then
+    cat /opt/epanchayat/latest_public_url.txt
+fi
+
