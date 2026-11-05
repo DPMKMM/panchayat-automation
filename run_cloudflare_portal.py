@@ -4,6 +4,7 @@ Launcher for PRKMM e-Panchayat Automated DSR Portal via Cloudflare Tunnel.
 Starts the local Uvicorn server and establishes a secure, public HTTPS tunnel
 routed through Cloudflare's Hyderabad edge network. The public URL can be opened
 from mobile phones or any external network with zero firewall blocks.
+Compatible with Windows, Linux (Ubuntu/Debian on Oracle Cloud, AWS, etc.).
 """
 
 import os
@@ -11,6 +12,7 @@ import re
 import sys
 import time
 import socket
+import platform
 import webbrowser
 import subprocess
 from pathlib import Path
@@ -28,9 +30,11 @@ if sys.platform == "win32":
 BASE_DIR = Path(__file__).resolve().parent
 PYTHON_EXE = BASE_DIR / ".venv" / "Scripts" / "python.exe"
 if not PYTHON_EXE.exists():
+    PYTHON_EXE = BASE_DIR / ".venv" / "bin" / "python"
+if not PYTHON_EXE.exists():
     PYTHON_EXE = Path(sys.executable)
 
-CLOUDFLARED_EXE = BASE_DIR / "cloudflared.exe"
+CLOUDFLARED_EXE = BASE_DIR / ("cloudflared.exe" if sys.platform == "win32" else "cloudflared")
 
 # 1. Read token from environment variable or .env file
 env_file = BASE_DIR / ".env"
@@ -52,9 +56,14 @@ TUNNEL_TOKEN = token_from_env or ""  # Leave empty for free trycloudflare quick 
 
 
 def ensure_cloudflared() -> Path:
-    """Ensures cloudflared.exe is present and valid; auto-downloads if missing."""
+    """Ensures cloudflared executable is present and valid; auto-downloads if missing."""
     global CLOUDFLARED_EXE
     if CLOUDFLARED_EXE.exists() and CLOUDFLARED_EXE.stat().st_size > 10_000_000:
+        if sys.platform != "win32":
+            try:
+                CLOUDFLARED_EXE.chmod(0o755)
+            except Exception:
+                pass
         return CLOUDFLARED_EXE
 
     import shutil
@@ -63,9 +72,18 @@ def ensure_cloudflared() -> Path:
         CLOUDFLARED_EXE = Path(cand)
         return CLOUDFLARED_EXE
 
-    print("[*] cloudflared.exe not found locally. Auto-downloading from Cloudflare...", flush=True)
-    target = BASE_DIR / "cloudflared.exe"
-    dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+    arch = platform.machine().lower()
+    if sys.platform == "win32":
+        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+        target = BASE_DIR / "cloudflared.exe"
+    elif "arm" in arch or "aarch64" in arch:
+        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64"
+        target = BASE_DIR / "cloudflared"
+    else:
+        dl_url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        target = BASE_DIR / "cloudflared"
+
+    print(f"[*] cloudflared not found locally. Auto-downloading {target.name} from Cloudflare...", flush=True)
     try:
         import urllib.request
         req = urllib.request.Request(dl_url, headers={"User-Agent": "Mozilla/5.0"})
@@ -81,11 +99,13 @@ def ensure_cloudflared() -> Path:
                 if total > 0:
                     pct = int(downloaded * 100 / total)
                     print(f"\r[*] Downloading Cloudflare Tunnel engine: {pct}% ({downloaded // (1024*1024)}MB / {total // (1024*1024)}MB)...", end="", flush=True)
-        print("\n[+] cloudflared.exe downloaded and verified successfully!", flush=True)
+        if sys.platform != "win32":
+            target.chmod(0o755)
+        print(f"\n[+] {target.name} downloaded and verified successfully!", flush=True)
         CLOUDFLARED_EXE = target
         return CLOUDFLARED_EXE
     except Exception as exc:
-        print(f"\n[!] Failed to auto-download cloudflared.exe: {exc}", flush=True)
+        print(f"\n[!] Failed to auto-download cloudflared: {exc}", flush=True)
         return target
 
 
@@ -93,6 +113,8 @@ def kill_stale_cloudflared():
     try:
         if sys.platform == "win32":
             subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run(["pkill", "-9", "-f", "cloudflared"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
 
@@ -129,7 +151,7 @@ def main():
     # 2. Verify cloudflared executable is present
     ensure_cloudflared()
     if not CLOUDFLARED_EXE.exists():
-        print("[ERROR] cloudflared.exe could not be downloaded. Please check internet connection.")
+        print("[ERROR] cloudflared could not be downloaded. Please check internet connection.")
         sys.exit(1)
 
     kill_stale_cloudflared()
