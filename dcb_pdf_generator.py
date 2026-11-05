@@ -144,7 +144,9 @@ def get_or_generate_dcb_pdf(
     if is_single_mandal and mandal_name:
         safe_mandal = "_" + mandal_name.strip().replace(" ", "_").title()
 
-    reports_dir = Path(__file__).resolve().parent / "data" / "reports"
+    import sys
+    base_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+    reports_dir = base_dir / "data" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     india_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
     date_str = india_now.strftime("%d-%m-%Y")

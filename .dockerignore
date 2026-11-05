@@ -13,3 +13,13 @@ tests
 secrets/
 *.pem
 *.p12
+
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+**/*.xls
+**/*.xlsx
+**/*.xlsm
+**/*.xlsb
+automate_epts/downloads/

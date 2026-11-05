@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir --upgrade pip \
     && mkdir -p /tmp/epanchayat-attendance-data \
     && chown -R appuser:appuser /app /tmp/epanchayat-attendance-data
 
-COPY --chown=appuser:appuser *.py bundled_allgpdata.xls ./
+COPY --chown=appuser:appuser *.py ./
 COPY --chown=appuser:appuser automate_epts/ ./automate_epts/
 
 USER 10001

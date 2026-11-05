@@ -53,7 +53,7 @@ def test_tax_pdf_generation_endpoint():
     assert len(resp.content) > 50_000
 
     reader = PdfReader(io.BytesIO(resp.content))
-    assert len(reader.pages) == 27
+    assert len(reader.pages) == 28
 
 
 def test_tax_single_mandal_pdf_endpoint():

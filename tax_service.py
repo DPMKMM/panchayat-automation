@@ -19,8 +19,8 @@ DATA_DIR = BASE_DIR / "data"
 URL_ALL_GP_DATA = "https://epanchayat.telangana.gov.in/epmis/allgpdata.jsp"
 URL_DISTRICT_LIVE = "https://epanchayat.telangana.gov.in/epmis/epmisPRHTAXDCBLive.jsp"
 
-# Ensure data directory exists
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+_LIVE_BYTES_CACHE: Optional[bytes] = None
+_LAST_FETCH_TIME: float = 0.0
 
 _LIVE_BYTES_CACHE: Optional[bytes] = None
 _LAST_FETCH_TIME: float = 0.0
@@ -47,6 +47,37 @@ def download_portal_raw_data() -> bytes:
         logger.info("Successfully fetched live portal DCB data: %d bytes (held in-memory)", len(content))
         return content
 
+    proxy_base = (os.getenv("DCB_PORTAL_PROXY_URL") or "").strip().rstrip("/")
+    proxy_token = (os.getenv("DCB_PORTAL_PROXY_TOKEN") or "").strip()
+    if proxy_base:
+        if not proxy_token:
+            raise RuntimeError("DCB_PORTAL_PROXY_TOKEN is required when the live DCB proxy is configured.")
+        request_url = f"{proxy_base}/v1/dcb/raw"
+        logger.info("Fetching live DCB workbook through the configured e-Panchayat proxy.")
+    else:
+        request_url = URL_ALL_GP_DATA
+        logger.info("Connecting directly to Telangana e-Panchayat for live DCB data: %s", URL_ALL_GP_DATA)
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/vnd.ms-excel,application/octet-stream,*/*",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+    if proxy_base:
+        headers["Authorization"] = f"Bearer {proxy_token}"
+
+    with httpx.Client(verify=False, timeout=90.0) as client:
+        resp = client.get(request_url, headers=headers)
+        resp.raise_for_status()
+        content = resp.content
+        if len(content) < 50_000:
+            raise ValueError(f"Portal returned invalid or empty data ({len(content)} bytes)")
+
+        _LIVE_BYTES_CACHE = content
+        _LAST_FETCH_TIME = time.time()
+        logger.info("Successfully fetched live portal DCB data: %d bytes", len(content))
+        return content
 
 def get_raw_data_bytes(force_download: bool = False) -> bytes:
     """Always fetch live real-time data from portal. Short 2-minute memory cache prevents duplicate downloads during rapid page navigation."""

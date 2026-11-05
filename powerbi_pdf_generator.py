@@ -515,7 +515,7 @@ def generate_powerbi_pdf(
 def get_or_generate_powerbi_pdf(
     district_name: str = "District",
     mandal_name: Optional[str] = None,
-    force_regenerate: bool = False,
+    force_regenerate: bool = True,
 ) -> tuple[str, bytes]:
     """Return filename and bytes of the Power BI report for district or mandal."""
     safe_dist = district_name.strip().replace(" ", "_").title()
@@ -525,7 +525,9 @@ def get_or_generate_powerbi_pdf(
     india_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
     date_str = india_now.strftime("%d-%m-%Y")
 
-    reports_dir = Path(__file__).resolve().parent / "data" / "reports"
+    import sys
+    base_dir = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+    reports_dir = base_dir / "data" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     pdf_filename = f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}.pdf"
     cache_path = reports_dir / f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}_v5.pdf"
