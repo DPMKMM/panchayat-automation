@@ -855,6 +855,16 @@ NARESH_PAGE_HTML = """<!doctype html>
           <span id="nav-browser-text">Browser: Standby</span>
         </span>
 
+        <!-- Session Auto-Close Countdown & Extension Pill in Navbar -->
+        <div id="nav-session-timer-wrap" style="display:none; align-items:center; gap:6px;">
+          <span id="nav-session-timer" style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; font-weight:700; background:rgba(16,185,129,0.2); border:1px solid rgba(16,185,129,0.45); padding:3px 10px; border-radius:12px; color:#d1fae5; transition:all 0.3s;" title="Session automatically closes browser when timer reaches 0 to conserve server load">
+            ⏳ <span id="nav-timer-digits">10:00</span>
+          </span>
+          <button id="btn-extend-session" type="button" onclick="extendPortalSession()" style="background:#2563eb; color:#ffffff; border:none; border-radius:12px; font-size:0.72rem; font-weight:700; padding:3px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:4px; box-shadow:0 2px 4px rgba(0,0,0,0.15);" title="Extend session by 10 more minutes (max 20 mins total)">
+            +10m Extend
+          </button>
+        </div>
+
         <!-- Logged-in Links (Shown after login) -->
         <div id="nav-portal-links" style="display: none; align-items: center; gap: 8px;">
           <!-- Automated Reports Menu -->
@@ -1028,6 +1038,12 @@ NARESH_PAGE_HTML = """<!doctype html>
           </div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span id="dash-timer-chip" style="background:rgba(0,0,0,0.35); border:1px solid #10b981; border-radius:8px; padding:6px 12px; color:#d1fae5; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+            ⏱️ Timer: <span id="dash-timer-digits" style="font-family:monospace; font-size:0.95rem; color:#fef08a;">10:00</span> remaining
+          </span>
+          <button id="dash-btn-extend" type="button" onclick="extendPortalSession()" style="background:#2563eb; color:white; border:none; border-radius:8px; font-size:0.8rem; font-weight:700; padding:6px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 6px rgba(0,0,0,0.2);" title="Extend session by 10 more minutes (max 20 mins total)">
+            ⏱️ +10 Mins (Extend)
+          </button>
           <span class="badge" style="background:rgba(255,255,255,0.1); color:#e2e8f0; border:1px solid rgba(255,255,255,0.2); font-size:0.8rem; padding:6px 12px;">
             🤖 Robot Engine: Standby
           </span>
@@ -1834,6 +1850,7 @@ NARESH_PAGE_HTML = """<!doctype html>
             <tr style="background:#f8fafc; border-bottom:1px solid var(--border); font-size:0.75rem; color:#475569;">
               <th style="padding:8px 10px;">Officer / User</th>
               <th style="padding:8px 10px;">Status</th>
+              <th style="padding:8px 10px;">Time Left</th>
               <th style="padding:8px 10px;">Active For</th>
               <th style="padding:8px 10px;">Idle</th>
               <th style="padding:8px 10px;">Session ID</th>
@@ -1949,9 +1966,16 @@ NARESH_PAGE_HTML = """<!doctype html>
           const userDisplay = s.user_id + (isMe ? ' <b style="color:#059669;">(You)</b>' : '');
           const rowBg = isMe ? 'background:#f0fdf4;' : '';
 
+          const remMin = Math.floor((s.expires_in_seconds || 0) / 60);
+          const remSec = (s.expires_in_seconds || 0) % 60;
+          const timeRemainingDisplay = isAuth 
+            ? `<span style="font-family:monospace; font-weight:700; color:${(s.expires_in_seconds||0) <= 120 ? '#ef4444' : '#059669'};">${remMin}:${remSec.toString().padStart(2, '0')}</span>${s.extended ? ' <span style="font-size:0.68rem; background:#dbeafe; color:#1e40af; padding:1px 4px; border-radius:4px;">20m</span>' : ' <span style="font-size:0.68rem; background:#f1f5f9; color:#64748b; padding:1px 4px; border-radius:4px;">10m</span>'}`
+            : '—';
+
           return `<tr style="border-bottom:1px solid #f1f5f9; ${rowBg}">
             <td style="padding:8px 10px; font-weight:700; color:var(--text);">${userDisplay}</td>
             <td style="padding:8px 10px;">${statusBadge}</td>
+            <td style="padding:8px 10px;">${timeRemainingDisplay}</td>
             <td style="padding:8px 10px; color:#475569;">${s.age_minutes}m</td>
             <td style="padding:8px 10px; color:#475569;">${s.idle_minutes}m ago</td>
             <td style="padding:8px 10px; font-family:monospace; color:#64748b; font-size:0.74rem;">${s.session_id_short}</td>
@@ -1959,6 +1983,137 @@ NARESH_PAGE_HTML = """<!doctype html>
         }).join('');
       } catch(e) {
         console.error('Sessions fetch error:', e);
+      }
+    };
+
+    // 10-Minute Session Auto-Close & +10m Extension Controllers (Server Load Optimization)
+    window.sessionExpiresIn = 600;
+    window.sessionCanExtend = true;
+    window.sessionTimerInterval = null;
+
+    window.updateTimerDisplay = function() {
+      const wrap = document.getElementById('nav-session-timer-wrap');
+      const digits = document.getElementById('nav-timer-digits');
+      const btn = document.getElementById('btn-extend-session');
+      const dashDigits = document.getElementById('dash-timer-digits');
+      const dashBtn = document.getElementById('dash-btn-extend');
+      const navTimer = document.getElementById('nav-session-timer');
+
+      const isAuth = sessionStorage.getItem('epts_portal_auth') === 'true';
+      if (!isAuth) {
+        if (wrap) wrap.style.display = 'none';
+        return;
+      }
+
+      if (wrap) wrap.style.display = 'inline-flex';
+
+      const totalSec = Math.max(0, window.sessionExpiresIn || 0);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+      if (digits) digits.innerText = timeStr;
+      if (dashDigits) dashDigits.innerText = timeStr;
+
+      // Color warning when under 2 minutes
+      if (totalSec <= 120) {
+        if (navTimer) {
+          navTimer.style.background = 'rgba(239, 68, 68, 0.25)';
+          navTimer.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+          navTimer.style.color = '#fca5a5';
+        }
+        if (dashDigits) dashDigits.style.color = '#ef4444';
+      } else {
+        if (navTimer) {
+          navTimer.style.background = 'rgba(16, 185, 129, 0.2)';
+          navTimer.style.borderColor = 'rgba(16, 185, 129, 0.45)';
+          navTimer.style.color = '#d1fae5';
+        }
+        if (dashDigits) dashDigits.style.color = '#fef08a';
+      }
+
+      // Extension button state
+      const canExt = (window.sessionCanExtend !== false) && (window.sessionExpiresIn > 0);
+      if (btn) {
+        if (canExt) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+          btn.innerText = '+10m Extend';
+          btn.title = 'Extend session by 10 more minutes (max 20 mins total)';
+        } else {
+          btn.disabled = true;
+          btn.style.opacity = '0.55';
+          btn.style.cursor = 'default';
+          btn.innerText = 'Max 20m';
+          btn.title = 'Maximum session duration reached (20 mins)';
+        }
+      }
+      if (dashBtn) {
+        if (canExt) {
+          dashBtn.disabled = false;
+          dashBtn.style.opacity = '1';
+          dashBtn.style.cursor = 'pointer';
+          dashBtn.innerHTML = '⏱️ +10 Mins (Extend)';
+        } else {
+          dashBtn.disabled = true;
+          dashBtn.style.opacity = '0.55';
+          dashBtn.style.cursor = 'default';
+          dashBtn.innerHTML = '⏱️ Max 20m Reached';
+        }
+      }
+    };
+
+    window.startSessionTimer = function(initialSec = 600, canExtend = true) {
+      window.sessionExpiresIn = initialSec;
+      window.sessionCanExtend = canExtend;
+      window.updateTimerDisplay();
+
+      if (window.sessionTimerInterval) {
+        clearInterval(window.sessionTimerInterval);
+      }
+
+      window.sessionTimerInterval = setInterval(() => {
+        if (window.sessionExpiresIn > 0) {
+          window.sessionExpiresIn--;
+          window.updateTimerDisplay();
+        } else {
+          clearInterval(window.sessionTimerInterval);
+          window.sessionTimerInterval = null;
+          window.handleSessionExpired();
+        }
+      }, 1000);
+    };
+
+    window.handleSessionExpired = async function() {
+      alert("⏰ Session Expired (Time Limit Reached)\n\nTo reduce server load and conserve memory, your browser automation session has been closed automatically after reaching the allowed duration (10 mins, or 20 mins if extended).\n\nPlease log in again whenever you need to generate reports.");
+      try {
+        await fetch('/api/naresh/logout', { method: 'POST' });
+      } catch(e) {}
+      setAuthenticated(false);
+    };
+
+    window.extendPortalSession = async function() {
+      const btn = document.getElementById('btn-extend-session');
+      const dashBtn = document.getElementById('dash-btn-extend');
+      if (btn) btn.disabled = true;
+      if (dashBtn) dashBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/naresh/extend-session', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.sessionExpiresIn = data.expires_in;
+          window.sessionCanExtend = data.can_extend;
+          window.updateTimerDisplay();
+          alert("✅ Session Extended!\n\nYour session has been extended by 10 additional minutes (Total allowed time: 20 minutes).\nThe browser will automatically close when the countdown reaches 0 to conserve server memory.");
+        } else {
+          alert(data.message || data.detail || "Could not extend session.");
+          window.updateTimerDisplay();
+        }
+      } catch (e) {
+        alert("Error extending session: " + e.message);
+        window.updateTimerDisplay();
       }
     };
 
@@ -2948,6 +3103,13 @@ NARESH_PAGE_HTML = """<!doctype html>
         if (line1) line1.classList.add('active');
         if (line2) line2.classList.add('active');
       } else {
+        if (window.sessionTimerInterval) {
+          clearInterval(window.sessionTimerInterval);
+          window.sessionTimerInterval = null;
+        }
+        const timerWrap = document.getElementById('nav-session-timer-wrap');
+        if (timerWrap) timerWrap.style.display = 'none';
+
         sessionStorage.removeItem('epts_portal_auth');
         sessionStorage.removeItem('epts_officer_id');
         localStorage.removeItem('epts_portal_auth');
@@ -3361,6 +3523,15 @@ NARESH_PAGE_HTML = """<!doctype html>
           window.updateGlobalBrowserStatus(data);
           if (data && data.authenticated) {
             const officer = data.user_id || sessionStorage.getItem('epts_officer_id') || 'Officer';
+            if (typeof data.expires_in === 'number') {
+              window.sessionExpiresIn = data.expires_in;
+              window.sessionCanExtend = data.can_extend;
+            }
+            if (!window.sessionTimerInterval) {
+              window.startSessionTimer(data.expires_in || 600, data.can_extend);
+            } else {
+              window.updateTimerDisplay();
+            }
             setAuthenticated(true, officer);
             return true;
           } else if (data && data.status === 'awaiting_otp') {

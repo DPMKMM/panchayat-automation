@@ -36,6 +36,11 @@ REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 logger = logging.getLogger("epts_automation_service")
 
+# Session timeout constants (server load optimization)
+SESSION_DEFAULT_DURATION = 600    # 10 minutes initial session limit
+SESSION_EXTENSION_DURATION = 600  # +10 minutes extension
+SESSION_MAX_DURATION = 1200       # 20 minutes maximum total cap
+
 # Multi-session registry
 _sessions: dict[str, dict[str, Any]] = {}
 _sessions_lock = threading.Lock()
@@ -58,6 +63,8 @@ def _save_session_state(session: dict[str, Any]) -> None:
             "status": session.get("status", "idle"),
             "mode": session.get("mode", "idle"),
             "authenticated_at": session.get("authenticated_at", 0),
+            "session_duration": session.get("session_duration", SESSION_DEFAULT_DURATION),
+            "extended": session.get("extended", False),
             "last_activity": session.get("last_activity", time.time()),
         }
         state_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -72,8 +79,11 @@ def _load_session_state(session_id: str) -> dict[str, Any]:
         if state_file.exists():
             payload = json.loads(state_file.read_text(encoding="utf-8"))
             auth_time = payload.get("authenticated_at", 0)
-            if payload.get("status") == "authenticated" and (time.time() - auth_time) < 43200:
+            dur = payload.get("session_duration", SESSION_DEFAULT_DURATION)
+            if payload.get("status") == "authenticated" and (time.time() - auth_time) < dur:
                 return payload
+            elif payload.get("status") == "authenticated":
+                _clear_session_state(sid)
     except Exception as exc:
         logger.warning("Could not load session state for %s: %s", sid, exc)
     return {}
@@ -115,6 +125,8 @@ def get_or_create_session(session_id: str = "") -> dict[str, Any]:
                 "last_error": "",
                 "created_at": time.time(),
                 "authenticated_at": 0.0,
+                "session_duration": SESSION_DEFAULT_DURATION,
+                "extended": False,
                 "last_activity": time.time(),
                 "latest_pdf_path": "",
                 "latest_report_date": "",
@@ -128,6 +140,8 @@ def get_or_create_session(session_id: str = "") -> dict[str, Any]:
                 session["status"] = saved.get("status", "idle")
                 session["mode"] = saved.get("mode", "idle")
                 session["authenticated_at"] = saved.get("authenticated_at", 0.0)
+                session["session_duration"] = saved.get("session_duration", SESSION_DEFAULT_DURATION)
+                session["extended"] = saved.get("extended", False)
             _sessions[sid] = session
 
         session["last_activity"] = time.time()
@@ -284,6 +298,8 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
             if "deptLoginVerified" in page.url or "Office ID:" in page.content():
                 session["status"] = "authenticated"
                 session["authenticated_at"] = time.time()
+                session["session_duration"] = SESSION_DEFAULT_DURATION
+                session["extended"] = False
                 session["user_id"] = user_id
                 _save_session_state(session)
                 ensure_keepalive_running()
@@ -305,6 +321,8 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     # Cloud session or fallback
     session["status"] = "authenticated"
     session["authenticated_at"] = time.time()
+    session["session_duration"] = SESSION_DEFAULT_DURATION
+    session["extended"] = False
     session["user_id"] = user_id
     _save_session_state(session)
     ensure_keepalive_running()
@@ -491,6 +509,68 @@ def get_session_status(session_id: str = "") -> dict[str, Any]:
     return run_in_session_thread(session, _get_session_status_impl, session)
 
 
+def _expire_session_impl(session: dict[str, Any]) -> dict[str, Any]:
+    """Closes Playwright browser and releases server memory when 10m/20m limit is reached."""
+    bot = session.get("bot")
+    if bot:
+        try:
+            bot.close()
+            logger.info("[%s] Closed Playwright browser to release server memory (session limit reached).",
+                        session["session_id"][:6])
+        except Exception as exc:
+            logger.warning("[%s] Error closing bot on session expire: %s", session["session_id"][:6], exc)
+
+    _clear_session_state(session["session_id"])
+    session["bot"] = None
+    session["user_id"] = ""
+    session["status"] = "expired"
+    session["mode"] = "idle"
+    session["last_error"] = "Session auto-closed after reaching time limit to reduce server load."
+    session["latest_pdf_path"] = ""
+    session["report_data"] = {}
+    session["authenticated_at"] = 0.0
+    session["session_duration"] = SESSION_DEFAULT_DURATION
+    session["extended"] = False
+    return {"success": True, "message": "Session expired and browser closed."}
+
+
+def extend_session(session_id: str = "") -> dict[str, Any]:
+    """Extends the user's active session duration by +10 minutes (up to max 20 minutes total)."""
+    session = get_or_create_session(session_id)
+    return run_in_session_thread(session, _extend_session_impl, session)
+
+
+def _extend_session_impl(session: dict[str, Any]) -> dict[str, Any]:
+    if session.get("status") != "authenticated":
+        raise ValueError("Cannot extend: No active authenticated session found. Please log in first.")
+
+    current_duration = session.get("session_duration", SESSION_DEFAULT_DURATION)
+    if current_duration >= SESSION_MAX_DURATION or session.get("extended", False):
+        raise ValueError("Maximum session extension reached (20 minutes total limit).")
+
+    new_duration = min(current_duration + SESSION_EXTENSION_DURATION, SESSION_MAX_DURATION)
+    session["session_duration"] = new_duration
+    session["extended"] = True
+    session["last_activity"] = time.time()
+    _save_session_state(session)
+
+    auth_time = session.get("authenticated_at") or time.time()
+    elapsed = max(0, int(time.time() - auth_time))
+    remaining = max(0, new_duration - elapsed)
+
+    logger.info("Session %s extended to %d seconds (%d mins). Remaining: %ds.",
+                session["session_id"][:6], new_duration, new_duration // 60, remaining)
+
+    return {
+        "success": True,
+        "message": "Session successfully extended by 10 minutes! Total allowed time is 20 minutes.",
+        "expires_in": remaining,
+        "session_duration": new_duration,
+        "can_extend": False,
+        "extended": True,
+    }
+
+
 def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
     bot = session.get("bot")
     bot_alive = False
@@ -498,6 +578,19 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
         try:
             bot_alive = not bot.page.is_closed()
         except Exception:
+            bot_alive = False
+
+    auth_time = session.get("authenticated_at") or 0
+    duration = session.get("session_duration", SESSION_DEFAULT_DURATION)
+    extended = session.get("extended", False)
+
+    # Check if session has exceeded its time limit (10 mins, or 20 mins if extended)
+    if session.get("status") == "authenticated" and auth_time > 0:
+        elapsed = int(time.time() - auth_time)
+        if elapsed >= duration:
+            logger.info("Session %s reached limit of %ds (elapsed: %ds). Closing browser.",
+                        session["session_id"][:6], duration, elapsed)
+            _expire_session_impl(session)
             bot_alive = False
 
     if session.get("status") == "authenticated" and not bot_alive and session.get("mode") == "live_portal":
@@ -508,8 +601,19 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
 
     is_auth = (session.get("status") == "authenticated") and (bot_alive or session.get("mode") == "cloud_sync")
     user_id = session.get("user_id") or ""
-    auth_time = session.get("authenticated_at") or session.get("created_at") or 0
-    age = int(time.time() - auth_time) if auth_time else 0
+    age = int(time.time() - auth_time) if (auth_time and is_auth) else 0
+    remaining = max(0, duration - age) if is_auth else 0
+    can_extend = is_auth and (not extended) and (duration < SESSION_MAX_DURATION)
+
+    msg = ""
+    if is_auth:
+        rem_min = remaining // 60
+        rem_sec = remaining % 60
+        msg = f"Officer {user_id} active. Remaining session time: {rem_min:02d}:{rem_sec:02d} (auto-closes to save server load)."
+    elif session.get("status") == "expired":
+        msg = "Session expired (10m limit reached to reduce server load). Please log in again."
+    else:
+        msg = "Session is idle."
 
     return {
         "success": True,
@@ -520,8 +624,13 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
         "mode": session.get("mode", "idle"),
         "bot_alive": bot_alive,
         "session_age_seconds": age,
+        "session_duration": duration,
+        "expires_in": remaining,
+        "can_extend": can_extend,
+        "extended": extended,
+        "max_duration": SESSION_MAX_DURATION,
         "latest_pdf_available": bool(session.get("latest_pdf_path")),
-        "message": f"Background robot service running for Officer {user_id}." if is_auth else "Session is idle.",
+        "message": msg,
     }
 
 
@@ -547,6 +656,8 @@ def _logout_server_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["latest_pdf_path"] = ""
     session["report_data"] = {}
     session["authenticated_at"] = 0.0
+    session["session_duration"] = SESSION_DEFAULT_DURATION
+    session["extended"] = False
     return {"success": True, "message": "Logged out successfully."}
 
 
@@ -594,6 +705,8 @@ def get_all_active_sessions_summary() -> dict[str, Any]:
         age_sec = int(now - auth_time)
         idle_sec = int(now - s.get("last_activity", now))
 
+        dur = s.get("session_duration", SESSION_DEFAULT_DURATION)
+        rem_sec = max(0, dur - age_sec) if is_auth else 0
         sessions_list.append({
             "session_id": sid,
             "session_id_short": (sid[:8] + "...") if len(sid) > 10 else sid,
@@ -604,6 +717,9 @@ def get_all_active_sessions_summary() -> dict[str, Any]:
             "bot_alive": bot_alive,
             "age_minutes": round(age_sec / 60, 1),
             "idle_minutes": round(idle_sec / 60, 1),
+            "session_duration_minutes": dur // 60,
+            "expires_in_seconds": rem_sec,
+            "extended": s.get("extended", False),
             "latest_pdf_available": bool(s.get("latest_pdf_path")),
             "latest_report_date": s.get("latest_report_date", ""),
         })
@@ -629,7 +745,7 @@ def _keepalive_ping(session: dict[str, Any]):
 
 def _background_keepalive_loop():
     while True:
-        time.sleep(120)
+        time.sleep(10)  # Check every 10 seconds for timely auto-close & keepalive
         with _sessions_lock:
             active_sids = list(_sessions.keys())
 
@@ -640,7 +756,19 @@ def _background_keepalive_loop():
             if not session:
                 continue
 
-            # Cleanup sessions idle > 8 hours
+            # 1. Enforce 10m / 20m session limit: Auto-close browser to release server RAM and CPU
+            auth_time = session.get("authenticated_at", 0)
+            duration = session.get("session_duration", SESSION_DEFAULT_DURATION)
+            if session.get("status") == "authenticated" and auth_time > 0:
+                if (now - auth_time) >= duration:
+                    logger.info("Session %s reached limit of %ds. Auto-closing browser.", sid[:6], duration)
+                    try:
+                        run_in_session_thread(session, _expire_session_impl, session)
+                    except Exception as e:
+                        logger.warning("Error auto-closing expired session %s: %s", sid[:6], e)
+                    continue
+
+            # 2. Cleanup sessions idle > 8 hours
             idle_sec = now - session.get("last_activity", now)
             if idle_sec > 28800:
                 logger.info("Session %s idle for >8h. Auto-logging out.", sid[:6])
@@ -650,6 +778,7 @@ def _background_keepalive_loop():
                     pass
                 continue
 
+            # 3. Keepalive ping for active authenticated sessions
             if session.get("status") == "authenticated":
                 try:
                     run_in_session_thread(session, _keepalive_ping, session)

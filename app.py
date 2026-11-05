@@ -376,6 +376,19 @@ def create_app(
             logger.warning("Error fetching session status for session %s: %s", sid, exc)
             return {"success": False, "authenticated": False, "status": "idle", "session_id": sid}
 
+    @api.post("/api/naresh/extend-session", include_in_schema=False)
+    def naresh_extend_session(request: Request) -> dict[str, Any]:
+        sid = _get_sid(request)
+        try:
+            sys.path.insert(0, str((BASE_DIR / "automate_epts").resolve()))
+            import automation_service
+            return automation_service.extend_session(session_id=sid)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        except Exception as exc:
+            logger.exception("Error extending session %s: %s", sid, exc)
+            raise HTTPException(status_code=500, detail=f"Failed to extend session: {exc}") from None
+
     @api.post("/api/naresh/logout", include_in_schema=False)
     def naresh_logout(request: Request) -> dict[str, Any]:
         sid = _get_sid(request)

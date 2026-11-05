@@ -34,3 +34,5 @@ cloudflared.exe
 **/*.xlsx
 **/*.xlsm
 **/*.xlsb
+
+scratch/
