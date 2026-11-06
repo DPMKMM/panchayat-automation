@@ -422,6 +422,7 @@ def generate_dcb_pdf(
             m_b_arr = m_stat["b_arr"]
             m_b_cur = m_stat["b_cur"]
             m_b_tot = m_stat["b_tot"]
+            m_pct_float = m_stat["pct_float"]
             m_pct = m_stat["pct"]
 
             dist_d_arr += m_d_arr

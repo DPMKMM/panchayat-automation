@@ -60,11 +60,22 @@ _upload_attempts: dict[str, list[float]] = {}
 
 def _get_sid(request: Request) -> str:
     """Extract and prioritize client session ID."""
-    sid = request.headers.get("X-Session-ID", "").strip()
+    state_sid = getattr(request.state, "session_id", None)
+    if state_sid and str(state_sid).strip():
+        return str(state_sid).strip()
+    sid = (
+        request.headers.get("X-Session-ID")
+        or request.headers.get("x-session-id")
+        or ""
+    ).strip()
     if not sid:
         sid = request.query_params.get("session_id", "").strip()
     if not sid:
-        sid = request.cookies.get("ept_session_id", "").strip()
+        sid = (
+            request.cookies.get("epts_session_id")
+            or request.cookies.get("ept_session_id")
+            or ""
+        ).strip()
     return sid or "default"
 
 
@@ -391,23 +402,38 @@ def naresh_generate(
 
 def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
     sid = _get_sid(request)
+    pdf_path: Path | None = None
     try:
         session = automation_service.get_or_create_session(sid)
         pdf_path_str = session.get("latest_pdf_path")
         if pdf_path_str:
-            pdf_path = Path(pdf_path_str)
-            if pdf_path.exists() and pdf_path.stat().st_size > 500:
-                disposition = "inline" if inline else "attachment"
-                return Response(
-                    content=pdf_path.read_bytes(),
-                    media_type="application/pdf",
-                    headers={
-                        "Content-Disposition": f'{disposition}; filename="{pdf_path.name}"',
-                        "Access-Control-Expose-Headers": "Content-Disposition",
-                    },
-                )
+            cand = Path(pdf_path_str)
+            if cand.exists() and cand.stat().st_size > 500:
+                pdf_path = cand
     except Exception:
         pass
+
+    if not pdf_path:
+        short_sid = sid[:6] if len(sid) >= 6 and sid != "default" else ""
+        if short_sid:
+            matches = sorted(REPORTS_DIR.glob(f"*Official_DSR_Report*_{short_sid}.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if matches and matches[0].stat().st_size > 500:
+                pdf_path = matches[0]
+        if not pdf_path:
+            all_matches = sorted(REPORTS_DIR.glob("*Official_DSR_Report*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if all_matches and all_matches[0].stat().st_size > 500:
+                pdf_path = all_matches[0]
+
+    if pdf_path and pdf_path.exists() and pdf_path.stat().st_size > 500:
+        disposition = "inline" if inline else "attachment"
+        return Response(
+            content=pdf_path.read_bytes(),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{pdf_path.name}"',
+                "Access-Control-Expose-Headers": "Content-Disposition",
+            },
+        )
 
     raise HTTPException(status_code=404, detail="No generated PDF available yet. Please complete login and generate report above.")
 

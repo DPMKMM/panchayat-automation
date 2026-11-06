@@ -30,7 +30,7 @@ _session_reports: dict[tuple[str, str], DistrictBalanceReport] = {}
 
 
 def reset_balance_data(session_id: str = "") -> None:
-    """Wipes in-memory session and deletes all previously processed balance files on server restart."""
+    """Wipes in-memory session cache without deleting persisted reports on disk."""
     global _session_reports
     clean_sid = (session_id or "").strip()
     if clean_sid:
@@ -39,40 +39,6 @@ def reset_balance_data(session_id: str = "") -> None:
             _session_reports.pop(k, None)
     else:
         _session_reports.clear()
-        try:
-            # Purge old balance reports from data/reports
-            if REPORTS_DIR.exists():
-                for f in REPORTS_DIR.glob("*Balance*"):
-                    try:
-                        f.unlink()
-                    except Exception:
-                        pass
-
-            # Purge old balance reports from GPBALNCE/data
-            local_data = BASE_DIR / "data"
-            if local_data.exists():
-                for f in local_data.glob("*"):
-                    try:
-                        f.unlink()
-                    except Exception:
-                        pass
-
-            # Purge old balance reports from automate_epts/downloads
-            downloads_dir = ROOT_DIR / "automate_epts" / "downloads"
-            if downloads_dir.exists():
-                for f in downloads_dir.glob("*Balance*"):
-                    try:
-                        f.unlink()
-                    except Exception:
-                        pass
-
-            logger.info("Previous GP Balance data and files have been completely reset.")
-        except Exception as exc:
-            logger.warning("Notice during reset_balance_data: %s", exc)
-
-
-# Execute reset on module load (ensures clean slate whenever server starts)
-reset_balance_data()
 
 
 def get_latest_balance_report(force_date: str = "", session_id: str = "") -> Optional[DistrictBalanceReport]:
@@ -147,24 +113,60 @@ def get_balance_filename_prefix(report: DistrictBalanceReport) -> str:
 
 def get_balance_excel_bytes(date_str: str = "", session_id: str = "") -> tuple[str, bytes]:
     report = get_latest_balance_report(force_date=date_str, session_id=session_id)
-    if report is None:
-        raise ValueError(f"No balance report generated yet for date {date_str}. Please click 'Run Balance Robot' first.")
-    clean_date = report.report_date_str.replace("/", "-")
-    safe_dist = get_balance_filename_prefix(report)
-    filename = f"{safe_dist}_GP_Balance_Report_{clean_date}.xlsx"
-    data = generate_balance_excel(report)
-    return filename, data
+    if report is not None:
+        clean_date = report.report_date_str.replace("/", "-")
+        safe_dist = get_balance_filename_prefix(report)
+        filename = f"{safe_dist}_GP_Balance_Report_{clean_date}.xlsx"
+        data = generate_balance_excel(report)
+        return filename, data
+
+    # Disk Fallback: Check if file was already generated and saved in REPORTS_DIR
+    clean_date = (date_str or "").strip().replace("/", "-")
+    short_sid = (session_id[:6] if len(session_id) >= 6 else session_id) if session_id and session_id != "default" else ""
+    patterns = []
+    if clean_date and short_sid:
+        patterns.append(f"*GP_Balance_Report_{clean_date}_{short_sid}.xlsx")
+    if clean_date:
+        patterns.append(f"*GP_Balance_Report_{clean_date}*.xlsx")
+    if short_sid:
+        patterns.append(f"*GP_Balance_Report*_{short_sid}.xlsx")
+    patterns.append("*GP_Balance_Report*.xlsx")
+
+    for pat in patterns:
+        matches = sorted(REPORTS_DIR.glob(pat), key=lambda p: p.stat().st_mtime, reverse=True)
+        if matches and matches[0].stat().st_size > 500:
+            return matches[0].name, matches[0].read_bytes()
+
+    raise ValueError(f"No balance report generated yet for date {date_str or 'selected'}. Please click 'Run Balance Robot' first.")
 
 
 def get_balance_pdf_bytes(date_str: str = "", session_id: str = "") -> tuple[str, bytes]:
     report = get_latest_balance_report(force_date=date_str, session_id=session_id)
-    if report is None:
-        raise ValueError(f"No balance report generated yet for date {date_str}. Please click 'Run Balance Robot' first.")
-    clean_date = report.report_date_str.replace("/", "-")
-    safe_dist = get_balance_filename_prefix(report)
-    filename = f"{safe_dist}_GP_Balance_Report_{clean_date}.pdf"
-    data = generate_balance_pdf(report)
-    return filename, data
+    if report is not None:
+        clean_date = report.report_date_str.replace("/", "-")
+        safe_dist = get_balance_filename_prefix(report)
+        filename = f"{safe_dist}_GP_Balance_Report_{clean_date}.pdf"
+        data = generate_balance_pdf(report)
+        return filename, data
+
+    # Disk Fallback: Check if file was already generated and saved in REPORTS_DIR
+    clean_date = (date_str or "").strip().replace("/", "-")
+    short_sid = (session_id[:6] if len(session_id) >= 6 else session_id) if session_id and session_id != "default" else ""
+    patterns = []
+    if clean_date and short_sid:
+        patterns.append(f"*GP_Balance_Report_{clean_date}_{short_sid}.pdf")
+    if clean_date:
+        patterns.append(f"*GP_Balance_Report_{clean_date}*.pdf")
+    if short_sid:
+        patterns.append(f"*GP_Balance_Report*_{short_sid}.pdf")
+    patterns.append("*GP_Balance_Report*.pdf")
+
+    for pat in patterns:
+        matches = sorted(REPORTS_DIR.glob(pat), key=lambda p: p.stat().st_mtime, reverse=True)
+        if matches and matches[0].stat().st_size > 500:
+            return matches[0].name, matches[0].read_bytes()
+
+    raise ValueError(f"No balance report generated yet for date {date_str or 'selected'}. Please click 'Run Balance Robot' first.")
 
 
 def get_balance_data_dict(date_str: str = "", session_id: str = "") -> dict[str, Any]:

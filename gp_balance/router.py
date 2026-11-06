@@ -14,11 +14,22 @@ router = APIRouter(tags=["GP Balance Entry (GM-R 14.2)"])
 
 def _get_sid(request: Request) -> str:
     """Helper to extract session id from header or query or cookie."""
-    sid = request.headers.get("X-Session-ID", "").strip()
+    state_sid = getattr(request.state, "session_id", None)
+    if state_sid and str(state_sid).strip():
+        return str(state_sid).strip()
+    sid = (
+        request.headers.get("X-Session-ID")
+        or request.headers.get("x-session-id")
+        or ""
+    ).strip()
     if not sid:
         sid = request.query_params.get("session_id", "").strip()
     if not sid:
-        sid = request.cookies.get("ept_session_id", "").strip()
+        sid = (
+            request.cookies.get("epts_session_id")
+            or request.cookies.get("ept_session_id")
+            or ""
+        ).strip()
     return sid or "default"
 
 
