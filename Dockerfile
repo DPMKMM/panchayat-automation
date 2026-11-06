@@ -15,8 +15,10 @@ RUN pip install --no-cache-dir --upgrade pip \
     && chown -R appuser:appuser /app /tmp/epanchayat-attendance-data
 
 COPY --chown=appuser:appuser *.py ./
-COPY --chown=appuser:appuser automate_epts/ ./automate_epts/
-COPY --chown=appuser:appuser GPBALNCE/ ./GPBALNCE/
+COPY --chown=appuser:appuser core/ ./core/
+COPY --chown=appuser:appuser dsr/ ./dsr/
+COPY --chown=appuser:appuser dcb/ ./dcb/
+COPY --chown=appuser:appuser gp_balance/ ./gp_balance/
 
 USER 10001
 EXPOSE 8080

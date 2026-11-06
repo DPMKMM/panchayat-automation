@@ -1,10 +1,14 @@
 @echo off
-title Telangana Panchayat Raj - Cloudflare Online Gateway
+title Telangana ePanchayat Portal - Cloudflare Public Access
 cd /d "%~dp0"
-echo ===================================================================
-echo   Telangana Panchayat Raj - Automated DSR Portal
-echo   Launching Public Cloudflare Tunnel (Hyderabad Edge)
-echo ===================================================================
-echo.
-".venv\Scripts\python.exe" run_cloudflare_portal.py
+
+echo ========================================================
+echo   Launching ePanchayat Portal via Cloudflare Tunnel
+echo ========================================================
+
+set PYTHON_CMD=python
+if exist ".venv\Scripts\python.exe" set PYTHON_CMD=.venv\Scripts\python.exe
+if exist "..\EPT_AUTOMATION\.venv\Scripts\python.exe" set PYTHON_CMD=..\EPT_AUTOMATION\.venv\Scripts\python.exe
+
+%PYTHON_CMD% run_cloudflare_portal.py
 pause

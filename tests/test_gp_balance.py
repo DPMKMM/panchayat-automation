@@ -21,10 +21,10 @@ GP_DIR = ROOT_DIR / "GPBALNCE"
 if str(GP_DIR) not in sys.path:
     sys.path.insert(0, str(GP_DIR))
 
-from gp_balance_models import GPBalanceDetail, MandalBalanceSummary, DistrictBalanceReport
-from gp_balance_automation import normalize_mandal_key, populate_pending_gps_from_directory
-from gp_balance_pdf_generator import generate_balance_pdf
-from gp_balance_excel_generator import generate_balance_excel
+from gp_balance.models import GPBalanceDetail, MandalBalanceSummary, DistrictBalanceReport
+from gp_balance.automation import normalize_mandal_key, populate_pending_gps_from_directory
+from gp_balance.pdf_generator import generate_balance_pdf
+from gp_balance.excel_generator import generate_balance_excel
 
 
 def test_mandal_normalization():

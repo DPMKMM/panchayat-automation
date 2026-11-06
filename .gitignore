@@ -10,30 +10,28 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Dynamic Runtime Data
 data/
-tmp/
-temp/
-secrets/
-*.pem
-*.p12
-*.pdf
-allgpdata.xls
-push_to_render.bat
-automate_epts/browser_profile/
-automate_epts/*.png
-automate_epts/otp.txt
-automate_epts/command.txt
-automate_epts/downloads/
-cloudflared.exe
+downloads/
+browser_profile/
 *.log
 
+# No offline excel/csv files (everything is scraped live from portal)
 *.xlsx
 *.xlsm
 *.xlsb
-**/*.xls
-**/*.xlsx
-**/*.xlsm
-**/*.xlsb
+*.xls
+*.csv
+*.csv.gz
 
-scratch/
+# Generated reports & screenshots
+*.pdf
+*.png
+*.jpg
+*.jpeg
+otp.txt
+command.txt
 latest_public_url.txt
+cloudflared.exe
+scratch/
