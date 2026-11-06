@@ -18,5 +18,5 @@ if not "%LOCAL_HASH%"=="%REMOTE_HASH%" (
     echo [%DATE% %TIME%] Code updated! Uvicorn reloads automatically.
 )
 
-timeout /t 60 /nobreak >nul
+ping 127.0.0.1 -n 61 >nul 2>&1
 goto loop
