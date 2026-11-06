@@ -1,6 +1,6 @@
 @echo off
 set "PATH=C:\Users\dpmkm\AppData\Local\Microsoft\WinGet\Packages\Git.MinGit_Microsoft.Winget.Source_8wekyb3d8bbwe\cmd;%PATH%"
-cd /d "E:\Google Antigravity\EPT_AUTOMATION"
+cd /d "%~dp0"
 echo ========================================================
 echo Pushing updates to GitHub (DPMKMM/panchayat-automation)...
 echo Render will auto-deploy to https://ept-automation.onrender.com
