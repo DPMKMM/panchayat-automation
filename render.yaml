@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: prkmm
+    name: panchayat-automation
     runtime: docker
     region: singapore
     plan: free

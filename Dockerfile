@@ -1,8 +1,9 @@
-FROM python:3.12-slim
+FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DATA_DIR=/tmp/epanchayat-attendance-data
+    DATA_DIR=/tmp/epanchayat-attendance-data \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
@@ -15,6 +16,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY --chown=appuser:appuser *.py ./
 COPY --chown=appuser:appuser automate_epts/ ./automate_epts/
+COPY --chown=appuser:appuser GPBALNCE/ ./GPBALNCE/
 
 USER 10001
 EXPOSE 8080

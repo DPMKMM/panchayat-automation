@@ -36,3 +36,4 @@ cloudflared.exe
 **/*.xlsb
 
 scratch/
+latest_public_url.txt
