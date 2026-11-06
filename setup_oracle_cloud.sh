@@ -32,7 +32,7 @@ sudo chown -R $USER:$USER /opt/epanchayat
 
 if [ ! -d "/opt/epanchayat/.git" ]; then
     echo "[*] Cloning repository from GitHub..."
-    git clone https://github.com/DPMKMM/PRKMM.git /opt/epanchayat
+    git clone https://github.com/DPMKMM/panchayat-automation.git /opt/epanchayat
 else
     echo "[*] Updating repository..."
     cd /opt/epanchayat && git pull origin main

@@ -1244,7 +1244,7 @@ NARESH_PAGE_HTML = """<!doctype html>
       <!-- STEP 3: Module & Date Selection -->
       <div class="step-pane" id="pane-step-3">
         <p class="step-instruction">
-          Automated multi-report pipeline: The robot downloads <strong>GM-R 1.2.7 DSR Raw Data</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.11 Presentees Report</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.10 Absentees Report</strong>, and compiles the official 7-section District PDF with matched secretary details (PRKMM standard).
+          Automated multi-report pipeline: The robot downloads <strong>GM-R 1.2.7 DSR Raw Data</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.11 Presentees Report</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.10 Absentees Report</strong>, and compiles the official 7-section District PDF with matched secretary details (Official District standard).
         </p>
         <div class="form-row">
           <div class="form-group" style="flex:2;">
@@ -3336,7 +3336,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         setTimeout(() => {
           setSubStep(4, 'done');
           setSubStep(5, 'active');
-          titleEl.innerText = 'Step 4: Compiling 7-Section Official Attendance & DSR Report (PRKMM Standard)...';
+          titleEl.innerText = 'Step 4: Compiling 7-Section Official Attendance & DSR Report (Official District Standard)...';
           barFill.style.width = '90%';
           updateStatus('Compiling official 7-section PDF report...');
         }, 3600);

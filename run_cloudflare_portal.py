@@ -1,5 +1,5 @@
 """
-Launcher for PRKMM e-Panchayat Automated DSR Portal via Cloudflare Tunnel.
+Launcher for e-Panchayat Automated DSR Portal via Cloudflare Tunnel.
 
 Starts the local Uvicorn server and establishes a secure, public HTTPS tunnel
 routed through Cloudflare's Hyderabad edge network. The public URL can be opened

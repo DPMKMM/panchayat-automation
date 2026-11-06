@@ -8,7 +8,7 @@ This guide explains how to set up your **Office Desktop (Windows 11 Pro)** as th
 
 ```
  [ Your Laptop ]                [ GitHub Repository ]             [ Office Desktop (Win 11 Pro) ]
-  (Development)                  (Code Hub: PRKMM)                     (24/7 Live Host)
+  (Development)                  (Code Hub: panchayat-automation)      (24/7 Live Host)
        |                                |                                     |
  1. Edit code                           |                                     |
  2. Run Laptop_Push_Updates.bat --------> git push origin main                |
@@ -36,7 +36,7 @@ On your Office Desktop running **Windows 11 Pro**:
 1. **Get the Project Folder**:
    - Either clone the repository via Git:
      ```cmd
-     git clone https://github.com/DPMKMM/PRKMM.git
+     git clone https://github.com/DPMKMM/panchayat-automation.git
      ```
    - Or copy the `EPT_AUTOMATION` folder from your external drive or network share to your office desktop (e.g., `C:\ePanchayat` or `D:\EPT_AUTOMATION`).
 

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "prkmm-dcb-proxy",
+  "name": "ept-dcb-proxy",
   "main": "worker.js",
   "compatibility_date": "2026-11-04",
   "workers_dev": true,

@@ -1,4 +1,4 @@
-# Telangana e-Panchayat Automated Console (PRKMM)
+# Telangana e-Panchayat Automated Console
 ### Panchayat Raj & Rural Development Department, Government of Telangana
 
 A comprehensive, production-grade automated intelligence and reporting portal for Telangana Gram Panchayats. Built with **FastAPI**, **Playwright headless browser automation**, **DDDDOCR deep learning neural network**, **Pandas**, **ReportLab**, and **PyPDF**.
