@@ -30,6 +30,7 @@ browser_profile/
 *.png
 *.jpg
 *.jpeg
+*.zip
 otp.txt
 command.txt
 latest_public_url.txt

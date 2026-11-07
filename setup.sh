@@ -1,98 +1,196 @@
 #!/usr/bin/env bash
+# ==============================================================================
+#  Telangana e-Panchayat Automation & Analytics Portal
+#  Oracle Cloud Infrastructure (Always Free Tier - Hyderabad / Mumbai)
+#  Automated 1-Click Production Setup & 24/7/365 High-Availability Daemon
+# ==============================================================================
 set -e
 
+# Detect actual non-root user (e.g., ubuntu on Oracle Cloud)
+ACTUAL_USER="${SUDO_USER:-$USER}"
+if [ -z "$ACTUAL_USER" ] || [ "$ACTUAL_USER" = "root" ]; then
+    if id "ubuntu" &>/dev/null; then
+        ACTUAL_USER="ubuntu"
+    else
+        ACTUAL_USER="root"
+    fi
+fi
+USER_HOME=$(eval echo "~$ACTUAL_USER")
+
 echo "====================================================================="
-echo "  e-Panchayat Automated Portal - Cloud Production Installer"
-echo "  Target: Ubuntu 22.04 / 24.04 LTS (AWS Lightsail / Oracle Cloud)"
+echo "  e-Panchayat Automated Portal - Oracle Cloud 24/7 Production Setup"
+echo "  Target: Ubuntu 22.04 / 24.04 LTS (Hyderabad ap-hyderabad-1 / Mumbai)"
+echo "  Running as system user: $ACTUAL_USER"
 echo "====================================================================="
 
-# 0. Setup 2GB Swap Memory (vital for 512MB/1GB VPS instances running Chromium)
+# 0. Setup 4GB Swap Space (essential for stability during Chromium headless scraping)
 if [ ! -f /swapfile ]; then
-    echo "[*] Creating 2GB swap memory for stable Playwright execution..."
-    sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+    echo "[*] Creating 4GB swap space for rock-solid stability..."
+    sudo fallocate -l 4G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
     sudo chmod 600 /swapfile
     sudo mkswap /swapfile
     sudo swapon /swapfile
-    echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-    echo "[+] 2GB swap memory configured successfully."
+    if ! grep -q '/swapfile' /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+    fi
+    echo "[+] 4GB swap memory configured successfully."
 else
     echo "[+] Swap file already exists."
 fi
 
-# 1. Update system & install dependencies
-echo "[*] Installing system dependencies and Python 3..."
+# 1. Update system & install required packages
+echo "[*] Updating apt packages and installing system libraries..."
 sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    python3 python3-pip python3-venv git curl wget build-essential \
-    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev iptables-persistent
+    python3 python3-pip python3-venv git curl wget build-essential jq \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
+    libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+    libgbm1 libpango-1.0-0 libcairo2 libasound2 iptables-persistent
 
-# 2. Setup project directory
-sudo mkdir -p /opt/epanchayat
-sudo chown -R $USER:$USER /opt/epanchayat
+# 2. Architecture detection & cloudflared binary installation
+ARCH=$(uname -m)
+echo "[*] Detected CPU Architecture: $ARCH"
+CLOUDFLARED_BIN="/usr/local/bin/cloudflared"
 
-if [ ! -d "/opt/epanchayat/.git" ]; then
-    echo "[*] Cloning repository from GitHub..."
-    git clone https://github.com/DPMKMM/panchayat-automation.git /opt/epanchayat
+if [ ! -f "$CLOUDFLARED_BIN" ] || [ ! -s "$CLOUDFLARED_BIN" ]; then
+    echo "[*] Installing Cloudflare Tunnel daemon for $ARCH..."
+    if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+        CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64"
+    else
+        CF_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+    fi
+    sudo curl -fsSL "$CF_URL" -o "$CLOUDFLARED_BIN"
+    sudo chmod +x "$CLOUDFLARED_BIN"
+    echo "[+] cloudflared installed to $CLOUDFLARED_BIN"
 else
-    echo "[*] Updating repository..."
-    cd /opt/epanchayat && git pull origin main
+    echo "[+] cloudflared already present at $CLOUDFLARED_BIN"
 fi
 
-cd /opt/epanchayat
+# 3. Setup Project Directory & Git Repository
+PROJECT_DIR="/opt/epanchayat"
+echo "[*] Setting up project directory at $PROJECT_DIR..."
+sudo mkdir -p "$PROJECT_DIR"
+sudo chown -R "$ACTUAL_USER":"$ACTUAL_USER" "$PROJECT_DIR"
 
-# 3. Create virtual environment
-if [ ! -d "/opt/epanchayat/.venv" ]; then
-    echo "[*] Creating Python virtual environment..."
-    python3 -m venv /opt/epanchayat/.venv
+if [ ! -d "$PROJECT_DIR/.git" ]; then
+    echo "[*] Cloning production repository from GitHub..."
+    sudo -u "$ACTUAL_USER" git clone https://github.com/DPMKMM/panchayat-automation.git "$PROJECT_DIR"
+else
+    echo "[*] Updating existing repository from GitHub main..."
+    cd "$PROJECT_DIR"
+    sudo -u "$ACTUAL_USER" git fetch origin main
+    sudo -u "$ACTUAL_USER" git reset --hard origin/main
 fi
 
-source /opt/epanchayat/.venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+cd "$PROJECT_DIR"
 
-# 4. Install Playwright Chromium with system dependencies
-echo "[*] Installing Playwright Chromium browser & Linux system libraries..."
-playwright install --with-deps chromium
+# 4. Configure .env file with permanent Cloudflare Tunnel token
+echo "[*] Writing production environment variables..."
+ENV_FILE="$PROJECT_DIR/.env"
+cat << 'EOF' | sudo -u "$ACTUAL_USER" tee "$ENV_FILE" > /dev/null
+# Telangana e-Panchayat Automated Portal Configuration
+CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0IjoiZTU3ZmZkZTgtZGRjYy00NTI4LTg2NTUtNjhmZmEwOWUwMjIyIiwicyI6Ik1qQmxORFV5TXpJdFpESTJZUzAwWWpFeUxXSmxObVl0WmpaaU9UTTNaakk0WTJaaCJ9"
+CUSTOM_DOMAIN="panchayatautomation.in"
+PORT=8000
+HOST="0.0.0.0"
+LOG_LEVEL="INFO"
+EOF
 
-# 5. Open firewall for port 8000 & 80 & 443
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT || true
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT || true
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT || true
-sudo netfilter-persistent save || true
+# 5. Setup Python Virtual Environment
+echo "[*] Creating Python virtual environment..."
+if [ ! -d "$PROJECT_DIR/.venv" ]; then
+    sudo -u "$ACTUAL_USER" python3 -m venv "$PROJECT_DIR/.venv"
+fi
 
-# 6. Configure systemd 24/7 background service
-echo "[*] Configuring systemd background service (auto-starts on boot)..."
+sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/pip" install --upgrade pip setuptools wheel
+echo "[*] Installing Python dependencies..."
+sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
+
+# 6. Install Playwright Headless Chromium
+echo "[*] Installing Playwright Chromium browser..."
+sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/python" -m playwright install --with-deps chromium || \
+sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/python" -m playwright install chromium
+
+# 7. Open Oracle Cloud Linux firewall ports (iptables)
+echo "[*] Configuring host firewall rules..."
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+sudo netfilter-persistent save 2>/dev/null || true
+
+# 8. Setup 24/7 Systemd Service
+echo "[*] Configuring systemd background daemon (/etc/systemd/system/epanchayat.service)..."
 sudo tee /etc/systemd/system/epanchayat.service > /dev/null <<EOF
 [Unit]
-Description=e-Panchayat Automated Portal Service
-After=network.target
+Description=Telangana ePanchayat Automation & Analytics Portal (24/7 Cloud Host)
+After=network.target network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=$USER
-WorkingDirectory=/opt/epanchayat
-ExecStart=/opt/epanchayat/.venv/bin/python run_cloudflare_portal.py
+User=$ACTUAL_USER
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/.venv/bin/python run_cloudflare_portal.py
 Restart=always
 RestartSec=5
+KillMode=mixed
+TimeoutStopSec=10
 Environment=PYTHONUNBUFFERED=1
+Environment=PORT=8000
+Environment=HOST=0.0.0.0
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# 9. Setup Auto-Pull & Continuous Deployment Script (every 60s)
+echo "[*] Installing auto-update sync service (pulls GitHub main automatically)..."
+sudo tee /usr/local/bin/epanchayat-autopull.sh > /dev/null <<'EOF'
+#!/usr/bin/env bash
+cd /opt/epanchayat || exit 1
+git fetch origin main -q
+LOCAL_HASH=$(git rev-parse HEAD)
+REMOTE_HASH=$(git rev-parse origin/main)
+
+if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+    echo "[$(date)] New update detected on GitHub main! Pulling changes..."
+    git reset --hard origin/main
+    .venv/bin/pip install -r requirements.txt -q
+    systemctl restart epanchayat.service
+    echo "[$(date)] Successfully updated and restarted epanchayat service."
+fi
+EOF
+sudo chmod +x /usr/local/bin/epanchayat-autopull.sh
+
+# Cron job for auto-pull
+CRON_LINE="* * * * * /usr/local/bin/epanchayat-autopull.sh >> /var/log/epanchayat-autopull.log 2>&1"
+(crontab -l 2>/dev/null | grep -v "epanchayat-autopull.sh" ; echo "$CRON_LINE") | crontab -
+
+# 10. Enable & Start Service
 sudo systemctl daemon-reload
 sudo systemctl enable epanchayat.service
 sudo systemctl restart epanchayat.service
 
 echo ""
 echo "====================================================================="
-echo "  INSTALLATION COMPLETED SUCCESSFULLY!"
-echo "  * Service running 24/7 in background (auto-starts on boot)."
-echo "  * Check service status : sudo systemctl status epanchayat"
-echo "  * Check live URL       : cat /opt/epanchayat/latest_public_url.txt"
+echo "  [+] ORACLE CLOUD HOST INSTALLATION COMPLETED SUCCESSFULLY!"
 echo "====================================================================="
-sleep 4
-if [ -f /opt/epanchayat/latest_public_url.txt ]; then
-    cat /opt/epanchayat/latest_public_url.txt
+echo "  * Public Domain  : https://panchayatautomation.in"
+echo "  * Alternate URL  : https://www.panchayatautomation.in"
+echo "  * Local Port     : http://127.0.0.1:8000/"
+echo "  * 24/7 Daemon    : epanchayat.service (Enabled on boot)"
+echo "  * Continuous CI  : GitHub auto-pull active every 60s"
+echo "====================================================================="
+echo ""
+echo "[*] Waiting 6 seconds for services to initialize..."
+sleep 6
+
+# Check local health
+if curl -s http://127.0.0.1:8000/health | grep -q "ok"; then
+    echo "  [OK] Local FastAPI server is HEALTHY on port 8000."
+else
+    echo "  [!] Server is still starting up. Checking status..."
 fi
 
+sudo systemctl status epanchayat --no-pager -l

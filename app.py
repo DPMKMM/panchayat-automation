@@ -22,6 +22,7 @@ from core.config import BASE_DIR, LOG_LEVEL
 from dsr.router import router as dsr_router
 from dcb.router import router as dcb_router
 from gp_balance.router import router as gp_balance_router
+from mas.router import router as mas_router, web_router as mas_web_router
 from dsr import service as automation_service
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -92,7 +93,7 @@ def create_app() -> FastAPI:
         return {
             "status": "ok",
             "platform": "Telangana ePanchayat Automation",
-            "modules": "DSR, DCB, GP_BALANCE",
+            "modules": "DSR, DCB, GP_BALANCE, MAS",
             "version": "4.0.0",
         }
 
@@ -100,6 +101,8 @@ def create_app() -> FastAPI:
     app.include_router(dsr_router)
     app.include_router(dcb_router)
     app.include_router(gp_balance_router)
+    app.include_router(mas_router)
+    app.include_router(mas_web_router)
 
     return app
 

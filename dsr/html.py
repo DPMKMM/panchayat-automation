@@ -844,6 +844,11 @@ NARESH_PAGE_HTML = """<!doctype html>
           <span>💰</span> House Tax (DCB)
         </a>
 
+        <!-- Always-Visible MAS & Births Button -->
+        <a class="nav-link" href="/reports/mas" id="nav-btn-mas" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
+          <span>📑</span> MAS & Births
+        </a>
+
         <!-- Unauthenticated Department Login Button -->
         <a class="nav-link" href="javascript:void(0)" onclick="openDepartmentLogin()" id="nav-btn-login" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#fbbf24;">
           <span>🔐</span> Login
@@ -1034,22 +1039,22 @@ NARESH_PAGE_HTML = """<!doctype html>
             </div>
           </div>
 
-          <!-- Module 2: Monthly Activity Statement (MAS) (Upcoming) -->
-          <div class="module-card">
+          <!-- Module 2: Monthly Activity Statement (MAS) (Active) -->
+          <div class="module-card featured" style="border-color:#10b981;">
             <div>
               <div class="module-card-header">
                 <div class="module-icon" style="background:#e0f2fe; color:#0369a1;">📑</div>
-                <span class="badge-pill-soon">Upcoming</span>
+                <span class="badge-pill-live">Live</span>
               </div>
               <h3>Monthly Activity Statement (MAS)</h3>
               <p>
-                Automated monthly compilation of Gram Panchayat developmental works, financial expenditure, and progress milestones from e-Panchayat.
+                Official 18-Indicator Executive Matrix (GM-R 5.24 & GM-R 5.23 Births Register) with 2-Page Legal PDF and 58-Column Formatted Excel.
               </p>
             </div>
             <div style="margin-top:auto;">
-              <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:var(--text); border-color:var(--border);" onclick="showUpcomingModal('Monthly Activity Statement (MAS)', '📑', 'Automated monthly progress report, developmental expenditure, and milestone submissions directly from ePanchayat Portal.')">
-                📑 View Module Details
-              </button>
+              <a href="/reports/mas" class="btn btn-primary" style="display:block; width:100%; text-align:center; text-decoration:none; background:#0c3829; color:white; font-weight:700; padding:10px 0; border-radius:8px;">
+                📑 Open MAS & Births Dashboard
+              </a>
             </div>
           </div>
 

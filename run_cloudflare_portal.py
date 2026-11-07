@@ -160,7 +160,7 @@ def main():
     if TUNNEL_TOKEN:
         print("[*] Launching permanent Cloudflare Zero Trust tunnel with your connector token...")
         cf_proc = subprocess.Popen(
-            [str(CLOUDFLARED_EXE), "tunnel", "run", "--url", "http://127.0.0.1:8000", "--token", TUNNEL_TOKEN],
+            [str(CLOUDFLARED_EXE), "tunnel", "--protocol", "http2", "run", "--url", "http://127.0.0.1:8000", "--token", TUNNEL_TOKEN],
             cwd=str(BASE_DIR),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
