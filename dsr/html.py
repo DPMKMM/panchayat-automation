@@ -1053,11 +1053,6 @@ NARESH_PAGE_HTML = """<!doctype html>
           <span>💰</span> House Tax (DCB)
         </a>
 
-        <!-- Always-Visible MAS & Births Button -->
-        <a class="nav-link" href="/reports/mas" id="nav-btn-mas" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
-          <span>📑</span> MAS & Births
-        </a>
-
         <!-- Unauthenticated Department Login Button -->
         <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); openDepartmentLogin();" id="nav-btn-login" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#fbbf24;">
           <span>🔐</span> Login
@@ -1086,7 +1081,15 @@ NARESH_PAGE_HTML = """<!doctype html>
             ⚡ DSR Module
           </button>
 
+          <!-- GP Balance Module Direct Link -->
+          <button type="button" class="dropdown-btn" onclick="closeMobileNav(); openBalanceRobot();" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            🏦 GP Balance
+          </button>
 
+          <!-- MAS & Births Module Direct Link -->
+          <a class="nav-link" href="/reports/mas" onclick="closeMobileNav();" id="nav-btn-mas" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
+            <span>📑</span> MAS &amp; Births
+          </a>
 
           <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); logoutPortalSession();" style="color:#fca5a5; font-weight:700;" title="Logout session">🔒 Logout</a>
         </div>
