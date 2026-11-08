@@ -2346,8 +2346,11 @@ NARESH_PAGE_HTML = """<!doctype html>
 
           const remMin = Math.floor((s.expires_in_seconds || 0) / 60);
           const remSec = (s.expires_in_seconds || 0) % 60;
+          const isNoExpiry = (s.user_id === 'DPOA3698') || (s.expires_in_seconds === -1) || (s.expires_in_seconds > 86400);
           const timeRemainingDisplay = isAuth 
-            ? `<span style="font-family:monospace; font-weight:700; color:${(s.expires_in_seconds||0) <= 120 ? '#ef4444' : '#059669'};">${remMin}:${remSec.toString().padStart(2, '0')}</span>${s.extended ? ' <span style="font-size:0.68rem; background:#dbeafe; color:#1e40af; padding:1px 4px; border-radius:4px;">20m</span>' : ' <span style="font-size:0.68rem; background:#f1f5f9; color:#64748b; padding:1px 4px; border-radius:4px;">10m</span>'}`
+            ? (isNoExpiry
+                ? `<span style="font-weight:700; color:#047857; background:#dcfce7; padding:2px 8px; border-radius:6px; font-size:0.75rem;">🛡️ No Expiry (Persistent)</span>`
+                : `<span style="font-family:monospace; font-weight:700; color:${(s.expires_in_seconds||0) <= 120 ? '#ef4444' : '#059669'};">${remMin}:${remSec.toString().padStart(2, '0')}</span>${s.extended ? ' <span style="font-size:0.68rem; background:#dbeafe; color:#1e40af; padding:1px 4px; border-radius:4px;">20m</span>' : ' <span style="font-size:0.68rem; background:#f1f5f9; color:#64748b; padding:1px 4px; border-radius:4px;">10m</span>'}`)
             : '—';
 
           return `<tr style="border-bottom:1px solid #f1f5f9; ${rowBg}">
@@ -2385,7 +2388,31 @@ NARESH_PAGE_HTML = """<!doctype html>
         return;
       }
 
+      const officer = (sessionStorage.getItem('epts_officer_id') || '').trim().toUpperCase();
+      const isDpoAdmin = (officer === 'DPOA3698') || (window.sessionNoExpiry === true);
+
       if (wrap) wrap.style.display = 'inline-flex';
+
+      if (isDpoAdmin) {
+        if (navTimer) {
+          navTimer.style.background = 'rgba(16, 185, 129, 0.25)';
+          navTimer.style.borderColor = '#10b981';
+          navTimer.style.color = '#d1fae5';
+          navTimer.innerHTML = '🛡️ <span style="font-weight:700;">No Expiry</span>';
+          navTimer.title = 'Officer DPOA3698: Persistent session without time limit';
+        }
+        if (btn) btn.style.display = 'none';
+        const dashTimerChip = document.getElementById('dash-timer-chip');
+        if (dashTimerChip) {
+          dashTimerChip.innerHTML = '🛡️ Session: <span style="font-weight:700; color:#34d399;">Persistent (No Expiry)</span>';
+          dashTimerChip.style.borderColor = '#10b981';
+        }
+        if (dashBtn) dashBtn.style.display = 'none';
+        return;
+      }
+
+      if (btn) btn.style.display = 'inline-flex';
+      if (dashBtn) dashBtn.style.display = 'inline-flex';
 
       const totalSec = Math.max(0, window.sessionExpiresIn || 0);
       const m = Math.floor(totalSec / 60);
@@ -2445,6 +2472,20 @@ NARESH_PAGE_HTML = """<!doctype html>
     };
 
     window.startSessionTimer = function(initialSec = 600, canExtend = true) {
+      const officer = (sessionStorage.getItem('epts_officer_id') || '').trim().toUpperCase();
+      if (officer === 'DPOA3698' || initialSec >= 86400 || window.sessionNoExpiry === true) {
+        window.sessionNoExpiry = true;
+        window.sessionExpiresIn = 999999;
+        window.sessionCanExtend = false;
+        if (window.sessionTimerInterval) {
+          clearInterval(window.sessionTimerInterval);
+          window.sessionTimerInterval = null;
+        }
+        window.updateTimerDisplay();
+        return;
+      }
+
+      window.sessionNoExpiry = false;
       window.sessionExpiresIn = initialSec;
       window.sessionCanExtend = canExtend;
       window.updateTimerDisplay();
@@ -2466,6 +2507,11 @@ NARESH_PAGE_HTML = """<!doctype html>
     };
 
     window.handleSessionExpired = async function() {
+      const officer = (sessionStorage.getItem('epts_officer_id') || '').trim().toUpperCase();
+      if (officer === 'DPOA3698' || window.sessionNoExpiry === true) {
+        console.log('[+] Persistent session: Expiry bypassed for DPOA3698.');
+        return;
+      }
       alert("⏰ Session Expired (Time Limit Reached)\\n\\nTo reduce server load and conserve memory, your browser automation session has been closed automatically after reaching the allowed duration (10 mins, or 20 mins if extended).\\n\\nPlease log in again whenever you need to generate reports.");
       try {
         await fetch('/api/naresh/logout', { method: 'POST' });
@@ -3984,14 +4030,26 @@ NARESH_PAGE_HTML = """<!doctype html>
           window.updateGlobalBrowserStatus(data);
           if (data && data.authenticated) {
             const officer = data.user_id || sessionStorage.getItem('epts_officer_id') || 'Officer';
-            if (typeof data.expires_in === 'number') {
-              window.sessionExpiresIn = data.expires_in;
-              window.sessionCanExtend = data.can_extend;
-            }
-            if (!window.sessionTimerInterval) {
-              window.startSessionTimer(data.expires_in || 600, data.can_extend);
-            } else {
+            if (officer.toUpperCase() === 'DPOA3698' || data.no_expiry) {
+              window.sessionNoExpiry = true;
+              window.sessionExpiresIn = 999999;
+              window.sessionCanExtend = false;
+              if (window.sessionTimerInterval) {
+                clearInterval(window.sessionTimerInterval);
+                window.sessionTimerInterval = null;
+              }
               window.updateTimerDisplay();
+            } else {
+              window.sessionNoExpiry = false;
+              if (typeof data.expires_in === 'number') {
+                window.sessionExpiresIn = data.expires_in;
+                window.sessionCanExtend = data.can_extend;
+              }
+              if (!window.sessionTimerInterval) {
+                window.startSessionTimer(data.expires_in || 600, data.can_extend);
+              } else {
+                window.updateTimerDisplay();
+              }
             }
             setAuthenticated(true, officer);
             return true;

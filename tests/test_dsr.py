@@ -125,3 +125,30 @@ def test_combined_landscape_pdf_generation(tmp_path):
     # Page 2 must be Portrait
     p2 = reader.pages[1]
     assert float(p2.mediabox.height) > float(p2.mediabox.width)
+
+
+def test_dpoa3698_persistent_session():
+    from dsr.service import _get_session_status_impl, _extend_session_impl
+    import time
+
+    mock_session = {
+        'session_id': 'test_dpoa3698_sess',
+        'user_id': 'DPOA3698',
+        'status': 'authenticated',
+        'mode': 'cloud_sync',
+        'authenticated_at': time.time() - 3600,
+        'session_duration': 600,
+        'extended': False,
+        'bot_alive': True,
+        'last_activity': time.time(),
+    }
+
+    status = _get_session_status_impl(mock_session)
+    assert status['no_expiry'] is True
+    assert status['expires_in'] == 999999
+    assert status['status'] == 'authenticated'
+    assert 'Persistent Session' in status['message']
+
+    ext = _extend_session_impl(mock_session)
+    assert ext['success'] is True
+    assert ext['no_expiry'] is True

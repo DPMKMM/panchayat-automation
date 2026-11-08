@@ -86,7 +86,8 @@ def _load_session_state(session_id: str) -> dict[str, Any]:
             payload = json.loads(state_file.read_text(encoding="utf-8"))
             auth_time = payload.get("authenticated_at", 0)
             dur = payload.get("session_duration", SESSION_DEFAULT_DURATION)
-            if payload.get("status") == "authenticated" and (time.time() - auth_time) < dur:
+            u_id = (payload.get("user_id") or "").strip().upper()
+            if payload.get("status") == "authenticated" and (u_id == "DPOA3698" or (time.time() - auth_time) < dur):
                 return payload
             elif payload.get("status") == "authenticated":
                 _clear_session_state(sid)
@@ -697,6 +698,18 @@ def _extend_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     if session.get("status") != "authenticated":
         raise ValueError("Cannot extend: No active authenticated session found. Please log in first.")
 
+    u_id = (session.get("user_id") or "").strip().upper()
+    if u_id == "DPOA3698":
+        return {
+            "success": True,
+            "message": "Officer DPOA3698 has persistent login (No time restriction / No expiry).",
+            "expires_in": 999999,
+            "session_duration": 999999,
+            "can_extend": False,
+            "extended": True,
+            "no_expiry": True,
+        }
+
     current_duration = session.get("session_duration", SESSION_DEFAULT_DURATION)
     if current_duration >= SESSION_MAX_DURATION or session.get("extended", False):
         raise ValueError("Maximum session extension reached (20 minutes total limit).")
@@ -736,9 +749,12 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
     auth_time = session.get("authenticated_at") or 0
     duration = session.get("session_duration", SESSION_DEFAULT_DURATION)
     extended = session.get("extended", False)
+    user_id = session.get("user_id") or ""
+    is_dpo_admin = user_id.strip().upper() == "DPOA3698"
 
     # Check if session has exceeded its time limit (10 mins, or 20 mins if extended)
-    if session.get("status") == "authenticated" and auth_time > 0:
+    # Officer DPOA3698 has NO time restriction and NEVER expires!
+    if session.get("status") == "authenticated" and auth_time > 0 and not is_dpo_admin:
         elapsed = int(time.time() - auth_time)
         if elapsed >= duration:
             logger.info("Session %s reached limit of %ds (elapsed: %ds). Closing browser.",
@@ -753,20 +769,24 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
         _clear_session_state(session["session_id"])
 
     is_auth = (session.get("status") == "authenticated") and (bot_alive or session.get("mode") == "cloud_sync")
-    user_id = session.get("user_id") or ""
     age = int(time.time() - auth_time) if (auth_time and is_auth) else 0
-    remaining = max(0, duration - age) if is_auth else 0
-    can_extend = is_auth and (not extended) and (duration < SESSION_MAX_DURATION)
 
-    msg = ""
-    if is_auth:
-        rem_min = remaining // 60
-        rem_sec = remaining % 60
-        msg = f"Officer {user_id} active. Remaining session time: {rem_min:02d}:{rem_sec:02d} (auto-closes to save server load)."
-    elif session.get("status") == "expired":
-        msg = "Session expired (10m limit reached to reduce server load). Please log in again."
+    if is_dpo_admin and is_auth:
+        remaining = 999999
+        can_extend = False
+        extended = True
+        msg = f"Officer {user_id} active. Persistent Session (No time restriction / No expiry)."
     else:
-        msg = "Session is idle."
+        remaining = max(0, duration - age) if is_auth else 0
+        can_extend = is_auth and (not extended) and (duration < SESSION_MAX_DURATION)
+        if is_auth:
+            rem_min = remaining // 60
+            rem_sec = remaining % 60
+            msg = f"Officer {user_id} active. Remaining session time: {rem_min:02d}:{rem_sec:02d} (auto-closes to save server load)."
+        elif session.get("status") == "expired":
+            msg = "Session expired (10m limit reached to reduce server load). Please log in again."
+        else:
+            msg = "Session is idle."
 
     return {
         "success": True,
@@ -777,7 +797,8 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
         "mode": session.get("mode", "idle"),
         "bot_alive": bot_alive,
         "session_age_seconds": age,
-        "session_duration": duration,
+        "session_duration": (999999 if is_dpo_admin else duration),
+        "no_expiry": is_dpo_admin,
         "expires_in": remaining,
         "can_extend": can_extend,
         "extended": extended,
@@ -861,8 +882,9 @@ def get_all_active_sessions_summary() -> dict[str, Any]:
         idle_sec = int(now - s.get("last_activity", now))
 
         dur = s.get("session_duration", SESSION_DEFAULT_DURATION)
-        rem_sec = max(0, dur - age_sec) if is_auth else 0
         u_id = s.get("user_id") or "Unauthenticated"
+        is_dpo_admin = u_id.strip().upper() == "DPOA3698"
+        rem_sec = -1 if is_dpo_admin else (max(0, dur - age_sec) if is_auth else 0)
         dist = s.get("district_name") or ("Khammam District" if u_id.upper() == "DPOA3698" else "")
         office = s.get("office_name") or ("District Panchayat Office" if u_id.upper() == "DPOA3698" else "")
         div = s.get("division_name") or ("Khammam Division" if u_id.upper() == "DPOA3698" else "")
@@ -925,10 +947,12 @@ def _background_keepalive_loop():
             if not session:
                 continue
 
-            # 1. Enforce 10m / 20m session limit: Auto-close browser to release server RAM and CPU
+            # 1. Enforce session limit: Auto-close browser to release server RAM and CPU
+            # IMPORTANT: Officer DPOA3698 has NO time restriction (No expiry)!
+            u_id = (session.get("user_id") or "").strip().upper()
             auth_time = session.get("authenticated_at", 0)
             duration = session.get("session_duration", SESSION_DEFAULT_DURATION)
-            if session.get("status") == "authenticated" and auth_time > 0:
+            if session.get("status") == "authenticated" and auth_time > 0 and u_id != "DPOA3698":
                 if (now - auth_time) >= duration:
                     logger.info("Session %s reached limit of %ds. Auto-closing browser.", sid[:6], duration)
                     try:
@@ -937,9 +961,9 @@ def _background_keepalive_loop():
                         logger.warning("Error auto-closing expired session %s: %s", sid[:6], e)
                     continue
 
-            # 2. Cleanup sessions idle > 8 hours
+            # 2. Cleanup non-admin sessions idle > 8 hours (DPOA3698 never auto-expires)
             idle_sec = now - session.get("last_activity", now)
-            if idle_sec > 28800:
+            if idle_sec > 28800 and u_id != "DPOA3698":
                 logger.info("Session %s idle for >8h. Auto-logging out.", sid[:6])
                 try:
                     run_in_session_thread(session, _logout_server_session_impl, session)
