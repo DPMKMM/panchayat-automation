@@ -2045,9 +2045,15 @@ NARESH_PAGE_HTML = """<!doctype html>
         </table>
       </div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <button type="button" class="btn btn-outline btn-sm" onclick="fetchAndRenderSessionsModal()" style="font-size:0.8rem; padding:6px 14px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">🔄 Refresh Status</button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="closeSessionsModal()" style="background:var(--primary); color:white; font-size:0.8rem; padding:6px 18px; border:none; border-radius:6px; cursor:pointer;">Close</button>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="font-size:0.75rem; color:#64748b; display:flex; align-items:center; gap:8px;">
+          <span id="sessions-git-version">🚀 Auto-Deploy: Active (Checks GitHub every 30s)</span>
+          <button type="button" onclick="triggerServerSync(this)" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; border-radius:4px; padding:2px 8px; font-size:0.72rem; cursor:pointer; font-weight:600;" title="Pull latest code from GitHub main immediately">🔄 Sync from GitHub Now</button>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="fetchAndRenderSessionsModal()" style="font-size:0.8rem; padding:6px 14px; border:1px solid var(--border); border-radius:6px; cursor:pointer;">🔄 Refresh Status</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="closeSessionsModal()" style="background:var(--primary); color:white; font-size:0.8rem; padding:6px 18px; border:none; border-radius:6px; cursor:pointer;">Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2293,6 +2299,26 @@ NARESH_PAGE_HTML = """<!doctype html>
       if (modal) {
         modal.style.display = 'flex';
         fetchAndRenderSessionsModal();
+      }
+    };
+
+    window.triggerServerSync = async function(btn) {
+      if (!confirm('Sync latest code from GitHub main and restart service?')) return;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Syncing...';
+      }
+      try {
+        const res = await fetch('/api/system/sync', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || (data.success ? 'Sync initiated!' : data.error));
+      } catch (e) {
+        alert('Sync request failed: ' + e);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '🔄 Sync from GitHub Now';
+        }
       }
     };
 

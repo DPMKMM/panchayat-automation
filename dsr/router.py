@@ -295,6 +295,49 @@ def system_sessions(request: Request) -> dict[str, Any]:
         return {"success": False, "error": str(exc), "total_sessions": 0, "sessions": []}
 
 
+@router.get("/api/system/version", include_in_schema=False)
+def system_version() -> dict[str, Any]:
+    try:
+        import subprocess
+        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
+        msg = subprocess.check_output(["git", "log", "-1", "--pretty=format:%s"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
+        date_str = subprocess.check_output(["git", "log", "-1", "--pretty=format:%cd", "--date=format:%d %b %Y %H:%M"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
+        return {
+            "success": True,
+            "commit": commit,
+            "message": msg,
+            "date": date_str,
+            "auto_deploy": "Active (Daemon checks GitHub every 30s)",
+        }
+    except Exception as exc:
+        return {"success": False, "commit": "unknown", "error": str(exc), "auto_deploy": "Active"}
+
+
+@router.post("/api/system/sync", include_in_schema=False)
+def system_sync(request: Request) -> dict[str, Any]:
+    sid = _get_sid(request)
+    session = automation_service.get_or_create_session(sid)
+    user_id = str(session.get("user_id") or "").strip().upper()
+    is_auth = automation_service.is_authenticated(session_id=sid)
+
+    if not (is_auth and user_id == "DPOA3698"):
+        return {"success": False, "error": "Only Administrator (DPOA3698) can trigger server sync."}
+
+    import subprocess
+    import threading
+
+    def _do_sync():
+        try:
+            cmd = "git fetch origin main && git reset --hard origin/main && systemctl restart epanchayat.service"
+            subprocess.Popen(["/bin/bash", "-c", cmd])
+        except Exception:
+            pass
+
+    threading.Thread(target=_do_sync, daemon=True).start()
+    return {"success": True, "message": "Server sync initiated. Pulling latest GitHub code and restarting service in background."}
+
+
+
 @router.get("/api/naresh/data", include_in_schema=False)
 def naresh_api_data(request: Request) -> dict[str, Any]:
     sid = _get_sid(request)

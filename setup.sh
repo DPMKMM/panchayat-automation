@@ -166,32 +166,58 @@ Environment=HOST=0.0.0.0
 WantedBy=multi-user.target
 EOF
 
-# 9. Setup Auto-Pull & Continuous Deployment Script (every 60s)
-echo "[*] Installing auto-update sync service (pulls GitHub main automatically)..."
+# 9. Setup Auto-Pull & 24/7 Continuous Deployment Daemon
+echo "[*] Installing 24/7 continuous deployment watcher daemon..."
+sudo git config --system --add safe.directory "$PROJECT_DIR" 2>/dev/null || true
+sudo chmod +x "$PROJECT_DIR/auto_deploy.sh" 2>/dev/null || true
+
+sudo tee /etc/systemd/system/epanchayat-updater.service > /dev/null <<EOF
+[Unit]
+Description=Telangana ePanchayat Automatic GitHub Continuous Deployment Watcher
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=$PROJECT_DIR
+ExecStart=/bin/bash $PROJECT_DIR/auto_deploy.sh
+Restart=always
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=10
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Fallback cron job for auto-pull
 sudo tee /usr/local/bin/epanchayat-autopull.sh > /dev/null <<'EOF'
 #!/usr/bin/env bash
+git config --system --add safe.directory /opt/epanchayat 2>/dev/null || true
 cd /opt/epanchayat || exit 1
-git fetch origin main -q
-LOCAL_HASH=$(git rev-parse HEAD)
-REMOTE_HASH=$(git rev-parse origin/main)
+git fetch origin main -q 2>/dev/null || exit 0
+LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null)
+REMOTE_HASH=$(git rev-parse origin/main 2>/dev/null)
 
-if [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
     echo "[$(date)] New update detected on GitHub main! Pulling changes..."
     git reset --hard origin/main
-    .venv/bin/pip install -r requirements.txt -q
+    .venv/bin/pip install -r requirements.txt -q 2>/dev/null || true
     systemctl restart epanchayat.service
     echo "[$(date)] Successfully updated and restarted epanchayat service."
 fi
 EOF
 sudo chmod +x /usr/local/bin/epanchayat-autopull.sh
 
-# Cron job for auto-pull
 CRON_LINE="* * * * * /usr/local/bin/epanchayat-autopull.sh >> /var/log/epanchayat-autopull.log 2>&1"
 (crontab -l 2>/dev/null | grep -v "epanchayat-autopull.sh" ; echo "$CRON_LINE") | crontab -
 
-# 10. Enable & Start Service
+# 10. Enable & Start Services
 sudo systemctl daemon-reload
 sudo systemctl enable epanchayat.service
+sudo systemctl enable --now epanchayat-updater.service 2>/dev/null || true
 sudo systemctl restart epanchayat.service
 
 echo ""
