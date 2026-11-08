@@ -5,7 +5,7 @@ NARESH_PAGE_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Automated Attendance & DSR Reporting System | e-Panchayat Telangana</title>
+  <title>e-Panchayat-automation</title>
   <style>
     :root {
       color-scheme: light;
@@ -1122,7 +1122,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:12px; margin-bottom:24px;">
           <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
             <div style="display:flex; align-items:center; gap:8px; font-weight:700; color:#fbbf24; font-size:0.92rem; margin-bottom:5px;">
-              <span>⚡</span> Automated Attendance &amp; DSR
+              <span>⚡</span> PS Attendance &amp; DSR
             </div>
             <div style="font-size:0.82rem; color:#d1fae5; line-height:1.45;">
               Daily morning attendance tracking, PS punctuality before 9 AM, absentees matching, and instant 7-section official District PDF compilation.
