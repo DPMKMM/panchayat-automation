@@ -24,24 +24,32 @@ fi
 USER_HOME=$(eval echo "~$ACTUAL_USER")
 
 echo "====================================================================="
-echo "  e-Panchayat Automated Portal - Oracle Cloud 24/7 Production Setup"
-echo "  Target: Ubuntu 22.04 / 24.04 LTS (Hyderabad ap-hyderabad-1 / Mumbai)"
+echo "  e-Panchayat Automated Portal - Cloud 24/7 Production Setup"
+echo "  Target: Ubuntu 22.04 / 24.04 LTS (India Datacenter)"
 echo "  Running as system user: $ACTUAL_USER"
 echo "====================================================================="
 
-# 0. Setup 4GB Swap Space (essential for stability during Chromium headless scraping)
-if [ ! -f /swapfile ]; then
-    echo "[*] Creating 4GB swap space for rock-solid stability..."
-    sudo fallocate -l 4G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=4096
-    sudo chmod 600 /swapfile
-    sudo mkswap /swapfile
-    sudo swapon /swapfile
-    if ! grep -q '/swapfile' /etc/fstab; then
-        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-    fi
-    echo "[+] 4GB swap memory configured successfully."
+# 0. Setup Swap Space (if supported by virtualization environment)
+echo "[*] Checking swap memory configuration..."
+if swapon --show 2>/dev/null | grep -q 'swap'; then
+    echo "[+] Swap is already active on host."
 else
-    echo "[+] Swap file already exists."
+    echo "[*] Setting up swap space..."
+    rm -f /swapfile 2>/dev/null || true
+    fallocate -l 4G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none 2>/dev/null || true
+    if [ -f /swapfile ]; then
+        chmod 600 /swapfile 2>/dev/null || true
+        mkswap /swapfile 2>/dev/null || true
+        if swapon /swapfile 2>/dev/null; then
+            echo "[+] 4GB swap memory enabled successfully."
+            if ! grep -q '/swapfile' /etc/fstab 2>/dev/null; then
+                echo '/swapfile none swap sw 0 0' >> /etc/fstab 2>/dev/null || true
+            fi
+        else
+            echo "[*] Notice: Swap is managed by host kernel (LXC/Container). Recovering disk space..."
+            rm -f /swapfile 2>/dev/null || true
+        fi
+    fi
 fi
 
 # 1. Update system & install required packages
