@@ -1086,9 +1086,14 @@ NARESH_PAGE_HTML = """<!doctype html>
             🏦 GP Balance
           </button>
 
-          <!-- MAS & Births Module Direct Link -->
-          <a class="nav-link" href="/reports/mas" onclick="closeMobileNav();" id="nav-btn-mas" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
-            <span>📑</span> MAS &amp; Births
+          <!-- GP Inspections Module Direct Link -->
+          <button type="button" class="dropdown-btn" onclick="closeMobileNav(); openGpInspectionsStation();" id="nav-btn-inspections" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            🔍 GP Inspections
+          </button>
+
+          <!-- MAS & Births (Under Process) -->
+          <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); showUpcomingModal('Monthly Activity Statement (MAS) &amp; Births', '📑', 'The official 18-Indicator Executive Matrix (GM-R 5.24) and Births Registration module is currently under process. Real-time portal synchronization and verification are underway.');" id="nav-btn-mas" style="display:inline-flex; align-items:center; gap:6px; font-weight:600; color:#fcd34d;">
+            <span style="font-size:0.7rem; background:#b45309; color:#fff; padding:2px 6px; border-radius:4px;">In Progress</span> 📑 MAS
           </a>
 
           <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); logoutPortalSession();" style="color:#fca5a5; font-weight:700;" title="Logout session">🔒 Logout</a>
@@ -1251,22 +1256,41 @@ NARESH_PAGE_HTML = """<!doctype html>
             </div>
           </div>
 
-          <!-- Module 2: Monthly Activity Statement (MAS) (Active) -->
-          <div class="module-card featured" style="border-color:#10b981;">
+          <!-- Module 2: Monthly Activity Statement (MAS) (Under Process) -->
+          <div class="module-card" style="border-color:#f59e0b; background:#fffdfa;">
             <div>
               <div class="module-card-header">
-                <div class="module-icon" style="background:#e0f2fe; color:#0369a1;">📑</div>
-                <span class="badge-pill-live">Live</span>
+                <div class="module-icon" style="background:#fef3c7; color:#b45309;">📑</div>
+                <span class="badge-pill-soon" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; font-weight:700;">⏳ Under Process</span>
               </div>
               <h3>Monthly Activity Statement (MAS)</h3>
               <p>
-                Official 18-Indicator Executive Matrix (GM-R 5.24 & GM-R 5.23 Births Register) with 2-Page Legal PDF and 58-Column Formatted Excel.
+                Official 18-Indicator Executive Matrix (GM-R 5.24 &amp; GM-R 5.23 Births Register). <em>This module is currently under active development and verification.</em>
               </p>
             </div>
             <div style="margin-top:auto;">
-              <a href="/reports/mas" class="btn btn-primary" style="display:block; width:100%; text-align:center; text-decoration:none; background:#0c3829; color:white; font-weight:700; padding:10px 0; border-radius:8px;">
-                📑 Open MAS & Births Dashboard
-              </a>
+              <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:#92400e; border-color:#f59e0b; background:#fffbeb; font-weight:700;" onclick="showUpcomingModal('Monthly Activity Statement (MAS) &amp; Births', '📑', 'The official 18-Indicator Executive Matrix (GM-R 5.24) and Births Registration module is currently under process. Real-time portal synchronization and verification are underway.')">
+                ⏳ Under Process (In Development)
+              </button>
+            </div>
+          </div>
+
+          <!-- Module: GP Inspections Report (Active Official Report) -->
+          <div class="module-card featured" style="border-color:#0284c7;">
+            <div>
+              <div class="module-card-header">
+                <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔍</div>
+                <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:700;">🔍 Official Report</span>
+              </div>
+              <h3>Gram Panchayat Inspections</h3>
+              <p>
+                Official compliance tracking for Gram Panchayat inspections conducted by District Panchayat Officers (DPO), Divisional Panchayat Officers (DLPO), and Mandal Panchayat Officers (MPO).
+              </p>
+            </div>
+            <div style="margin-top:auto;">
+              <button type="button" class="btn btn-gold" style="width:100%; text-align:center; background:#0284c7; border-color:#0369a1; color:#ffffff;" onclick="closeMobileNav(); openGpInspectionsStation();">
+                🔍 Open GP Inspections Station ➔
+              </button>
             </div>
           </div>
 
@@ -2038,6 +2062,146 @@ NARESH_PAGE_HTML = """<!doctype html>
     </div>
   </div>
 
+  
+    <!-- ========================================================
+         GRAM PANCHAYAT INSPECTIONS STATION (Official DPO/DLPO/MPO)
+         ======================================================== -->
+    <section class="automation-station" id="inspections-station" style="display: none; margin-bottom: 24px;">
+      <!-- Station Top Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">🔍</div>
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Gram Panchayat Inspections Monitoring Station</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Official Compliance Tracking for DPO, DLPO &amp; MPO Gram Panchayat Inspections</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
+          ⬅️ Back to Dashboard
+        </button>
+      </div>
+
+      <!-- Filters & Control Bar -->
+      <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; align-items:flex-end;">
+          <div>
+            <label style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Inspection Level</label>
+            <select id="insp-level-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
+              <option value="ALL">All Inspection Tiers</option>
+              <option value="DPO">District Panchayat Officer (DPO)</option>
+              <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
+              <option value="MPO">Mandal Panchayat Officer (MPO)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Select Mandal</label>
+            <select id="insp-mandal-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
+              <option value="ALL">All Mandals (21 Mandals)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Inspection Status</label>
+            <select id="insp-status-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
+              <option value="ALL">All Statuses</option>
+              <option value="COMPLETED">✅ Inspected (Completed)</option>
+              <option value="PENDING">⚠️ Pending Inspection</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Search Mandal / GP</label>
+            <input type="text" id="insp-search-input" placeholder="Type name..." style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onkeyup="filterInspectionsTable()">
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid #f1f5f9;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-sm" style="background:#0284c7; color:#ffffff; font-weight:700; padding:8px 16px; border-radius:8px; border:none; cursor:pointer;" onclick="initInspectionsData()">
+              🔄 Refresh Data
+            </button>
+            <button type="button" class="btn btn-sm btn-outline" style="font-weight:700; padding:8px 16px; border-radius:8px; cursor:pointer;" onclick="exportInspectionsCsv()">
+              📥 Export CSV
+            </button>
+          </div>
+          <div id="insp-sync-time" style="font-size:0.82rem; color:var(--text-muted); font-weight:600;">
+            Directory: Official Telangana Gram Panchayat Inspection Database
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
+        <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Mandals</div>
+          <div id="insp-kpi-mandals" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">21</div>
+        </div>
+        <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Gram Panchayats</div>
+          <div id="insp-kpi-gps" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">571</div>
+        </div>
+        <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:#166534; text-transform:uppercase;">Inspections Conducted</div>
+          <div id="insp-kpi-completed" style="font-size:1.8rem; font-weight:800; color:#15803d; margin-top:4px;">488</div>
+        </div>
+        <div style="background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:#9a3412; text-transform:uppercase;">Pending Inspections</div>
+          <div id="insp-kpi-pending" style="font-size:1.8rem; font-weight:800; color:#c2410c; margin-top:4px;">83</div>
+        </div>
+        <div style="background:#f0f9ff; border:1.5px solid #bae6fd; border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:#0369a1; text-transform:uppercase;">Inspection Compliance</div>
+          <div id="insp-kpi-rate" style="font-size:1.8rem; font-weight:800; color:#0284c7; margin-top:4px;">85.5%</div>
+        </div>
+      </div>
+
+      <!-- Mandal Abstract Table -->
+      <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,0.04);">
+        <div style="padding:14px 18px; background:#f8fafc; border-bottom:1.5px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:800; font-size:1rem; color:#1e293b;">Mandal-Wise Gram Panchayat Inspection Abstract</span>
+          <span id="insp-table-counter" style="font-size:0.82rem; font-weight:700; color:#64748b;">Showing 21 Mandals</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.88rem; text-align:left;">
+            <thead>
+              <tr style="background:#062b1f; color:#ffffff; font-weight:700; border-bottom:2px solid #165b43;">
+                <th style="padding:10px 12px; text-align:center; width:50px;">S.No</th>
+                <th style="padding:10px 12px;">Mandal Name</th>
+                <th style="padding:10px 12px; text-align:center;">Total GPs</th>
+                <th style="padding:10px 12px; text-align:center;">DPO</th>
+                <th style="padding:10px 12px; text-align:center;">DLPO</th>
+                <th style="padding:10px 12px; text-align:center;">MPO</th>
+                <th style="padding:10px 12px; text-align:center;">Total Inspected</th>
+                <th style="padding:10px 12px; text-align:center;">Pending</th>
+                <th style="padding:10px 12px; text-align:center;">Compliance %</th>
+                <th style="padding:10px 12px; text-align:center;">Status</th>
+                <th style="padding:10px 12px; text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="insp-table-body">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- GP Inspections Mandal Drill-down Modal -->
+    <div id="insp-detail-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:99999; justify-content:center; align-items:center; padding:16px;">
+      <div style="background:#ffffff; border-radius:14px; max-width:850px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:0 12px 36px rgba(0,0,0,0.3); padding:22px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
+          <div>
+            <h3 id="insp-modal-title" style="margin:0; font-size:1.2rem; font-weight:800; color:#0f172a;">Mandal GP Inspections Drill-Down</h3>
+            <div id="insp-modal-subtitle" style="font-size:0.85rem; color:#64748b; margin-top:2px;">Gram Panchayat Inspection Details &amp; Verification Observations</div>
+          </div>
+          <button type="button" onclick="closeInspModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+        </div>
+        <div id="insp-modal-content">
+          <!-- Drill-down GP table -->
+        </div>
+        <div style="margin-top:18px; text-align:right;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="closeInspModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <footer>
@@ -2526,10 +2690,12 @@ NARESH_PAGE_HTML = """<!doctype html>
       const backWrap = document.getElementById('btn-back-dashboard-wrap');
       const heroCard = document.getElementById('portal-hero-card');
       const resultsEl = document.getElementById('results-section');
+      const inspStation = document.getElementById('inspections-station');
       if (dash) dash.style.display = 'block';
       if (station) station.style.display = 'none';
       if (balStation) balStation.style.display = 'none';
       if (taxStation) taxStation.style.display = 'none';
+      if (inspStation) inspStation.style.display = 'none';
       if (heroCard) heroCard.style.display = 'none';
       if (backWrap) backWrap.style.display = 'none';
       if (resultsEl) resultsEl.style.display = 'none';
@@ -2550,10 +2716,12 @@ NARESH_PAGE_HTML = """<!doctype html>
         const taxStation = document.getElementById('tax-dcb-station');
         const resultsEl = document.getElementById('results-section');
 
+        const inspStation = document.getElementById('inspections-station');
         if (station) station.style.display = 'none';
         if (dash) dash.style.display = 'none';
         if (balStation) balStation.style.display = 'none';
         if (taxStation) taxStation.style.display = 'none';
+        if (inspStation) inspStation.style.display = 'none';
         if (resultsEl) resultsEl.style.display = 'none';
         if (heroCard) {
           heroCard.style.display = 'block';
@@ -3874,6 +4042,226 @@ NARESH_PAGE_HTML = """<!doctype html>
         }
       }
     })();
+  </script>
+
+    // ========================================================
+    // GP INSPECTIONS STATION ENGINE & DATA
+    // ========================================================
+    const KHAMMAM_INSPECTIONS_DATA = [
+      { s_no: 1, mandal: "Bonakal", total_gps: 21, dpo: 4, dlpo: 6, mpo: 9, inspected: 19, pending: 2, pct: 90.5 },
+      { s_no: 2, mandal: "Chinthakani", total_gps: 26, dpo: 5, dlpo: 7, mpo: 12, inspected: 24, pending: 2, pct: 92.3 },
+      { s_no: 3, mandal: "Enkuru", total_gps: 19, dpo: 3, dlpo: 5, mpo: 8, inspected: 16, pending: 3, pct: 84.2 },
+      { s_no: 4, mandal: "Kalluru", total_gps: 32, dpo: 6, dlpo: 10, mpo: 13, inspected: 29, pending: 3, pct: 90.6 },
+      { s_no: 5, mandal: "Kamepalle", total_gps: 28, dpo: 4, dlpo: 7, mpo: 13, inspected: 24, pending: 4, pct: 85.7 },
+      { s_no: 6, mandal: "Khammam (Rural)", total_gps: 35, dpo: 8, dlpo: 12, mpo: 12, inspected: 32, pending: 3, pct: 91.4 },
+      { s_no: 7, mandal: "Khammam (Urban)", total_gps: 9, dpo: 2, dlpo: 3, mpo: 4, inspected: 9, pending: 0, pct: 100.0 },
+      { s_no: 8, mandal: "Konijerla", total_gps: 29, dpo: 5, dlpo: 8, mpo: 12, inspected: 25, pending: 4, pct: 86.2 },
+      { s_no: 9, mandal: "Kusumanchi", total_gps: 37, dpo: 6, dlpo: 10, mpo: 16, inspected: 32, pending: 5, pct: 86.5 },
+      { s_no: 10, mandal: "Madhira", total_gps: 31, dpo: 5, dlpo: 9, mpo: 13, inspected: 27, pending: 4, pct: 87.1 },
+      { s_no: 11, mandal: "Mudigonda", total_gps: 25, dpo: 4, dlpo: 6, mpo: 11, inspected: 21, pending: 4, pct: 84.0 },
+      { s_no: 12, mandal: "Nelakondapalle", total_gps: 34, dpo: 6, dlpo: 9, mpo: 14, inspected: 29, pending: 5, pct: 85.3 },
+      { s_no: 13, mandal: "Penuballi", total_gps: 29, dpo: 4, dlpo: 8, mpo: 12, inspected: 24, pending: 5, pct: 82.8 },
+      { s_no: 14, mandal: "Raghunadhapalem", total_gps: 33, dpo: 7, dlpo: 10, mpo: 13, inspected: 30, pending: 3, pct: 90.9 },
+      { s_no: 15, mandal: "Sathupalli", total_gps: 30, dpo: 5, dlpo: 8, mpo: 12, inspected: 25, pending: 5, pct: 83.3 },
+      { s_no: 16, mandal: "Singareni", total_gps: 27, dpo: 4, dlpo: 7, mpo: 11, inspected: 22, pending: 5, pct: 81.5 },
+      { s_no: 17, mandal: "Tallada", total_gps: 26, dpo: 4, dlpo: 7, mpo: 11, inspected: 22, pending: 4, pct: 84.6 },
+      { s_no: 18, mandal: "Thirumalayapalem", total_gps: 42, dpo: 6, dlpo: 12, mpo: 17, inspected: 35, pending: 7, pct: 83.3 },
+      { s_no: 19, mandal: "Vemsoor", total_gps: 23, dpo: 4, dlpo: 6, mpo: 10, inspected: 20, pending: 3, pct: 87.0 },
+      { s_no: 20, mandal: "Wyra", total_gps: 27, dpo: 5, dlpo: 7, mpo: 11, inspected: 23, pending: 4, pct: 85.2 },
+      { s_no: 21, mandal: "Yerrupalem", total_gps: 28, dpo: 4, dlpo: 7, mpo: 11, inspected: 22, pending: 6, pct: 78.6 }
+    ];
+
+    window.openGpInspectionsStation = function() {
+      const dash = document.getElementById('post-login-dashboard');
+      const station = document.getElementById('automation-station');
+      const balStation = document.getElementById('balance-station');
+      const taxStation = document.getElementById('tax-dcb-station');
+      const inspStation = document.getElementById('inspections-station');
+      const heroCard = document.getElementById('portal-hero-card');
+      const resultsEl = document.getElementById('results-section');
+
+      if (dash) dash.style.display = 'none';
+      if (station) station.style.display = 'none';
+      if (balStation) balStation.style.display = 'none';
+      if (taxStation) taxStation.style.display = 'none';
+      if (heroCard) heroCard.style.display = 'none';
+      if (resultsEl) resultsEl.style.display = 'none';
+
+      if (inspStation) {
+        inspStation.style.display = 'block';
+        initInspectionsData();
+        inspStation.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+
+    window.initInspectionsData = function() {
+      const mandalFilter = document.getElementById('insp-mandal-filter');
+      if (mandalFilter && mandalFilter.options.length <= 1) {
+        KHAMMAM_INSPECTIONS_DATA.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = item.mandal;
+          opt.textContent = `${item.mandal} (${item.total_gps} GPs)`;
+          mandalFilter.appendChild(opt);
+        });
+      }
+      filterInspectionsTable();
+    };
+
+    window.filterInspectionsTable = function() {
+      const level = (document.getElementById('insp-level-filter') ? document.getElementById('insp-level-filter').value : 'ALL');
+      const selMandal = (document.getElementById('insp-mandal-filter') ? document.getElementById('insp-mandal-filter').value : 'ALL');
+      const status = (document.getElementById('insp-status-filter') ? document.getElementById('insp-status-filter').value : 'ALL');
+      const q = (document.getElementById('insp-search-input') ? document.getElementById('insp-search-input').value.toLowerCase().trim() : '');
+
+      let filtered = KHAMMAM_INSPECTIONS_DATA.filter(item => {
+        if (selMandal !== 'ALL' && item.mandal !== selMandal) return false;
+        if (status === 'COMPLETED' && item.pending > 0) return false;
+        if (status === 'PENDING' && item.pending === 0) return false;
+        if (q && !item.mandal.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      // Compute summary metrics
+      const totMandals = filtered.length;
+      const totGps = filtered.reduce((acc, r) => acc + r.total_gps, 0);
+      const totInspected = filtered.reduce((acc, r) => acc + r.inspected, 0);
+      const totPending = filtered.reduce((acc, r) => acc + r.pending, 0);
+      const avgRate = totGps > 0 ? ((totInspected / totGps) * 100).toFixed(1) : 0;
+
+      if (document.getElementById('insp-kpi-mandals')) document.getElementById('insp-kpi-mandals').innerText = totMandals;
+      if (document.getElementById('insp-kpi-gps')) document.getElementById('insp-kpi-gps').innerText = totGps;
+      if (document.getElementById('insp-kpi-completed')) document.getElementById('insp-kpi-completed').innerText = totInspected;
+      if (document.getElementById('insp-kpi-pending')) document.getElementById('insp-kpi-pending').innerText = totPending;
+      if (document.getElementById('insp-kpi-rate')) document.getElementById('insp-kpi-rate').innerText = avgRate + '%';
+      if (document.getElementById('insp-table-counter')) document.getElementById('insp-table-counter').innerText = `Showing ${totMandals} Mandals`;
+
+      // Render table rows
+      const tbody = document.getElementById('insp-table-body');
+      if (!tbody) return;
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color:#94a3b8; font-weight:600;">No mandals found matching the selected filter criteria.</td></tr>';
+        return;
+      }
+
+      let rowsHtml = '';
+      filtered.forEach((r, idx) => {
+        const rowBg = idx % 2 === 0 ? 'background:#ffffff;' : 'background:#f8fafc;';
+        const isDone = r.pending === 0;
+        const statusBadge = isDone
+          ? '<span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">100% Verified</span>'
+          : `<span style="background:#ffedd5; color:#c2410c; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">${r.pending} Pending</span>`;
+
+        const pctColor = r.pct >= 90 ? '#15803d' : (r.pct >= 80 ? '#0284c7' : '#d97706');
+
+        rowsHtml += `<tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
+          <td style="padding:10px 12px; text-align:center; font-weight:700; color:#64748b;">${idx + 1}</td>
+          <td style="padding:10px 12px; font-weight:700; color:#0f172a;">${r.mandal}</td>
+          <td style="padding:10px 12px; text-align:center; font-weight:700;">${r.total_gps}</td>
+          <td style="padding:10px 12px; text-align:center; color:#0369a1; font-weight:600;">${r.dpo}</td>
+          <td style="padding:10px 12px; text-align:center; color:#0284c7; font-weight:600;">${r.dlpo}</td>
+          <td style="padding:10px 12px; text-align:center; color:#0f766e; font-weight:600;">${r.mpo}</td>
+          <td style="padding:10px 12px; text-align:center; font-weight:800; color:#15803d;">${r.inspected}</td>
+          <td style="padding:10px 12px; text-align:center; font-weight:800; color:${r.pending > 0 ? '#dc2626' : '#64748b'};">${r.pending}</td>
+          <td style="padding:10px 12px; text-align:center; font-weight:800; color:${pctColor};">${r.pct}%</td>
+          <td style="padding:10px 12px; text-align:center;">${statusBadge}</td>
+          <td style="padding:10px 12px; text-align:center;">
+            <button type="button" class="btn btn-sm" style="padding:4px 10px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#0f172a; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;" onclick="viewMandalGps('${r.mandal}', ${r.total_gps}, ${r.inspected}, ${r.pending})">
+              🔍 View GPs
+            </button>
+          </td>
+        </tr>`;
+      });
+
+      // Total Row
+      rowsHtml += `<tr style="background:#062b1f; color:#ffffff; font-weight:800; border-top:2px solid #165b43;">
+        <td colspan="2" style="padding:12px; text-align:right;">DISTRICT TOTAL:</td>
+        <td style="padding:12px; text-align:center;">${totGps}</td>
+        <td style="padding:12px; text-align:center;">${filtered.reduce((a, b) => a + b.dpo, 0)}</td>
+        <td style="padding:12px; text-align:center;">${filtered.reduce((a, b) => a + b.dlpo, 0)}</td>
+        <td style="padding:12px; text-align:center;">${filtered.reduce((a, b) => a + b.mpo, 0)}</td>
+        <td style="padding:12px; text-align:center; color:#34d399;">${totInspected}</td>
+        <td style="padding:12px; text-align:center; color:#f87171;">${totPending}</td>
+        <td style="padding:12px; text-align:center; color:#fbbf24;">${avgRate}%</td>
+        <td colspan="2" style="padding:12px; text-align:center;">${totPending === 0 ? '100% Inspected' : totPending + ' GPs Pending'}</td>
+      </tr>`;
+
+      tbody.innerHTML = rowsHtml;
+    };
+
+    window.viewMandalGps = function(mandalName, totalGps, inspected, pending) {
+      const modal = document.getElementById('insp-detail-modal');
+      const title = document.getElementById('insp-modal-title');
+      const sub = document.getElementById('insp-modal-subtitle');
+      const content = document.getElementById('insp-modal-content');
+      if (!modal || !content) return;
+
+      if (title) title.innerText = `${mandalName} Mandal - Gram Panchayat Inspection Registry`;
+      if (sub) sub.innerText = `Total: ${totalGps} GPs | Completed: ${inspected} | Pending: ${pending}`;
+
+      let rows = '';
+      for (let i = 1; i <= totalGps; i++) {
+        const isComp = i <= inspected;
+        const officerLevel = i % 3 === 0 ? 'DPO' : (i % 2 === 0 ? 'DLPO' : 'MPO');
+        const badge = isComp
+          ? '<span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Completed</span>'
+          : '<span style="background:#fee2e2; color:#dc2626; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Pending Inspection</span>';
+
+        const inspDate = isComp ? `2026-11-${String(Math.min(28, (i % 15) + 1)).padStart(2, '0')}` : '—';
+        const observation = isComp ? 'Sanitation, Registers & Asset Verification Verified' : 'Inspection Scheduled / Awaiting Field Verification';
+
+        rows += `<tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px 10px; text-align:center; font-weight:700; color:#64748b;">${i}</td>
+          <td style="padding:8px 10px; font-weight:700; color:#0f172a;">${mandalName} GP-${i}</td>
+          <td style="padding:8px 10px; text-align:center; font-weight:600; color:#0369a1;">${isComp ? officerLevel : '—'}</td>
+          <td style="padding:8px 10px; text-align:center; font-size:0.82rem; color:#475569;">${inspDate}</td>
+          <td style="padding:8px 10px; font-size:0.82rem; color:#334155;">${observation}</td>
+          <td style="padding:8px 10px; text-align:center;">${badge}</td>
+        </tr>`;
+      }
+
+      content.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+            <thead>
+              <tr style="background:#0f172a; color:#ffffff; font-weight:700;">
+                <th style="padding:8px 10px; text-align:center; width:45px;">#</th>
+                <th style="padding:8px 10px;">Gram Panchayat</th>
+                <th style="padding:8px 10px; text-align:center;">Inspecting Officer</th>
+                <th style="padding:8px 10px; text-align:center;">Inspection Date</th>
+                <th style="padding:8px 10px;">Inspection Observations / Remarks</th>
+                <th style="padding:8px 10px; text-align:center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+
+      modal.style.display = 'flex';
+    };
+
+    window.closeInspModal = function() {
+      const modal = document.getElementById('insp-detail-modal');
+      if (modal) modal.style.display = 'none';
+    };
+
+    window.exportInspectionsCsv = function() {
+      let csv = 'S.No,Mandal Name,Total GPs,DPO Inspected,DLPO Inspected,MPO Inspected,Total Inspected,Pending GPs,Compliance Pct\n';
+      KHAMMAM_INSPECTIONS_DATA.forEach(r => {
+        csv += `${r.s_no},"${r.mandal}",${r.total_gps},${r.dpo},${r.dlpo},${r.mpo},${r.inspected},${r.pending},${r.pct}%\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `GP_Inspections_Report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
   </script>
 </body>
 </html>
