@@ -1495,6 +1495,32 @@ NARESH_PAGE_HTML = """<!doctype html>
             <input type="date" id="auto-date" value="2026-11-02">
           </div>
         </div>
+        <div class="form-row" style="margin-top:12px;">
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label for="auto-cutoff-time" style="display:flex; align-items:center; gap:6px;">
+              <span>⏰</span> Attendance Cutoff Time (Default: 9 AM)
+            </label>
+            <input type="time" id="auto-cutoff-time" value="09:00" onchange="updateCutoffLabelInUi(this.value)">
+            <small style="color:var(--text-muted); font-size:0.78rem; display:block; margin-top:4px;">
+              Evaluates PS punctuality submitted before this cutoff time.
+            </small>
+          </div>
+          <div class="form-group" style="flex:2; min-width:260px;">
+            <label for="auto-sort-by" style="display:flex; align-items:center; gap:6px;">
+              <span>📊</span> PDF Report Sorting Order
+            </label>
+            <select id="auto-sort-by">
+              <option value="before_9" selected id="opt-sort-cutoff">1. Sort based on before 9 AM or entered time (Punctuality %)</option>
+              <option value="overall_att_pct">2. Sort based on overall attendance percentage</option>
+              <option value="dsr_pct">3. Sort based on DSR percentage</option>
+              <option value="att_pending">4. Based on no. of GPs Attendance pending (Highest first)</option>
+              <option value="dsr_pending">5. Based on no. of GPs DSR Pending (Highest first)</option>
+            </select>
+            <small style="color:var(--text-muted); font-size:0.78rem; display:block; margin-top:4px;">
+              Orders Mandal table rows in both the compiled PDF and live dashboard view.
+            </small>
+          </div>
+        </div>
         <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
           <button type="button" class="btn btn-gold" id="btn-generate" onclick="runAutomatedGeneration()">
             ⚡ Generate PS Attendance and DSR Report
@@ -1948,23 +1974,36 @@ NARESH_PAGE_HTML = """<!doctype html>
 
       <!-- Mandal Breakdown Table Card -->
       <section class="table-card">
-        <div class="table-header">
-          <div class="table-title">Mandal-wise Attendance &amp; DSR Performance (20 Mandals)</div>
-          <input type="text" id="mandal-search" class="search-input" placeholder="Search Mandal..." onkeyup="filterMandals()">
+        <div class="table-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div class="table-title">Mandal-wise Attendance &amp; DSR Performance (<span id="mandals-count-label">20 Mandals</span>)</div>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <label for="online-sort-selector" style="font-size:0.82rem; font-weight:700; color:var(--text-muted); margin:0;">Sort:</label>
+              <select id="online-sort-selector" onchange="sortOnlineMandalsTable(this.value)" style="padding:6px 12px; font-size:0.84rem; border:1px solid var(--border); border-radius:6px; background:white; color:var(--text); font-weight:600; cursor:pointer;">
+                <option value="before_9">1. Before Cutoff Time % (Punctuality %)</option>
+                <option value="overall_att_pct">2. Overall Attendance %</option>
+                <option value="dsr_pct">3. DSR Percentage</option>
+                <option value="att_pending">4. GPs Attendance Pending (Highest first)</option>
+                <option value="dsr_pending">5. GPs DSR Pending (Highest first)</option>
+                <option value="mandal">Mandal Name (A-Z)</option>
+              </select>
+            </div>
+            <input type="text" id="mandal-search" class="search-input" placeholder="Search Mandal..." onkeyup="filterMandals()">
+          </div>
         </div>
         <div class="table-responsive">
           <table id="mandals-table">
             <thead>
               <tr>
-                <th>#</th>
-                <th>Mandal Name</th>
-                <th class="text-center">Total GPs</th>
-                <th class="text-center">Submitted</th>
-                <th class="text-center">Attendance %</th>
-                <th class="text-center">Before 9 AM</th>
-                <th class="text-center">On Leave / Meet</th>
-                <th class="text-center">Pending</th>
-                <th class="text-center">DSR Entered</th>
+                <th style="cursor:pointer;" onclick="sortOnlineMandalsTable('serial')" title="Sort by S.No"># ⇕</th>
+                <th style="cursor:pointer;" onclick="sortOnlineMandalsTable('mandal')" title="Sort by Mandal Name">Mandal Name ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('total_gps')" title="Sort by Total GPs">Total GPs ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('submitted')" title="Sort by Submitted">Submitted ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('overall_att_pct')" title="Sort by Attendance %">Attendance % ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('before_9')" title="Sort by Before Cutoff Time"><span id="th-cutoff-header">Before 9 AM</span> ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('on_leave')" title="Sort by On Leave">On Leave / Meet ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('att_pending')" title="Sort by Pending Attendance">Pending ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('dsr_entered')" title="Sort by DSR Entered">DSR Entered ⇕</th>
               </tr>
             </thead>
             <tbody id="mandals-tbody">
@@ -3849,9 +3888,25 @@ NARESH_PAGE_HTML = """<!doctype html>
       }
     }
 
+    function updateCutoffLabelInUi(timeVal) {
+      if (!timeVal) return;
+      const parts = timeVal.split(':');
+      let hr = parseInt(parts[0], 10);
+      const min = parseInt(parts[1], 10);
+      const ampm = hr >= 12 ? 'PM' : 'AM';
+      hr = hr % 12 || 12;
+      const formatted = (min === 0 ? `${hr} ${ampm}` : `${hr}:${min < 10 ? '0' + min : min} ${ampm}`);
+      const opt = document.getElementById('opt-sort-cutoff');
+      if (opt) {
+        opt.innerText = `1. Sort based on before ${formatted} or entered time (Punctuality %)`;
+      }
+    }
+
     async function runAutomatedGeneration() {
       const mod = document.getElementById('auto-module').value;
       const date = document.getElementById('auto-date').value;
+      const cutoffTime = (document.getElementById('auto-cutoff-time') ? document.getElementById('auto-cutoff-time').value : '09:00') || '09:00';
+      const sortBy = (document.getElementById('auto-sort-by') ? document.getElementById('auto-sort-by').value : 'before_9') || 'before_9';
       if (!date) {
         alert('Please select a report date.');
         return;
@@ -3875,6 +3930,8 @@ NARESH_PAGE_HTML = """<!doctype html>
         const formData = new FormData();
         formData.append('module', mod);
         formData.append('date', date);
+        formData.append('cutoff_time', cutoffTime);
+        formData.append('sort_by', sortBy);
 
         setTimeout(() => {
           setSubStep(1, 'done');
@@ -3984,11 +4041,95 @@ NARESH_PAGE_HTML = """<!doctype html>
         document.getElementById('val-pending').innerText = t.pending != null ? t.pending : '—';
 
         // Render Mandals Table
-        renderMandals(reportData.mandal_rows || []);
+        window.currentMandalRows = reportData.mandal_rows || [];
+        const countLabel = document.getElementById('mandals-count-label');
+        if (countLabel && window.currentMandalRows.length > 0) {
+          countLabel.innerText = `${window.currentMandalRows.length} Mandals`;
+        }
+        const cutoffLbl = (reportData.totals && reportData.totals.cutoff_label) ? reportData.totals.cutoff_label : '9 AM';
+        const thCutoff = document.getElementById('th-cutoff-header');
+        if (thCutoff) {
+          thCutoff.innerText = `Before ${cutoffLbl}`;
+        }
+        const sortSel = document.getElementById('online-sort-selector');
+        if (sortSel && reportData.totals && reportData.totals.sort_by) {
+          sortSel.value = reportData.totals.sort_by;
+        }
+        renderMandals(window.currentMandalRows);
       } catch (e) {
         console.error('Error loading automated feed:', e);
       }
     }
+
+    window.currentMandalRows = [];
+    window.currentSortKey = 'before_9';
+    window.currentSortAsc = true;
+
+    window.sortOnlineMandalsTable = function(sortKey) {
+      if (!window.currentMandalRows || window.currentMandalRows.length === 0) return;
+
+      const sel = document.getElementById('online-sort-selector');
+      if (sel && sel.value !== sortKey && ['before_9', 'overall_att_pct', 'dsr_pct', 'att_pending', 'dsr_pending', 'mandal'].includes(sortKey)) {
+        sel.value = sortKey;
+      }
+
+      if (window.currentSortKey === sortKey) {
+        window.currentSortAsc = !window.currentSortAsc;
+      } else {
+        window.currentSortKey = sortKey;
+        if (sortKey === 'att_pending' || sortKey === 'dsr_pending') {
+          window.currentSortAsc = false;
+        } else {
+          window.currentSortAsc = true;
+        }
+      }
+
+      const rows = [...window.currentMandalRows];
+      rows.sort((a, b) => {
+        let valA, valB;
+        if (sortKey === 'before_9') {
+          valA = a.before_9_pct != null ? Number(a.before_9_pct) : 0;
+          valB = b.before_9_pct != null ? Number(b.before_9_pct) : 0;
+        } else if (sortKey === 'overall_att_pct' || sortKey === 'attendance_pct') {
+          valA = a.attendance_pct != null ? Number(a.attendance_pct) : 0;
+          valB = b.attendance_pct != null ? Number(b.attendance_pct) : 0;
+        } else if (sortKey === 'dsr_pct') {
+          valA = a.dsr_pct != null ? Number(a.dsr_pct) : 0;
+          valB = b.dsr_pct != null ? Number(b.dsr_pct) : 0;
+        } else if (sortKey === 'att_pending' || sortKey === 'pending') {
+          valA = a.pending != null ? Number(a.pending) : 0;
+          valB = b.pending != null ? Number(b.pending) : 0;
+        } else if (sortKey === 'dsr_pending') {
+          valA = a.dsr_pending != null ? Number(a.dsr_pending) : 0;
+          valB = b.dsr_pending != null ? Number(b.dsr_pending) : 0;
+        } else if (sortKey === 'mandal') {
+          return window.currentSortAsc 
+            ? (a.mandal || '').localeCompare(b.mandal || '')
+            : (b.mandal || '').localeCompare(a.mandal || '');
+        } else if (sortKey === 'total_gps') {
+          valA = a.total_gps != null ? Number(a.total_gps) : 0;
+          valB = b.total_gps != null ? Number(b.total_gps) : 0;
+        } else if (sortKey === 'submitted') {
+          valA = a.submitted != null ? Number(a.submitted) : 0;
+          valB = b.submitted != null ? Number(b.submitted) : 0;
+        } else if (sortKey === 'on_leave') {
+          valA = (a.on_leave || 0) + (a.meeting_training || 0);
+          valB = (b.on_leave || 0) + (b.meeting_training || 0);
+        } else if (sortKey === 'dsr_entered') {
+          valA = a.dsr_entered != null ? Number(a.dsr_entered) : 0;
+          valB = b.dsr_entered != null ? Number(b.dsr_entered) : 0;
+        } else {
+          valA = a.serial || 0;
+          valB = b.serial || 0;
+        }
+
+        if (valA < valB) return window.currentSortAsc ? -1 : 1;
+        if (valA > valB) return window.currentSortAsc ? 1 : -1;
+        return (a.mandal || '').localeCompare(b.mandal || '');
+      });
+
+      renderMandals(rows);
+    };
 
     function renderMandals(rows) {
       const tbody = document.getElementById('mandals-tbody');
@@ -4015,6 +4156,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         </tr>`;
       });
       tbody.innerHTML = html;
+      filterMandals();
     }
 
     function filterMandals() {

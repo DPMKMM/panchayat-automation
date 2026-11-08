@@ -161,6 +161,9 @@ class ReportData:
     dsr_district_total: dict[str, Any]
     dsr_pending_rows: list[dict[str, Any]]
     all_gp_rows: list[dict[str, Any]] | None = None
+    cutoff_time_str: str = "09:00"
+    cutoff_label: str = "9 AM"
+    sort_by: str = "before_9"
 
     @property
     def totals(self) -> dict[str, Any]:
@@ -176,6 +179,9 @@ class ReportData:
             "dsr_eligible": int(self.dsr_district_total["present_ps"]),
             "dsr_entered": int(self.dsr_district_total["dsr_entered"]),
             "dsr_pending": int(self.dsr_district_total["dsr_pending"]),
+            "cutoff_time": self.cutoff_time_str,
+            "cutoff_label": self.cutoff_label,
+            "sort_by": self.sort_by,
         }
 
 
@@ -580,6 +586,8 @@ def analyze_attendance(
     frame: pd.DataFrame,
     filename: str = "attendance.xlsx",
     ps_directory: dict[str, dict[str, str]] | None = None,
+    cutoff_time: str | time | None = None,
+    sort_by: str = "before_9",
 ) -> ReportData:
     """Validate and aggregate one unique record per nonblank Panchayat LGD."""
     frame, missing = _canonicalize_columns(frame.copy())
@@ -685,14 +693,37 @@ def analyze_attendance(
 
     records = pd.DataFrame(unique_rows)
     records["submitted"] = records["status"].ne("")
-    cutoff = time(9, 0)
 
-    def is_before_9(stamp: Any) -> bool:
+    # Parse user-selected attendance cutoff time (defaults to 09:00 AM)
+    if isinstance(cutoff_time, time):
+        cutoff = cutoff_time
+    elif isinstance(cutoff_time, str) and cutoff_time.strip():
+        s = cutoff_time.strip().upper()
+        try:
+            if "AM" in s or "PM" in s:
+                cutoff = datetime.strptime(s, "%I:%M %p").time()
+            elif ":" in s:
+                parts = s.split(":")
+                cutoff = time(int(parts[0]), int(parts[1]))
+            else:
+                cutoff = time(int(s), 0)
+        except Exception:
+            cutoff = time(9, 0)
+    else:
+        cutoff = time(9, 0)
+
+    if cutoff.minute == 0:
+        cutoff_label = cutoff.strftime("%I %p").lstrip("0")
+    else:
+        cutoff_label = cutoff.strftime("%I:%M %p").lstrip("0")
+    cutoff_time_str = cutoff.strftime("%H:%M")
+
+    def is_before_cutoff(stamp: Any) -> bool:
         if pd.isna(stamp):
             return False
         return stamp.time() <= cutoff
 
-    records["before_9"] = records["submitted"] & records["parsed_timestamp"].map(is_before_9)
+    records["before_9"] = records["submitted"] & records["parsed_timestamp"].map(is_before_cutoff)
     records["after_9"] = records["submitted"] & records["parsed_timestamp"].map(
         lambda value: (not pd.isna(value)) and value.time() > cutoff
     )
@@ -720,10 +751,6 @@ def analyze_attendance(
             "meeting_training": int(group["meeting_training"].sum()),
             "pending": int(group["pending"].sum()),
         })
-    mandal_rows.sort(key=lambda item: (item["before_9_pct"], item["mandal"].casefold()))
-    for index, item in enumerate(mandal_rows, start=1):
-        item["serial"] = index
-
     district_gps = len(records)
     district_before = int(records["before_9"].sum())
     district_total = {
@@ -753,6 +780,39 @@ def analyze_attendance(
         key=lambda item: (item["dsr_pct"], -item["dsr_pending"], item["mandal"].casefold())
     )
     for index, item in enumerate(dsr_mandal_rows, start=1):
+        item["serial"] = index
+
+    # Merge DSR metrics into mandal_rows so all sorting options operate seamlessly
+    dsr_by_mandal = {
+        item["mandal"].strip().casefold(): item for item in dsr_mandal_rows
+    }
+    for item in mandal_rows:
+        dsr_item = dsr_by_mandal.get(item["mandal"].strip().casefold(), {})
+        item["present_ps"] = dsr_item.get("present_ps", 0)
+        item["dsr_entered"] = dsr_item.get("dsr_entered", 0)
+        item["dsr_pct"] = dsr_item.get("dsr_pct", 0.0)
+        item["dsr_pending"] = dsr_item.get("dsr_pending", 0)
+
+    # Apply 5 User Sorting Options:
+    # 1. Sort based on before 9 AM or entered time (Punctuality %)
+    # 2. Sort based overall attendance percentage
+    # 3. Sort based on Dsr Percentage
+    # 4. Based on no of GPs Attendance pending
+    # 5. Based on no of GPs DSR Pending
+    sort_by_norm = (sort_by or "before_9").strip().lower()
+    if "overall" in sort_by_norm or "attendance_pct" in sort_by_norm or "att_pct" in sort_by_norm:
+        mandal_rows.sort(key=lambda item: (item["attendance_pct"], item["mandal"].casefold()))
+    elif "dsr_pct" in sort_by_norm or "dsr_percentage" in sort_by_norm or "dsr_percent" in sort_by_norm:
+        mandal_rows.sort(key=lambda item: (item.get("dsr_pct", 0.0), item["mandal"].casefold()))
+    elif "att_pending" in sort_by_norm or "attendance_pending" in sort_by_norm or "gps_att_pending" in sort_by_norm:
+        mandal_rows.sort(key=lambda item: (-item["pending"], item["mandal"].casefold()))
+    elif "dsr_pending" in sort_by_norm or "gps_dsr_pending" in sort_by_norm:
+        mandal_rows.sort(key=lambda item: (-item.get("dsr_pending", 0), item["mandal"].casefold()))
+    else:
+        # Default: Sort based on punctuality % before entered cutoff time
+        mandal_rows.sort(key=lambda item: (item["before_9_pct"], item["mandal"].casefold()))
+
+    for index, item in enumerate(mandal_rows, start=1):
         item["serial"] = index
 
     dsr_present_ps = int(records["dsr_eligible"].sum())
@@ -862,6 +922,9 @@ def analyze_attendance(
         dsr_district_total=dsr_district_total,
         dsr_pending_rows=dsr_pending_rows,
         all_gp_rows=all_gp_rows,
+        cutoff_time_str=cutoff_time_str,
+        cutoff_label=cutoff_label,
+        sort_by=sort_by_norm,
     )
 
 
@@ -871,6 +934,8 @@ def process_attendance_file(
     presentees_source: tuple[str, bytes] | None = None,
     absentees_source: tuple[str, bytes] | None = None,
     ps_directory: dict[str, dict[str, str]] | None = None,
+    cutoff_time: str | time | None = None,
+    sort_by: str = "before_9",
 ) -> ReportData:
     """Read and analyze an uploaded file, merging optional Presentees/Absentees PS details."""
     sources: list[tuple[str, bytes]] = []
@@ -888,6 +953,8 @@ def process_attendance_file(
         read_source_file(filename, raw_bytes),
         filename,
         ps_directory=combined_dir,
+        cutoff_time=cutoff_time,
+        sort_by=sort_by,
     )
 
 
@@ -1101,8 +1168,8 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
 
     comb_headers_row1 = [
         "", "", "",
-        Paragraph("Submitted<br/>&lt; 9 AM", styles["HSub"]),
-        Paragraph("&lt; 9 AM<br/>%", styles["HSub"]),
+        Paragraph(f"Submitted<br/>&lt; {report.cutoff_label}", styles["HSub"]),
+        Paragraph(f"&lt; {report.cutoff_label}<br/>%", styles["HSub"]),
         Paragraph("Total PS<br/>Submitted", styles["HSub"]),
         Paragraph("Overall<br/>Att. %", styles["HSub"]),
         Paragraph("On<br/>Leave", styles["HSub"]),
@@ -1329,8 +1396,8 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
 
     # 7. GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM (with PS Name, Nature of Posting, Mobile Number, Time in Red)
     story.append(PageBreak())
-    story.append(Paragraph("7. GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM", styles["SectionTitle"]))
-    story.append(Paragraph(f"Total GPs after 9 AM: {len(report.after_9_rows):,}", styles["ReportSubtitle"]))
+    story.append(Paragraph(f"7. GPs THAT SUBMITTED ATTENDANCE AFTER {report.cutoff_label.upper()}", styles["SectionTitle"]))
+    story.append(Paragraph(f"Total GPs after {report.cutoff_label}: {len(report.after_9_rows):,}", styles["ReportSubtitle"]))
     after_9_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat",
         "Panchayat Secretary Name", "Nature of\nPosting", "Mobile Number",

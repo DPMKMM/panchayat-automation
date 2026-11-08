@@ -449,10 +449,18 @@ def naresh_generate(
     request: Request,
     module: str = Form(default="dsr_full"),
     date: str = Form(default=""),
+    cutoff_time: str = Form(default="09:00"),
+    sort_by: str = Form(default="before_9"),
 ) -> dict[str, Any]:
     sid = _get_sid(request)
     try:
-        return automation_service.generate_server_report(module=module, date_str=date, session_id=sid)
+        return automation_service.generate_server_report(
+            module=module,
+            date_str=date,
+            session_id=sid,
+            cutoff_time=cutoff_time,
+            sort_by=sort_by,
+        )
     except Exception as exc:
         logger.exception("naresh_generate failed for module=%s date=%s sid=%s: %s", module, date, sid, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc

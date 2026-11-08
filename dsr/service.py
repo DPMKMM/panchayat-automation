@@ -450,14 +450,14 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     }
 
 
-def generate_server_report(module: str = "dsr_full", date_str: str = "", session_id: str = "") -> dict[str, Any]:
+def generate_server_report(module: str = "dsr_full", date_str: str = "", session_id: str = "", cutoff_time: str = "09:00", sort_by: str = "before_9") -> dict[str, Any]:
     """Generates report for this specific user session in its isolated browser and directory."""
     session = get_or_create_session(session_id)
     with session["lock"]:
-        return run_in_session_thread(session, _generate_server_report_impl, session, module, date_str)
+        return run_in_session_thread(session, _generate_server_report_impl, session, module, date_str, cutoff_time, sort_by)
 
 
-def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_full", date_str: str = "") -> dict[str, Any]:
+def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_full", date_str: str = "", cutoff_time: str = "09:00", sort_by: str = "before_9") -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
     if not is_auth:
         raise PermissionError(
@@ -509,7 +509,7 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
 
     # Check 3-minute live micro-cache first (protects SDC portal from repeated scrapes)
     dist_name = session.get("district_name", "Khammam")
-    cache_key = (module, portal_date_fmt, dist_name)
+    cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by)
     with _DSR_CACHE_LOCK:
         if cache_key in _DSR_CACHE:
             cached_entry = _DSR_CACHE[cache_key]
@@ -610,10 +610,12 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
         raw_path.read_bytes(),
         presentees_source=presentees_data,
         absentees_source=absentees_data,
+        cutoff_time=cutoff_time,
+        sort_by=sort_by,
     )
 
     clean_dist = report.district_name.replace(' ', '_')
-    target_pdf = REPORTS_DIR / f"{clean_dist}_Official_DSR_Report_{portal_date_fmt}_{sid[:6]}.pdf"
+    target_pdf = REPORTS_DIR / f"{clean_dist}_Official_DSR_Report_{portal_date_fmt}_{cutoff_time.replace(':', '-')}_{sort_by}_{sid[:6]}.pdf"
     generate_pdf(report, target_pdf)
 
     # Save to session downloads cache

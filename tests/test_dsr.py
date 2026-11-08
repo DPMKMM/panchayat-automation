@@ -153,3 +153,43 @@ def test_dpoa3698_persistent_session():
     ext = _extend_session_impl(mock_session)
     assert ext['success'] is True
     assert ext['no_expiry'] is True
+
+
+def test_cutoff_time_and_sorting_options():
+    import pandas as pd
+    from dsr.pdf_generator import analyze_attendance
+
+    raw_data = [
+        {"District Name": "Khammam", "Mandal Name": "Mandal A", "Grampanchayat Name": "GP A1", "Panchayat Lgd": "101", "First Attendence Status": "Present", "Second Attendence Status": "Present", "First Attendence Datetime": "08-11-2026 08:45:00", "DSR Status": "Entered", "Nature Of Reason": ""},
+        {"District Name": "Khammam", "Mandal Name": "Mandal A", "Grampanchayat Name": "GP A2", "Panchayat Lgd": "102", "First Attendence Status": "Present", "Second Attendence Status": "Present", "First Attendence Datetime": "08-11-2026 09:15:00", "DSR Status": "Entered", "Nature Of Reason": ""},
+        {"District Name": "Khammam", "Mandal Name": "Mandal B", "Grampanchayat Name": "GP B1", "Panchayat Lgd": "103", "First Attendence Status": "Present", "Second Attendence Status": "Present", "First Attendence Datetime": "08-11-2026 08:30:00", "DSR Status": "Not Entered", "Nature Of Reason": ""},
+        {"District Name": "Khammam", "Mandal Name": "Mandal B", "Grampanchayat Name": "GP B2", "Panchayat Lgd": "104", "First Attendence Status": "", "Second Attendence Status": "", "First Attendence Datetime": "", "DSR Status": "", "Nature Of Reason": ""},
+    ]
+    df = pd.DataFrame(raw_data)
+
+    # 1. Test default cutoff (09:00 AM) and default sort (before_9)
+    rep1 = analyze_attendance(df, cutoff_time="09:00", sort_by="before_9")
+    assert rep1.cutoff_label == "9 AM"
+    assert rep1.totals["cutoff_time"] == "09:00"
+    assert rep1.totals["sort_by"] == "before_9"
+
+    # 2. Test custom cutoff time 09:30 AM
+    rep2 = analyze_attendance(df, cutoff_time="09:30", sort_by="before_9")
+    assert rep2.cutoff_label == "9:30 AM"
+    # At 09:30 cutoff, GP A2 (09:15) is before cutoff, so Mandal A has 100% punctuality (2 out of 2)
+    m_a = next(m for m in rep2.mandal_rows if m["mandal"] == "Mandal A")
+    assert m_a["before_9"] == 2
+
+    # 3. Test sorting options: attendance pending (highest pending first)
+    rep3 = analyze_attendance(df, cutoff_time="09:00", sort_by="att_pending")
+    # Mandal B has 1 pending, Mandal A has 0 pending -> Mandal B must be first
+    assert rep3.mandal_rows[0]["mandal"] == "Mandal B"
+    assert rep3.mandal_rows[0]["serial"] == 1
+    assert rep3.mandal_rows[1]["serial"] == 2
+
+    # 4. Test DSR sorting options: DSR pending
+    rep4 = analyze_attendance(df, cutoff_time="09:00", sort_by="dsr_pending")
+    # Mandal B has 1 DSR pending (GP B1 is present but DSR not entered), Mandal A has 0 DSR pending
+    assert rep4.mandal_rows[0]["mandal"] == "Mandal B"
+    assert rep4.mandal_rows[0]["serial"] == 1
+
