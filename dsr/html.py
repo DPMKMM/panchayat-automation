@@ -1919,7 +1919,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         const tbody = document.getElementById('sessions-table-body');
         if (!tbody) return;
         if (!data.sessions || data.sessions.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:18px; color:var(--text-muted);">No active sessions currently.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:18px; color:var(--text-muted);">No active sessions currently.</td></tr>';
           return;
         }
 
@@ -1935,6 +1935,14 @@ NARESH_PAGE_HTML = """<!doctype html>
           const userDisplay = s.user_id + (isMe ? ' <b style="color:#059669;">(You)</b>' : '');
           const rowBg = isMe ? 'background:#f0fdf4;' : '';
 
+          const distDisplay = isAuth 
+            ? `<span style="font-weight:700; color:#047857; display:inline-flex; align-items:center; gap:4px;">🏛️ ${s.district_name || 'Khammam District'}</span>`
+            : '<span style="color:#94a3b8;">—</span>';
+          
+          const officeDisplay = isAuth 
+            ? `<span style="font-weight:600; color:#1e293b;">${s.office_name || (s.user_id === 'DPOA3698' ? 'District Panchayat Office' : 'Panchayat Officer')}</span>`
+            : '<span style="color:#94a3b8;">—</span>';
+
           const remMin = Math.floor((s.expires_in_seconds || 0) / 60);
           const remSec = (s.expires_in_seconds || 0) % 60;
           const timeRemainingDisplay = isAuth 
@@ -1942,6 +1950,8 @@ NARESH_PAGE_HTML = """<!doctype html>
             : '—';
 
           return `<tr style="border-bottom:1px solid #f1f5f9; ${rowBg}">
+            <td style="padding:8px 10px;">${distDisplay}</td>
+            <td style="padding:8px 10px;">${officeDisplay}</td>
             <td style="padding:8px 10px; font-weight:700; color:var(--text);">${userDisplay}</td>
             <td style="padding:8px 10px;">${statusBadge}</td>
             <td style="padding:8px 10px;">${timeRemainingDisplay}</td>
@@ -2101,6 +2111,8 @@ NARESH_PAGE_HTML = """<!doctype html>
 
       if (data && data.authenticated) {
         const off = (data.user_id || sessionStorage.getItem('epts_officer_id') || 'Officer').trim();
+        const dist = (data.district_name || sessionStorage.getItem('epts_district_name') || (off === 'DPOA3698' ? 'Khammam District' : '')).trim();
+        const officeName = (data.office_name || sessionStorage.getItem('epts_office_name') || (off === 'DPOA3698' ? 'District Panchayat Office' : '')).trim();
         if (ping) { ping.style.display = 'inline-block'; ping.style.background = '#10b981'; }
         if (dot) dot.style.background = '#10b981';
         if (pill) {
@@ -2109,11 +2121,11 @@ NARESH_PAGE_HTML = """<!doctype html>
           pill.innerText = 'ACTIVE & RUNNING IN BACKGROUND';
         }
         if (desc) {
-          desc.innerText = `Playwright browser automation active for Officer ${off}. Continuous background session ready for zero-wait reports.`;
+          desc.innerText = `Playwright browser automation active for ${dist ? dist + ' (' + (officeName || off) + ')' : 'Officer ' + off}. Continuous background session ready for zero-wait reports.`;
         }
-        if (officerEl) officerEl.innerText = `🏛️ Officer: ${off} (Session Active)`;
+        if (officerEl) officerEl.innerText = dist ? `🏛️ ${dist} • ${officeName || off}` : `🏛️ Officer: ${off} (Session Active)`;
         if (navDot) navDot.style.background = '#10b981';
-        if (navText) navText.innerText = `Browser: Active (${off})`;
+        if (navText) navText.innerText = dist ? `Browser: ${dist}` : `Browser: Active (${off})`;
       } else if (data && data.status === 'awaiting_otp') {
         const off = (data.user_id || 'Officer').trim();
         if (ping) { ping.style.display = 'inline-block'; ping.style.background = '#f59e0b'; }

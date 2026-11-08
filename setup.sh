@@ -52,6 +52,10 @@ else
     fi
 fi
 
+# Configure server timezone to Indian Standard Time (IST)
+echo "[*] Setting server timezone to Asia/Kolkata (IST)..."
+sudo timedatectl set-timezone Asia/Kolkata 2>/dev/null || sudo ln -sf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime 2>/dev/null || true
+
 # 1. Update system & install required packages
 echo "[*] Updating apt packages and installing system libraries..."
 sudo apt-get update -y

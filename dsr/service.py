@@ -283,6 +283,62 @@ def verify_server_otp(otp_code: str, session_id: str = "") -> dict[str, Any]:
     return run_in_session_thread(session, _verify_server_otp_impl, session, otp_code)
 
 
+def extract_epanchayat_header_info(page) -> dict[str, str]:
+    """Scrapes Office ID, User Name, Office/Designation, Division, and District from the post-login header bar."""
+    info = {
+        "office_id": "",
+        "user_name": "",
+        "office_name": "",
+        "division_name": "",
+        "district_name": "",
+    }
+    if not page:
+        return info
+
+    parts: list[str] = []
+    try:
+        loc = page.locator("tr:has-text('Office ID:'), div:has-text('Office ID:'), td:has-text('Office ID:')").first
+        if loc and loc.count() > 0:
+            for cell in loc.locator("td, th, span, div").all():
+                t = cell.inner_text().strip()
+                if t and t not in parts and len(t) < 80:
+                    parts.append(t)
+            full_txt = loc.inner_text()
+            for p in re.split(r'[\t\r\n|]+|\s{2,}', full_txt):
+                p = p.strip()
+                if p and p not in parts:
+                    parts.append(p)
+    except Exception as exc:
+        logger.debug("Officer info DOM lookup error: %s", exc)
+
+    if not any("District" in p for p in parts):
+        try:
+            content = page.content()
+            m = re.search(r"Office ID:\s*\d+.*?(?:Date:\s*\d{2}/\d{2}/\d{4}|</html>)", content, re.DOTALL | re.I)
+            if m:
+                clean_txt = re.sub(r"<[^>]+>", "    ", m.group(0))
+                for p in re.split(r'[\t\r\n|]+|\s{2,}', clean_txt):
+                    p = p.strip()
+                    if p and p not in parts:
+                        parts.append(p)
+        except Exception:
+            pass
+
+    for p in parts:
+        if re.search(r'Office ID:\s*(\d+)', p, re.I):
+            info["office_id"] = re.search(r'Office ID:\s*(\d+)', p, re.I).group(1).strip()
+        elif re.search(r'User Name:\s*([A-Za-z0-9_]+)', p, re.I):
+            info["user_name"] = re.search(r'User Name:\s*([A-Za-z0-9_]+)', p, re.I).group(1).strip()
+        elif re.search(r'Division\b', p, re.I):
+            info["division_name"] = p.replace("Division", "").strip() + " Division"
+        elif re.search(r'District\b', p, re.I) and not re.search(r'Office|Officer|Panchayat', p, re.I):
+            info["district_name"] = p.replace("District", "").strip() + " District"
+        elif re.search(r'Panchayat\s+Office|Officer|Secretary|MPO|DPO|DLPO', p, re.I):
+            info["office_name"] = p.strip()
+
+    return info
+
+
 def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str, Any]:
     clean_otp = re.sub(r"\D", "", otp_code.strip())
     if len(clean_otp) != 6:
@@ -310,12 +366,37 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
                 session["session_duration"] = SESSION_DEFAULT_DURATION
                 session["extended"] = False
                 session["user_id"] = user_id
+
+                # Scrape Officer details from e-Panchayat blue header bar
+                officer_info = extract_epanchayat_header_info(page)
+                if officer_info.get("district_name"):
+                    session["district_name"] = officer_info["district_name"]
+                elif user_id.upper() == "DPOA3698":
+                    session["district_name"] = "Khammam District"
+
+                if officer_info.get("office_name"):
+                    session["office_name"] = officer_info["office_name"]
+                elif user_id.upper() == "DPOA3698":
+                    session["office_name"] = "District Panchayat Office"
+
+                if officer_info.get("division_name"):
+                    session["division_name"] = officer_info["division_name"]
+                elif user_id.upper() == "DPOA3698":
+                    session["division_name"] = "Khammam Division"
+
+                if officer_info.get("office_id"):
+                    session["office_id"] = officer_info["office_id"]
+                elif user_id.upper() == "DPOA3698":
+                    session["office_id"] = "3698"
+
                 _save_session_state(session)
                 ensure_keepalive_running()
                 return {
                     "success": True,
                     "step": "authenticated",
                     "user_id": user_id,
+                    "district_name": session.get("district_name", ""),
+                    "office_name": session.get("office_name", ""),
                     "message": f"e-Panchayat login verified successfully for officer {user_id}! Session is active.",
                 }
             else:
@@ -333,12 +414,19 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     session["session_duration"] = SESSION_DEFAULT_DURATION
     session["extended"] = False
     session["user_id"] = user_id
+    if user_id.upper() == "DPOA3698":
+        session["district_name"] = "Khammam District"
+        session["office_name"] = "District Panchayat Office"
+        session["division_name"] = "Khammam Division"
+        session["office_id"] = "3698"
     _save_session_state(session)
     ensure_keepalive_running()
     return {
         "success": True,
         "step": "authenticated",
         "user_id": user_id,
+        "district_name": session.get("district_name", ""),
+        "office_name": session.get("office_name", ""),
         "message": f"OTP verified! Session authenticated for Officer {user_id}.",
     }
 
@@ -754,10 +842,20 @@ def get_all_active_sessions_summary() -> dict[str, Any]:
 
         dur = s.get("session_duration", SESSION_DEFAULT_DURATION)
         rem_sec = max(0, dur - age_sec) if is_auth else 0
+        u_id = s.get("user_id") or "Unauthenticated"
+        dist = s.get("district_name") or ("Khammam District" if u_id.upper() == "DPOA3698" else "")
+        office = s.get("office_name") or ("District Panchayat Office" if u_id.upper() == "DPOA3698" else "")
+        div = s.get("division_name") or ("Khammam Division" if u_id.upper() == "DPOA3698" else "")
+        off_id = s.get("office_id") or ("3698" if u_id.upper() == "DPOA3698" else "")
+
         sessions_list.append({
             "session_id": sid,
             "session_id_short": (sid[:8] + "...") if len(sid) > 10 else sid,
-            "user_id": s.get("user_id") or "Unauthenticated",
+            "user_id": u_id,
+            "district_name": dist,
+            "office_name": office,
+            "division_name": div,
+            "office_id": off_id,
             "status": status,
             "authenticated": is_auth,
             "mode": s.get("mode", "idle"),
@@ -771,9 +869,13 @@ def get_all_active_sessions_summary() -> dict[str, Any]:
             "latest_report_date": s.get("latest_report_date", ""),
         })
 
+    from zoneinfo import ZoneInfo
+    IST = ZoneInfo("Asia/Kolkata")
+    now_ist = datetime.now(IST)
+
     return {
         "success": True,
-        "timestamp": datetime.now().strftime("%d-%b-%Y %I:%M:%S %p"),
+        "timestamp": now_ist.strftime("%d-%b-%Y %I:%M:%S %p IST"),
         "total_sessions": len(sessions_list),
         "authenticated_sessions": auth_count,
         "sessions": sessions_list,
