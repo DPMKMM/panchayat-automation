@@ -46,6 +46,12 @@ _sessions: dict[str, dict[str, Any]] = {}
 _sessions_lock = threading.Lock()
 _keepalive_started = False
 
+# 3-Minute Live DSR Attendance Micro-Cache & Deduplication Lock
+# Protects State Data Center (SDC) from IP rate-limiting and prevents multi-operator race conditions
+_DSR_CACHE: dict[tuple[str, str, str], dict[str, Any]] = {}
+_DSR_CACHE_LOCK = threading.Lock()
+_DSR_CACHE_TTL_SECONDS = 180.0  # 3 minutes micro-cache
+
 
 def _sanitize_session_id(session_id: str) -> str:
     s = (session_id or "").strip()
@@ -394,6 +400,21 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
     portal_date_fmt = format_portal_date(req_date)
     dl_dir = session["downloads_dir"]
 
+    # Check 3-minute live micro-cache first (protects SDC portal from repeated scrapes)
+    dist_name = session.get("district_name", "Khammam")
+    cache_key = (module, portal_date_fmt, dist_name)
+    with _DSR_CACHE_LOCK:
+        if cache_key in _DSR_CACHE:
+            cached_entry = _DSR_CACHE[cache_key]
+            age = time.time() - cached_entry["timestamp"]
+            if age < _DSR_CACHE_TTL_SECONDS and Path(cached_entry["latest_pdf_path"]).exists():
+                logger.info("[%s] Serving cached DSR report (age: %.1fs < %.0fs TTL). Zero portal load.",
+                            sid[:6], age, _DSR_CACHE_TTL_SECONDS)
+                session["latest_pdf_path"] = cached_entry["latest_pdf_path"]
+                session["latest_report_date"] = cached_entry["latest_report_date"]
+                session["report_data"] = cached_entry["report_data"]
+                return cached_entry["response"]
+
     # Clean old downloads in this session's isolated folder
     if dl_dir.exists():
         for old_f in dl_dir.iterdir():
@@ -505,7 +526,7 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
         "generated": True,
     }
 
-    return {
+    res_payload = {
         "success": True,
         "step": "completed",
         "user_id": user_id,
@@ -516,6 +537,17 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
         "download_url": "/api/naresh/download",
         "totals": report.totals,
     }
+
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE[cache_key] = {
+            "timestamp": time.time(),
+            "latest_pdf_path": str(target_pdf),
+            "latest_report_date": f"{report.report_date:%d-%b-%Y}",
+            "report_data": session["report_data"],
+            "response": res_payload,
+        }
+
+    return res_payload
 
 
 def get_session_status(session_id: str = "") -> dict[str, Any]:

@@ -8,6 +8,7 @@ Unified backend server cleanly mounting modular sub-applications:
 
 from __future__ import annotations
 
+import os
 import logging
 import re
 import secrets
@@ -36,19 +37,38 @@ def create_app() -> FastAPI:
     except Exception as exc:
         logger.warning("Notice on keepalive init: %s", exc)
 
+    # Security Patch 4: Hide Swagger OpenAPI Docs in production to prevent schema scraping
+    is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
+    enable_docs = os.getenv("ENABLE_DOCS", "false" if is_production else "true").lower() in ("true", "1")
+
     app = FastAPI(
         title="Telangana ePanchayat Automation & Executive Analytics",
         version="4.0.0",
         description="Unified portal for Attendance/DSR, House Tax DCB, and GP Thursday Balance Tracking.",
-        docs_url="/api/docs",
+        docs_url="/api/docs" if enable_docs else None,
         redoc_url=None,
+        openapi_url="/api/openapi.json" if enable_docs else None,
     )
+
+    # Security Patch 2: Restrict CORS to authorized production and local domains
+    allowed_origins = [
+        "https://panchayatautomation.in",
+        "https://www.panchayatautomation.in",
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://testserver",
+    ]
+    custom_origin = os.getenv("CUSTOM_DOMAIN", "").strip()
+    if custom_origin and f"https://{custom_origin}" not in allowed_origins:
+        allowed_origins.append(f"https://{custom_origin}")
+        allowed_origins.append(f"https://www.{custom_origin}")
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=allowed_origins,
+        allow_origin_regex=r"^https?://(www\.)?panchayatautomation\.in(:[0-9]+)?$",
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -71,18 +91,30 @@ def create_app() -> FastAPI:
         request.state.session_id = sid
         response = await call_next(request)
 
-        # 2. Strict anti-caching headers for ALL endpoints
+        # Security Patch 1: Comprehensive Anti-Clickjacking, Anti-Sniffing & Security Headers
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Strict anti-caching headers for dynamic governance reports
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         response.headers["X-Session-ID"] = sid
 
+        is_https = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+        if is_https:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Security Patch 3: Secure Session Cookie with HttpOnly and Lax SameSite
         if is_new or not request.cookies.get("epts_session_id"):
             response.set_cookie(
                 key="epts_session_id",
                 value=sid,
                 max_age=86400 * 30,
-                httponly=False,
+                httponly=True,
+                secure=is_https,
                 samesite="lax",
                 path="/",
             )
