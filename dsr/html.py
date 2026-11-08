@@ -1138,10 +1138,10 @@ NARESH_PAGE_HTML = """<!doctype html>
           </div>
           <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
             <div style="display:flex; align-items:center; gap:8px; font-weight:700; color:#38bdf8; font-size:0.92rem; margin-bottom:5px;">
-              <span>🔍</span> GP Inspections Report
+              <span>🔍</span> GP Inspections (Coming Soon)
             </div>
             <div style="font-size:0.82rem; color:#d1fae5; line-height:1.45;">
-              Official DPO, DLPO, and MPO inspection monitoring, compliance % tracking, and drill-down across Mandals.
+              Official compliance tracking for Gram Panchayat inspections conducted by DPO, DLPO, and MPO (Coming Soon).
             </div>
           </div>
           <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
@@ -1169,7 +1169,7 @@ NARESH_PAGE_HTML = """<!doctype html>
     <!-- ========================================================
          EXECUTIVE DASHBOARD & MODULE CARDS
          ======================================================== -->
-    <div id="post-login-dashboard" style="display: block;">
+    <div id="post-login-dashboard" style="display: none;">
       <!-- Welcome Officer Banner (Shown when Authenticated) -->
       <div id="dash-officer-banner" style="display: none;">
         <section class="hero-card" style="margin-bottom: 24px;">
@@ -1265,21 +1265,21 @@ NARESH_PAGE_HTML = """<!doctype html>
             </div>
           </div>
 
-          <!-- Module 3: GP Inspections Report (Active Official Report) -->
-          <div class="module-card featured" style="border-color:#0284c7;">
+          <!-- Module 3: GP Inspections Report (Coming Soon) -->
+          <div class="module-card" style="border-color:#0284c7;">
             <div>
               <div class="module-card-header">
                 <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔍</div>
-                <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:700;">🔍 Official Report</span>
+                <span class="badge-pill-soon" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; font-weight:700;">⏳ Coming Soon</span>
               </div>
               <h3>Gram Panchayat Inspections</h3>
               <p>
-                Official compliance tracking for Gram Panchayat inspections conducted by District Panchayat Officers (DPO), Divisional Panchayat Officers (DLPO), and Mandal Panchayat Officers (MPO).
+                Official compliance tracking for Gram Panchayat inspections conducted by District Panchayat Officers (DPO), Divisional Panchayat Officers (DLPO), and Mandal Panchayat Officers (MPO). <em>This module is coming soon.</em>
               </p>
             </div>
             <div style="margin-top:auto;">
-              <button type="button" class="btn btn-gold" style="width:100%; text-align:center; background:#0284c7; border-color:#0369a1; color:#ffffff;" onclick="closeMobileNav(); openGpInspectionsStation();">
-                🔍 Open GP Inspections Station ➔
+              <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:#92400e; border-color:#f59e0b; background:#fffbeb; font-weight:700;" onclick="showUpcomingModal('Gram Panchayat Inspections', '🔍', 'Official compliance tracking for Gram Panchayat inspections conducted by DPO, DLPO, and MPO is coming soon.')">
+                ⏳ Coming Soon (In Development)
               </button>
             </div>
           </div>
@@ -2712,9 +2712,11 @@ NARESH_PAGE_HTML = """<!doctype html>
       const backHomeWrap = document.getElementById('btn-back-home-wrap');
       const backDashWrap = document.getElementById('btn-back-dashboard-wrap');
 
+      const inspStation = document.getElementById('inspections-station');
       if (dash) dash.style.display = 'none';
       if (balStation) balStation.style.display = 'none';
       if (taxStation) taxStation.style.display = 'none';
+      if (inspStation) inspStation.style.display = 'none';
       if (resultsEl) resultsEl.style.display = 'none';
       if (heroCard) heroCard.style.display = 'none';
 
@@ -2811,8 +2813,8 @@ NARESH_PAGE_HTML = """<!doctype html>
         if (inspStation) inspStation.style.display = 'none';
         if (resultsEl) resultsEl.style.display = 'none';
         if (officerBanner) officerBanner.style.display = 'none';
+        if (dash) dash.style.display = 'none';
         if (heroCard) heroCard.style.display = 'block';
-        if (dash) dash.style.display = 'block';
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
@@ -3637,9 +3639,9 @@ NARESH_PAGE_HTML = """<!doctype html>
           if (heroCard) heroCard.style.display = 'none';
           if (dash) dash.style.display = 'none';
         } else {
-          // Default unauthenticated view: show overview hero card and all modules cards
+          // Default unauthenticated view: show overview hero card, hide post-login dashboard
+          if (dash) dash.style.display = 'none';
           if (heroCard) heroCard.style.display = 'block';
-          if (dash) dash.style.display = 'block';
         }
         if (backWrap) backWrap.style.display = 'none';
         if (currentStep > 2) {
@@ -4355,15 +4357,17 @@ NARESH_PAGE_HTML = """<!doctype html>
     };
 
     window.exportInspectionsCsv = function() {
-      let csv = 'S.No,Mandal Name,Total GPs,DPO Inspected,DLPO Inspected,MPO Inspected,Total Inspected,Pending GPs,Compliance Pct\n';
+      const rows = [
+        'S.No,Mandal Name,Total GPs,DPO Inspected,DLPO Inspected,MPO Inspected,Total Inspected,Pending GPs,Compliance Pct'
+      ];
       KHAMMAM_INSPECTIONS_DATA.forEach(r => {
-        csv += `${r.s_no},"${r.mandal}",${r.total_gps},${r.dpo},${r.dlpo},${r.mpo},${r.inspected},${r.pending},${r.pct}%\n`;
+        rows.push([r.s_no, '"' + r.mandal + '"', r.total_gps, r.dpo, r.dlpo, r.mpo, r.inspected, r.pending, r.pct + '%'].join(','));
       });
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob([rows.join(String.fromCharCode(10))], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `GP_Inspections_Report_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = 'GP_Inspections_Report_' + new Date().toISOString().split('T')[0] + '.csv';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
