@@ -1119,13 +1119,13 @@ NARESH_PAGE_HTML = """<!doctype html>
         </p>
 
         <!-- Module Highlights Grid on Home -->
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:12px; margin-bottom:24px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:24px;">
           <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
             <div style="display:flex; align-items:center; gap:8px; font-weight:700; color:#fbbf24; font-size:0.92rem; margin-bottom:5px;">
               <span>⚡</span> PS Attendance &amp; DSR
             </div>
             <div style="font-size:0.82rem; color:#d1fae5; line-height:1.45;">
-              Daily morning attendance tracking, PS punctuality before 9 AM, absentees matching, and instant 7-section official District PDF compilation.
+              Daily morning attendance punctuality, DSR entry tracking, and 1-page Landscape combined District report.
             </div>
           </div>
           <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
@@ -1133,15 +1133,23 @@ NARESH_PAGE_HTML = """<!doctype html>
               <span>🏦</span> Thursday Balance Entry
             </div>
             <div style="font-size:0.82rem; color:#d1fae5; line-height:1.45;">
-              Weekly GP bank balance entry tracking, % compliance metrics, account-wise pendency analysis, and Secretary drill-down.
+              Weekly GP bank balance entry tracking, % compliance metrics, and Secretary pendency drill-down.
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
+            <div style="display:flex; align-items:center; gap:8px; font-weight:700; color:#38bdf8; font-size:0.92rem; margin-bottom:5px;">
+              <span>🔍</span> GP Inspections Report
+            </div>
+            <div style="font-size:0.82rem; color:#d1fae5; line-height:1.45;">
+              Official DPO, DLPO, and MPO inspection monitoring, compliance % tracking, and drill-down across Mandals.
             </div>
           </div>
           <div style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:14px;">
             <div style="display:flex; align-items:center; gap:8px; font-weight:700; color:#93c5fd; font-size:0.92rem; margin-bottom:5px;">
-              <span>💰</span> House Tax Collection (DCB)
+              <span>💰</span> House Tax (DCB)
             </div>
             <div style="font-size:0.82rem; color:#d1fae5; line-height:1.45;">
-              Real-time Demand, Collection, and Balance analytics across Mandals and GPs with interactive tables and PowerBI visual reports.
+              Real-time Demand, Collection, and Balance analytics across Mandals and GPs with PowerBI visual reports.
             </div>
           </div>
         </div>
@@ -1159,51 +1167,53 @@ NARESH_PAGE_HTML = """<!doctype html>
     </section>
 
     <!-- ========================================================
-         POST-LOGIN EXECUTIVE DASHBOARD (REPORT MODULE CARDS)
+         EXECUTIVE DASHBOARD & MODULE CARDS
          ======================================================== -->
-    <div id="post-login-dashboard" style="display: none;">
-      <!-- Welcome Officer Banner -->
-      <section class="hero-card" style="margin-bottom: 24px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
-          <div>
-            <h1 class="hero-title" style="margin-bottom:6px;">Executive Report Modules</h1>
-            <p class="hero-subtitle" style="margin-bottom:0;">
-              Welcome back. Select an active automated robot module below or access regular departmental monitoring reports.
-            </p>
+    <div id="post-login-dashboard" style="display: block;">
+      <!-- Welcome Officer Banner (Shown when Authenticated) -->
+      <div id="dash-officer-banner" style="display: none;">
+        <section class="hero-card" style="margin-bottom: 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h1 class="hero-title" style="margin-bottom:6px;">Executive Report Modules</h1>
+              <p class="hero-subtitle" style="margin-bottom:0;">
+                Welcome back. Select an active automated robot module below or access regular departmental monitoring reports.
+              </p>
+            </div>
+            <span class="badge badge-portal" id="dash-session-badge" style="font-size:0.86rem; padding:6px 14px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);">
+              🏛️ Authenticated Session Active
+            </span>
           </div>
-          <span class="badge badge-portal" id="dash-session-badge" style="font-size:0.86rem; padding:6px 14px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);">
-            🏛️ Authenticated Session Active
-          </span>
-        </div>
-      </section>
+        </section>
 
-      <!-- Live Background Service Status Card -->
-      <div class="bg-service-strip" style="background:#092e21; border:1px solid #167451; border-radius:12px; padding:16px 20px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; box-shadow:0 4px 14px rgba(0,0,0,0.12);">
-        <div style="display:flex; align-items:center; gap:14px;">
-          <div style="position:relative; width:14px; height:14px; flex-shrink:0;">
-            <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:#10b981; opacity:0.75; animation:livePing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-            <span style="position:relative; display:inline-block; width:14px; height:14px; border-radius:50%; background:#10b981;"></span>
-          </div>
-          <div>
-            <div style="font-size:1rem; font-weight:700; color:white; display:flex; align-items:center; gap:8px;">
-              <span>Background Robot Service:</span>
-              <span style="background:#10b981; color:#064e3b; font-size:0.75rem; font-weight:800; padding:2px 8px; border-radius:6px; letter-spacing:0.5px;">ACTIVE &amp; RUNNING IN BACKGROUND</span>
+        <!-- Live Background Service Status Card -->
+        <div class="bg-service-strip" style="background:#092e21; border:1px solid #167451; border-radius:12px; padding:16px 20px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; box-shadow:0 4px 14px rgba(0,0,0,0.12);">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="position:relative; width:14px; height:14px; flex-shrink:0;">
+              <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:#10b981; opacity:0.75; animation:livePing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+              <span style="position:relative; display:inline-block; width:14px; height:14px; border-radius:50%; background:#10b981;"></span>
             </div>
-            <div style="font-size:0.84rem; color:#a7f3d0; margin-top:3px;">
-              Playwright browser automation session active for Officer <strong id="dash-officer-id" style="color:#fbbf24;">Officer</strong>. Session is continuously running in the background for zero-wait automated reports.
+            <div>
+              <div style="font-size:1rem; font-weight:700; color:white; display:flex; align-items:center; gap:8px;">
+                <span>Background Robot Service:</span>
+                <span style="background:#10b981; color:#064e3b; font-size:0.75rem; font-weight:800; padding:2px 8px; border-radius:6px; letter-spacing:0.5px;">ACTIVE &amp; RUNNING IN BACKGROUND</span>
+              </div>
+              <div style="font-size:0.84rem; color:#a7f3d0; margin-top:3px;">
+                Playwright browser automation session active for Officer <strong id="dash-officer-id" style="color:#fbbf24;">Officer</strong>. Session is continuously running in the background for zero-wait automated reports.
+              </div>
             </div>
           </div>
-        </div>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <span id="dash-timer-chip" style="background:rgba(0,0,0,0.35); border:1px solid #10b981; border-radius:8px; padding:6px 12px; color:#d1fae5; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
-            ⏱️ Timer: <span id="dash-timer-digits" style="font-family:monospace; font-size:0.95rem; color:#fef08a;">10:00</span> remaining
-          </span>
-          <button id="dash-btn-extend" type="button" onclick="extendPortalSession()" style="background:#2563eb; color:white; border:none; border-radius:8px; font-size:0.8rem; font-weight:700; padding:6px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 6px rgba(0,0,0,0.2);" title="Extend session by 10 more minutes (max 20 mins total)">
-            ⏱️ +10 Mins (Extend)
-          </button>
-          <span class="badge" style="background:rgba(255,255,255,0.1); color:#e2e8f0; border:1px solid rgba(255,255,255,0.2); font-size:0.8rem; padding:6px 12px;">
-            🤖 Robot Engine: Standby
-          </span>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span id="dash-timer-chip" style="background:rgba(0,0,0,0.35); border:1px solid #10b981; border-radius:8px; padding:6px 12px; color:#d1fae5; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+              ⏱️ Timer: <span id="dash-timer-digits" style="font-family:monospace; font-size:0.95rem; color:#fef08a;">10:00</span> remaining
+            </span>
+            <button id="dash-btn-extend" type="button" onclick="extendPortalSession()" style="background:#2563eb; color:white; border:none; border-radius:8px; font-size:0.8rem; font-weight:700; padding:6px 14px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; box-shadow:0 2px 6px rgba(0,0,0,0.2);" title="Extend session by 10 more minutes (max 20 mins total)">
+              ⏱️ +10 Mins (Extend)
+            </button>
+            <span class="badge" style="background:rgba(255,255,255,0.1); color:#e2e8f0; border:1px solid rgba(255,255,255,0.2); font-size:0.8rem; padding:6px 12px;">
+              🤖 Robot Engine: Standby
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1217,7 +1227,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           Direct background portal fetching with AI Captcha solving, OTP auth, and automatic PDF generation.
         </div>
         <div class="modules-grid">
-          <!-- Module 1: Automated DSR (Active) -->
+          <!-- Module 1: PS Attendance and DSR (Active Robot) -->
           <div class="module-card featured">
             <div>
               <div class="module-card-header">
@@ -1226,7 +1236,7 @@ NARESH_PAGE_HTML = """<!doctype html>
               </div>
               <h3>PS Attendance and DSR Report</h3>
               <p>
-                Automatic downloading of GM-R 1.2.7 DSR raw data, 1.2.11 Presentees, and 1.2.10 Absentees reports with matched secretary details and official 7-section District PDF compilation.
+                Automatic downloading of GM-R 1.2.7 DSR raw data, 1.2.11 Presentees, and 1.2.10 Absentees reports with matched secretary details and official combined Landscape District PDF compilation.
               </p>
             </div>
             <div style="margin-top:auto;">
@@ -1236,26 +1246,26 @@ NARESH_PAGE_HTML = """<!doctype html>
             </div>
           </div>
 
-          <!-- Module 2: Monthly Activity Statement (MAS) (Under Process) -->
-          <div class="module-card" style="border-color:#f59e0b; background:#fffdfa;">
+          <!-- Module 2: GP Balance Entry (Active Robot) -->
+          <div class="module-card featured" style="border-color:#10b981;">
             <div>
               <div class="module-card-header">
-                <div class="module-icon" style="background:#fef3c7; color:#b45309;">📑</div>
-                <span class="badge-pill-soon" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; font-weight:700;">⏳ Under Process</span>
+                <div class="module-icon" style="background:#ecfdf5; color:#047857;">🏦</div>
+                <span class="badge-pill-live">● Active Robot</span>
               </div>
-              <h3>Monthly Activity Statement (MAS)</h3>
+              <h3>GP Balance Entry Report</h3>
               <p>
-                Official 18-Indicator Executive Matrix (GM-R 5.24 &amp; GM-R 5.23 Births Register). <em>This module is currently under active development and verification.</em>
+                Automated Thursday bank balance entry tracking (GM-R 14.2), calculating % Data Entered, account-wise pending tracking, and drill-down actionable list.
               </p>
             </div>
             <div style="margin-top:auto;">
-              <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:#92400e; border-color:#f59e0b; background:#fffbeb; font-weight:700;" onclick="showUpcomingModal('Monthly Activity Statement (MAS) &amp; Births', '📑', 'The official 18-Indicator Executive Matrix (GM-R 5.24) and Births Registration module is currently under process. Real-time portal synchronization and verification are underway.')">
-                ⏳ Under Process (In Development)
+              <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="openBalanceRobot()">
+                🏦 Open Balance Robot Station →
               </button>
             </div>
           </div>
 
-          <!-- Module: GP Inspections Report (Active Official Report) -->
+          <!-- Module 3: GP Inspections Report (Active Official Report) -->
           <div class="module-card featured" style="border-color:#0284c7;">
             <div>
               <div class="module-card-header">
@@ -1274,21 +1284,21 @@ NARESH_PAGE_HTML = """<!doctype html>
             </div>
           </div>
 
-          <!-- Module 3: GP Balance Entry (Active) -->
-          <div class="module-card featured" style="border-color:#10b981;">
+          <!-- Module 4: Monthly Activity Statement (MAS) (Under Process) -->
+          <div class="module-card" style="border-color:#f59e0b; background:#fffdfa;">
             <div>
               <div class="module-card-header">
-                <div class="module-icon" style="background:#ecfdf5; color:#047857;">🏦</div>
-                <span class="badge-pill-live">● Active Robot</span>
+                <div class="module-icon" style="background:#fef3c7; color:#b45309;">📑</div>
+                <span class="badge-pill-soon" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; font-weight:700;">⏳ Under Process</span>
               </div>
-              <h3>GP Balance Entry Report</h3>
+              <h3>Monthly Activity Statement (MAS)</h3>
               <p>
-                Automated Thursday bank balance entry tracking (GM-R 14.2), calculating % Data Entered, account-wise pending tracking, and drill-down actionable list.
+                Official 18-Indicator Executive Matrix (GM-R 5.24 &amp; GM-R 5.23 Births Register). <em>This module is currently under active development and verification.</em>
               </p>
             </div>
             <div style="margin-top:auto;">
-              <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="openBalanceRobot()">
-                ⚡ Open Balance Robot Station →
+              <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:#92400e; border-color:#f59e0b; background:#fffbeb; font-weight:700;" onclick="showUpcomingModal('Monthly Activity Statement (MAS) &amp; Births', '📑', 'The official 18-Indicator Executive Matrix (GM-R 5.24) and Births Registration module is currently under process. Real-time portal synchronization and verification are underway.')">
+                ⏳ Under Process (In Development)
               </button>
             </div>
           </div>
@@ -2562,7 +2572,32 @@ NARESH_PAGE_HTML = """<!doctype html>
       }
     });
 
+    window.displayOtpNotice = function(msg, mobile) {
+      try {
+        const noticeBox = document.getElementById('otp-dynamic-notice');
+        const mobileSpan = document.getElementById('otp-mobile-span');
+        if (mobileSpan && mobile) {
+          mobileSpan.innerText = mobile;
+        }
+        if (noticeBox) {
+          if (msg && msg.trim()) {
+            noticeBox.innerHTML = msg;
+          } else if (mobile) {
+            noticeBox.innerHTML = `A 6 digit OTP has been sent to your registered mobile number <span id="otp-mobile-span" style="text-decoration: underline; font-weight: 800;">${mobile}</span>. Enter OTP to continue.`;
+          }
+          noticeBox.style.display = 'block';
+        }
+      } catch (err) {
+        console.warn('displayOtpNotice note:', err);
+      }
+    };
+
     window.openDsrRobot = function() {
+      const isAuth = sessionStorage.getItem('epts_portal_auth') === 'true';
+      if (!isAuth) {
+        openDepartmentLogin('dsr');
+        return;
+      }
       const dash = document.getElementById('post-login-dashboard');
       const station = document.getElementById('automation-station');
       const balStation = document.getElementById('balance-station');
@@ -2697,16 +2732,16 @@ NARESH_PAGE_HTML = """<!doctype html>
         const resultsEl = document.getElementById('results-section');
 
         const inspStation = document.getElementById('inspections-station');
+        const officerBanner = document.getElementById('dash-officer-banner');
         if (station) station.style.display = 'none';
-        if (dash) dash.style.display = 'none';
         if (balStation) balStation.style.display = 'none';
         if (taxStation) taxStation.style.display = 'none';
         if (inspStation) inspStation.style.display = 'none';
         if (resultsEl) resultsEl.style.display = 'none';
-        if (heroCard) {
-          heroCard.style.display = 'block';
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        if (officerBanner) officerBanner.style.display = 'none';
+        if (heroCard) heroCard.style.display = 'block';
+        if (dash) dash.style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     };
 
@@ -3464,6 +3499,9 @@ NARESH_PAGE_HTML = """<!doctype html>
         const isViewingBal = balStation && balStation.style.display === 'block';
         const isViewingDsr = station && station.style.display === 'block';
 
+        const officerBanner = document.getElementById('dash-officer-banner');
+        if (officerBanner) officerBanner.style.display = 'block';
+
         if (!isViewingTax && !isViewingBal) {
           if (!isViewingDsr || currentStep <= 2) {
             // User was on home or logging in: open Executive Dashboard
@@ -3516,17 +3554,20 @@ NARESH_PAGE_HTML = """<!doctype html>
           navPill.title = 'Background browser engine status';
         }
 
+        const officerBanner = document.getElementById('dash-officer-banner');
+        if (officerBanner) officerBanner.style.display = 'none';
         if (resultsEl) resultsEl.style.display = 'none';
-        if (dash) dash.style.display = 'none';
         if (balStation) balStation.style.display = 'none';
         if (station) station.style.display = 'none';
 
         if (taxStation && taxStation.style.display === 'block') {
           // Keep tax station open if user was viewing it
           if (heroCard) heroCard.style.display = 'none';
+          if (dash) dash.style.display = 'none';
         } else {
-          // Default unauthenticated view: show overview hero card, keep login form hidden
+          // Default unauthenticated view: show overview hero card and all modules cards
           if (heroCard) heroCard.style.display = 'block';
+          if (dash) dash.style.display = 'block';
         }
         if (backWrap) backWrap.style.display = 'none';
         if (currentStep > 2) {
@@ -3662,7 +3703,9 @@ NARESH_PAGE_HTML = """<!doctype html>
 
         const otpNoticeMsg = json.otp_message || json.message || '';
         const otpMobile = json.mobile_number || '';
-        window.displayOtpNotice(otpNoticeMsg, otpMobile);
+        if (typeof window.displayOtpNotice === 'function') {
+          window.displayOtpNotice(otpNoticeMsg, otpMobile);
+        }
         updateStatus(otpNoticeMsg || 'OTP triggered successfully!', 'success');
         document.getElementById('session-badge').innerText = `Officer: ${user} (Awaiting OTP)`;
         goToStep(2);
@@ -3959,7 +4002,9 @@ NARESH_PAGE_HTML = """<!doctype html>
             const badge = document.getElementById('session-badge');
             if (badge) badge.innerText = `Officer: ${officer} (Awaiting OTP)`;
             if (data.otp_message || data.mobile_number) {
-              window.displayOtpNotice(data.otp_message, data.mobile_number);
+              if (typeof window.displayOtpNotice === 'function') {
+                window.displayOtpNotice(data.otp_message, data.mobile_number);
+              }
             }
             openDepartmentLogin();
             if (currentStep !== 2) {
@@ -4022,7 +4067,6 @@ NARESH_PAGE_HTML = """<!doctype html>
         }
       }
     })();
-  </script>
 
     // ========================================================
     // GP INSPECTIONS STATION ENGINE & DATA
