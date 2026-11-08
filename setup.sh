@@ -43,10 +43,13 @@ echo "[*] Updating apt packages and installing system libraries..."
 sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     python3 python3-pip python3-venv git curl wget build-essential jq \
-    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev \
+    libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev iptables-persistent || true
+
+# System graphic and audio libraries (handles Ubuntu 22.04 & 24.04 time_t naming)
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libgbm1 libpango-1.0-0 libcairo2 libasound2 iptables-persistent
+    libgbm1 libpango-1.0-0 libcairo2 libasound2 libasound2t64 2>/dev/null || true
 
 # 2. Architecture detection & cloudflared binary installation
 ARCH=$(uname -m)
@@ -108,15 +111,15 @@ echo "[*] Installing Python dependencies..."
 sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
 
 # 6. Install Playwright Headless Chromium
-echo "[*] Installing Playwright Chromium browser..."
-sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/python" -m playwright install --with-deps chromium || \
+echo "[*] Installing Playwright Chromium browser & OS dependencies..."
+sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/python" -m playwright install-deps chromium 2>/dev/null || true
 sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/python" -m playwright install chromium
 
-# 7. Open Oracle Cloud Linux firewall ports (iptables)
+# 7. Configure Linux firewall rules (iptables)
 echo "[*] Configuring host firewall rules..."
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 8000 -j ACCEPT 2>/dev/null || true
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
 sudo netfilter-persistent save 2>/dev/null || true
 
 # 8. Setup 24/7 Systemd Service
@@ -174,7 +177,7 @@ sudo systemctl restart epanchayat.service
 
 echo ""
 echo "====================================================================="
-echo "  [+] ORACLE CLOUD HOST INSTALLATION COMPLETED SUCCESSFULLY!"
+echo "  [+] PRODUCTION CLOUD HOST INSTALLATION COMPLETED SUCCESSFULLY!"
 echo "====================================================================="
 echo "  * Public Domain  : https://panchayatautomation.in"
 echo "  * Alternate URL  : https://www.panchayatautomation.in"
@@ -183,14 +186,20 @@ echo "  * 24/7 Daemon    : epanchayat.service (Enabled on boot)"
 echo "  * Continuous CI  : GitHub auto-pull active every 60s"
 echo "====================================================================="
 echo ""
-echo "[*] Waiting 6 seconds for services to initialize..."
-sleep 6
+echo "[*] Waiting for services to initialize..."
+HEALTHY=false
+for i in {1..15}; do
+    if curl -s http://127.0.0.1:8000/health | grep -q "ok"; then
+        HEALTHY=true
+        break
+    fi
+    sleep 1
+done
 
-# Check local health
-if curl -s http://127.0.0.1:8000/health | grep -q "ok"; then
+if [ "$HEALTHY" = true ]; then
     echo "  [OK] Local FastAPI server is HEALTHY on port 8000."
 else
-    echo "  [!] Server is still starting up. Checking status..."
+    echo "  [*] Service is initializing in background..."
 fi
 
 sudo systemctl status epanchayat --no-pager -l
