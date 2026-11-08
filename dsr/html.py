@@ -820,6 +820,208 @@ NARESH_PAGE_HTML = """<!doctype html>
       border-top: 1px solid var(--border);
       margin-top: 40px;
     }
+
+    /* =========================================================================
+       Mobile & Tablet Responsive System
+       ========================================================================= */
+    .nav-hamburger {
+      display: none;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 8px;
+      width: 40px;
+      height: 40px;
+      padding: 8px;
+      cursor: pointer;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      transition: all 0.25s ease-in-out;
+      flex-shrink: 0;
+    }
+    .nav-hamburger:hover {
+      background: rgba(255, 255, 255, 0.22);
+    }
+    .nav-hamburger:focus {
+      outline: 2px solid #fbbf24;
+      outline-offset: 2px;
+    }
+    .nav-hamburger .bar {
+      width: 22px;
+      height: 2.5px;
+      background: #ffffff;
+      border-radius: 2px;
+      transition: all 0.25s ease-in-out;
+    }
+    .nav-hamburger.open .bar-1 {
+      transform: translateY(6.5px) rotate(45deg);
+    }
+    .nav-hamburger.open .bar-2 {
+      opacity: 0;
+    }
+    .nav-hamburger.open .bar-3 {
+      transform: translateY(-6.5px) rotate(-45deg);
+    }
+
+    @media (max-width: 991px) {
+      .nav-inner {
+        height: 58px;
+        padding: 0 12px;
+        position: relative;
+      }
+      .nav-brand {
+        gap: 6px;
+      }
+      .nav-brand-badge {
+        font-size: 0.74rem;
+        padding: 4px 8px;
+        letter-spacing: 0.2px;
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-hamburger {
+        display: flex;
+      }
+      .nav-links {
+        display: none !important;
+        position: absolute;
+        top: 58px;
+        left: 0;
+        right: 0;
+        width: 100%;
+        background: #062b1f;
+        border-bottom: 3px solid #165b43;
+        box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding: 14px !important;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        z-index: 9999;
+      }
+      .nav-links.mobile-open {
+        display: flex !important;
+        animation: navSlideDown 0.22s ease-out;
+      }
+      @keyframes navSlideDown {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .nav-link, .dropdown-btn {
+        width: 100%;
+        padding: 12px 14px !important;
+        font-size: 0.95rem !important;
+        border-radius: 8px !important;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex !important;
+        justify-content: flex-start !important;
+        box-sizing: border-box;
+      }
+      .nav-link:hover, .dropdown-btn:hover {
+        background: rgba(255, 255, 255, 0.16);
+      }
+      #nav-browser-pill {
+        margin: 4px 0;
+        padding: 10px 14px !important;
+        border-radius: 8px !important;
+        width: 100%;
+        justify-content: center;
+        font-size: 0.85rem !important;
+      }
+      #nav-session-timer-wrap {
+        width: 100%;
+        justify-content: space-between;
+        margin: 4px 0;
+      }
+      #nav-portal-links {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        width: 100%;
+        gap: 8px !important;
+      }
+      #nav-portal-links .dropdown-btn, #nav-portal-links .nav-link {
+        width: 100%;
+      }
+
+      /* Container & Overall spacing */
+      .container {
+        padding: 0 12px !important;
+        margin: 14px auto !important;
+      }
+
+      /* Global Browser Status Bar */
+      #global-browser-status-bar {
+        padding: 12px 14px !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+      }
+      #browser-status-action {
+        width: 100%;
+        justify-content: space-between !important;
+      }
+
+      /* Hero Section */
+      .hero-card {
+        padding: 18px 16px !important;
+      }
+      .hero-title {
+        font-size: 1.25rem !important;
+        line-height: 1.35 !important;
+      }
+      .hero-subtitle {
+        font-size: 0.88rem !important;
+      }
+      .modules-grid {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+      .module-card {
+        padding: 16px !important;
+      }
+
+      /* Stepper */
+      .stepper {
+        gap: 4px !important;
+        overflow-x: auto;
+        padding-bottom: 6px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .step-label {
+        font-size: 0.72rem !important;
+      }
+      .step-circle {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.85rem !important;
+      }
+
+      /* Modals */
+      .modal-dialog {
+        max-width: 96vw !important;
+        width: 96vw !important;
+        margin: 12px auto !important;
+        padding: 16px !important;
+      }
+      .modal-dialog input, .modal-dialog select, .modal-dialog button {
+        font-size: 1rem !important;
+      }
+
+      /* Tables in Active Sessions and Results */
+      .table-wrap, .table-container, .table-responsive {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      table th, table td {
+        padding: 8px 8px !important;
+        font-size: 0.78rem !important;
+        white-space: nowrap;
+      }
+    }
   </style>
 </head>
 <body>
@@ -827,20 +1029,27 @@ NARESH_PAGE_HTML = """<!doctype html>
   <!-- Navigation Bar -->
   <header class="navbar">
     <div class="nav-inner">
-      <a class="nav-brand" href="javascript:void(0)" onclick="handleHomeNavigation()" style="display:inline-flex; align-items:center; gap:8px;" title="Go to Reports Dashboard / Home">
+      <a class="nav-brand" href="javascript:void(0)" onclick="closeMobileNav(); handleHomeNavigation();" style="display:inline-flex; align-items:center; gap:8px;" title="Go to Reports Dashboard / Home">
         <span style="font-size:1.3rem; line-height:1;">🏛️</span>
         <span class="nav-brand-badge" style="font-size:0.86rem; padding:5px 12px; font-weight:800; letter-spacing:0.5px;">e-Panchayat Automated Console</span>
       </a>
 
+      <!-- Mobile Hamburger Toggle Button -->
+      <button class="nav-hamburger" id="nav-hamburger-btn" type="button" onclick="toggleMobileNav()" aria-label="Toggle Navigation">
+        <span class="bar bar-1"></span>
+        <span class="bar bar-2"></span>
+        <span class="bar bar-3"></span>
+      </button>
+
       <!-- Navigation Links -->
-      <nav class="nav-links" style="display:flex; align-items:center; gap:10px;">
+      <nav class="nav-links" id="main-nav-links" style="display:flex; align-items:center; gap:10px;">
         <!-- Always-Visible Home Button -->
         <a class="nav-link" href="javascript:void(0)" onclick="handleHomeNavigation()" id="nav-btn-home" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
           <span>🏠</span> Home
         </a>
 
         <!-- Always-Visible House Tax (DCB) Button (Public / No Login Required) -->
-        <a class="nav-link" href="javascript:void(0)" onclick="openTaxDcbStation()" id="nav-btn-tax" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
+        <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); openTaxDcbStation();" id="nav-btn-tax" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
           <span>💰</span> House Tax (DCB)
         </a>
 
@@ -850,7 +1059,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         </a>
 
         <!-- Unauthenticated Department Login Button -->
-        <a class="nav-link" href="javascript:void(0)" onclick="openDepartmentLogin()" id="nav-btn-login" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#fbbf24;">
+        <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); openDepartmentLogin();" id="nav-btn-login" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#fbbf24;">
           <span>🔐</span> Login
         </a>
 
@@ -873,13 +1082,13 @@ NARESH_PAGE_HTML = """<!doctype html>
         <!-- Logged-in Links (Shown after login) -->
         <div id="nav-portal-links" style="display: none; align-items: center; gap: 8px;">
           <!-- DSR Module Direct Link -->
-          <button type="button" class="dropdown-btn active" onclick="openDsrRobot()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+          <button type="button" class="dropdown-btn active" onclick="closeMobileNav(); openDsrRobot();" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
             ⚡ DSR Module
           </button>
 
 
 
-          <a class="nav-link" href="javascript:void(0)" onclick="logoutPortalSession()" style="color:#fca5a5; font-weight:700;" title="Logout session">🔒 Logout</a>
+          <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); logoutPortalSession();" style="color:#fca5a5; font-weight:700;" title="Logout session">🔒 Logout</a>
         </div>
       </nav>
     </div>
@@ -1033,7 +1242,7 @@ NARESH_PAGE_HTML = """<!doctype html>
               </p>
             </div>
             <div style="margin-top:auto;">
-              <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="openDsrRobot()">
+              <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="closeMobileNav(); openDsrRobot();">
                 ⚡ Open DSR Robot Station →
               </button>
             </div>
@@ -1827,6 +2036,35 @@ NARESH_PAGE_HTML = """<!doctype html>
   </footer>
 
   <script>
+    // Mobile Responsive Navigation Handlers
+    window.toggleMobileNav = function() {
+      const nav = document.getElementById('main-nav-links');
+      const btn = document.getElementById('nav-hamburger-btn');
+      if (nav) {
+        nav.classList.toggle('mobile-open');
+        if (btn) btn.classList.toggle('open');
+      }
+    };
+
+    window.closeMobileNav = function() {
+      const nav = document.getElementById('main-nav-links');
+      const btn = document.getElementById('nav-hamburger-btn');
+      if (nav && nav.classList.contains('mobile-open')) {
+        nav.classList.remove('mobile-open');
+        if (btn) btn.classList.remove('open');
+      }
+    };
+
+    document.addEventListener('click', function(e) {
+      const nav = document.getElementById('main-nav-links');
+      const btn = document.getElementById('nav-hamburger-btn');
+      if (nav && nav.classList.contains('mobile-open')) {
+        if (!nav.contains(e.target) && !btn.contains(e.target)) {
+          window.closeMobileNav();
+        }
+      }
+    });
+
     // Multi-Session Client ID Manager (sessionStorage + localStorage + Cookie + Fetch Interceptor)
     window.getEptsSessionId = function() {
       // 1. Check sessionStorage (strictly isolated per browser tab / window)
