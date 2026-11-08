@@ -854,8 +854,8 @@ NARESH_PAGE_HTML = """<!doctype html>
           <span>🔐</span> Login
         </a>
 
-        <!-- Always-Visible Background Browser Status Pill in Navbar (Clickable for All Active Sessions) -->
-        <span id="nav-browser-pill" onclick="openSessionsModal()" style="display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; font-weight:700; background:rgba(0,0,0,0.28); border:1px solid rgba(255,255,255,0.2); padding:3px 10px; border-radius:12px; color:#d1fae5; cursor:pointer;" title="Click to view all active background sessions and connected officers">
+        <!-- Always-Visible Background Browser Status Pill in Navbar (Clickable for All Active Sessions ONLY for DPOA3698) -->
+        <span id="nav-browser-pill" style="display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; font-weight:700; background:rgba(0,0,0,0.28); border:1px solid rgba(255,255,255,0.2); padding:3px 10px; border-radius:12px; color:#d1fae5; cursor:default;" title="Background browser engine status">
           <span style="width:8px; height:8px; border-radius:50%; background:#9ca3af; display:inline-block;" id="nav-browser-dot"></span>
           <span id="nav-browser-text">Browser: Standby</span>
         </span>
@@ -906,7 +906,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         </div>
       </div>
       <div id="browser-status-action" style="display: flex; align-items: center; gap: 10px;">
-        <button type="button" onclick="openSessionsModal()" style="background:rgba(255,255,255,0.12); color:#a7f3d0; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:0.75rem; font-weight:700; padding:4px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:5px;" title="View all connected officers and background sessions">👥 Active Sessions</button>
+        <button type="button" id="btn-active-sessions" onclick="openSessionsModal()" style="display:none; background:rgba(255,255,255,0.12); color:#a7f3d0; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:0.75rem; font-weight:700; padding:4px 10px; cursor:pointer; align-items:center; gap:5px;" title="View all connected officers and background sessions (Admin only)">👥 Active Sessions</button>
         <span id="browser-status-officer" style="font-size: 0.82rem; font-weight: 700; color: #fbbf24;">🔒 Login Required</span>
       </div>
     </div>
@@ -1884,6 +1884,10 @@ NARESH_PAGE_HTML = """<!doctype html>
     })();
 
     window.openSessionsModal = function() {
+      const officer = (sessionStorage.getItem('epts_officer_id') || '').trim().toUpperCase();
+      if (officer !== 'DPOA3698') {
+        return;
+      }
       const modal = document.getElementById('sessions-modal');
       if (modal) {
         modal.style.display = 'flex';
@@ -3032,6 +3036,22 @@ NARESH_PAGE_HTML = """<!doctype html>
 
         window.updateGlobalBrowserStatus({ authenticated: true, user_id: officer });
 
+        const isDpoAdmin = (officer || '').trim().toUpperCase() === 'DPOA3698';
+        const btnSessions = document.getElementById('btn-active-sessions');
+        if (btnSessions) btnSessions.style.display = isDpoAdmin ? 'inline-flex' : 'none';
+        const navPill = document.getElementById('nav-browser-pill');
+        if (navPill) {
+          if (isDpoAdmin) {
+            navPill.style.cursor = 'pointer';
+            navPill.onclick = window.openSessionsModal;
+            navPill.title = 'Click to view all active background sessions (Admin DPOA3698)';
+          } else {
+            navPill.style.cursor = 'default';
+            navPill.onclick = null;
+            navPill.title = 'Background browser engine status';
+          }
+        }
+
         // Show dashboard with module cards by default unless a station is already active
         const isViewingTax = taxStation && taxStation.style.display === 'block';
         const isViewingBal = balStation && balStation.style.display === 'block';
@@ -3080,6 +3100,14 @@ NARESH_PAGE_HTML = """<!doctype html>
         localStorage.removeItem('epts_portal_auth');
         localStorage.removeItem('epts_officer_id');
         window.updateGlobalBrowserStatus({ authenticated: false, status: 'idle' });
+        const btnSessions = document.getElementById('btn-active-sessions');
+        if (btnSessions) btnSessions.style.display = 'none';
+        const navPill = document.getElementById('nav-browser-pill');
+        if (navPill) {
+          navPill.style.cursor = 'default';
+          navPill.onclick = null;
+          navPill.title = 'Background browser engine status';
+        }
 
         if (resultsEl) resultsEl.style.display = 'none';
         if (dash) dash.style.display = 'none';
@@ -3532,11 +3560,27 @@ NARESH_PAGE_HTML = """<!doctype html>
           }
         } else {
           window.updateGlobalBrowserStatus({ authenticated: false, status: 'idle' });
+        const btnSessions = document.getElementById('btn-active-sessions');
+        if (btnSessions) btnSessions.style.display = 'none';
+        const navPill = document.getElementById('nav-browser-pill');
+        if (navPill) {
+          navPill.style.cursor = 'default';
+          navPill.onclick = null;
+          navPill.title = 'Background browser engine status';
+        }
           setAuthenticated(false);
         }
       } catch (e) {
         console.warn('Session check note:', e);
         window.updateGlobalBrowserStatus({ authenticated: false, status: 'idle' });
+        const btnSessions = document.getElementById('btn-active-sessions');
+        if (btnSessions) btnSessions.style.display = 'none';
+        const navPill = document.getElementById('nav-browser-pill');
+        if (navPill) {
+          navPill.style.cursor = 'default';
+          navPill.onclick = null;
+          navPill.title = 'Background browser engine status';
+        }
       }
       return false;
     }

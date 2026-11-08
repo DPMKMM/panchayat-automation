@@ -273,7 +273,22 @@ def diag_reach() -> dict[str, Any]:
 
 @router.get("/api/system/sessions", include_in_schema=False)
 @router.get("/api/admin/sessions", include_in_schema=False)
-def system_sessions() -> dict[str, Any]:
+def system_sessions(request: Request) -> dict[str, Any]:
+    sid = _get_sid(request)
+    session = automation_service.get_or_create_session(sid)
+    user_id = str(session.get("user_id") or "").strip().upper()
+    is_auth = automation_service.is_authenticated(session_id=sid)
+
+    # Restrict active session inspection to administrator DPOA3698 only
+    if not (is_auth and user_id == "DPOA3698"):
+        return {
+            "success": False,
+            "error": "Access restricted. Only Administrator (DPOA3698) can view active sessions.",
+            "total_sessions": 0,
+            "authenticated_sessions": 0,
+            "sessions": [],
+        }
+
     try:
         return automation_service.get_all_active_sessions_summary()
     except Exception as exc:
