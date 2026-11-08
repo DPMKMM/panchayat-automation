@@ -6,6 +6,12 @@
 # ==============================================================================
 set -e
 
+# Ensure core utilities (sudo, curl, git) exist on minimal images
+if ! command -v sudo &>/dev/null || ! command -v curl &>/dev/null; then
+    echo "[*] Installing fundamental tools (sudo, curl, git)..."
+    apt-get update -y && apt-get install -y sudo curl git
+fi
+
 # Detect actual non-root user (e.g., ubuntu on Oracle Cloud)
 ACTUAL_USER="${SUDO_USER:-$USER}"
 if [ -z "$ACTUAL_USER" ] || [ "$ACTUAL_USER" = "root" ]; then
