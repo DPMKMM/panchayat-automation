@@ -1076,27 +1076,7 @@ NARESH_PAGE_HTML = """<!doctype html>
 
         <!-- Logged-in Links (Shown after login) -->
         <div id="nav-portal-links" style="display: none; align-items: center; gap: 8px;">
-          <!-- DSR Module Direct Link -->
-          <button type="button" class="dropdown-btn active" onclick="closeMobileNav(); openDsrRobot();" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-            ⚡ DSR Module
-          </button>
-
-          <!-- GP Balance Module Direct Link -->
-          <button type="button" class="dropdown-btn" onclick="closeMobileNav(); openBalanceRobot();" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-            🏦 GP Balance
-          </button>
-
-          <!-- GP Inspections Module Direct Link -->
-          <button type="button" class="dropdown-btn" onclick="closeMobileNav(); openGpInspectionsStation();" id="nav-btn-inspections" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
-            🔍 GP Inspections
-          </button>
-
-          <!-- MAS & Births (Under Process) -->
-          <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); showUpcomingModal('Monthly Activity Statement (MAS) &amp; Births', '📑', 'The official 18-Indicator Executive Matrix (GM-R 5.24) and Births Registration module is currently under process. Real-time portal synchronization and verification are underway.');" id="nav-btn-mas" style="display:inline-flex; align-items:center; gap:6px; font-weight:600; color:#fcd34d;">
-            <span style="font-size:0.7rem; background:#b45309; color:#fff; padding:2px 6px; border-radius:4px;">In Progress</span> 📑 MAS
-          </a>
-
-          <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); logoutPortalSession();" style="color:#fca5a5; font-weight:700;" title="Logout session">🔒 Logout</a>
+          <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); logoutPortalSession();" style="color:#fca5a5; font-weight:700; border:1px solid rgba(248,113,113,0.3); border-radius:8px; padding:6px 14px; background:rgba(239,68,68,0.12);" title="Logout session">🔒 Logout</a>
         </div>
       </nav>
     </div>
@@ -1244,7 +1224,7 @@ NARESH_PAGE_HTML = """<!doctype html>
                 <div class="module-icon" style="background:#fef3c7; color:#b45309;">⚡</div>
                 <span class="badge-pill-live">● Active Robot</span>
               </div>
-              <h3>Automated DSR Report</h3>
+              <h3>PS Attendance and DSR Report</h3>
               <p>
                 Automatic downloading of GM-R 1.2.7 DSR raw data, 1.2.11 Presentees, and 1.2.10 Absentees reports with matched secretary details and official 7-section District PDF compilation.
               </p>
@@ -1403,7 +1383,7 @@ NARESH_PAGE_HTML = """<!doctype html>
       <div class="automation-header">
         <div class="automation-title">
           <span class="pulse-icon">⚡</span>
-          <span>e-Panchayat Automated Robot Console</span>
+          <span>PS Attendance and DSR</span>
         </div>
         <span class="badge badge-portal" id="session-badge">Session: Ready</span>
       </div>
@@ -1507,7 +1487,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         </div>
         <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
           <button type="button" class="btn btn-gold" id="btn-generate" onclick="runAutomatedGeneration()">
-            ⚡ Automate &amp; Generate Official DSR Report
+            ⚡ Generate PS Attendance and DSR Report
           </button>
           <button type="button" class="btn btn-outline" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
             ← Back to Dashboard
