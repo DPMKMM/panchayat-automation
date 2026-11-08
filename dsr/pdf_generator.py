@@ -21,13 +21,17 @@ import pandas as pd
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    BaseDocTemplate,
     Flowable,
+    Frame,
     KeepTogether,
+    NextPageTemplate,
     PageBreak,
+    PageTemplate,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -902,12 +906,15 @@ class PercentBar(Flowable):
 
     def draw(self) -> None:
         self.canv.saveState()
-        self.canv.setFont("Helvetica-Bold", 6.5)
+        font_size = 6.0 if self.height <= 16 else 6.5
+        self.canv.setFont("Helvetica-Bold", font_size)
         self.canv.setFillColor(HexColor("#1F2937"))
-        self.canv.drawCentredString(self.width / 2, self.height - 8, f"{self.percent:.2f}%")
-        y, height = 3, 4
+        text_y = self.height - (7 if self.height <= 16 else 8)
+        self.canv.drawCentredString(self.width / 2, text_y, f"{self.percent:.2f}%")
+        bar_h = 3.5 if self.height <= 16 else 4
+        bar_y = 1.5 if self.height <= 16 else 3
         self.canv.setFillColor(HexColor("#E8EDF3"))
-        self.canv.roundRect(0, y, self.width, height, 2, fill=1, stroke=0)
+        self.canv.roundRect(0, bar_y, self.width, bar_h, 1.5, fill=1, stroke=0)
         fill_width = min(self.width, self.width * self.percent / 100)
         if fill_width > 0:
             # Green ONLY if attendance is 100.0%; distinct amber/orange/red for < 100%
@@ -920,18 +927,46 @@ class PercentBar(Flowable):
             else:
                 color = "#D9534F"  # Red for < 50%
             self.canv.setFillColor(HexColor(color))
-            self.canv.roundRect(0, y, fill_width, height, 2, fill=1, stroke=0)
+            self.canv.roundRect(0, bar_y, fill_width, bar_h, 1.5, fill=1, stroke=0)
         self.canv.restoreState()
 
 
 def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
-    """Create a professional, printable A4 portrait report."""
+    """Create a professional, printable A4 report with Landscape Page 1 and Portrait subsequent pages."""
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    page_width, _ = A4
-    margin = 12 * mm
-    available_width = page_width - 2 * margin
+    land_w, land_h = landscape(A4)
+    port_w, port_h = A4
+    margin_land = 8 * mm
+    margin_port = 12 * mm
+    available_land_width = land_w - 2 * margin_land
+    available_width = port_w - 2 * margin_port
+
     styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="CombinedTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=13, leading=15, alignment=TA_CENTER, textColor=HexColor("#17365D"), spaceAfter=2,
+    ))
+    styles.add(ParagraphStyle(
+        name="CombinedSubtitle", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8, leading=10, alignment=TA_CENTER, textColor=HexColor("#444444"), spaceAfter=5,
+    ))
+    styles.add(ParagraphStyle(
+        name="HSuper", fontName="Helvetica-Bold", fontSize=7.2, leading=8.5,
+        alignment=TA_CENTER, textColor=colors.white,
+    ))
+    styles.add(ParagraphStyle(
+        name="HSub", fontName="Helvetica-Bold", fontSize=6.2, leading=7.2,
+        alignment=TA_CENTER, textColor=colors.white, wordWrap="CJK",
+    ))
+    styles.add(ParagraphStyle(
+        name="CombCellCenter", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=6.6, leading=7.8, alignment=TA_CENTER,
+    ))
+    styles.add(ParagraphStyle(
+        name="CombCellLeft", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=6.6, leading=7.8, alignment=TA_LEFT, wordWrap="CJK",
+    ))
     styles.add(ParagraphStyle(
         name="ReportTitle", parent=styles["Title"], fontName="Helvetica-Bold",
         fontSize=15, leading=18, alignment=TA_CENTER, textColor=HexColor("#17365D"), spaceAfter=3,
@@ -1014,99 +1049,169 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
 
     def footer(canvas: Any, document: Any) -> None:
         canvas.saveState()
-        width, _ = A4
+        w, _ = canvas._pagesize
+        foot_margin = margin_land if w > 600 else margin_port
         canvas.setStrokeColor(HexColor("#B7C9D6"))
-        canvas.line(margin, 10 * mm, width - margin, 10 * mm)
+        canvas.line(foot_margin, 8 * mm, w - foot_margin, 8 * mm)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(HexColor("#555555"))
-        canvas.drawString(margin, 6 * mm, f"{report.district_name.title()} District | PS Attendance Report | {report.report_date:%d-%m-%Y}")
-        canvas.drawRightString(width - margin, 6 * mm, f"Page {document.page}")
+        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}")
+        canvas.drawRightString(w - foot_margin, 4.5 * mm, f"Page {document.page}")
         canvas.restoreState()
 
     story: list[Any] = []
-    story.extend([
-        Paragraph(f"{report.district_name.upper()} DISTRICT", styles["ReportTitle"]),
-        Paragraph("PANCHAYAT SECRETARY ATTENDANCE REPORT", styles["ReportTitle"]),
-        Paragraph(f"Report Date: {report.report_date:%d-%m-%Y} | Unique GPs: {report.unique_gp_count:,}", styles["ReportSubtitle"]),
-        Paragraph("1. Mandal-wise Attendance Abstract", styles["SectionTitle"]),
-    ])
 
-    abstract_headers = [
-        "Sl. No.", "Mandal", "No. of GPs",
-        "No. of GPs submitted\nattendance before 9 AM",
-        "Attendance %\nbefore 9 AM", "Overall\nAttendance %", "No. of PS\non leave",
-        "No. of PS in\ntraining/meeting", "No. of GPs with\nattendance pending",
+    # ========================================================
+    # PAGE 1 (LANDSCAPE): COMBINED ATTENDANCE & DSR ABSTRACT
+    # ========================================================
+    story.append(Paragraph(
+        f"{report.district_name.upper()} DISTRICT - PANCHAYAT SECRETARY ATTENDANCE &amp; DSR REPORT",
+        styles["CombinedTitle"],
+    ))
+    dsr_tot = report.dsr_district_total
+    story.append(Paragraph(
+        f"Report Date: {report.report_date:%d-%m-%Y} | Total GPs: {report.unique_gp_count:,} | PS Present: {dsr_tot['present_ps']:,} | Total DSR Entered: {dsr_tot['dsr_entered']:,}",
+        styles["CombinedSubtitle"],
+    ))
+
+    # 13 column widths scaled to available landscape width
+    raw_widths = [10 * mm, 34 * mm, 13 * mm, 18 * mm, 23 * mm, 23 * mm, 13 * mm, 15 * mm, 18 * mm, 16 * mm, 18 * mm, 18 * mm, 23 * mm]
+    scale_land = available_land_width / sum(raw_widths)
+    comb_widths = [w * scale_land for w in raw_widths]
+
+    comb_headers_row0 = [
+        Paragraph("Sl.<br/>No.", styles["HSuper"]),
+        Paragraph("Mandal Name", styles["HSuper"]),
+        Paragraph("Total<br/>GPs", styles["HSuper"]),
+        Paragraph("1. PS ATTENDANCE ABSTRACT", styles["HSuper"]),
+        "", "", "", "", "",
+        Paragraph("2. DSR ABSTRACT REPORT", styles["HSuper"]),
+        "", "", "",
     ]
-    widths = [11 * mm, 24 * mm, 12 * mm, 28 * mm, 22 * mm, 22 * mm, 14 * mm, 27 * mm, 26 * mm]
-    # Keep all eight columns inside the printable A4 width even if margins change.
-    scale = min(1.0, available_width / sum(widths))
-    widths = [width * scale for width in widths]
-    abstract_rows: list[list[Any]] = []
+
+    comb_headers_row1 = [
+        "", "", "",
+        Paragraph("Submitted<br/>&lt; 9 AM", styles["HSub"]),
+        Paragraph("&lt; 9 AM<br/>%", styles["HSub"]),
+        Paragraph("Overall<br/>Att. %", styles["HSub"]),
+        Paragraph("On<br/>Leave", styles["HSub"]),
+        Paragraph("Trg /<br/>Mtg", styles["HSub"]),
+        Paragraph("Att.<br/>Pending", styles["HSub"]),
+        Paragraph("PS<br/>Present", styles["HSub"]),
+        Paragraph("DSR<br/>Entered", styles["HSub"]),
+        Paragraph("DSR<br/>Pending", styles["HSub"]),
+        Paragraph("% DSR<br/>Submitted", styles["HSub"]),
+    ]
+
+    dsr_by_mandal = {
+        item["mandal"].strip().casefold(): item for item in report.dsr_mandal_rows
+    }
+
+    comb_table_rows: list[list[Any]] = [comb_headers_row0, comb_headers_row1]
     for item in report.mandal_rows:
-        pending_val = item["pending"]
-        pending_display = f'<font color="#C00000"><b>{pending_val}</b></font>' if pending_val > 0 else str(pending_val)
-        abstract_rows.append([
-            item["serial"], item["mandal"], item["total_gps"], item["before_9"],
-            PercentBar(item["before_9_pct"], widths[4] - 5),
-            PercentBar(item["attendance_pct"], widths[5] - 5), item["on_leave"],
-            item["meeting_training"], pending_display,
-        ])
+        m_name = item["mandal"]
+        dsr_item = dsr_by_mandal.get(m_name.strip().casefold(), {})
+
+        att_pending = item["pending"]
+        att_pending_str = f'<font color="#C00000"><b>{att_pending}</b></font>' if att_pending > 0 else str(att_pending)
+
+        dsr_present = dsr_item.get("present_ps", 0)
+        dsr_entered = dsr_item.get("dsr_entered", 0)
+        dsr_pending = dsr_item.get("dsr_pending", 0)
+        dsr_pct = dsr_item.get("dsr_pct", 0.0)
+        dsr_pending_str = f'<font color="#C00000"><b>{dsr_pending}</b></font>' if dsr_pending > 0 else str(dsr_pending)
+
+        row = [
+            Paragraph(str(item["serial"]), styles["CombCellCenter"]),
+            Paragraph(safe(m_name), styles["CombCellLeft"]),
+            Paragraph(str(item["total_gps"]), styles["CombCellCenter"]),
+            Paragraph(str(item["before_9"]), styles["CombCellCenter"]),
+            PercentBar(item["before_9_pct"], comb_widths[4] - 4, height=14),
+            PercentBar(item["attendance_pct"], comb_widths[5] - 4, height=14),
+            Paragraph(str(item["on_leave"]), styles["CombCellCenter"]),
+            Paragraph(str(item["meeting_training"]), styles["CombCellCenter"]),
+            Paragraph(att_pending_str, styles["CombCellCenter"]),
+            Paragraph(str(dsr_present), styles["CombCellCenter"]),
+            Paragraph(str(dsr_entered), styles["CombCellCenter"]),
+            Paragraph(dsr_pending_str, styles["CombCellCenter"]),
+            PercentBar(dsr_pct, comb_widths[12] - 4, height=14),
+        ]
+        comb_table_rows.append(row)
+
     total = report.district_total
-    total_pending = total["pending"]
-    total_pending_display = f'<font color="#C00000"><b>{total_pending}</b></font>' if total_pending > 0 else str(total_pending)
-    abstract_rows.append([
-        "", "DISTRICT TOTAL", total["total_gps"], total["before_9"],
-        PercentBar(total["before_9_pct"], widths[4] - 5),
-        PercentBar(total["attendance_pct"], widths[5] - 5), total["on_leave"],
-        total["meeting_training"], total_pending_display,
+    dsr_total = report.dsr_district_total
+
+    tot_att_pending = total["pending"]
+    tot_att_pending_str = f'<font color="#C00000"><b>{tot_att_pending}</b></font>' if tot_att_pending > 0 else f'<b>{tot_att_pending}</b>'
+
+    tot_dsr_pending = dsr_total["dsr_pending"]
+    tot_dsr_pending_str = f'<font color="#C00000"><b>{tot_dsr_pending}</b></font>' if tot_dsr_pending > 0 else f'<b>{tot_dsr_pending}</b>'
+
+    comb_total_row = [
+        "",
+        Paragraph("<b>DISTRICT TOTAL</b>", styles["CombCellLeft"]),
+        Paragraph(f"<b>{total['total_gps']}</b>", styles["CombCellCenter"]),
+        Paragraph(f"<b>{total['before_9']}</b>", styles["CombCellCenter"]),
+        PercentBar(total["before_9_pct"], comb_widths[4] - 4, height=14),
+        PercentBar(total["attendance_pct"], comb_widths[5] - 4, height=14),
+        Paragraph(f"<b>{total['on_leave']}</b>", styles["CombCellCenter"]),
+        Paragraph(f"<b>{total['meeting_training']}</b>", styles["CombCellCenter"]),
+        Paragraph(tot_att_pending_str, styles["CombCellCenter"]),
+        Paragraph(f"<b>{dsr_total['present_ps']}</b>", styles["CombCellCenter"]),
+        Paragraph(f"<b>{dsr_total['dsr_entered']}</b>", styles["CombCellCenter"]),
+        Paragraph(tot_dsr_pending_str, styles["CombCellCenter"]),
+        PercentBar(dsr_total["dsr_pct"], comb_widths[12] - 4, height=14),
+    ]
+    comb_table_rows.append(comb_total_row)
+
+    comb_table_style = TableStyle([
+        # Spans for Common columns
+        ("SPAN", (0, 0), (0, 1)),
+        ("SPAN", (1, 0), (1, 1)),
+        ("SPAN", (2, 0), (2, 1)),
+        # Super-headers
+        ("SPAN", (3, 0), (8, 0)),
+        ("SPAN", (9, 0), (12, 0)),
+        # Header background colors
+        ("BACKGROUND", (0, 0), (2, 1), HexColor("#17365D")),
+        ("BACKGROUND", (3, 0), (8, 0), HexColor("#0C3829")),
+        ("BACKGROUND", (3, 1), (8, 1), HexColor("#165B43")),
+        ("BACKGROUND", (9, 0), (12, 0), HexColor("#1E3A8A")),
+        ("BACKGROUND", (9, 1), (12, 1), HexColor("#2563EB")),
+        # Alignment & Padding
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.35, HexColor("#CBD5E1")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.4),
+        ("ROWBACKGROUNDS", (0, 2), (-1, -2), [colors.white, HexColor("#F8FAFC")]),
+        # Total row
+        ("BACKGROUND", (0, -1), (-1, -1), HexColor("#D9EAF7")),
+        ("LINEABOVE", (0, -1), (-1, -1), 0.8, HexColor("#17365D")),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
     ])
-    story.append(make_table(abstract_headers, abstract_rows, widths, left_columns=(1,), total_row=True))
-    story.append(Spacer(1, 6))
+    comb_table = Table(comb_table_rows, colWidths=comb_widths, repeatRows=2, splitByRow=1)
+    comb_table.setStyle(comb_table_style)
+    story.append(comb_table)
+
     if report.duplicate_lgd_rows:
+        story.append(Spacer(1, 2))
         story.append(Paragraph(
             f"Validation: Excluded {report.duplicate_lgd_rows} duplicate LGD row(s).", styles["Note"],
         ))
     if report.missing_lgd_rows:
+        story.append(Spacer(1, 1))
         story.append(Paragraph(
             f"Validation: Excluded {report.missing_lgd_rows} source row(s) without a Panchayat LGD code.",
             styles["Note"],
         ))
-    if report.conflicts:
-        details = "; ".join(
-            f"{item['lgd']} (Mandal: {', '.join(item['mandals']) or '-'}; GP: {', '.join(item['panchayats']) or '-'})"
-            for item in report.conflicts[:8]
-        )
-        suffix = f"; and {len(report.conflicts) - 8} more" if len(report.conflicts) > 8 else ""
-        story.append(Paragraph(
-            f"Validation warning: {len(report.conflicts)} LGD code(s) have conflicting names: {safe(details + suffix)}.",
-            styles["Note"],
-        ))
 
-    story.append(PageBreak())
-    story.append(Paragraph("2. Mandal-wise DSR Abstract Report", styles["SectionTitle"]))
-    dsr_headers = [
-        "Sl. No.", "Mandal", "Total No. of GPs", "No. of PS present",
-        "No. of GPs DSR entered", "No. of GPs DSR pending", "% GPs DSR submitted",
-    ]
-    dsr_widths = [10 * mm, 38 * mm, 27 * mm, 27 * mm, 29 * mm, 27 * mm, available_width - 158 * mm]
-    dsr_rows: list[list[Any]] = []
-    for item in report.dsr_mandal_rows:
-        dsr_pending_display = f'<font color="#C00000"><b>{item["dsr_pending"]}</b></font>' if item["dsr_pending"] > 0 else str(item["dsr_pending"])
-        dsr_rows.append([
-            item["serial"], item["mandal"], item["total_gps"], item["present_ps"],
-            item["dsr_entered"], dsr_pending_display,
-            PercentBar(item["dsr_pct"], dsr_widths[6] - 5),
-        ])
-    dsr_total = report.dsr_district_total
-    total_dsr_pending_display = f'<font color="#C00000"><b>{dsr_total["dsr_pending"]}</b></font>' if dsr_total["dsr_pending"] > 0 else str(dsr_total["dsr_pending"])
-    dsr_rows.append([
-        "", "DISTRICT TOTAL", dsr_total["total_gps"], dsr_total["present_ps"],
-        dsr_total["dsr_entered"], total_dsr_pending_display,
-        PercentBar(dsr_total["dsr_pct"], dsr_widths[6] - 5),
-    ])
-    story.append(make_table(dsr_headers, dsr_rows, dsr_widths, left_columns=(1,), total_row=True))
-
-    # 3. Attendance Pending GPs (with PS Name, Nature of Posting, Mobile Number)
+    # ========================================================
+    # PAGE 2+ (PORTRAIT): DETAIL SECTIONS 3 THROUGH 7
+    # ========================================================
+    story.append(NextPageTemplate("Portrait"))
     story.append(PageBreak())
     story.append(Paragraph("3. Attendance Pending GPs", styles["SectionTitle"]))
     story.append(Paragraph(f"Total pending GPs: {len(report.pending_rows):,}", styles["ReportSubtitle"]))
@@ -1244,13 +1349,24 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         ]))
     story.append(after_9_table)
 
-    doc = SimpleDocTemplate(
-        str(output), pagesize=A4, rightMargin=margin, leftMargin=margin,
-        topMargin=13 * mm, bottomMargin=14 * mm,
-        title=f"{report.district_name.title()} District PS Attendance Report",
+    frame_land = Frame(
+        margin_land, 10 * mm, available_land_width, land_h - 18 * mm,
+        id="F_Landscape", topPadding=0, bottomPadding=0, leftPadding=0, rightPadding=0,
+    )
+    frame_port = Frame(
+        margin_port, 12 * mm, available_width, port_h - 22 * mm,
+        id="F_Portrait", topPadding=0, bottomPadding=0, leftPadding=0, rightPadding=0,
+    )
+
+    doc = BaseDocTemplate(
+        str(output),
+        title=f"{report.district_name.title()} District PS Attendance & DSR Report",
         author=f"{report.district_name.title()} District",
     )
-    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    tmpl_land = PageTemplate(id="Landscape", frames=[frame_land], pagesize=landscape(A4), onPage=footer)
+    tmpl_port = PageTemplate(id="Portrait", frames=[frame_port], pagesize=A4, onPage=footer)
+    doc.addPageTemplates([tmpl_land, tmpl_port])
+    doc.build(story)
     return output
 
 
@@ -1407,7 +1523,7 @@ def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name
     # PAGE 1: Mandal Abstract & Exception Lists
     story.extend([
         Paragraph(f"{report.district_name.upper()} DISTRICT", styles["MandalReportTitle"]),
-        Paragraph(f"{target_mandal.upper()} MANDAL &mdash; ATTENDANCE &amp; DSR REPORT", styles["MandalReportTitle"]),
+        Paragraph(f"{target_mandal.upper()} MANDAL - ATTENDANCE &amp; DSR REPORT", styles["MandalReportTitle"]),
         Paragraph(
             f"Report Date: {report.report_date:%d-%m-%Y} | Total GPs: {len(mandal_gps)} | "
             f"Attendance Submitted: {len(submitted_gps)} | Pending: {len(pending_gps)}",
@@ -1497,7 +1613,7 @@ def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name
     story.append(PageBreak())
     story.extend([
         Paragraph(f"{report.district_name.upper()} DISTRICT", styles["MandalReportTitle"]),
-        Paragraph(f"{target_mandal.upper()} MANDAL &mdash; GP ATTENDANCE &amp; DSR REPORT", styles["MandalReportTitle"]),
+        Paragraph(f"{target_mandal.upper()} MANDAL - GP ATTENDANCE &amp; DSR REPORT", styles["MandalReportTitle"]),
         Paragraph(
             f"Report Date: {report.report_date:%d-%m-%Y} | Total GPs: {len(mandal_gps)} | "
             f"Attendance Submitted: {len(submitted_gps)} | Pending: {len(pending_gps)}",

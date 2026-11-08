@@ -1231,7 +1231,7 @@ NARESH_PAGE_HTML = """<!doctype html>
             </div>
             <div style="margin-top:auto;">
               <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="closeMobileNav(); openDsrRobot();">
-                ⚡ Open DSR Robot Station →
+                ⚡ Open PS Attendance & DSR Station →
               </button>
             </div>
           </div>
@@ -1477,7 +1477,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           <div class="form-group" style="flex:2;">
             <label>Reporting Workflow</label>
             <select id="auto-module">
-              <option value="dsr_full" selected>⚡ Automated DSR Module (Official 7-Section District PDF)</option>
+              <option value="dsr_full" selected>⚡ PS Attendance and DSR Module (Combined Landscape District PDF)</option>
             </select>
           </div>
           <div class="form-group" style="flex:1;">
