@@ -61,6 +61,7 @@ class EPTSAutomation:
         self.context = None
         self.page = None
         self.ocr = ddddocr.DdddOcr(show_ad=False)
+        self.otp_message = ""
 
     def start_browser(self):
         print(f"[*] Launching Chrome with persistent profile at {self.profile_dir} (Headless: {self.headless})...", flush=True)
@@ -151,6 +152,55 @@ class EPTSAutomation:
                 time.sleep(1)
         return ""
 
+    def get_dynamic_otp_message(self) -> str:
+        """Scrapes the live dynamic OTP notice from the e-Panchayat page, e.g.
+        'A 6 digit OTP has been sent to your registered mobile number xxxxxx5586. Enter OTP to continue.'"""
+        if not self.page:
+            return ""
+        try:
+            text = self.page.evaluate("""() => {
+                const pvals = document.getElementById('pvals');
+                if (pvals && /registered mobile/i.test(pvals.innerText || '')) {
+                    return pvals.innerText.trim();
+                }
+                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                let node;
+                while ((node = walker.nextNode())) {
+                    const val = (node.nodeValue || '').trim();
+                    if (/OTP has been sent to your registered mobile/i.test(val)) {
+                        return val;
+                    }
+                }
+                const allEls = document.querySelectorAll('p, div, span, font, b, strong, label, h4, h5');
+                for (const el of allEls) {
+                    const t = (el.innerText || '').trim();
+                    if (/OTP has been sent to your registered mobile/i.test(t)) {
+                        return t;
+                    }
+                }
+                const bodyText = document.body ? document.body.innerText : '';
+                const m = bodyText.match(/A \\d+ digit OTP has been sent to your registered mobile number [^\\.\\n\\r<]+\\.?\\s*(?:Enter OTP to continue\\.?)?/i);
+                return m ? m[0] : '';
+            }""")
+            if text:
+                return text.strip()
+
+            content = self.page.content()
+            m = re.search(
+                r"A\s+\d+\s+digit\s+OTP\s+has\s+been\s+sent\s+to\s+your\s+registered\s+mobile\s+number\s+([xX\d]+)\.?\s*(?:Enter\s+OTP\s+to\s+continue\.?)?",
+                content,
+                re.IGNORECASE,
+            )
+            if m:
+                return m.group(0).strip()
+
+            m2 = re.search(r"registered mobile number\s+([xX\d]{6,12})", content, re.IGNORECASE)
+            if m2:
+                return f"A 6 digit OTP has been sent to your registered mobile number {m2.group(1)}. Enter OTP to continue."
+        except Exception as exc:
+            print(f"[!] Note extracting dynamic OTP text: {exc}", flush=True)
+        return ""
+
     def submit_credentials_and_generate_otp(self, username, password):
         max_attempts = 5
         for attempt in range(1, max_attempts + 1):
@@ -178,6 +228,9 @@ class EPTSAutomation:
             if "login" in self.page.url.lower() or self.page.locator("#otp").is_visible() or self.page.locator("input[placeholder*='otp' i]").is_visible():
                 print("[+] OTP generation triggered successfully! Reached OTP verification screen.", flush=True)
                 time.sleep(1)
+                self.otp_message = self.get_dynamic_otp_message()
+                if self.otp_message:
+                    print(f"[+] Dynamic OTP Notice captured: {self.otp_message}", flush=True)
                 self.page.screenshot(path=str(OTP_SCREENSHOT))
                 print(f"[+] Saved OTP screen to {OTP_SCREENSHOT}", flush=True)
                 return True

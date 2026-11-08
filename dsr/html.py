@@ -1444,6 +1444,12 @@ NARESH_PAGE_HTML = """<!doctype html>
               </div>
             </div>
           </div>
+
+          <!-- Dynamic Mobile Number OTP Notice (Matches e-Panchayat official portal message) -->
+          <div id="otp-dynamic-notice" style="margin: 16px auto 20px auto; max-width: 580px; padding: 14px 18px; background: #fff5f5; border: 1.5px solid #fca5a5; border-radius: 8px; color: #dc2626; font-size: 1.02rem; font-weight: 700; text-align: center; line-height: 1.5; letter-spacing: 0.1px; box-shadow: 0 2px 8px rgba(220,38,38,0.08);">
+            A 6 digit OTP has been sent to your registered mobile number <span id="otp-mobile-span" style="text-decoration: underline; font-weight: 800;">xxxxxx5586</span>. Enter OTP to continue.
+          </div>
+
           <div class="otp-input-wrap">
             <input type="text" id="auto-otp" maxlength="6" inputmode="numeric" placeholder="••••••" autocomplete="one-time-code">
           </div>
@@ -3506,7 +3512,10 @@ NARESH_PAGE_HTML = """<!doctype html>
           body: formData
         });
 
-        updateStatus(json.message || 'OTP triggered successfully!', 'success');
+        const otpNoticeMsg = json.otp_message || json.message || '';
+        const otpMobile = json.mobile_number || '';
+        window.displayOtpNotice(otpNoticeMsg, otpMobile);
+        updateStatus(otpNoticeMsg || 'OTP triggered successfully!', 'success');
         document.getElementById('session-badge').innerText = `Officer: ${user} (Awaiting OTP)`;
         goToStep(2);
         setTimeout(() => {
@@ -3801,6 +3810,9 @@ NARESH_PAGE_HTML = """<!doctype html>
             updateOfficerBadge(officer);
             const badge = document.getElementById('session-badge');
             if (badge) badge.innerText = `Officer: ${officer} (Awaiting OTP)`;
+            if (data.otp_message || data.mobile_number) {
+              window.displayOtpNotice(data.otp_message, data.mobile_number);
+            }
             openDepartmentLogin();
             if (currentStep !== 2) {
               goToStep(2);
