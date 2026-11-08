@@ -935,12 +935,22 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     """Create a professional, printable A4 report with Landscape Page 1 and Portrait subsequent pages."""
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    land_w, land_h = landscape(A4)
+    land_w, default_land_h = landscape(A4)
     port_w, port_h = A4
     margin_land = 8 * mm
     margin_port = 12 * mm
     available_land_width = land_w - 2 * margin_land
     available_width = port_w - 2 * margin_port
+
+    # Dynamically compute Landscape Page 1 height based on mandal count
+    # Guarantees the combined abstract table NEVER breaks across pages!
+    num_mandals = len(report.mandal_rows)
+    table_rows_count = num_mandals + 3  # 2 header rows + mandal data rows + 1 total row
+    estimated_table_height = 15 * mm + (num_mandals * 5.6 * mm) + 6.0 * mm
+    if report.duplicate_lgd_rows or report.missing_lgd_rows:
+        estimated_table_height += 12 * mm
+    required_land_h = estimated_table_height + 53 * mm
+    dynamic_land_h = max(default_land_h, required_land_h)
 
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(
@@ -1074,8 +1084,8 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         styles["CombinedSubtitle"],
     ))
 
-    # 13 column widths scaled to available landscape width
-    raw_widths = [10 * mm, 34 * mm, 13 * mm, 18 * mm, 23 * mm, 23 * mm, 13 * mm, 15 * mm, 18 * mm, 16 * mm, 18 * mm, 18 * mm, 23 * mm]
+    # 14 column widths scaled to available landscape width (Includes Total PS Submitted before Overall Att. %)
+    raw_widths = [9 * mm, 32 * mm, 12 * mm, 16 * mm, 21 * mm, 15 * mm, 21 * mm, 12 * mm, 13 * mm, 15 * mm, 14 * mm, 15 * mm, 15 * mm, 22 * mm]
     scale_land = available_land_width / sum(raw_widths)
     comb_widths = [w * scale_land for w in raw_widths]
 
@@ -1084,7 +1094,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         Paragraph("Mandal Name", styles["HSuper"]),
         Paragraph("Total<br/>GPs", styles["HSuper"]),
         Paragraph("1. PS ATTENDANCE ABSTRACT", styles["HSuper"]),
-        "", "", "", "", "",
+        "", "", "", "", "", "",
         Paragraph("2. DSR ABSTRACT REPORT", styles["HSuper"]),
         "", "", "",
     ]
@@ -1093,6 +1103,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         "", "", "",
         Paragraph("Submitted<br/>&lt; 9 AM", styles["HSub"]),
         Paragraph("&lt; 9 AM<br/>%", styles["HSub"]),
+        Paragraph("Total PS<br/>Submitted", styles["HSub"]),
         Paragraph("Overall<br/>Att. %", styles["HSub"]),
         Paragraph("On<br/>Leave", styles["HSub"]),
         Paragraph("Trg /<br/>Mtg", styles["HSub"]),
@@ -1108,10 +1119,11 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     }
 
     comb_table_rows: list[list[Any]] = [comb_headers_row0, comb_headers_row1]
-    for item in report.mandal_rows:
+    for idx, item in enumerate(report.mandal_rows, start=1):
         m_name = item["mandal"]
         dsr_item = dsr_by_mandal.get(m_name.strip().casefold(), {})
 
+        att_submitted = item.get("attendance_submitted", 0)
         att_pending = item["pending"]
         att_pending_str = f'<font color="#C00000"><b>{att_pending}</b></font>' if att_pending > 0 else str(att_pending)
 
@@ -1122,25 +1134,27 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         dsr_pending_str = f'<font color="#C00000"><b>{dsr_pending}</b></font>' if dsr_pending > 0 else str(dsr_pending)
 
         row = [
-            Paragraph(str(item["serial"]), styles["CombCellCenter"]),
+            Paragraph(str(idx), styles["CombCellCenter"]),
             Paragraph(safe(m_name), styles["CombCellLeft"]),
             Paragraph(str(item["total_gps"]), styles["CombCellCenter"]),
             Paragraph(str(item["before_9"]), styles["CombCellCenter"]),
-            PercentBar(item["before_9_pct"], comb_widths[4] - 4, height=14),
-            PercentBar(item["attendance_pct"], comb_widths[5] - 4, height=14),
+            PercentBar(item["before_9_pct"], comb_widths[4] - 4, height=13),
+            Paragraph(str(att_submitted), styles["CombCellCenter"]),
+            PercentBar(item["attendance_pct"], comb_widths[6] - 4, height=13),
             Paragraph(str(item["on_leave"]), styles["CombCellCenter"]),
             Paragraph(str(item["meeting_training"]), styles["CombCellCenter"]),
             Paragraph(att_pending_str, styles["CombCellCenter"]),
             Paragraph(str(dsr_present), styles["CombCellCenter"]),
             Paragraph(str(dsr_entered), styles["CombCellCenter"]),
             Paragraph(dsr_pending_str, styles["CombCellCenter"]),
-            PercentBar(dsr_pct, comb_widths[12] - 4, height=14),
+            PercentBar(dsr_pct, comb_widths[13] - 4, height=13),
         ]
         comb_table_rows.append(row)
 
     total = report.district_total
     dsr_total = report.dsr_district_total
 
+    tot_att_submitted = total.get("attendance_submitted", 0)
     tot_att_pending = total["pending"]
     tot_att_pending_str = f'<font color="#C00000"><b>{tot_att_pending}</b></font>' if tot_att_pending > 0 else f'<b>{tot_att_pending}</b>'
 
@@ -1152,15 +1166,16 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         Paragraph("<b>DISTRICT TOTAL</b>", styles["CombCellLeft"]),
         Paragraph(f"<b>{total['total_gps']}</b>", styles["CombCellCenter"]),
         Paragraph(f"<b>{total['before_9']}</b>", styles["CombCellCenter"]),
-        PercentBar(total["before_9_pct"], comb_widths[4] - 4, height=14),
-        PercentBar(total["attendance_pct"], comb_widths[5] - 4, height=14),
+        PercentBar(total["before_9_pct"], comb_widths[4] - 4, height=13),
+        Paragraph(f"<b>{tot_att_submitted}</b>", styles["CombCellCenter"]),
+        PercentBar(total["attendance_pct"], comb_widths[6] - 4, height=13),
         Paragraph(f"<b>{total['on_leave']}</b>", styles["CombCellCenter"]),
         Paragraph(f"<b>{total['meeting_training']}</b>", styles["CombCellCenter"]),
         Paragraph(tot_att_pending_str, styles["CombCellCenter"]),
         Paragraph(f"<b>{dsr_total['present_ps']}</b>", styles["CombCellCenter"]),
         Paragraph(f"<b>{dsr_total['dsr_entered']}</b>", styles["CombCellCenter"]),
         Paragraph(tot_dsr_pending_str, styles["CombCellCenter"]),
-        PercentBar(dsr_total["dsr_pct"], comb_widths[12] - 4, height=14),
+        PercentBar(dsr_total["dsr_pct"], comb_widths[13] - 4, height=13),
     ]
     comb_table_rows.append(comb_total_row)
 
@@ -1170,22 +1185,22 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         ("SPAN", (1, 0), (1, 1)),
         ("SPAN", (2, 0), (2, 1)),
         # Super-headers
-        ("SPAN", (3, 0), (8, 0)),
-        ("SPAN", (9, 0), (12, 0)),
+        ("SPAN", (3, 0), (9, 0)),
+        ("SPAN", (10, 0), (13, 0)),
         # Header background colors
         ("BACKGROUND", (0, 0), (2, 1), HexColor("#17365D")),
-        ("BACKGROUND", (3, 0), (8, 0), HexColor("#0C3829")),
-        ("BACKGROUND", (3, 1), (8, 1), HexColor("#165B43")),
-        ("BACKGROUND", (9, 0), (12, 0), HexColor("#1E3A8A")),
-        ("BACKGROUND", (9, 1), (12, 1), HexColor("#2563EB")),
+        ("BACKGROUND", (3, 0), (9, 0), HexColor("#0C3829")),
+        ("BACKGROUND", (3, 1), (9, 1), HexColor("#165B43")),
+        ("BACKGROUND", (10, 0), (13, 0), HexColor("#1E3A8A")),
+        ("BACKGROUND", (10, 1), (13, 1), HexColor("#2563EB")),
         # Alignment & Padding
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("GRID", (0, 0), (-1, -1), 0.35, HexColor("#CBD5E1")),
-        ("LEFTPADDING", (0, 0), (-1, -1), 1.5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 1.5),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1.2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1.2),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.2),
         ("ROWBACKGROUNDS", (0, 2), (-1, -2), [colors.white, HexColor("#F8FAFC")]),
         # Total row
         ("BACKGROUND", (0, -1), (-1, -1), HexColor("#D9EAF7")),
@@ -1213,7 +1228,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     # ========================================================
     story.append(NextPageTemplate("Portrait"))
     story.append(PageBreak())
-    story.append(Paragraph("3. Attendance Pending GPs", styles["SectionTitle"]))
+    story.append(Paragraph("3. ATTENDANCE PENDING GPs", styles["SectionTitle"]))
     story.append(Paragraph(f"Total pending GPs: {len(report.pending_rows):,}", styles["ReportSubtitle"]))
     pending_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat",
@@ -1222,14 +1237,14 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     pending_widths = [10 * mm, 28 * mm, 36 * mm, 44 * mm, 34 * mm, available_width - 152 * mm]
     pending_table_rows: list[list[Any]] = [
         [
-            item["serial"],
+            idx,
             item["mandal"],
             item["gp"],
             _clean_name(item.get("ps_name")) or "-",
             item.get("nature_of_posting") or "-",
             item.get("mobile") or "-",
         ]
-        for item in report.pending_rows
+        for idx, item in enumerate(report.pending_rows, start=1)
     ]
     if not pending_table_rows:
         pending_table_rows = [["-", "-", "No pending GPs found.", "-", "-", "-"]]
@@ -1254,14 +1269,14 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     ]
     dsr_pending_widths = [10 * mm, 32 * mm, 38 * mm, 42 * mm, 32 * mm, available_width - 154 * mm]
     dsr_pending_table_rows: list[list[Any]] = []
-    for item in report.dsr_pending_rows:
+    for idx, item in enumerate(report.dsr_pending_rows, start=1):
         raw_time = item.get("time_only") or _format_time_only(item.get("timestamp")) or "-"
         dsr_status_display = '<font color="#C00000"><b>DSR not entered</b></font>'
         dsr_pending_table_rows.append([
-            item["serial"],
+            idx,
             item["mandal"],
             item["gp"],
-            item["attendance_status"],
+            item.get("attendance_status", "Present"),
             raw_time,
             dsr_status_display,
         ])
@@ -1290,15 +1305,15 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         ]
         table_rows: list[list[Any]] = [
             [
-                item["serial"],
+                idx,
                 item["mandal"],
                 item["gp"],
                 _clean_name(item.get("ps_name")) or "-",
                 item.get("nature_of_posting") or "-",
                 item.get("mobile") or "-",
-                item["status"] or "-",
+                item.get("status") or "-",
             ]
-            for item in rows
+            for idx, item in enumerate(rows, start=1)
         ]
         if not table_rows:
             table_rows = [["-", "-", "No records found for this section.", "-", "-", "-", "-"]]
@@ -1307,9 +1322,9 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
             table.setStyle(TableStyle([("SPAN", (2, 1), (-1, 1)), ("ALIGN", (2, 1), (-1, 1), "LEFT")]))
         story.append(table)
 
-    append_contact_list_section("5. Secretaries Reported as Leave", "Total Secretaries on leave", report.leave_rows)
+    append_contact_list_section("5. SECRETARIES REPORTED AS LEAVE", "Total Secretaries on leave", report.leave_rows)
     append_contact_list_section(
-        "6. Secretaries Reported as Training / Meeting", "Total training/meeting records", report.meeting_training_rows,
+        "6. SECRETARIES REPORTED AS TRAINING / MEETING", "Total training/meeting records", report.meeting_training_rows,
     )
 
     # 7. GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM (with PS Name, Nature of Posting, Mobile Number, Time in Red)
@@ -1325,18 +1340,18 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         9 * mm, 24 * mm, 28 * mm, 36 * mm, 22 * mm, 25 * mm, 24 * mm, available_width - 168 * mm,
     ]
     after_9_table_rows: list[list[Any]] = []
-    for item in report.after_9_rows:
+    for idx, item in enumerate(report.after_9_rows, start=1):
         raw_time = item.get("time_only") or _format_time_only(item.get("timestamp")) or "-"
         time_display = f'<font color="#C00000"><b>{raw_time}</b></font>' if raw_time != "-" else "-"
         after_9_table_rows.append([
-            item["serial"],
+            idx,
             item["mandal"],
             item["gp"],
             _clean_name(item.get("ps_name")) or "-",
             item.get("nature_of_posting") or "-",
             item.get("mobile") or "-",
             time_display,
-            item["status"] or "Present",
+            item.get("status") or "Present",
         ])
     if not after_9_table_rows:
         after_9_table_rows = [["-", "-", "No GPs submitted attendance after 9 AM.", "-", "-", "-", "-", "-"]]
@@ -1350,7 +1365,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     story.append(after_9_table)
 
     frame_land = Frame(
-        margin_land, 10 * mm, available_land_width, land_h - 18 * mm,
+        margin_land, 10 * mm, available_land_width, dynamic_land_h - 18 * mm,
         id="F_Landscape", topPadding=0, bottomPadding=0, leftPadding=0, rightPadding=0,
     )
     frame_port = Frame(
@@ -1363,7 +1378,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         title=f"{report.district_name.title()} District PS Attendance & DSR Report",
         author=f"{report.district_name.title()} District",
     )
-    tmpl_land = PageTemplate(id="Landscape", frames=[frame_land], pagesize=landscape(A4), onPage=footer)
+    tmpl_land = PageTemplate(id="Landscape", frames=[frame_land], pagesize=(land_w, dynamic_land_h), onPage=footer)
     tmpl_port = PageTemplate(id="Portrait", frames=[frame_port], pagesize=A4, onPage=footer)
     doc.addPageTemplates([tmpl_land, tmpl_port])
     doc.build(story)

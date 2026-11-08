@@ -121,6 +121,7 @@ def test_combined_landscape_pdf_generation(tmp_path):
     assert "ATTENDANCE ABSTRACT" in p1_txt
     assert "DSR ABSTRACT REPORT" in p1_txt
     assert "DISTRICT TOTAL" in p1_txt
+    assert "Total PS" in p1_txt
 
     # Page 2 must be Portrait
     p2 = reader.pages[1]
