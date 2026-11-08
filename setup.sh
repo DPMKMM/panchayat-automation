@@ -56,8 +56,9 @@ fi
 echo "[*] Updating apt packages and installing system libraries..."
 sudo apt-get update -y
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    python3 python3-pip python3-venv git curl wget build-essential jq \
+    python3 python3-pip python3-venv git curl wget build-essential jq cron \
     libgl1 libglib2.0-0 libsm6 libxext6 libxrender-dev iptables-persistent || true
+sudo systemctl enable --now cron 2>/dev/null || true
 
 # System graphic and audio libraries (handles Ubuntu 22.04 & 24.04 time_t naming)
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
