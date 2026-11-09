@@ -518,6 +518,7 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
                 logger.info("[%s] Serving cached DSR report (age: %.1fs < %.0fs TTL). Zero portal load.",
                             sid[:6], age, _DSR_CACHE_TTL_SECONDS)
                 session["latest_pdf_path"] = cached_entry["latest_pdf_path"]
+                session["download_filename"] = cached_entry.get("download_filename", "")
                 session["latest_report_date"] = cached_entry["latest_report_date"]
                 session["report_data"] = cached_entry["report_data"]
                 return cached_entry["response"]
@@ -614,12 +615,19 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
         sort_by=sort_by,
     )
 
+    now = datetime.now()
+    gen_time_label = now.strftime("%I:%M %p")
+    gen_time_file = now.strftime("%I-%M-%p")
+
+    report.generated_at = now
+    report.generated_time_str = gen_time_label
+
     clean_dist = report.district_name.replace(' ', '_')
-    clean_download_name = f"{clean_dist}_PS_Attendance_and_DSR_Report_{portal_date_fmt}.pdf"
-    target_pdf = REPORTS_DIR / f"{clean_dist}_DSR_Report_{portal_date_fmt}_{cutoff_time.replace(':', '-')}_{sort_by}.pdf"
+    clean_download_name = f"{clean_dist}_PS_Attendance_and_DSR_Report_{portal_date_fmt}_{gen_time_file}.pdf"
+    target_pdf = REPORTS_DIR / f"{clean_dist}_DSR_Report_{portal_date_fmt}_{gen_time_file}_{cutoff_time.replace(':', '-')}_{sort_by}.pdf"
     generate_pdf(report, target_pdf)
 
-    # Save to session downloads cache with clean filename (no session ID, no Official)
+    # Save to session downloads cache with clean filename (no session ID, no Official, with timestamp)
     cached_pdf = dl_dir / clean_download_name
     try:
         cached_pdf.write_bytes(target_pdf.read_bytes())
@@ -632,6 +640,9 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
     session["report_data"] = {
         "district_name": report.district_name,
         "report_date": f"{report.report_date:%d-%b-%Y}",
+        "generated_time": gen_time_label,
+        "generated_timestamp": gen_time_file,
+        "download_filename": clean_download_name,
         "totals": report.totals,
         "mandal_rows": report.mandal_rows,
         "generated": True,
@@ -643,7 +654,10 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
         "user_id": user_id,
         "district_name": report.district_name,
         "report_date": f"{report.report_date:%d-%b-%Y}",
-        "message": f"Official Attendance & DSR Report for {report.district_name} ({portal_date_fmt}) prepared successfully!",
+        "generated_time": gen_time_label,
+        "generated_timestamp": gen_time_file,
+        "download_filename": clean_download_name,
+        "message": f"Attendance & DSR Report for {report.district_name} ({portal_date_fmt}) prepared successfully at {gen_time_label}!",
         "pdf_url": "/api/naresh/view",
         "download_url": "/api/naresh/download",
         "totals": report.totals,
@@ -653,6 +667,7 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
         _DSR_CACHE[cache_key] = {
             "timestamp": time.time(),
             "latest_pdf_path": str(target_pdf),
+            "download_filename": clean_download_name,
             "latest_report_date": f"{report.report_date:%d-%b-%Y}",
             "report_data": session["report_data"],
             "response": res_payload,

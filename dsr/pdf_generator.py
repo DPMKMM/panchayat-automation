@@ -164,6 +164,13 @@ class ReportData:
     cutoff_time_str: str = "09:00"
     cutoff_label: str = "9 AM"
     sort_by: str = "before_9"
+    generated_at: datetime | None = None
+    generated_time_str: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.generated_time_str:
+            gen_dt = self.generated_at or datetime.now()
+            self.generated_time_str = gen_dt.strftime("%I:%M %p")
 
     @property
     def totals(self) -> dict[str, Any]:
@@ -182,6 +189,7 @@ class ReportData:
             "cutoff_time": self.cutoff_time_str,
             "cutoff_label": self.cutoff_label,
             "sort_by": self.sort_by,
+            "generated_time": self.generated_time_str,
         }
 
 
@@ -1132,7 +1140,8 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         canvas.line(foot_margin, 8 * mm, w - foot_margin, 8 * mm)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(HexColor("#555555"))
-        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}")
+        foot_time = f" {report.generated_time_str}" if getattr(report, "generated_time_str", "") else ""
+        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}{foot_time}")
         canvas.drawRightString(w - foot_margin, 4.5 * mm, f"Page {document.page}")
         canvas.restoreState()
 
@@ -1146,8 +1155,9 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         styles["CombinedTitle"],
     ))
     dsr_tot = report.dsr_district_total
+    gen_time_part = f" | Generated Time: {report.generated_time_str}" if getattr(report, "generated_time_str", "") else ""
     story.append(Paragraph(
-        f"Report Date: {report.report_date:%d-%m-%Y} | Total GPs: {report.unique_gp_count:,} | PS Present: {dsr_tot['present_ps']:,} | Total DSR Entered: {dsr_tot['dsr_entered']:,}",
+        f"Report Date: {report.report_date:%d-%m-%Y}{gen_time_part} | Total GPs: {report.unique_gp_count:,} | PS Present: {dsr_tot['present_ps']:,} | Total DSR Entered: {dsr_tot['dsr_entered']:,}",
         styles["CombinedSubtitle"],
     ))
 

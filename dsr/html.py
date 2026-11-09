@@ -4169,13 +4169,15 @@ NARESH_PAGE_HTML = """<!doctype html>
         // Update Badges & Date
         const dateEl = document.getElementById('report-date-badge');
         if (dateEl && reportData.report_date) {
-          dateEl.innerText = `📅 Date: ${reportData.report_date}`;
+          const timeLabel = reportData.generated_time ? ` (${reportData.generated_time})` : '';
+          dateEl.innerText = `📅 Date: ${reportData.report_date}${timeLabel}`;
         }
 
-        // Set clean filename for download buttons without "Official" and without session name/ID
+        // Set clean filename with timestamp for download buttons without "Official" and without session name/ID
         const cleanDist = (reportData.district_name || 'Khammam').replace(/\\s+/g, '_');
         const reportDt = (reportData.report_date || '').replace(/\\s+/g, '-');
-        const dlFilename = `${cleanDist}_PS_Attendance_and_DSR_Report_${reportDt}.pdf`;
+        const timeStamp = reportData.generated_timestamp || '';
+        const dlFilename = reportData.download_filename || `${cleanDist}_PS_Attendance_and_DSR_Report_${reportDt}${timeStamp ? '_' + timeStamp : ''}.pdf`;
         const btnAuto = document.getElementById('btn-auto-download-pdf');
         if (btnAuto) btnAuto.setAttribute('download', dlFilename);
         const btnViewer = document.getElementById('btn-viewer-download-pdf');

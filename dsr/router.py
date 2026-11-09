@@ -488,15 +488,22 @@ def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
 
     if pdf_path and pdf_path.exists() and pdf_path.stat().st_size > 500:
         if not download_filename:
-            # Cleanly construct download filename without "Official" and without session ID
-            m = re.match(r"^([A-Za-z0-9_]+?)_(?:Official_)?.*_(\d{2}-[A-Za-z]{3}-\d{4})", pdf_path.name)
+            # Cleanly construct download filename without "Official", with timestamp, and without session ID
+            m = re.match(r"^([A-Za-z0-9_]+?)_(?:Official_)?.*_(\d{2}-[A-Za-z]{3}-\d{4})(?:_(\d{2}-\d{2}-[A-Za-z]{2}))?", pdf_path.name)
             if m:
-                download_filename = f"{m.group(1)}_PS_Attendance_and_DSR_Report_{m.group(2)}.pdf"
+                ts_part = f"_{m.group(3)}" if m.group(3) else f"_{datetime.now().strftime('%I-%M-%p')}"
+                download_filename = f"{m.group(1)}_PS_Attendance_and_DSR_Report_{m.group(2)}{ts_part}.pdf"
             else:
                 download_filename = re.sub(r"_[a-zA-Z0-9]{4,32}\.pdf$", ".pdf", pdf_path.name)
                 download_filename = download_filename.replace("Official_", "").replace("_Official", "").replace("Official", "")
+                if not re.search(r"\d{2}-\d{2}-[A-Za-z]{2}\.pdf$", download_filename):
+                    ts = datetime.now().strftime("%I-%M-%p")
+                    download_filename = download_filename[:-4] + f"_{ts}.pdf"
         else:
             download_filename = download_filename.replace("Official_", "").replace("_Official", "").replace("Official", "")
+            if not re.search(r"\d{2}-\d{2}-[A-Za-z]{2}\.pdf$", download_filename):
+                ts = datetime.now().strftime("%I-%M-%p")
+                download_filename = download_filename[:-4] + f"_{ts}.pdf"
 
         download_filename = re.sub(r"_+", "_", download_filename).strip("_")
         if not download_filename.endswith(".pdf"):
