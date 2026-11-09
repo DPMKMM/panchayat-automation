@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
 # ==============================================================================
 #  Telangana e-Panchayat Automation - 24/7 Continuous Deployment Watcher
-#  Checks GitHub main every 30 seconds and automatically updates the server
+#  Checks GitHub main every 15 seconds and automatically updates the server
 # ==============================================================================
 
-PROJECT_DIR="/opt/epanchayat"
+# Auto-detect project directory
+if [ -d "/opt/epanchayat/.git" ]; then
+    PROJECT_DIR="/opt/epanchayat"
+elif [ -d "/root/panchayat-automation/.git" ]; then
+    PROJECT_DIR="/root/panchayat-automation"
+elif [ -d "$HOME/panchayat-automation/.git" ]; then
+    PROJECT_DIR="$HOME/panchayat-automation"
+else
+    PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
 BRANCH="main"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] e-Panchayat Continuous Deployment Watcher started."
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Monitoring GitHub repository: DPMKMM/panchayat-automation (branch: $BRANCH)"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Continuous Deployment Watcher active in $PROJECT_DIR"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Monitoring GitHub repository branch: $BRANCH"
 
-# Ensure git trusts the repository directory regardless of user
 git config --system --add safe.directory "$PROJECT_DIR" 2>/dev/null || true
 cd "$PROJECT_DIR" || exit 1
 
 while true; do
-    sleep 30
+    sleep 15
 
-    # Fetch latest remote commits quietly
+    # Quietly fetch origin main
     if ! git fetch origin "$BRANCH" --quiet 2>/dev/null; then
         continue
     fi
@@ -36,14 +45,15 @@ while true; do
         # Hard reset to match remote main exactly
         git reset --hard "origin/$BRANCH"
 
-        # If requirements.txt was modified in this update, update pip dependencies
+        # Update dependencies if requirements.txt changed
         if git diff --name-only "$LOCAL_HASH" "$REMOTE_HASH" | grep -q "requirements.txt"; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] requirements.txt changed. Installing dependencies..."
             "$PROJECT_DIR/.venv/bin/pip" install -r "$PROJECT_DIR/requirements.txt" --quiet 2>/dev/null || true
         fi
 
-        # Terminate any lingering uvicorn processes so new code is guaranteed to load
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Stopping stale uvicorn on port 8000..."
+        # Terminate any lingering uvicorn processes on 8000 & 8050
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Stopping stale servers on ports 8000 and 8050..."
+        fuser -k -9 8050/tcp 2>/dev/null || true
         fuser -k -9 8000/tcp 2>/dev/null || true
         pkill -9 -f "uvicorn" 2>/dev/null || true
         pkill -9 -f "python.*app:app" 2>/dev/null || true

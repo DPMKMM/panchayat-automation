@@ -56,6 +56,8 @@ def create_app() -> FastAPI:
         "https://www.panchayatautomation.in",
         "http://127.0.0.1:8000",
         "http://localhost:8000",
+        "http://127.0.0.1:8050",
+        "http://localhost:8050",
         "http://testserver",
     ]
     custom_origin = os.getenv("CUSTOM_DOMAIN", "").strip()
@@ -143,4 +145,5 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.getenv("PORT", "8050"))
+    uvicorn.run("app:app", host="127.0.0.1", port=port, reload=True)

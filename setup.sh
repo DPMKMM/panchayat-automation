@@ -159,7 +159,7 @@ RestartSec=5
 KillMode=mixed
 TimeoutStopSec=10
 Environment=PYTHONUNBUFFERED=1
-Environment=PORT=8000
+Environment=PORT=8050
 Environment=HOST=0.0.0.0
 
 [Install]

@@ -53,6 +53,7 @@ if not token_from_env and env_file.exists():
         pass
 
 TUNNEL_TOKEN = token_from_env or ""  # Leave empty for free trycloudflare quick tunnel
+PORT = int(os.getenv("PORT", "8050"))
 
 
 def ensure_cloudflared() -> Path:
@@ -124,13 +125,16 @@ def kill_stale_uvicorn():
         if sys.platform != "win32":
             subprocess.run(["pkill", "-9", "-f", "uvicorn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["pkill", "-9", "-f", "python.*uvicorn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["fuser", "-k", "-9", f"{PORT}/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["fuser", "-k", "-9", "8000/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1)
     except Exception:
         pass
 
 
-def is_port_in_use(port: int = 8000) -> bool:
+def is_port_in_use(port: int = None) -> bool:
+    if port is None:
+        port = PORT
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
@@ -142,9 +146,9 @@ def main():
 
     # 1. Clean up any stale uvicorn process and start fresh
     kill_stale_uvicorn()
-    print("[*] Starting fresh Uvicorn server on port 8000...")
+    print(f"[*] Starting fresh Uvicorn server on port {PORT}...")
     uvicorn_proc = subprocess.Popen(
-        [str(PYTHON_EXE), "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"],
+        [str(PYTHON_EXE), "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(PORT)],
         cwd=str(BASE_DIR),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -174,7 +178,7 @@ def main():
     if TUNNEL_TOKEN:
         print("[*] Launching permanent Cloudflare Zero Trust tunnel with your connector token...")
         cf_proc = subprocess.Popen(
-            [str(CLOUDFLARED_EXE), "tunnel", "--protocol", "http2", "run", "--url", "http://127.0.0.1:8000", "--token", TUNNEL_TOKEN],
+            [str(CLOUDFLARED_EXE), "tunnel", "--protocol", "http2", "run", "--url", f"http://127.0.0.1:{PORT}", "--token", TUNNEL_TOKEN],
             cwd=str(BASE_DIR),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -186,7 +190,7 @@ def main():
         perm_url = f"https://{custom_domain}/"
         try:
             url_file = BASE_DIR / "latest_public_url.txt"
-            url_file.write_text(f"Public URL: {perm_url}\nLocal Access: http://127.0.0.1:8000/\nStatus: Connected via Cloudflare Zero Trust Tunnel\nConnected: {time.ctime()}\n", encoding="utf-8")
+            url_file.write_text(f"Public URL: {perm_url}\nLocal Access: http://127.0.0.1:{PORT}/\nStatus: Connected via Cloudflare Zero Trust Tunnel\nConnected: {time.ctime()}\n", encoding="utf-8")
         except Exception:
             pass
 
@@ -195,14 +199,14 @@ def main():
         print("=" * 68)
         print(f"  Public URL       :  {perm_url}")
         print("  Status           :  Connected to Hyderabad & Mumbai edge nodes (hyd03/bom10)")
-        print("  Local Access URL :  http://127.0.0.1:8000/")
+        print("  Local Access URL :  http://127.0.0.1:{PORT}/")
         print("=" * 68)
         print(f"  Your permanent website is live at {perm_url} !")
         print("  Running silently in background.\n")
     else:
         print("[*] Establishing Cloudflare Tunnel to Hyderabad edge...")
         cf_proc = subprocess.Popen(
-            [str(CLOUDFLARED_EXE), "tunnel", "--url", "http://127.0.0.1:8000"],
+            [str(CLOUDFLARED_EXE), "tunnel", "--url", f"http://127.0.0.1:{PORT}"],
             cwd=str(BASE_DIR),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -243,7 +247,7 @@ def main():
 
         try:
             url_file = BASE_DIR / "latest_public_url.txt"
-            url_file.write_text(f"Public URL: {public_url}\nLocal Access: http://127.0.0.1:8000/\nGenerated: {time.ctime()}\n", encoding="utf-8")
+            url_file.write_text(f"Public URL: {public_url}\nLocal Access: http://127.0.0.1:{PORT}/\nGenerated: {time.ctime()}\n", encoding="utf-8")
         except Exception:
             pass
 
@@ -251,7 +255,7 @@ def main():
         print("  [+] PORTAL IS LIVE ONLINE VIA CLOUDFLARE HYDERABAD EDGE!")
         print("=" * 68)
         print(f"  Public URL       :  {public_url}")
-        print(f"  Local Access URL :  http://127.0.0.1:8000/")
+        print(f"  Local Access URL :  http://127.0.0.1:{PORT}/")
         print("=" * 68)
         print("  [*] Open the Public URL above on your phone or any PC.")
         print("  [*] Traffic to e-Panchayat originates from your local Indian IP,")
