@@ -294,6 +294,6 @@ def test_services_hub_page():
     assert 'Services' in resp1.text
     assert 'Multi-Day Attendance' in resp1.text
 
+    # /services-inspections-bal was removed as requested
     resp2 = client.get('/services-inspections-bal')
-    assert resp2.status_code == 200
-    assert 'Services' in resp2.text
+    assert resp2.status_code == 404

@@ -754,10 +754,9 @@ def auto_load_web_report(
 
 
 # ========================================================
-# SERVICES OVERVIEW HUB (/services & /services-inspections-bal)
+# SERVICES OVERVIEW HUB (/services)
 # ========================================================
 @router.get('/services', response_class=HTMLResponse, tags=['Services'])
-@router.get('/services-inspections-bal', response_class=HTMLResponse, tags=['Services'])
 def services_hub_page() -> HTMLResponse:
     from dsr.services_html import get_services_page_html
     return HTMLResponse(get_services_page_html())
