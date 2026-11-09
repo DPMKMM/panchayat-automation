@@ -154,18 +154,12 @@ def main():
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    # Wait up to 5 seconds for port to open
+    # Wait up to 5 seconds for server port to open
     for _ in range(10):
         time.sleep(0.5)
-        if is_port_in_use(8000):
-            print("[+] Local server started successfully.")
+        if is_port_in_use(PORT):
+            print(f"[+] Local server started successfully on port {PORT}.")
             break
-        # Wait up to 5 seconds for port to open
-        for _ in range(10):
-            time.sleep(0.5)
-            if is_port_in_use(8000):
-                print("[+] Local server started successfully.")
-                break
 
     # 2. Verify cloudflared executable is present
     ensure_cloudflared()
@@ -178,8 +172,10 @@ def main():
     # 3. Launch Cloudflare Tunnel
     if TUNNEL_TOKEN:
         print("[*] Launching permanent Cloudflare Zero Trust tunnel with your connector token...")
+        # Remotely managed Zero Trust tunnels require clean 'tunnel run --token <TOKEN>'
+        cf_cmd = [str(CLOUDFLARED_EXE), "tunnel", "run", "--token", TUNNEL_TOKEN]
         cf_proc = subprocess.Popen(
-            [str(CLOUDFLARED_EXE), "tunnel", "--protocol", "http2", "run", "--url", f"http://127.0.0.1:{PORT}", "--token", TUNNEL_TOKEN],
+            cf_cmd,
             cwd=str(BASE_DIR),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

@@ -34,7 +34,22 @@ git reset --hard origin/main
 COMMIT_INFO=$(git log -1 --pretty=format:"%h - %s (%cr)")
 echo "[+] Updated to commit: $COMMIT_INFO"
 
-# 3. Create or update .env with new tunnel token
+# 3. Ensure cloudflared binary is installed in system
+if ! command -v cloudflared &>/dev/null && [ ! -f "$PROJECT_DIR/cloudflared" ]; then
+    echo "[*] Installing cloudflared Linux binary..."
+    ARCH=$(uname -m)
+    if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+        curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64 -o /usr/local/bin/cloudflared
+    else
+        curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
+    fi
+    chmod +x /usr/local/bin/cloudflared || true
+fi
+if [ -f "$PROJECT_DIR/cloudflared" ]; then
+    chmod +x "$PROJECT_DIR/cloudflared" 2>/dev/null || true
+fi
+
+# 4. Create or update .env with new tunnel token
 echo "[*] Configuring .env with new Cloudflare Tunnel token..."
 tee "$PROJECT_DIR/.env" > /dev/null <<'EOF'
 WEB_SESSION_SECRET=b71c84f509e5bca393c5d888f4c2810ab512a863d0859339e1a10ebf19a3b6d2
@@ -46,7 +61,7 @@ CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0
 CUSTOM_DOMAIN=panchayatautomation.in
 EOF
 
-# 4. Terminate any legacy processes on port 8000 and port 8050
+# 5. Terminate any legacy processes on port 8000 and port 8050
 echo "[*] Clearing legacy local host and stale server processes..."
 fuser -k -9 8000/tcp 2>/dev/null || true
 fuser -k -9 8050/tcp 2>/dev/null || true
@@ -54,7 +69,7 @@ pkill -9 -f "uvicorn" 2>/dev/null || true
 pkill -9 -f "cloudflared" 2>/dev/null || true
 sleep 2
 
-# 5. Configure systemd for main portal on port 8050
+# 6. Configure systemd for main portal on port 8050
 echo "[*] Configuring epanchayat.service (Port 8050)..."
 tee /etc/systemd/system/epanchayat.service > /dev/null <<EOF
 [Unit]
@@ -79,7 +94,7 @@ Environment=HOST=127.0.0.1
 WantedBy=multi-user.target
 EOF
 
-# 6. Configure 24/7 Continuous Deployment Watcher Daemon
+# 7. Configure 24/7 Continuous Deployment Watcher Daemon
 echo "[*] Configuring epanchayat-updater.service (Continuous GitHub Watcher)..."
 chmod +x "$PROJECT_DIR/auto_deploy.sh"
 
@@ -104,7 +119,7 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WantedBy=multi-user.target
 EOF
 
-# 7. Reload and start services
+# 8. Reload and start services
 echo "[*] Reloading systemd daemons and restarting services..."
 systemctl daemon-reload
 systemctl enable epanchayat.service
@@ -114,7 +129,7 @@ systemctl enable --now epanchayat-updater.service
 echo "[*] Waiting 6 seconds for portal and new Cloudflare tunnel initialization..."
 sleep 6
 
-# 8. Verify local health check
+# 9. Verify local health check
 if curl -s http://127.0.0.1:8050/health | grep -q "ok"; then
     echo "  [OK] Local FastAPI server is HEALTHY on port 8050."
 else
