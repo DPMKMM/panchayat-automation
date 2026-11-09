@@ -322,11 +322,24 @@ def system_version() -> dict[str, Any]:
         commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
         msg = subprocess.check_output(["git", "log", "-1", "--pretty=format:%s"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
         date_str = subprocess.check_output(["git", "log", "-1", "--pretty=format:%cd", "--date=format:%d %b %Y %H:%M"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
+        html_path = Path(__file__).parent / "html.py"
+        raw_html_sample = ""
+        try:
+            raw_text = html_path.read_text(encoding="utf-8")
+            s_idx = raw_text.find("Session is Persistent")
+            raw_html_sample = raw_text[s_idx:s_idx+80] if s_idx != -1 else "not found"
+        except Exception as e:
+            raw_html_sample = f"err: {e}"
+
         return {
             "success": True,
             "commit": commit,
             "message": msg,
             "date": date_str,
+            "pid": os.getpid(),
+            "cwd": str(Path.cwd()),
+            "html_file": str(html_path),
+            "html_disk_sample": raw_html_sample,
             "auto_deploy": "Active (Daemon checks GitHub every 30s)",
         }
     except Exception as exc:
