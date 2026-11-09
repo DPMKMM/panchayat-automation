@@ -52,7 +52,8 @@ if not token_from_env and env_file.exists():
     except Exception:
         pass
 
-TUNNEL_TOKEN = token_from_env or ""  # Leave empty for free trycloudflare quick tunnel
+DEFAULT_TUNNEL_TOKEN = "eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0IjoiOTlmODY1MWYtNjZmMi00YTIzLTllZjktYjYxYjhjOTg2MzkzIiwicyI6IlpHTmxPRFkxTVRNdE1XSm1NUzAwWmpNM0xXRXhNVFV0TjJVMk1UQXpPRGczWXprMSJ9"
+TUNNEL_TOKEN = token_from_env or DEFAULT_TUNNEL_TOKEN
 PORT = int(os.getenv("PORT", "8050"))
 
 

@@ -34,7 +34,19 @@ git reset --hard origin/main
 COMMIT_INFO=$(git log -1 --pretty=format:"%h - %s (%cr)")
 echo "[+] Updated to commit: $COMMIT_INFO"
 
-# 3. Terminate any legacy processes on port 8000 and port 8050
+# 3. Create or update .env with new tunnel token
+echo "[*] Configuring .env with new Cloudflare Tunnel token..."
+tee "$PROJECT_DIR/.env" > /dev/null <<'EOF'
+WEB_SESSION_SECRET=b71c84f509e5bca393c5d888f4c2810ab512a863d0859339e1a10ebf19a3b6d2
+DATA_DIR=./data
+MAX_UPLOAD_BYTES=31457280
+LOG_LEVEL=INFO
+PORT=8050
+CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0IjoiOTlmODY1MWYtNjZmMi00YTIzLTllZjktYjYxYjhjOTg2MzkzIiwicyI6IlpHTmxPRFkxTVRNdE1XSm1NUzAwWmpNM0xXRXhNVFV0TjJVMk1UQXpPRGczWXprMSJ9
+CUSTOM_DOMAIN=panchayatautomation.in
+EOF
+
+# 4. Terminate any legacy processes on port 8000 and port 8050
 echo "[*] Clearing legacy local host and stale server processes..."
 fuser -k -9 8000/tcp 2>/dev/null || true
 fuser -k -9 8050/tcp 2>/dev/null || true
@@ -42,7 +54,7 @@ pkill -9 -f "uvicorn" 2>/dev/null || true
 pkill -9 -f "cloudflared" 2>/dev/null || true
 sleep 2
 
-# 4. Configure systemd for main portal on port 8050
+# 5. Configure systemd for main portal on port 8050
 echo "[*] Configuring epanchayat.service (Port 8050)..."
 tee /etc/systemd/system/epanchayat.service > /dev/null <<EOF
 [Unit]
@@ -67,7 +79,7 @@ Environment=HOST=127.0.0.1
 WantedBy=multi-user.target
 EOF
 
-# 5. Configure 24/7 Continuous Deployment Watcher Daemon
+# 6. Configure 24/7 Continuous Deployment Watcher Daemon
 echo "[*] Configuring epanchayat-updater.service (Continuous GitHub Watcher)..."
 chmod +x "$PROJECT_DIR/auto_deploy.sh"
 
@@ -92,17 +104,17 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 WantedBy=multi-user.target
 EOF
 
-# 6. Reload and start services
+# 7. Reload and start services
 echo "[*] Reloading systemd daemons and restarting services..."
 systemctl daemon-reload
 systemctl enable epanchayat.service
 systemctl restart epanchayat.service
 systemctl enable --now epanchayat-updater.service
 
-echo "[*] Waiting 5 seconds for portal and tunnel initialization..."
-sleep 5
+echo "[*] Waiting 6 seconds for portal and new Cloudflare tunnel initialization..."
+sleep 6
 
-# 7. Verify local health check
+# 8. Verify local health check
 if curl -s http://127.0.0.1:8050/health | grep -q "ok"; then
     echo "  [OK] Local FastAPI server is HEALTHY on port 8050."
 else
@@ -111,12 +123,13 @@ fi
 
 echo ""
 echo "======================================================================"
-echo "  [+] DEPLOYMENT AND CONTINUOUS SYNC ACTIVE!"
+echo "  [+] NEW TUNNEL CONNECTED & 24/7 CI/CD ACTIVE!"
 echo "======================================================================"
+echo "  * New Tunnel ID   : 99f8651f-66f2-4a23-9ef9-b61b8c986393"
 echo "  * Main Service    : epanchayat.service (Running on Port 8050)"
 echo "  * Auto-Deploy CI  : epanchayat-updater.service (Every 15s)"
 echo "  * Public Domain   : https://panchayatautomation.in"
 echo ""
-echo "  All future git pushes will now automatically deploy within 15 seconds"
-echo "  with ZERO manual terminal commands needed!"
+echo "  Old machine D:\DPM-ept is now completely cut off."
+echo "  All future git pushes will auto-deploy within 15 seconds!"
 echo "======================================================================"
