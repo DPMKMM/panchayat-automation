@@ -158,6 +158,35 @@ def test_dpoa3698_persistent_session():
     assert ext['no_expiry'] is True
 
 
+def test_all_authenticated_sessions_no_10m_restriction():
+    """Verify that ANY authenticated session has no 10-minute restriction and never auto-expires."""
+    from dsr.service import _get_session_status_impl, _extend_session_impl
+    import time
+
+    mock_session = {
+        'session_id': 'test_officer_mpo_sess',
+        'user_id': 'MPOA1234',
+        'status': 'authenticated',
+        'mode': 'cloud_sync',
+        'authenticated_at': time.time() - 7200,  # 2 hours ago (well beyond 10m / 600s)
+        'session_duration': 600,
+        'extended': False,
+        'bot_alive': True,
+        'last_activity': time.time(),
+    }
+
+    status = _get_session_status_impl(mock_session)
+    assert status['no_expiry'] is True
+    assert status['expires_in'] == 999999
+    assert status['status'] == 'authenticated'
+    assert 'Persistent Session' in status['message']
+
+    ext = _extend_session_impl(mock_session)
+    assert ext['success'] is True
+    assert ext['no_expiry'] is True
+    assert ext['expires_in'] == 999999
+
+
 def test_cutoff_time_and_sorting_options():
     import pandas as pd
     from dsr.pdf_generator import analyze_attendance

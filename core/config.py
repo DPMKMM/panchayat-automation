@@ -24,9 +24,9 @@ for directory in (DATA_DIR, REPORTS_DIR, SESSIONS_DIR, PROFILES_DIR, DOWNLOADS_D
 # Security and Session Limits
 WEB_SESSION_SECRET = os.getenv("WEB_SESSION_SECRET", "khammam-epanchayat-automation-secure-key-2026")
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", 30 * 1024 * 1024))
-SESSION_DEFAULT_DURATION = 600    # 10 minutes initial limit
-SESSION_EXTENSION_DURATION = 600  # +10 minutes extension
-SESSION_MAX_DURATION = 1200       # 20 minutes maximum total cap
+SESSION_DEFAULT_DURATION = 86400    # 24 hours persistent session (10m restriction removed)
+SESSION_EXTENSION_DURATION = 86400  # Persistent
+SESSION_MAX_DURATION = 86400       # 24 hours maximum cap
 
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
