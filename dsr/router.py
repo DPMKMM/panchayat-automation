@@ -751,3 +751,27 @@ def auto_load_web_report(
     resp_data = completed.public_dict()
     resp_data["download_filename"] = _record_report_filename(completed)
     return JSONResponse(resp_data)
+
+
+# ========================================================
+# LEGAL, PRIVACY & SERVICES HUB ROUTES
+# ========================================================
+@router.get("/privacy", response_class=HTMLResponse, tags=["Legal"])
+def privacy_policy() -> HTMLResponse:
+    from dsr.legal_html import get_privacy_html
+    return HTMLResponse(get_privacy_html())
+
+
+@router.get("/terms", response_class=HTMLResponse, tags=["Legal"])
+@router.get("/legal", response_class=HTMLResponse, tags=["Legal"])
+def terms_of_service() -> HTMLResponse:
+    from dsr.legal_html import get_terms_html
+    return HTMLResponse(get_terms_html())
+
+
+@router.get("/services-inspections-bal", response_class=HTMLResponse, tags=["Services"])
+@router.get("/services", response_class=HTMLResponse, tags=["Services"])
+def services_hub() -> HTMLResponse:
+    from dsr.legal_html import get_services_hub_html
+    return HTMLResponse(get_services_hub_html())
+

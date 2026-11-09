@@ -2300,7 +2300,17 @@ NARESH_PAGE_HTML = """<!doctype html>
   </main>
 
   <footer>
-    Automated Report Monitoring Service &bull; Executive Analytics Console
+    <div style="max-width:1200px; margin:0 auto; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <div>
+        <strong>e-Panchayat Automated Console</strong> &bull; Executive Analytics Platform
+      </div>
+      <div style="display:flex; gap:18px; align-items:center; flex-wrap:wrap;">
+        <a href="/" style="color:#d1fae5; text-decoration:none;">🏠 Home</a>
+        <a href="/services-inspections-bal" style="color:#d1fae5; text-decoration:none;">📑 Services Hub</a>
+        <a href="/privacy" style="color:#d1fae5; text-decoration:none;">🛡️ Privacy Policy</a>
+        <a href="/terms" style="color:#d1fae5; text-decoration:none;">⚖️ Terms of Service</a>
+      </div>
+    </div>
   </footer>
 
   <script>

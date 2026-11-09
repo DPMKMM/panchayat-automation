@@ -284,4 +284,27 @@ def test_dpoa3698_force_fresh_cache_bypass(tmp_path):
     assert res2.get("cached") is True
 
 
+def test_legal_and_services_routes():
+    # 1. Privacy Policy
+    resp_priv = client.get("/privacy")
+    assert resp_priv.status_code == 200
+    assert "text/html" in resp_priv.headers["content-type"]
+    assert "Privacy Policy" in resp_priv.text
+    assert "e-Panchayat" in resp_priv.text
+
+    # 2. Terms of Service
+    resp_terms = client.get("/terms")
+    assert resp_terms.status_code == 200
+    assert "Terms of Service" in resp_terms.text
+    assert "panchayatautomation.in" in resp_terms.text
+
+    # 3. Services Hub
+    resp_serv = client.get("/services-inspections-bal")
+    assert resp_serv.status_code == 200
+    assert "Services" in resp_serv.text
+    assert "Multi-Day Attendance" in resp_serv.text
+    assert "GP Bank Balance" in resp_serv.text
+
+
+
 
