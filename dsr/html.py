@@ -473,16 +473,36 @@ NARESH_PAGE_HTML = """<!doctype html>
     .spinner-wrap {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 16px;
       margin-bottom: 16px;
     }
+    .circle-progress-box {
+      position: relative;
+      width: 58px;
+      height: 58px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     .spinner {
-      width: 28px;
-      height: 28px;
-      border: 3px solid #e2e8f0;
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 4px solid #e2e8f0;
       border-top-color: #059669;
+      border-right-color: #10b981;
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      animation: spin 1s linear infinite;
+    }
+    #spinner-pct-text {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #065f46;
+      font-family: monospace;
+      z-index: 2;
+      font-variant-numeric: tabular-nums;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -492,19 +512,29 @@ NARESH_PAGE_HTML = """<!doctype html>
       font-weight: 700;
       color: #065f46;
     }
+    .progress-time-strip {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.84rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #1e293b;
+    }
     .progress-bar-container {
       width: 100%;
-      height: 8px;
+      height: 14px;
       background: #e2e8f0;
-      border-radius: 4px;
+      border-radius: 7px;
       overflow: hidden;
       margin-bottom: 16px;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
     }
     .progress-bar-active {
       height: 100%;
       background: linear-gradient(90deg, #059669, #10b981);
-      border-radius: 4px;
-      transition: width 0.4s ease;
+      border-radius: 7px;
+      transition: width 0.25s ease;
     }
     .progress-steps {
       list-style: none;
@@ -1535,11 +1565,29 @@ NARESH_PAGE_HTML = """<!doctype html>
       <div class="step-pane" id="pane-step-4">
         <div class="live-progress-card">
           <div class="spinner-wrap">
-            <div class="spinner" id="auto-spinner"></div>
-            <div id="progress-status-title">Processing in Background...</div>
+            <!-- Rotating circle with dynamic % Completed in the center -->
+            <div class="circle-progress-box">
+              <div class="spinner" id="auto-spinner"></div>
+              <span id="spinner-pct-text">0%</span>
+            </div>
+            <div style="flex:1;">
+              <div id="progress-status-title">Processing in Background...</div>
+              <div id="progress-status-sub" style="font-size:0.82rem; color:#64748b; margin-top:2px;">Connecting to e-Panchayat server and downloading reports...</div>
+            </div>
           </div>
+
+          <!-- Progress bar time strip: Left side Elapsed time, Right side Expected completion time -->
+          <div class="progress-time-strip">
+            <div style="display:flex; align-items:center; gap:5px; color:#0f766e;">
+              <span>⏱️</span> Elapsed Time: <span id="val-elapsed-time" style="font-family:monospace; font-size:0.95rem; font-weight:800; color:#047857;">00:00</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:5px; color:#047857;">
+              <span>⏳</span> Expected Time: <span id="val-expected-time" style="font-family:monospace; font-size:0.95rem; font-weight:800; color:#047857;">00:45</span>
+            </div>
+          </div>
+
           <div class="progress-bar-container">
-            <div class="progress-bar-active" id="progress-bar-fill" style="width: 25%;"></div>
+            <div class="progress-bar-active" id="progress-bar-fill" style="width: 0%;"></div>
           </div>
           <ul class="progress-steps" id="progress-steps-list">
             <li class="p-step active" id="ps-1">Authenticating with e-Panchayat Session...</li>
@@ -1552,7 +1600,7 @@ NARESH_PAGE_HTML = """<!doctype html>
             <strong style="color:#065f46; font-size:1.15rem; display:block; margin-bottom:6px;">🎉 Official DSR Report Generated Successfully!</strong>
             <span style="color:#047857; font-size:0.92rem;">The metrics, mandal statistics, and PDF preview below have been updated in real-time.</span>
             <div style="margin-top:14px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
-              <a class="btn btn-gold btn-sm" href="/api/naresh/download" target="_blank">📥 Download PDF</a>
+              <a class="btn btn-gold btn-sm" id="btn-auto-download-pdf" href="/api/naresh/download" target="_blank">📥 Download PDF</a>
               <button type="button" class="btn btn-white btn-sm" onclick="loadAndScrollToViewer()">👁️ View in PDF Reader</button>
               <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="goToStep(3)">🔄 Generate Another Date</button>
             </div>
@@ -1961,7 +2009,7 @@ NARESH_PAGE_HTML = """<!doctype html>
             <span>Official 6-Section District Attendance &amp; DSR Monitoring PDF</span>
           </div>
           <div class="viewer-actions">
-            <a class="btn btn-gold btn-sm" href="/api/naresh/download" target="_blank">
+            <a class="btn btn-gold btn-sm" id="btn-viewer-download-pdf" href="/api/naresh/download" target="_blank">
               📥 Download PDF
             </a>
             <button type="button" class="btn btn-white btn-sm" onclick="refreshViewer()">
@@ -3902,6 +3950,104 @@ NARESH_PAGE_HTML = """<!doctype html>
       }
     }
 
+    let genProgressInterval = null;
+    let genStartTime = 0;
+    let targetDurationSec = 45;
+    let currentPct = 0;
+
+    function formatMinSec(totalSec) {
+      const s = Math.max(0, Math.floor(totalSec));
+      const m = Math.floor(s / 60);
+      const remS = s % 60;
+      return (m < 10 ? '0' + m : m) + ':' + (remS < 10 ? '0' + remS : remS);
+    }
+
+    function startProgressTimer() {
+      if (genProgressInterval) clearInterval(genProgressInterval);
+      genStartTime = Date.now();
+      targetDurationSec = 45;
+      currentPct = 0;
+
+      const elapsedEl = document.getElementById('val-elapsed-time');
+      const expectedEl = document.getElementById('val-expected-time');
+      const pctEl = document.getElementById('spinner-pct-text');
+      const barFill = document.getElementById('progress-bar-fill');
+      const spinner = document.getElementById('auto-spinner');
+
+      if (elapsedEl) elapsedEl.innerText = '00:00';
+      if (expectedEl) expectedEl.innerText = formatMinSec(targetDurationSec);
+      if (pctEl) pctEl.innerText = '0%';
+      if (barFill) barFill.style.width = '0%';
+      if (spinner) {
+        spinner.style.display = 'block';
+        spinner.style.animation = 'spin 1s linear infinite';
+      }
+
+      genProgressInterval = setInterval(() => {
+        const elapsedMs = Date.now() - genStartTime;
+        const elapsedSec = Math.floor(elapsedMs / 1000);
+
+        if (elapsedEl) elapsedEl.innerText = formatMinSec(elapsedSec);
+
+        // Dynamically adjust expected duration if the server / portal takes longer
+        if (elapsedSec >= targetDurationSec - 3) {
+          targetDurationSec = elapsedSec + 6;
+        }
+
+        const remainingSec = Math.max(0, targetDurationSec - elapsedSec);
+        if (expectedEl) expectedEl.innerText = formatMinSec(remainingSec);
+
+        // Calculate smooth continuous percentage progress
+        let computedPct = 0;
+        if (elapsedSec < 10) {
+          computedPct = 5 + (elapsedSec / 10) * 30; // 5% to 35%
+        } else if (elapsedSec < 22) {
+          computedPct = 35 + ((elapsedSec - 10) / 12) * 25; // 35% to 60%
+        } else if (elapsedSec < 34) {
+          computedPct = 60 + ((elapsedSec - 22) / 12) * 22; // 60% to 82%
+        } else {
+          const extraSec = elapsedSec - 34;
+          computedPct = 82 + (extraSec / (extraSec + 8)) * 14; // smoothly reaches up to 96%
+        }
+
+        if (computedPct > currentPct && currentPct < 96) {
+          currentPct = Math.min(96, computedPct);
+        }
+
+        const roundedPct = Math.round(currentPct);
+        if (pctEl) pctEl.innerText = roundedPct + '%';
+        if (barFill) barFill.style.width = roundedPct + '%';
+      }, 200);
+    }
+
+    function completeProgressTimer() {
+      if (genProgressInterval) {
+        clearInterval(genProgressInterval);
+        genProgressInterval = null;
+      }
+      currentPct = 100;
+      const expectedEl = document.getElementById('val-expected-time');
+      const pctEl = document.getElementById('spinner-pct-text');
+      const barFill = document.getElementById('progress-bar-fill');
+      const spinner = document.getElementById('auto-spinner');
+
+      if (expectedEl) expectedEl.innerText = '00:00';
+      if (pctEl) pctEl.innerText = '100%';
+      if (barFill) barFill.style.width = '100%';
+      if (spinner) spinner.style.animation = 'none';
+    }
+
+    function stopProgressTimerOnError() {
+      if (genProgressInterval) {
+        clearInterval(genProgressInterval);
+        genProgressInterval = null;
+      }
+      const expectedEl = document.getElementById('val-expected-time');
+      const spinner = document.getElementById('auto-spinner');
+      if (expectedEl) expectedEl.innerText = '--:--';
+      if (spinner) spinner.style.animation = 'none';
+    }
+
     async function runAutomatedGeneration() {
       const mod = document.getElementById('auto-module').value;
       const date = document.getElementById('auto-date').value;
@@ -3913,17 +4059,16 @@ NARESH_PAGE_HTML = """<!doctype html>
       }
 
       goToStep(4);
+      startProgressTimer();
       const titleEl = document.getElementById('progress-status-title');
-      const barFill = document.getElementById('progress-bar-fill');
+      const subTitleEl = document.getElementById('progress-status-sub');
       const banner = document.getElementById('auto-completion-banner');
-      const spinner = document.getElementById('auto-spinner');
-      banner.style.display = 'none';
-      spinner.style.display = 'block';
+      if (banner) banner.style.display = 'none';
 
       // Step 1
       setSubStep(1, 'active');
       titleEl.innerText = 'Step 1: GP Monitoring -> Downloading GM-R 1.2.7 DSR Raw Data...';
-      barFill.style.width = '25%';
+      if (subTitleEl) subTitleEl.innerText = 'Downloading morning attendance and DSR raw data records...';
       updateStatus('Downloading GM-R 1.2.7 DSR Raw Data...');
 
       try {
@@ -3938,7 +4083,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           setSubStep(2, 'done');
           setSubStep(3, 'active');
           titleEl.innerText = 'Step 2: Re-select GP Monitoring -> Downloading GM-R 1.2.11 Presentees Report...';
-          barFill.style.width = '50%';
+          if (subTitleEl) subTitleEl.innerText = 'Matching Panchayat Secretary details and mobile numbers...';
           updateStatus('Downloading GM-R 1.2.11 Presentees Report...');
         }, 1200);
 
@@ -3946,7 +4091,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           setSubStep(3, 'done');
           setSubStep(4, 'active');
           titleEl.innerText = 'Step 3: Re-select GP Monitoring -> Downloading GM-R 1.2.10 Absentees Report...';
-          barFill.style.width = '75%';
+          if (subTitleEl) subTitleEl.innerText = 'Extracting leave, training, and meeting secretary logs...';
           updateStatus('Downloading GM-R 1.2.10 Absentees Report...');
         }, 2400);
 
@@ -3954,7 +4099,7 @@ NARESH_PAGE_HTML = """<!doctype html>
           setSubStep(4, 'done');
           setSubStep(5, 'active');
           titleEl.innerText = 'Step 4: Compiling 6-Section Official Attendance & DSR Report (Official District Standard)...';
-          barFill.style.width = '90%';
+          if (subTitleEl) subTitleEl.innerText = 'Aggregating metrics, calculating punctuality, and compiling landscape PDF...';
           updateStatus('Compiling official 6-section PDF report...');
         }, 3600);
 
@@ -3963,14 +4108,15 @@ NARESH_PAGE_HTML = """<!doctype html>
           body: formData
         });
 
+        completeProgressTimer();
+
         setSubStep(1, 'done');
         setSubStep(2, 'done');
         setSubStep(3, 'done');
         setSubStep(4, 'done');
         setSubStep(5, 'done');
-        barFill.style.width = '100%';
-        spinner.style.display = 'none';
         titleEl.innerText = 'Official 6-Section District Attendance & DSR Report Generated!';
+        if (subTitleEl) subTitleEl.innerText = 'All 6 sections successfully compiled and ready for review.';
         banner.style.display = 'block';
         updateStatus('Official report generated successfully!', 'success');
 
@@ -3985,8 +4131,9 @@ NARESH_PAGE_HTML = """<!doctype html>
         await loadNareshData();
         refreshViewer();
       } catch (err) {
-        spinner.style.display = 'none';
+        stopProgressTimerOnError();
         titleEl.innerText = 'Generation encountered an error';
+        if (subTitleEl) subTitleEl.innerText = err.message || 'Error occurred';
         updateStatus('Error: ' + err.message, 'error');
         alert('Report generation: ' + err.message);
       }
@@ -4024,6 +4171,15 @@ NARESH_PAGE_HTML = """<!doctype html>
         if (dateEl && reportData.report_date) {
           dateEl.innerText = `📅 Date: ${reportData.report_date}`;
         }
+
+        // Set clean official filename for download buttons without session name/ID
+        const cleanDist = (reportData.district_name || 'Khammam').replace(/\\s+/g, '_');
+        const reportDt = (reportData.report_date || '').replace(/\\s+/g, '-');
+        const officialDlName = `${cleanDist}_Official_PS_Attendance_and_DSR_Report_${reportDt}.pdf`;
+        const btnAuto = document.getElementById('btn-auto-download-pdf');
+        if (btnAuto) btnAuto.setAttribute('download', officialDlName);
+        const btnViewer = document.getElementById('btn-viewer-download-pdf');
+        if (btnViewer) btnViewer.setAttribute('download', officialDlName);
 
         // Update Totals with real numbers
         const t = reportData.totals || {};

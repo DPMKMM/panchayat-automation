@@ -469,9 +469,11 @@ def naresh_generate(
 def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
     sid = _get_sid(request)
     pdf_path: Path | None = None
+    download_filename: str = ""
     try:
         session = automation_service.get_or_create_session(sid)
         pdf_path_str = session.get("latest_pdf_path")
+        download_filename = session.get("download_filename") or ""
         if pdf_path_str:
             cand = Path(pdf_path_str)
             if cand.exists() and cand.stat().st_size > 500:
@@ -480,24 +482,27 @@ def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
         pass
 
     if not pdf_path:
-        short_sid = sid[:6] if len(sid) >= 6 and sid != "default" else ""
-        if short_sid:
-            matches = sorted(REPORTS_DIR.glob(f"*Official_DSR_Report*_{short_sid}.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if matches and matches[0].stat().st_size > 500:
-                pdf_path = matches[0]
-        if not pdf_path:
-            all_matches = sorted(REPORTS_DIR.glob("*Official_DSR_Report*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
-            if all_matches and all_matches[0].stat().st_size > 500:
-                pdf_path = all_matches[0]
+        all_matches = sorted(REPORTS_DIR.glob("*Official*Report*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if all_matches and all_matches[0].stat().st_size > 500:
+            pdf_path = all_matches[0]
 
     if pdf_path and pdf_path.exists() and pdf_path.stat().st_size > 500:
+        if not download_filename:
+            # Cleanly construct official download filename without any session ID or session name
+            m = re.match(r"^([A-Za-z0-9_]+?)_Official_.*_(\d{2}-[A-Za-z]{3}-\d{4})", pdf_path.name)
+            if m:
+                download_filename = f"{m.group(1)}_Official_PS_Attendance_and_DSR_Report_{m.group(2)}.pdf"
+            else:
+                download_filename = re.sub(r"_[a-zA-Z0-9]{4,32}\.pdf$", ".pdf", pdf_path.name)
+
         disposition = "inline" if inline else "attachment"
         return Response(
             content=pdf_path.read_bytes(),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f'{disposition}; filename="{pdf_path.name}"',
+                "Content-Disposition": f'{disposition}; filename="{download_filename}"',
                 "Access-Control-Expose-Headers": "Content-Disposition",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
             },
         )
 

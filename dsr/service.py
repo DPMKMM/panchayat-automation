@@ -615,17 +615,19 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
     )
 
     clean_dist = report.district_name.replace(' ', '_')
-    target_pdf = REPORTS_DIR / f"{clean_dist}_Official_DSR_Report_{portal_date_fmt}_{cutoff_time.replace(':', '-')}_{sort_by}_{sid[:6]}.pdf"
+    clean_download_name = f"{clean_dist}_Official_PS_Attendance_and_DSR_Report_{portal_date_fmt}.pdf"
+    target_pdf = REPORTS_DIR / f"{clean_dist}_Official_DSR_Report_{portal_date_fmt}_{cutoff_time.replace(':', '-')}_{sort_by}.pdf"
     generate_pdf(report, target_pdf)
 
-    # Save to session downloads cache
-    cached_pdf = dl_dir / f"Official_DSR_Report_{portal_date_fmt}.pdf"
+    # Save to session downloads cache with official clean filename
+    cached_pdf = dl_dir / clean_download_name
     try:
         cached_pdf.write_bytes(target_pdf.read_bytes())
     except Exception:
         pass
 
     session["latest_pdf_path"] = str(target_pdf)
+    session["download_filename"] = clean_download_name
     session["latest_report_date"] = f"{report.report_date:%d-%b-%Y}"
     session["report_data"] = {
         "district_name": report.district_name,
