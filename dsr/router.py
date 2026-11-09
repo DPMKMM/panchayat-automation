@@ -451,8 +451,10 @@ def naresh_generate(
     date: str = Form(default=""),
     cutoff_time: str = Form(default="09:00"),
     sort_by: str = Form(default="before_9"),
+    force_fresh: str = Form(default="false"),
 ) -> dict[str, Any]:
     sid = _get_sid(request)
+    is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
     try:
         return automation_service.generate_server_report(
             module=module,
@@ -460,6 +462,7 @@ def naresh_generate(
             session_id=sid,
             cutoff_time=cutoff_time,
             sort_by=sort_by,
+            force_fresh=is_force_fresh,
         )
     except Exception as exc:
         logger.exception("naresh_generate failed for module=%s date=%s sid=%s: %s", module, date, sid, exc)

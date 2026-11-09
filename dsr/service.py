@@ -450,14 +450,14 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     }
 
 
-def generate_server_report(module: str = "dsr_full", date_str: str = "", session_id: str = "", cutoff_time: str = "09:00", sort_by: str = "before_9") -> dict[str, Any]:
+def generate_server_report(module: str = "dsr_full", date_str: str = "", session_id: str = "", cutoff_time: str = "09:00", sort_by: str = "before_9", force_fresh: bool = False) -> dict[str, Any]:
     """Generates report for this specific user session in its isolated browser and directory."""
     session = get_or_create_session(session_id)
     with session["lock"]:
-        return run_in_session_thread(session, _generate_server_report_impl, session, module, date_str, cutoff_time, sort_by)
+        return run_in_session_thread(session, _generate_server_report_impl, session, module, date_str, cutoff_time, sort_by, force_fresh)
 
 
-def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_full", date_str: str = "", cutoff_time: str = "09:00", sort_by: str = "before_9") -> dict[str, Any]:
+def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_full", date_str: str = "", cutoff_time: str = "09:00", sort_by: str = "before_9", force_fresh: bool = False) -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
     if not is_auth:
         raise PermissionError(
@@ -508,20 +508,26 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
     dl_dir = session["downloads_dir"]
 
     # Check 3-minute live micro-cache first (protects SDC portal from repeated scrapes)
+    # Exclusively for Officer DPOA3698: allow force_fresh to bypass micro-cache on demand at any second
+    is_dpoa = str(user_id).strip().upper() == "DPOA3698"
     dist_name = session.get("district_name", "Khammam")
     cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by)
-    with _DSR_CACHE_LOCK:
-        if cache_key in _DSR_CACHE:
-            cached_entry = _DSR_CACHE[cache_key]
-            age = time.time() - cached_entry["timestamp"]
-            if age < _DSR_CACHE_TTL_SECONDS and Path(cached_entry["latest_pdf_path"]).exists():
-                logger.info("[%s] Serving cached DSR report (age: %.1fs < %.0fs TTL). Zero portal load.",
-                            sid[:6], age, _DSR_CACHE_TTL_SECONDS)
-                session["latest_pdf_path"] = cached_entry["latest_pdf_path"]
-                session["download_filename"] = cached_entry.get("download_filename", "")
-                session["latest_report_date"] = cached_entry["latest_report_date"]
-                session["report_data"] = cached_entry["report_data"]
-                return cached_entry["response"]
+
+    if is_dpoa and force_fresh:
+        logger.info("[%s] Officer DPOA3698 requested FORCE FRESH live portal download. Bypassing micro-cache.", sid[:6])
+    else:
+        with _DSR_CACHE_LOCK:
+            if cache_key in _DSR_CACHE:
+                cached_entry = _DSR_CACHE[cache_key]
+                age = time.time() - cached_entry["timestamp"]
+                if age < _DSR_CACHE_TTL_SECONDS and Path(cached_entry["latest_pdf_path"]).exists():
+                    logger.info("[%s] Serving cached DSR report (age: %.1fs < %.0fs TTL). Zero portal load.",
+                                sid[:6], age, _DSR_CACHE_TTL_SECONDS)
+                    session["latest_pdf_path"] = cached_entry["latest_pdf_path"]
+                    session["download_filename"] = cached_entry.get("download_filename", "")
+                    session["latest_report_date"] = cached_entry["latest_report_date"]
+                    session["report_data"] = cached_entry["report_data"]
+                    return cached_entry["response"]
 
     # Clean old downloads in this session's isolated folder
     if dl_dir.exists():

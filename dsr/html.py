@@ -1551,6 +1551,18 @@ NARESH_PAGE_HTML = """<!doctype html>
             </small>
           </div>
         </div>
+
+        <!-- Officer DPOA3698 Exclusive: Force Fresh Portal Download -->
+        <div id="dpoa-fresh-toggle-wrap" style="display:none; margin:14px 0 16px 0; padding:12px 16px; background:#f0fdf4; border:1.5px solid #10b981; border-radius:8px; box-shadow:0 1px 3px rgba(16,185,129,0.08);">
+          <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.92rem; font-weight:700; color:#065f46; margin:0;">
+            <input type="checkbox" id="chk-force-fresh" checked style="width:19px; height:19px; accent-color:#059669; cursor:pointer;">
+            <span>🔄 Force Fresh Portal Download (Always fetch latest attendance from e-Panchayat)</span>
+          </label>
+          <div style="font-size:0.8rem; color:#047857; margin-top:4px; margin-left:29px; line-height:1.4;">
+            <strong>Officer DPOA3698 Exclusive:</strong> Bypasses the 3-minute server cache to retrieve real-time Panchayats submissions at any second.
+          </div>
+        </div>
+
         <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
           <button type="button" class="btn btn-gold" id="btn-generate" onclick="runAutomatedGeneration()">
             ⚡ Generate PS Attendance and DSR Report
@@ -3640,6 +3652,8 @@ NARESH_PAGE_HTML = """<!doctype html>
         window.updateGlobalBrowserStatus({ authenticated: true, user_id: officer });
 
         const isDpoAdmin = (officer || '').trim().toUpperCase() === 'DPOA3698';
+        const dpoaFreshWrap = document.getElementById('dpoa-fresh-toggle-wrap');
+        if (dpoaFreshWrap) dpoaFreshWrap.style.display = isDpoAdmin ? 'block' : 'none';
         const btnSessions = document.getElementById('btn-active-sessions');
         if (btnSessions) btnSessions.style.display = isDpoAdmin ? 'inline-flex' : 'none';
         const navPill = document.getElementById('nav-browser-pill');
@@ -3706,6 +3720,8 @@ NARESH_PAGE_HTML = """<!doctype html>
         localStorage.removeItem('epts_portal_auth');
         localStorage.removeItem('epts_officer_id');
         window.updateGlobalBrowserStatus({ authenticated: false, status: 'idle' });
+        const dpoaFreshWrap = document.getElementById('dpoa-fresh-toggle-wrap');
+        if (dpoaFreshWrap) dpoaFreshWrap.style.display = 'none';
         const btnSessions = document.getElementById('btn-active-sessions');
         if (btnSessions) btnSessions.style.display = 'none';
         const navPill = document.getElementById('nav-browser-pill');
@@ -3773,6 +3789,11 @@ NARESH_PAGE_HTML = """<!doctype html>
         if (line) {
           line.classList.toggle('active', i < step);
         }
+      }
+      if (step === 3) {
+        const off = (sessionStorage.getItem('epts_officer_id') || '').trim().toUpperCase();
+        const dpoaFreshWrap = document.getElementById('dpoa-fresh-toggle-wrap');
+        if (dpoaFreshWrap) dpoaFreshWrap.style.display = (off === 'DPOA3698') ? 'block' : 'none';
       }
     }
 
@@ -4077,6 +4098,10 @@ NARESH_PAGE_HTML = """<!doctype html>
         formData.append('date', date);
         formData.append('cutoff_time', cutoffTime);
         formData.append('sort_by', sortBy);
+        const chkFresh = document.getElementById('chk-force-fresh');
+        if (chkFresh && chkFresh.checked) {
+          formData.append('force_fresh', 'true');
+        }
 
         setTimeout(() => {
           setSubStep(1, 'done');
@@ -4404,6 +4429,8 @@ NARESH_PAGE_HTML = """<!doctype html>
           }
         } else {
           window.updateGlobalBrowserStatus({ authenticated: false, status: 'idle' });
+        const dpoaFreshWrap = document.getElementById('dpoa-fresh-toggle-wrap');
+        if (dpoaFreshWrap) dpoaFreshWrap.style.display = 'none';
         const btnSessions = document.getElementById('btn-active-sessions');
         if (btnSessions) btnSessions.style.display = 'none';
         const navPill = document.getElementById('nav-browser-pill');
@@ -4417,6 +4444,8 @@ NARESH_PAGE_HTML = """<!doctype html>
       } catch (e) {
         console.warn('Session check note:', e);
         window.updateGlobalBrowserStatus({ authenticated: false, status: 'idle' });
+        const dpoaFreshWrap = document.getElementById('dpoa-fresh-toggle-wrap');
+        if (dpoaFreshWrap) dpoaFreshWrap.style.display = 'none';
         const btnSessions = document.getElementById('btn-active-sessions');
         if (btnSessions) btnSessions.style.display = 'none';
         const navPill = document.getElementById('nav-browser-pill');

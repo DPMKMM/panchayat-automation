@@ -241,3 +241,47 @@ def test_download_filename_no_official():
     assert re.search(r"Khammam_PS_Attendance_and_DSR_Report_08-Nov-2026_\d{2}-\d{2}-[A-Za-z]{2}\.pdf", cd2)
 
 
+def test_dpoa3698_force_fresh_cache_bypass(tmp_path):
+    import time
+    from dsr import service as automation_service
+    from dsr.service import _DSR_CACHE, _DSR_CACHE_LOCK
+
+    sid_dpo = "sid_test_dpoa3698_fresh"
+    session_dpo = automation_service.get_or_create_session(sid_dpo)
+    session_dpo["status"] = "authenticated"
+    session_dpo["user_id"] = "DPOA3698"
+    session_dpo["district_name"] = "Khammam"
+
+    cached_pdf = tmp_path / "cached_report.pdf"
+    cached_pdf.write_bytes(b"%PDF-1.4 dummy " + b"0" * 600)
+
+    cache_key = ("dsr_full", "02-Nov-2026", "Khammam", "09:00", "before_9")
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE[cache_key] = {
+            "timestamp": time.time(),
+            "latest_pdf_path": str(cached_pdf),
+            "download_filename": "cached.pdf",
+            "latest_report_date": "02-Nov-2026",
+            "report_data": {"cached": True},
+            "response": {"success": True, "cached": True},
+        }
+
+    # 1. Without force_fresh, DPOA3698 gets cached entry
+    res1 = automation_service.generate_server_report(
+        module="dsr_full", date_str="2026-11-02", session_id=sid_dpo, cutoff_time="09:00", sort_by="before_9", force_fresh=False
+    )
+    assert res1.get("cached") is True
+
+    # 2. For non-DPOA3698 users, force_fresh=True does NOT bypass cache (SDC protection)
+    sid_other = "sid_test_other_officer"
+    session_other = automation_service.get_or_create_session(sid_other)
+    session_other["status"] = "authenticated"
+    session_other["user_id"] = "DLPO1234"
+    session_other["district_name"] = "Khammam"
+    res2 = automation_service.generate_server_report(
+        module="dsr_full", date_str="2026-11-02", session_id=sid_other, cutoff_time="09:00", sort_by="before_9", force_fresh=True
+    )
+    assert res2.get("cached") is True
+
+
+
