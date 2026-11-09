@@ -122,8 +122,10 @@ def kill_stale_cloudflared():
 def kill_stale_uvicorn():
     try:
         if sys.platform != "win32":
-            subprocess.run(["pkill", "-9", "-f", "uvicorn.*app:app"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(0.5)
+            subprocess.run(["pkill", "-9", "-f", "uvicorn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["pkill", "-9", "-f", "python.*uvicorn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["fuser", "-k", "-9", "8000/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(1)
     except Exception:
         pass
 
@@ -140,17 +142,19 @@ def main():
 
     # 1. Clean up any stale uvicorn process and start fresh
     kill_stale_uvicorn()
-    uvicorn_proc = None
-    if is_port_in_use(8000):
-        print("[+] Local Uvicorn server is already running on http://127.0.0.1:8000")
-    else:
-        print("[*] Starting local Uvicorn server on port 8000...")
-        uvicorn_proc = subprocess.Popen(
-            [str(PYTHON_EXE), "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"],
-            cwd=str(BASE_DIR),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    print("[*] Starting fresh Uvicorn server on port 8000...")
+    uvicorn_proc = subprocess.Popen(
+        [str(PYTHON_EXE), "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"],
+        cwd=str(BASE_DIR),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    # Wait up to 5 seconds for port to open
+    for _ in range(10):
+        time.sleep(0.5)
+        if is_port_in_use(8000):
+            print("[+] Local server started successfully.")
+            break
         # Wait up to 5 seconds for port to open
         for _ in range(10):
             time.sleep(0.5)

@@ -44,8 +44,9 @@ while true; do
 
         # Terminate any lingering uvicorn processes so new code is guaranteed to load
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Stopping stale uvicorn on port 8000..."
-        fuser -k 8000/tcp 2>/dev/null || true
+        fuser -k -9 8000/tcp 2>/dev/null || true
         pkill -9 -f "uvicorn" 2>/dev/null || true
+        pkill -9 -f "python.*app:app" 2>/dev/null || true
         sleep 2
 
         # Restart the main application service
