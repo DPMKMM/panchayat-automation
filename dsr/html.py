@@ -2558,7 +2558,7 @@ NARESH_PAGE_HTML = """<!doctype html>
       window.sessionNoExpiry = true;
       window.sessionCanExtend = false;
       window.updateTimerDisplay();
-      alert("🛡️ Session is Persistent!\n\nThere is no time limit or 10-minute restriction. The background browser will remain connected as you generate reports.");
+      alert("🛡️ Session is Persistent! No time limit or 10-minute restriction. The background browser will remain connected as you generate reports.");
     };
 
     let reportData = null;
