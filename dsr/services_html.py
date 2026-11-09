@@ -322,8 +322,6 @@ def get_services_page_html() -> str:
       </a>
       <nav class="nav-links">
         <a class="nav-link" href="/">🏠 Home</a>
-        <a class="nav-link" href="/services" style="color:#fbbf24;">📑 Services Hub</a>
-        <a class="nav-link" href="/#tax-station">💰 House Tax (DCB)</a>
         <a class="nav-link" href="/login" style="color:#fbbf24;">🔐 Login</a>
       </nav>
     </div>

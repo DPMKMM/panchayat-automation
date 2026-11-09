@@ -1078,11 +1078,6 @@ NARESH_PAGE_HTML = """<!doctype html>
           <span>🏠</span> Home
         </a>
 
-        <!-- Always-Visible House Tax (DCB) Button (Public / No Login Required) -->
-        <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); openTaxDcbStation();" id="nav-btn-tax" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
-          <span>💰</span> House Tax (DCB)
-        </a>
-
         <!-- Unauthenticated Department Login Button -->
         <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); openDepartmentLogin();" id="nav-btn-login" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#fbbf24;">
           <span>🔐</span> Login
