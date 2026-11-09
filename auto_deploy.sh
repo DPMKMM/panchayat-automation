@@ -42,6 +42,12 @@ while true; do
             "$PROJECT_DIR/.venv/bin/pip" install -r "$PROJECT_DIR/requirements.txt" --quiet 2>/dev/null || true
         fi
 
+        # Terminate any lingering uvicorn processes so new code is guaranteed to load
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Stopping stale uvicorn on port 8000..."
+        fuser -k 8000/tcp 2>/dev/null || true
+        pkill -9 -f "uvicorn" 2>/dev/null || true
+        sleep 2
+
         # Restart the main application service
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [Deploy] Restarting epanchayat.service..."
         systemctl restart epanchayat.service

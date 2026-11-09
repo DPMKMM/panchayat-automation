@@ -233,13 +233,33 @@ def _process_job(
 # DSR Portal & Navigation Endpoints
 # -------------------------------------------------------------
 
+_last_html_mtime: float = 0.0
+_cached_html: str = NARESH_PAGE_HTML
+
+
+def _get_latest_portal_html() -> str:
+    global _last_html_mtime, _cached_html
+    try:
+        from dsr import html as _html_mod
+        html_file = Path(_html_mod.__file__)
+        mtime = html_file.stat().st_mtime
+        if mtime != _last_html_mtime:
+            import importlib
+            importlib.reload(_html_mod)
+            _cached_html = _html_mod.NARESH_PAGE_HTML
+            _last_html_mtime = mtime
+        return _cached_html
+    except Exception:
+        return NARESH_PAGE_HTML
+
+
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/eptauto", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/naresh", response_class=HTMLResponse, include_in_schema=False)
 def naresh_page() -> HTMLResponse:
     """Renders the unified executive portal with DSR Attendance & GP Balance modules."""
-    return HTMLResponse(NARESH_PAGE_HTML)
+    return HTMLResponse(_get_latest_portal_html())
 
 
 @router.get("/reports/ps-attendance", response_class=HTMLResponse, include_in_schema=False)

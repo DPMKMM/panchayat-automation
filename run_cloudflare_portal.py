@@ -119,6 +119,15 @@ def kill_stale_cloudflared():
         pass
 
 
+def kill_stale_uvicorn():
+    try:
+        if sys.platform != "win32":
+            subprocess.run(["pkill", "-9", "-f", "uvicorn.*app:app"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+    except Exception:
+        pass
+
+
 def is_port_in_use(port: int = 8000) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(("127.0.0.1", port)) == 0
@@ -129,7 +138,8 @@ def main():
     print("  e-Panchayat Automated DSR Portal - Cloudflare Public Gateway")
     print("=" * 68)
 
-    # 1. Start Uvicorn if not already running on port 8000
+    # 1. Clean up any stale uvicorn process and start fresh
+    kill_stale_uvicorn()
     uvicorn_proc = None
     if is_port_in_use(8000):
         print("[+] Local Uvicorn server is already running on http://127.0.0.1:8000")
