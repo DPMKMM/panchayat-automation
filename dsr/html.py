@@ -4172,14 +4172,14 @@ NARESH_PAGE_HTML = """<!doctype html>
           dateEl.innerText = `📅 Date: ${reportData.report_date}`;
         }
 
-        // Set clean official filename for download buttons without session name/ID
+        // Set clean filename for download buttons without "Official" and without session name/ID
         const cleanDist = (reportData.district_name || 'Khammam').replace(/\\s+/g, '_');
         const reportDt = (reportData.report_date || '').replace(/\\s+/g, '-');
-        const officialDlName = `${cleanDist}_Official_PS_Attendance_and_DSR_Report_${reportDt}.pdf`;
+        const dlFilename = `${cleanDist}_PS_Attendance_and_DSR_Report_${reportDt}.pdf`;
         const btnAuto = document.getElementById('btn-auto-download-pdf');
-        if (btnAuto) btnAuto.setAttribute('download', officialDlName);
+        if (btnAuto) btnAuto.setAttribute('download', dlFilename);
         const btnViewer = document.getElementById('btn-viewer-download-pdf');
-        if (btnViewer) btnViewer.setAttribute('download', officialDlName);
+        if (btnViewer) btnViewer.setAttribute('download', dlFilename);
 
         // Update Totals with real numbers
         const t = reportData.totals || {};

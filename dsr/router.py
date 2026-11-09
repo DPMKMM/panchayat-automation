@@ -482,18 +482,25 @@ def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
         pass
 
     if not pdf_path:
-        all_matches = sorted(REPORTS_DIR.glob("*Official*Report*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
+        all_matches = sorted(REPORTS_DIR.glob("*Report*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
         if all_matches and all_matches[0].stat().st_size > 500:
             pdf_path = all_matches[0]
 
     if pdf_path and pdf_path.exists() and pdf_path.stat().st_size > 500:
         if not download_filename:
-            # Cleanly construct official download filename without any session ID or session name
-            m = re.match(r"^([A-Za-z0-9_]+?)_Official_.*_(\d{2}-[A-Za-z]{3}-\d{4})", pdf_path.name)
+            # Cleanly construct download filename without "Official" and without session ID
+            m = re.match(r"^([A-Za-z0-9_]+?)_(?:Official_)?.*_(\d{2}-[A-Za-z]{3}-\d{4})", pdf_path.name)
             if m:
-                download_filename = f"{m.group(1)}_Official_PS_Attendance_and_DSR_Report_{m.group(2)}.pdf"
+                download_filename = f"{m.group(1)}_PS_Attendance_and_DSR_Report_{m.group(2)}.pdf"
             else:
                 download_filename = re.sub(r"_[a-zA-Z0-9]{4,32}\.pdf$", ".pdf", pdf_path.name)
+                download_filename = download_filename.replace("Official_", "").replace("_Official", "").replace("Official", "")
+        else:
+            download_filename = download_filename.replace("Official_", "").replace("_Official", "").replace("Official", "")
+
+        download_filename = re.sub(r"_+", "_", download_filename).strip("_")
+        if not download_filename.endswith(".pdf"):
+            download_filename += ".pdf"
 
         disposition = "inline" if inline else "attachment"
         return Response(

@@ -208,3 +208,35 @@ def test_cutoff_time_and_sorting_options():
     assert len(rep_strict.after_9_rows) == 1
     assert rep_strict.after_9_rows[0]["gp"] == "GP C2"
 
+
+def test_download_filename_no_official():
+    from dsr import service as automation_service
+    from core.config import REPORTS_DIR
+
+    sid = "test_no_official_sid"
+    session = automation_service.get_or_create_session(sid)
+
+    dummy_pdf = REPORTS_DIR / "Khammam_DSR_Report_08-Nov-2026_09-00_before_9.pdf"
+    dummy_pdf.write_bytes(b"%PDF-1.4 test dummy content over 500 bytes " + b"0" * 600)
+
+    session["latest_pdf_path"] = str(dummy_pdf)
+    session["download_filename"] = "Khammam_PS_Attendance_and_DSR_Report_08-Nov-2026.pdf"
+
+    resp = client.get("/api/naresh/download", headers={"X-Session-ID": sid})
+    assert resp.status_code == 200
+    cd = resp.headers.get("content-disposition", "")
+    assert "filename=" in cd
+    assert "Official" not in cd
+    assert "Khammam_PS_Attendance_and_DSR_Report_08-Nov-2026.pdf" in cd
+
+    # Test fallback when download_filename is not in session
+    session.pop("download_filename", None)
+    session["latest_pdf_path"] = str(REPORTS_DIR / "Khammam_Official_DSR_Report_08-Nov-2026_09-00_before_9.pdf")
+    (REPORTS_DIR / "Khammam_Official_DSR_Report_08-Nov-2026_09-00_before_9.pdf").write_bytes(b"%PDF-1.4 dummy " + b"1" * 600)
+    resp2 = client.get("/api/naresh/download", headers={"X-Session-ID": sid})
+    assert resp2.status_code == 200
+    cd2 = resp2.headers.get("content-disposition", "")
+    assert "Official" not in cd2
+    assert "Khammam_PS_Attendance_and_DSR_Report_08-Nov-2026.pdf" in cd2
+
+

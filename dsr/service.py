@@ -615,11 +615,11 @@ def _generate_server_report_impl(session: dict[str, Any], module: str = "dsr_ful
     )
 
     clean_dist = report.district_name.replace(' ', '_')
-    clean_download_name = f"{clean_dist}_Official_PS_Attendance_and_DSR_Report_{portal_date_fmt}.pdf"
-    target_pdf = REPORTS_DIR / f"{clean_dist}_Official_DSR_Report_{portal_date_fmt}_{cutoff_time.replace(':', '-')}_{sort_by}.pdf"
+    clean_download_name = f"{clean_dist}_PS_Attendance_and_DSR_Report_{portal_date_fmt}.pdf"
+    target_pdf = REPORTS_DIR / f"{clean_dist}_DSR_Report_{portal_date_fmt}_{cutoff_time.replace(':', '-')}_{sort_by}.pdf"
     generate_pdf(report, target_pdf)
 
-    # Save to session downloads cache with official clean filename
+    # Save to session downloads cache with clean filename (no session ID, no Official)
     cached_pdf = dl_dir / clean_download_name
     try:
         cached_pdf.write_bytes(target_pdf.read_bytes())
