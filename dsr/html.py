@@ -1078,6 +1078,11 @@ NARESH_PAGE_HTML = """<!doctype html>
           <span>🏠</span> Home
         </a>
 
+        <!-- Services Hub Link in Navbar -->
+        <a class="nav-link" href="/services" id="nav-btn-services" style="display:inline-flex; align-items:center; gap:6px; font-weight:700;">
+          <span>📑</span> Services
+        </a>
+
         <!-- Unauthenticated Department Login Button -->
         <a class="nav-link" href="javascript:void(0)" onclick="closeMobileNav(); openDepartmentLogin();" id="nav-btn-login" style="display:inline-flex; align-items:center; gap:6px; font-weight:700; color:#fbbf24;">
           <span>🔐</span> Login
@@ -2295,15 +2300,8 @@ NARESH_PAGE_HTML = """<!doctype html>
   </main>
 
   <footer>
-    <div style="max-width:1200px; margin:0 auto; padding:4px 10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-      <div>
-        <strong>e-Panchayat Automated Console</strong> &bull; Executive Analytics Platform
-      </div>
-      <div style="display:flex; gap:18px; align-items:center; flex-wrap:wrap;">
-        <a href="/" style="color:#d1fae5; text-decoration:none;">🏠 Home</a>
-        <a href="/services" style="color:#d1fae5; text-decoration:none;">📑 Services Hub</a>
-        <a href="/#tax-station" style="color:#d1fae5; text-decoration:none;">💰 House Tax (DCB)</a>
-      </div>
+    <div style="max-width:1200px; margin:0 auto; padding:6px 10px; text-align:center;">
+      <strong>e-Panchayat Automated Console</strong> &bull; Executive Analytics Platform
     </div>
   </footer>
 

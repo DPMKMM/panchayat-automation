@@ -322,6 +322,7 @@ def get_services_page_html() -> str:
       </a>
       <nav class="nav-links">
         <a class="nav-link" href="/">🏠 Home</a>
+        <a class="nav-link" href="/services" style="color:#fbbf24; font-weight:700;">📑 Services</a>
         <a class="nav-link" href="/login" style="color:#fbbf24;">🔐 Login</a>
       </nav>
     </div>
@@ -485,18 +486,12 @@ def get_services_page_html() -> str:
   </div>
 
   <footer>
-    <div class="footer-inner">
+    <div class="footer-inner" style="justify-content:center; text-align:center;">
       <div>
         <strong>e-Panchayat Automated Console</strong> &bull; Executive Analytics Platform
         <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">
           Dedicated administrative companion tool for Telangana Panchayat Raj &amp; Rural Development officers.
         </div>
-      </div>
-      <div class="footer-links">
-        <a href="/">Home</a>
-        <a href="/services">Services Hub</a>
-        <a href="/#tax-station">House Tax (DCB)</a>
-        <a href="/login">Officer Login</a>
       </div>
     </div>
   </footer>
