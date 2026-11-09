@@ -721,11 +721,11 @@ def analyze_attendance(
     def is_before_cutoff(stamp: Any) -> bool:
         if pd.isna(stamp):
             return False
-        return stamp.time() <= cutoff
+        return stamp.time() < cutoff
 
     records["before_9"] = records["submitted"] & records["parsed_timestamp"].map(is_before_cutoff)
     records["after_9"] = records["submitted"] & records["parsed_timestamp"].map(
-        lambda value: (not pd.isna(value)) and value.time() > cutoff
+        lambda value: (not pd.isna(value)) and value.time() >= cutoff
     )
     records["pending"] = ~records["submitted"]
     status_lower = records["status"].str.casefold()
@@ -1142,7 +1142,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     # PAGE 1 (LANDSCAPE): COMBINED ATTENDANCE & DSR ABSTRACT
     # ========================================================
     story.append(Paragraph(
-        f"{report.district_name.upper()} DISTRICT - PANCHAYAT SECRETARY ATTENDANCE &amp; DSR REPORT",
+        f"1. {report.district_name.upper()} DISTRICT - MANDAL-WISE ATTENDANCE &amp; DSR ABSTRACT REPORT",
         styles["CombinedTitle"],
     ))
     dsr_tot = report.dsr_district_total
@@ -1160,9 +1160,9 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         Paragraph("Sl.<br/>No.", styles["HSuper"]),
         Paragraph("Mandal Name", styles["HSuper"]),
         Paragraph("Total<br/>GPs", styles["HSuper"]),
-        Paragraph("1. PS ATTENDANCE ABSTRACT", styles["HSuper"]),
+        Paragraph("PS ATTENDANCE ABSTRACT", styles["HSuper"]),
         "", "", "", "", "", "",
-        Paragraph("2. DSR ABSTRACT REPORT", styles["HSuper"]),
+        Paragraph("DSR ABSTRACT REPORT", styles["HSuper"]),
         "", "", "",
     ]
 
@@ -1291,11 +1291,11 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         ))
 
     # ========================================================
-    # PAGE 2+ (PORTRAIT): DETAIL SECTIONS 3 THROUGH 7
+    # PAGE 2+ (PORTRAIT): DETAIL SECTIONS 2 THROUGH 6
     # ========================================================
     story.append(NextPageTemplate("Portrait"))
     story.append(PageBreak())
-    story.append(Paragraph("3. ATTENDANCE PENDING GPs", styles["SectionTitle"]))
+    story.append(Paragraph("2. ATTENDANCE PENDING GPs", styles["SectionTitle"]))
     story.append(Paragraph(f"Total pending GPs: {len(report.pending_rows):,}", styles["ReportSubtitle"]))
     pending_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat",
@@ -1324,9 +1324,9 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         ]))
     story.append(pending_table)
 
-    # 4. DSR PENDING GPs (with Attendance Time and 'DSR not entered' in RED)
+    # 3. DSR PENDING GPs (with Attendance Time and 'DSR not entered' in RED)
     story.append(PageBreak())
-    story.append(Paragraph("4. DSR PENDING GPs", styles["SectionTitle"]))
+    story.append(Paragraph("3. DSR PENDING GPs", styles["SectionTitle"]))
     story.append(Paragraph(
         f"DSR Pending GPs: {len(report.dsr_pending_rows):,}",
         styles["ReportSubtitle"],
@@ -1389,14 +1389,14 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
             table.setStyle(TableStyle([("SPAN", (2, 1), (-1, 1)), ("ALIGN", (2, 1), (-1, 1), "LEFT")]))
         story.append(table)
 
-    append_contact_list_section("5. SECRETARIES REPORTED AS LEAVE", "Total Secretaries on leave", report.leave_rows)
+    append_contact_list_section("4. SECRETARIES REPORTED AS LEAVE", "Total Secretaries on leave", report.leave_rows)
     append_contact_list_section(
-        "6. SECRETARIES REPORTED AS TRAINING / MEETING", "Total training/meeting records", report.meeting_training_rows,
+        "5. SECRETARIES REPORTED AS TRAINING / MEETING", "Total training/meeting records", report.meeting_training_rows,
     )
 
-    # 7. GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM (with PS Name, Nature of Posting, Mobile Number, Time in Red)
+    # 6. GPs THAT SUBMITTED ATTENDANCE AFTER {cutoff} (with PS Name, Nature of Posting, Mobile Number, Time in Red)
     story.append(PageBreak())
-    story.append(Paragraph(f"7. GPs THAT SUBMITTED ATTENDANCE AFTER {report.cutoff_label.upper()}", styles["SectionTitle"]))
+    story.append(Paragraph(f"6. GPs THAT SUBMITTED ATTENDANCE AFTER {report.cutoff_label.upper()}", styles["SectionTitle"]))
     story.append(Paragraph(f"Total GPs after {report.cutoff_label}: {len(report.after_9_rows):,}", styles["ReportSubtitle"]))
     after_9_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat",
@@ -1623,8 +1623,8 @@ def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name
     summary_headers = ["Indicator", "Count / Value", "Indicator", "Count / Value"]
     summary_widths = [45 * mm, 48 * mm, 45 * mm, available_width - 138 * mm]
     summary_rows = [
-        ["Total Gram Panchayats", str(total_gp_cnt), "Submitted Before 9 AM", f"{before_9_cnt} ({before_9_pct:.2f}%)"],
-        ["Submitted After 9 AM", f'<font color="#C00000"><b>{len(after_9_gps)}</b></font>' if after_9_gps else "0", "PS on Leave", str(len(leave_gps))],
+        ["Total Gram Panchayats", str(total_gp_cnt), f"Submitted Before {report.cutoff_label}", f"{before_9_cnt} ({before_9_pct:.2f}%)"],
+        [f"Submitted After {report.cutoff_label}", f'<font color="#C00000"><b>{len(after_9_gps)}</b></font>' if after_9_gps else "0", "PS on Leave", str(len(leave_gps))],
         ["PS in Meeting / Training", str(len(meeting_gps)), "Attendance Pending", f'<font color="#C00000"><b>{len(pending_gps)}</b></font>' if pending_gps else "0"],
         ["Present PS (DSR Eligible)", str(len(dsr_eligible_gps)), "DSR Submitted", f"{len(dsr_entered_gps)} ({dsr_pct:.2f}%)"],
         ["DSR Pending", f'<font color="#C00000"><b>{len(dsr_pending_gps)}</b></font>' if dsr_pending_gps else "0", "Overall Attendance %", f"{(len(submitted_gps) / total_gp_cnt * 100):.2f}%" if total_gp_cnt else "0%"],
@@ -1672,8 +1672,8 @@ def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name
     story.append(dsrp_tbl)
     story.append(Spacer(1, 6))
 
-    # 4. GPs Submitted Attendance After 9 AM
-    story.append(Paragraph(f"4. GPs Submitted Attendance After 9 AM (Total: {len(after_9_gps)})", styles["MandalSectionTitle"]))
+    # 4. GPs Submitted Attendance After Cutoff Time
+    story.append(Paragraph(f"4. GPs Submitted Attendance After {report.cutoff_label} (Total: {len(after_9_gps)})", styles["MandalSectionTitle"]))
     after9_headers = ["Sl. No.", "Gram Panchayat Name", "Attendance Time", "Attendance Status"]
     after9_widths = [14 * mm, 95 * mm, 45 * mm, available_width - 154 * mm]
     after9_table_rows: list[list[Any]] = []

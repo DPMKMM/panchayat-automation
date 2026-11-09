@@ -1481,7 +1481,7 @@ NARESH_PAGE_HTML = """<!doctype html>
       <!-- STEP 3: Module & Date Selection -->
       <div class="step-pane" id="pane-step-3">
         <p class="step-instruction">
-          Automated multi-report pipeline: The robot downloads <strong>GM-R 1.2.7 DSR Raw Data</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.11 Presentees Report</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.10 Absentees Report</strong>, and compiles the official 7-section District PDF with matched secretary details (Official District standard).
+          Automated multi-report pipeline: The robot downloads <strong>GM-R 1.2.7 DSR Raw Data</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.11 Presentees Report</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.10 Absentees Report</strong>, and compiles the official 6-section District PDF with matched secretary details (Official District standard).
         </p>
         <div class="form-row">
           <div class="form-group" style="flex:2;">
@@ -1546,7 +1546,7 @@ NARESH_PAGE_HTML = """<!doctype html>
             <li class="p-step" id="ps-2">Step 1: GP Monitoring &rarr; Downloading GM-R 1.2.7 DSR Raw Data...</li>
             <li class="p-step" id="ps-3">Step 2: Re-select GP Monitoring &rarr; Downloading GM-R 1.2.11 Presentees Report...</li>
             <li class="p-step" id="ps-4">Step 3: Re-select GP Monitoring &rarr; Downloading GM-R 1.2.10 Absentees Report...</li>
-            <li class="p-step" id="ps-5">Step 4: Compiling 7-section official District Attendance &amp; DSR PDF...</li>
+            <li class="p-step" id="ps-5">Step 4: Compiling 6-section official District Attendance &amp; DSR PDF...</li>
           </ul>
           <div id="auto-completion-banner" style="display:none; margin-top:20px; padding:18px; background:#ecfdf5; border:1.5px solid #10b981; border-radius:10px; text-align:center;">
             <strong style="color:#065f46; font-size:1.15rem; display:block; margin-bottom:6px;">🎉 Official DSR Report Generated Successfully!</strong>
@@ -1958,7 +1958,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         <div class="viewer-header">
           <div class="viewer-title">
             <span>📄</span>
-            <span>Official 7-Section District Attendance &amp; DSR Monitoring PDF</span>
+            <span>Official 6-Section District Attendance &amp; DSR Monitoring PDF</span>
           </div>
           <div class="viewer-actions">
             <a class="btn btn-gold btn-sm" href="/api/naresh/download" target="_blank">
@@ -3953,9 +3953,9 @@ NARESH_PAGE_HTML = """<!doctype html>
         setTimeout(() => {
           setSubStep(4, 'done');
           setSubStep(5, 'active');
-          titleEl.innerText = 'Step 4: Compiling 7-Section Official Attendance & DSR Report (Official District Standard)...';
+          titleEl.innerText = 'Step 4: Compiling 6-Section Official Attendance & DSR Report (Official District Standard)...';
           barFill.style.width = '90%';
-          updateStatus('Compiling official 7-section PDF report...');
+          updateStatus('Compiling official 6-section PDF report...');
         }, 3600);
 
         const json = await safeFetchJson('/api/naresh/generate', {
@@ -3970,7 +3970,7 @@ NARESH_PAGE_HTML = """<!doctype html>
         setSubStep(5, 'done');
         barFill.style.width = '100%';
         spinner.style.display = 'none';
-        titleEl.innerText = 'Official 7-Section District Attendance & DSR Report Generated!';
+        titleEl.innerText = 'Official 6-Section District Attendance & DSR Report Generated!';
         banner.style.display = 'block';
         updateStatus('Official report generated successfully!', 'success');
 

@@ -126,6 +126,8 @@ def test_combined_landscape_pdf_generation(tmp_path):
     # Page 2 must be Portrait
     p2 = reader.pages[1]
     assert float(p2.mediabox.height) > float(p2.mediabox.width)
+    p2_txt = p2.extract_text()
+    assert "2. ATTENDANCE PENDING GPs" in p2_txt
 
 
 def test_dpoa3698_persistent_session():
@@ -192,4 +194,17 @@ def test_cutoff_time_and_sorting_options():
     # Mandal B has 1 DSR pending (GP B1 is present but DSR not entered), Mandal A has 0 DSR pending
     assert rep4.mandal_rows[0]["mandal"] == "Mandal B"
     assert rep4.mandal_rows[0]["serial"] == 1
+
+    # 5. Test strict cutoff: 09:00 AM submission must NOT be included in before 9 AM
+    raw_strict = [
+        {"District Name": "Khammam", "Mandal Name": "Mandal C", "Grampanchayat Name": "GP C1", "Panchayat Lgd": "201", "First Attendence Status": "Present", "Second Attendence Status": "Present", "First Attendence Datetime": "08-11-2026 08:59:59", "DSR Status": "Entered", "Nature Of Reason": ""},
+        {"District Name": "Khammam", "Mandal Name": "Mandal C", "Grampanchayat Name": "GP C2", "Panchayat Lgd": "202", "First Attendence Status": "Present", "Second Attendence Status": "Present", "First Attendence Datetime": "08-11-2026 09:00:00", "DSR Status": "Entered", "Nature Of Reason": ""},
+    ]
+    df_strict = pd.DataFrame(raw_strict)
+    rep_strict = analyze_attendance(df_strict, cutoff_time="09:00")
+    # GP C1 (08:59:59) is < 09:00 -> before cutoff. GP C2 (09:00:00) is NOT < 09:00 -> after cutoff.
+    m_c = rep_strict.mandal_rows[0]
+    assert m_c["before_9"] == 1
+    assert len(rep_strict.after_9_rows) == 1
+    assert rep_strict.after_9_rows[0]["gp"] == "GP C2"
 
