@@ -285,3 +285,15 @@ def test_dpoa3698_force_fresh_cache_bypass(tmp_path):
 
 
 
+
+
+def test_services_hub_page():
+    resp1 = client.get('/services')
+    assert resp1.status_code == 200
+    assert 'text/html' in resp1.headers['content-type']
+    assert 'Services' in resp1.text
+    assert 'Multi-Day Attendance' in resp1.text
+
+    resp2 = client.get('/services-inspections-bal')
+    assert resp2.status_code == 200
+    assert 'Services' in resp2.text

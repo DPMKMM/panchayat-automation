@@ -751,3 +751,13 @@ def auto_load_web_report(
     resp_data = completed.public_dict()
     resp_data["download_filename"] = _record_report_filename(completed)
     return JSONResponse(resp_data)
+
+
+# ========================================================
+# SERVICES OVERVIEW HUB (/services & /services-inspections-bal)
+# ========================================================
+@router.get('/services', response_class=HTMLResponse, tags=['Services'])
+@router.get('/services-inspections-bal', response_class=HTMLResponse, tags=['Services'])
+def services_hub_page() -> HTMLResponse:
+    from dsr.services_html import get_services_page_html
+    return HTMLResponse(get_services_page_html())
