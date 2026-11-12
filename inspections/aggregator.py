@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from inspections.models import (
@@ -269,7 +269,7 @@ def consolidate_inspection_files(
         weeks_selected=effective_weeks,
         target_per_unit=target_per_unit,
         target_rule_desc=target_rule_desc,
-        generated_at=datetime.now(),
+        generated_at=datetime.now(timezone(timedelta(hours=5, minutes=30))),
         abstract_rows=abstract_rows,
         total_target=tot_target,
         total_completed=tot_completed,

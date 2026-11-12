@@ -147,17 +147,20 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
     safe_sid = re.sub(r"[^a-zA-Z0-9_-]", "", session_id)[:12] or "sess"
     safe_dist = re.sub(r"[^A-Za-z0-9_-]", "_", report.district_name or "District")
     safe_desig = re.sub(r"[^A-Za-z0-9_-]", "_", report.designation)
-    ts = report.generated_at.strftime("%Y%m%d_%H%M%S")
+    ts_download = report.generated_at.strftime("%d-%m-%Y %I:%M %p")
+    ts_disk = report.generated_at.strftime("%d-%m-%Y_%I-%M_%p")
 
-    pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts}.pdf"
-    xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Consolidated_{ts}.xlsx"
-    mw_pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts}.pdf"
-    mw_xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts}.xlsx"
+    pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts_download}.pdf"
+    xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Consolidated_{ts_download}.xlsx"
+    csv_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts_download}.csv"
+    mw_pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_download}.pdf"
+    mw_xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_download}.xlsx"
+    mw_csv_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_download}.csv"
 
-    pdf_path = reports_dir / f"{safe_sid}_{pdf_name}"
-    xlsx_path = reports_dir / f"{safe_sid}_{xlsx_name}"
-    mw_pdf_path = reports_dir / f"{safe_sid}_{mw_pdf_name}"
-    mw_xlsx_path = reports_dir / f"{safe_sid}_{mw_xlsx_name}"
+    pdf_path = reports_dir / f"{safe_sid}_{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts_disk}.pdf"
+    xlsx_path = reports_dir / f"{safe_sid}_{safe_dist}_{safe_desig}_GP_Inspections_Consolidated_{ts_disk}.xlsx"
+    mw_pdf_path = reports_dir / f"{safe_sid}_{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_disk}.pdf"
+    mw_xlsx_path = reports_dir / f"{safe_sid}_{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_disk}.xlsx"
 
     generate_inspections_pdf(report, pdf_path)
     generate_inspections_excel(report, xlsx_path)
@@ -176,13 +179,13 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
             "xlsx_path": str(xlsx_path),
             "xlsx_filename": xlsx_name,
             "csv_bytes": csv_bytes,
-            "csv_filename": f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts}.csv",
+            "csv_filename": csv_name,
             "mw_pdf_path": str(mw_pdf_path),
             "mw_pdf_filename": mw_pdf_name,
             "mw_xlsx_path": str(mw_xlsx_path),
             "mw_xlsx_filename": mw_xlsx_name,
             "mw_csv_bytes": mw_csv_bytes,
-            "mw_csv_filename": f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts}.csv",
+            "mw_csv_filename": mw_csv_name,
         }
     return payload
 

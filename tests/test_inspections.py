@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -297,24 +298,50 @@ def test_inspections_api_rbac_session_isolation_live_and_upload(monkeypatch):
     assert other_data.status_code == 200
     assert other_data.json()["generated"] is False
 
-    # Same session downloads PDF, Excel, CSV
+    # Same session downloads PDF, Excel, CSV (and Month-Wise artifacts) with DD-MM-YYYY HH:MM AM/PM filename
+    ts_re = re.compile(r"_\d{2}-\d{2}-\d{4} \d{2}:\d{2} (?:AM|PM)\.(?:pdf|xlsx|csv)\"")
+
     pdf_dl = client.get(
         "/api/inspections/download-pdf",
         headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
     )
     assert pdf_dl.status_code == 200 and pdf_dl.content.startswith(b"%PDF")
+    assert ts_re.search(pdf_dl.headers.get("Content-Disposition", ""))
 
     xl_dl = client.get(
         "/api/inspections/download-excel",
         headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
     )
     assert xl_dl.status_code == 200 and xl_dl.content[:2] == b"PK"
+    assert ts_re.search(xl_dl.headers.get("Content-Disposition", ""))
 
     csv_dl = client.get(
         "/api/inspections/download-csv",
         headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
     )
     assert csv_dl.status_code == 200 and "Kalluru" in csv_dl.text
+    assert ts_re.search(csv_dl.headers.get("Content-Disposition", ""))
+
+    mw_pdf_dl = client.get(
+        "/api/inspections/download-monthwise-pdf",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
+    )
+    assert mw_pdf_dl.status_code == 200 and mw_pdf_dl.content.startswith(b"%PDF")
+    assert ts_re.search(mw_pdf_dl.headers.get("Content-Disposition", ""))
+
+    mw_xl_dl = client.get(
+        "/api/inspections/download-monthwise-excel",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
+    )
+    assert mw_xl_dl.status_code == 200 and mw_xl_dl.content[:2] == b"PK"
+    assert ts_re.search(mw_xl_dl.headers.get("Content-Disposition", ""))
+
+    mw_csv_dl = client.get(
+        "/api/inspections/download-monthwise-csv",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
+    )
+    assert mw_csv_dl.status_code == 200
+    assert ts_re.search(mw_csv_dl.headers.get("Content-Disposition", ""))
 
     # 4. Live Playwright automation endpoint (/api/inspections/generate & /weeks) executes cleanly with mocked session bot
     sess = session_manager.get_or_create_session(sid)
