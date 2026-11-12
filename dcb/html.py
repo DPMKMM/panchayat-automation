@@ -5,7 +5,7 @@ TAX_PAGE_HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Telangana ePanchayat · House Tax DCB Consolidation</title>
+  <title>House Tax DCB Consolidation | e-Panchayat Automation Console</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
@@ -991,6 +991,15 @@ TAX_PAGE_HTML = """<!doctype html>
         font-size: 26px !important;
       }
     }
+    @media (max-width: 768px) {
+      .nav-inner { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 6px; }
+      .nav-brand { gap: 8px; }
+      .nav-brand-main { font-size: 0.94rem; }
+      .nav-menu { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
+      .nav-link { padding: 6px 10px; font-size: 0.82rem; }
+      main { padding: 0 12px; margin: 16px auto 40px; }
+      .hero-strip { padding: 18px 16px; }
+    }
   </style>
 </head>
 <body>
@@ -999,8 +1008,9 @@ TAX_PAGE_HTML = """<!doctype html>
     <div class="nav-inner">
       <a class="nav-brand" href="/">
         <span class="nav-brand-logo">🏛️</span>
-        <div class="nav-brand-titles">
-          <span class="nav-brand-main">Panchayat Raj Analytics Reports</span>
+        <div class="nav-brand-titles" style="flex-direction:row; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="nav-brand-main">e-Panchayat Automation</span>
+          <span id="subpage-console-pill" style="display:none; align-items:center; background:rgba(255,255,255,0.16); border:1px solid rgba(251,191,36,0.65); color:#fde68a; font-size:0.68rem; font-weight:800; padding:2px 8px; border-radius:999px; letter-spacing:0.35px; text-transform:uppercase;">e-Panchayat Automation Console</span>
         </div>
       </a>
       <nav class="nav-menu">
@@ -1015,8 +1025,9 @@ TAX_PAGE_HTML = """<!doctype html>
     <!-- Hero Banner -->
     <section class="hero-strip">
       <div class="hero-info">
-        <span class="hero-badge">ePanchayat Departmental Live Data</span>
+        <span class="hero-badge">Welcome to e-Panchayat Automation · e-Panchayat Automation Console</span>
         <h1>Gram Panchayat Wise DCB Status Report</h1>
+        <p style="font-weight:700; color:#fde68a; margin-bottom:4px;">Simplifying Panchayat Administration through Smart Reporting and Automation.</p>
         <p>Consolidated Demand, Collection, and Balance (DCB) for House Tax across all Mandals and Gram Panchayats</p>
       </div>
     </section>
@@ -1113,7 +1124,7 @@ TAX_PAGE_HTML = """<!doctype html>
       <button type="button" class="tab-item" onclick="switchTab('pdf')" id="tab-btn-pdf">
         📄 Official Landscape PDF Viewer
       </button>
-      <button type="button" class="tab-item" onclick="switchTab('abstract')">
+      <button type="button" class="tab-item" onclick="switchTab('abstract')" id="tab-btn-abstract">
         🏛️ Mandal Wise Consolidated Abstract
       </button>
       <button type="button" class="tab-item" onclick="switchTab('detail')">
@@ -1126,10 +1137,10 @@ TAX_PAGE_HTML = """<!doctype html>
       <div class="pdf-viewer-card">
         <div class="pdf-toolbar" id="pdf-toolbar" style="display: none;">
           <div class="pdf-toolbar-info">
-            Official Departmental Landscape Format · Generated for <span id="pdf-dist-label">--</span>
+            e-Panchayat Automation Console · Official Departmental Landscape Format · Generated for <span id="pdf-dist-label">--</span>
           </div>
           <div style="display:flex; gap:8px;">
-            <a id="btn-fullscreen-pdf" href="#" target="_blank" class="btn btn-pdf" style="padding:6px 12px; font-size:0.82rem;">
+            <a id="btn-fullscreen-pdf" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-pdf" style="padding:6px 12px; font-size:0.82rem;" onclick="if (this.getAttribute('href') === '#') { showStatus('Please select a District and click Generate Report first.', 'error'); return false; }">
               ↗ Open in Full Screen / Native Viewer
             </a>
             <button type="button" class="btn btn-outline" style="padding:6px 12px; font-size:0.82rem;" onclick="reloadPdfViewer()">
@@ -1141,7 +1152,7 @@ TAX_PAGE_HTML = """<!doctype html>
           <div style="font-size:3.2rem; margin-bottom:12px;">🏛️</div>
           <h3 style="font-size:1.3rem; font-weight:700; margin-bottom:8px; color:#173b2b;">Please Select a District</h3>
           <p style="max-width:520px; margin:0 auto; font-size:0.92rem; line-height:1.5; color:#557267;">
-            Select a <strong>District</strong> from the controls above (and optionally a specific <strong>Mandal</strong>), then click the <strong>⚡ Generate Report</strong> button to load the official PDF report and consolidated DCB data.
+            e-Panchayat Automation is ready — select a <strong>District</strong> from the controls above (and optionally a specific <strong>Mandal</strong>), then click <strong>⚡ Generate Report</strong> to load the official PDF report and consolidated DCB data.
           </p>
         </div>
         <iframe id="pdf-frame" class="pdf-iframe" style="display:none;" src="about:blank"></iframe>
@@ -1172,7 +1183,7 @@ TAX_PAGE_HTML = """<!doctype html>
           <div style="font-size:3.2rem; margin-bottom:12px;">📊</div>
           <h3 style="font-size:1.3rem; font-weight:700; margin-bottom:8px; color:#173b2b;">Please Select a District</h3>
           <p style="max-width:520px; margin:0 auto; font-size:0.92rem; line-height:1.5; color:#557267;">
-            Select a District (and optionally a Mandal) above, then click <strong>⚡ Generate Report</strong> to load the full Power BI style interactive report and charts.
+            e-Panchayat Automation Console is ready — select a District (and optionally a Mandal) above, then click <strong>⚡ Generate Report</strong> to load the interactive visual report and charts.
           </p>
         </div>
 
@@ -1424,9 +1435,13 @@ TAX_PAGE_HTML = """<!doctype html>
   </div>
 
   <footer>
-    Executive Analytics &amp; Monitoring Portal Owned, maintained and updated by DPM Khammam
+    <div style="max-width:1240px; margin:0 auto; padding:6px 10px; text-align:center; line-height:1.55;">
+      <strong style="display:block; font-size:0.95rem; font-weight:800; color:#0c3829;">e-Panchayat Automation</strong>
+      <div style="font-size:0.84rem; color:#486158; margin-top:2px;">Simplifying Panchayat Administration through Smart Reporting and Automation.</div>
+    </div>
   </footer>
 
+  <script src="/static/js/dept_session.js?v=2"></script>
   <script>
     let allRecords = [];
     let filteredRecords = [];
@@ -1500,9 +1515,11 @@ TAX_PAGE_HTML = """<!doctype html>
       if (targetPane) targetPane.classList.add('active');
 
       if (tab === 'visual') {
-        if (chartClustered) chartClustered.resize();
-        if (chartRanking) chartRanking.resize();
-        if (chartPie) chartPie.resize();
+        if (typeof chartDistClustered !== 'undefined' && chartDistClustered) chartDistClustered.resize();
+        if (typeof chartDistRanking !== 'undefined' && chartDistRanking) chartDistRanking.resize();
+        if (typeof chartDistDonut !== 'undefined' && chartDistDonut) chartDistDonut.resize();
+        if (typeof chartMandalRanking !== 'undefined' && chartMandalRanking) chartMandalRanking.resize();
+        if (typeof chartMandalDcb !== 'undefined' && chartMandalDcb) chartMandalDcb.resize();
       }
     }
 
@@ -1541,9 +1558,10 @@ TAX_PAGE_HTML = """<!doctype html>
       if (!sel) return;
       sel.innerHTML = '<option value="" selected disabled>⏳ Loading districts from portal...</option>';
 
-      // Check if URL specifies a district
+      // Check if URL specifies a district / mandal
       const urlParams = new URLSearchParams(window.location.search);
       const urlDist = (urlParams.get('district') || '').trim();
+      const urlMandal = (urlParams.get('mandal') || '').trim();
 
       try {
         const res = await fetch('/api/tax/districts');
@@ -1561,7 +1579,11 @@ TAX_PAGE_HTML = """<!doctype html>
             });
             if (urlDist) {
               sel.value = urlDist;
-              onDistrictChange();
+              await onDistrictChanged();
+              if (urlMandal) {
+                const mSel = document.getElementById('mandal-select');
+                if (mSel) mSel.value = urlMandal;
+              }
             } else {
               showStatus('Please select a District and click Generate Report to begin.', 'info');
             }
@@ -1580,7 +1602,11 @@ TAX_PAGE_HTML = """<!doctype html>
         });
         if (urlDist) {
           sel.value = urlDist;
-          onDistrictChange();
+          await onDistrictChanged();
+          if (urlMandal) {
+            const mSel = document.getElementById('mandal-select');
+            if (mSel) mSel.value = urlMandal;
+          }
         } else {
           showStatus('Districts loaded. Please select a District and click Generate Report.', 'info');
         }
@@ -1607,9 +1633,12 @@ TAX_PAGE_HTML = """<!doctype html>
       const pdfDlUrl = `/api/tax/download-pdf?district=${encDist}${mandalParam}`;
       const excelUrl = `/api/tax/download?district=${encDist}${mandalParam}&format=xlsx`;
       const csvUrl = `/api/tax/download?district=${encDist}${mandalParam}&format=csv`;
+      const finalPdfUrl = (window.DeptSessionManager && window.DeptSessionManager.isConsoleContext())
+        ? window.DeptSessionManager.appendSessionParam(pdfUrl)
+        : pdfUrl;
 
       const viewPdfBtn = document.getElementById('btn-view-pdf');
-      if (viewPdfBtn) viewPdfBtn.href = pdfUrl;
+      if (viewPdfBtn) viewPdfBtn.href = finalPdfUrl;
       const dlPdfBtn = document.getElementById('btn-download-pdf');
       if (dlPdfBtn) {
         dlPdfBtn.onclick = (e) => {
@@ -1631,11 +1660,11 @@ TAX_PAGE_HTML = """<!doctype html>
       const dlCsvBtn = document.getElementById('btn-download-csv');
       if (dlCsvBtn) dlCsvBtn.href = csvUrl;
       const fsPdfBtn = document.getElementById('btn-fullscreen-pdf');
-      if (fsPdfBtn) fsPdfBtn.href = pdfUrl;
+      if (fsPdfBtn) fsPdfBtn.href = finalPdfUrl;
 
       const label = isAllMandals ? `${dist} District` : `${mandal} Mandal (${dist} District)`;
       document.getElementById('pdf-dist-label').textContent = label;
-      document.getElementById('pdf-frame').src = pdfUrl;
+      document.getElementById('pdf-frame').src = finalPdfUrl;
     }
 
     async function onDistrictChanged() {
@@ -1715,6 +1744,18 @@ TAX_PAGE_HTML = """<!doctype html>
         showStatus(`Loading consolidated data for ${dist}...`, 'info');
         const mandal = document.getElementById('mandal-select').value;
         const res = await fetch(`/api/tax/data?district=${encodeURIComponent(dist)}&mandal=${encodeURIComponent(mandal)}`);
+        if ((res.status === 401 || res.status === 403) && window.DeptSessionManager && window.DeptSessionManager.isConsoleContext()) {
+          const retUrl = new URL(window.location.href);
+          retUrl.searchParams.delete('auto_generate');
+          window.DeptSessionManager.redirectToConsoleDeptLogin({
+            module: 'tax-dcb',
+            returnUrl: retUrl.pathname + retUrl.search,
+            autoGenerate: false,
+            reason: 'expired',
+            params: { district: dist, mandal },
+          });
+          return;
+        }
         const data = await res.json();
 
         // Summary KPI
@@ -1735,6 +1776,23 @@ TAX_PAGE_HTML = """<!doctype html>
         mandalAbstract = data.mandal_abstract || [];
         filteredRecords = [...allRecords];
 
+        const tabAbs = document.getElementById('tab-btn-abstract');
+        if (data.is_mandal_level) {
+          if (tabAbs) tabAbs.style.display = 'none';
+          const paneAbs = document.getElementById('pane-abstract');
+          if (paneAbs && paneAbs.classList.contains('active')) {
+            switchTab('detail');
+          }
+          if (data.mandal_name) {
+            const mandalSel = document.getElementById('mandal-select');
+            if (mandalSel) {
+              mandalSel.value = data.mandal_name;
+              mandalSel.disabled = true;
+            }
+          }
+        } else {
+          if (tabAbs) tabAbs.style.display = '';
+        }
         renderMandalTable(mandalAbstract, s);
         applyFilter();
         renderExecutiveVisualReport(data);
@@ -2412,7 +2470,7 @@ TAX_PAGE_HTML = """<!doctype html>
       const btn = document.getElementById('btn-refresh');
       btn.disabled = true;
       btn.textContent = '⏳ Refreshing from epanchayat...';
-      showStatus('Downloading latest live DCB data from ePanchayat Telangana portal...', 'info');
+      showStatus('Downloading latest live DCB data via e-Panchayat Automation...', 'info');
 
       try {
         const res = await fetch('/api/tax/refresh', { method: 'POST' });
@@ -2449,8 +2507,76 @@ TAX_PAGE_HTML = """<!doctype html>
     });
     document.getElementById('search-input').addEventListener('input', applyFilter);
 
-    // Initial run
-    initDistricts();
+    // Initial run (Enforce centralized Department Login only when opened in Console scope)
+    (async () => {
+      const mgr = window.DeptSessionManager;
+      if (mgr && mgr.isConsoleContext()) {
+        const sp = new URLSearchParams(window.location.search || '');
+        const reqDist = (sp.get('district') || '').trim();
+        const reqMandal = (sp.get('mandal') || 'all').trim();
+        const origFetch = window.fetch;
+        window.fetch = function (resource, init) {
+          const urlStr = typeof resource === 'string' ? resource : (resource && resource.url) || '';
+          if (urlStr.startsWith('/api/')) {
+            return mgr.consoleFetch(resource, init);
+          }
+          return origFetch.call(this, resource, init);
+        };
+        const stage1 = await mgr.verifyStage1PortalStatus();
+        const deptSt = stage1.authenticated ? await mgr.verifyStatus() : { authenticated: false };
+        if (!stage1.authenticated || !deptSt.authenticated) {
+          const retUrl = new URL(window.location.href);
+          retUrl.searchParams.delete('auto_generate');
+          mgr.redirectToConsoleDeptLogin({
+            module: 'tax-dcb',
+            returnUrl: retUrl.pathname + retUrl.search,
+            autoGenerate: false,
+            reason: deptSt.expired ? 'expired' : 'required',
+            params: { district: reqDist, mandal: reqMandal },
+          });
+          return;
+        }
+        await initDistricts();
+        const distSel = document.getElementById('district-select');
+        if (distSel && !distSel.value && deptSt.data && deptSt.data.district_name) {
+          const cleanDist = deptSt.data.district_name.replace(/\bDistrict\b/ig, '').trim().toLowerCase();
+          for (const opt of distSel.options) {
+            if (opt.value && opt.value.toLowerCase() === cleanDist) {
+              distSel.value = opt.value;
+              break;
+            }
+          }
+        }
+        if (distSel && distSel.value) {
+          await onDistrictChanged();
+          const mSel = document.getElementById('mandal-select');
+          if (mSel && reqMandal && reqMandal !== 'all') mSel.value = reqMandal;
+          if (sp.get('auto_generate') === '1') {
+            await onGenerateReportClick();
+          }
+        }
+        return;
+      }
+      await initDistricts();
+    })();
+  </script>
+  <script>
+    (() => {
+      try {
+        const sp = new URLSearchParams(window.location.search || '');
+        const siteVal = (sp.get('site') || '').trim().toLowerCase();
+        if (!siteVal || (siteVal !== 'console' && siteVal !== 'reports' && siteVal !== 'portal')) return;
+        document.querySelectorAll('a[href]').forEach((a) => {
+          const href = a.getAttribute('href') || '';
+          if (!href.startsWith('/') || href.startsWith('//') || href.startsWith('/api/')) return;
+          const parsed = new URL(href, window.location.origin);
+          if (!parsed.searchParams.has('site')) {
+            parsed.searchParams.set('site', siteVal);
+            a.setAttribute('href', parsed.pathname + parsed.search + parsed.hash);
+          }
+        });
+      } catch (e) {}
+    })();
   </script>
 </body>
 </html>

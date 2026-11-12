@@ -1,370 +1,444 @@
-"""High-Level Service Interface for Monthly Activity Statement (MAS) Module.
-
-Coordinates:
-  - Cache management (in-memory per session and disk under data/reports)
-  - Period discovery (Financial Years & Months)
-  - Playwright automation orchestration
-  - PDF & Excel report generation
-"""
+"""Business logic & pipeline orchestration for MAS Consolidated Reporting (GM-R 5.24 + 5.23)."""
 
 from __future__ import annotations
 
-import json
 import logging
-from datetime import datetime
+import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from mas.automation import fetch_available_mas_periods, run_mas_automation
-from mas.excel_generator import generate_mas_excel
-from mas.models import DEFAULT_MAS_ACTIVITIES, DistrictMASReport, GPMASDetail, MandalMASSummary
-from mas.pdf_generator import generate_mas_pdf
+from core.config import get_reports_dir
+from mas import automation as mas_automation
+from mas.excel_generator import export_all_deliverables
+from mas.models import (
+    ALL_18_MODULES,
+    build_module_options,
+    make_unique_key,
+    normalize_district_and_slug,
+    resolve_excluded_set,
+)
 
-logger = logging.getLogger("mas_service")
-
-BASE_DIR = Path(__file__).resolve().parent
-ROOT_DIR = BASE_DIR.parent
-REPORTS_DIR = ROOT_DIR / "data" / "reports"
-REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-
-# Cache active reports in memory keyed by (session_id, financial_year, month)
-_session_reports: dict[tuple[str, str, str], DistrictMASReport] = {}
+logger = logging.getLogger(__name__)
 
 
-def reset_mas_data(session_id: str = "") -> None:
-    """Wipes in-memory session cache for MAS without deleting persisted reports on disk."""
-    global _session_reports
-    clean_sid = (session_id or "").strip()
-    if clean_sid:
-        keys_to_del = [k for k in list(_session_reports.keys()) if k[0] == clean_sid]
-        for k in keys_to_del:
-            _session_reports.pop(k, None)
+def get_available_mas_modules() -> List[Dict[str, Any]]:
+    """Return UI filter options for all 18 MAS indicators."""
+    return build_module_options()
+
+
+def join_reports(
+    gmr_524_data: dict,
+    gmr_523_lookup: dict,
+    excluded_modules: Optional[List[str]] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Join GM-R 5.24 17-module records and GM-R 5.23 Births records across GPs."""
+    if excluded_modules is None:
+        excluded_modules = []
+
+    normalized_excluded = resolve_excluded_set(excluded_modules)
+
+    gmr_524_gps = gmr_524_data.get("gram_panchayats", [])
+    births_lookup = gmr_523_lookup.get("lookup", gmr_523_lookup)
+
+    joined_records: List[Dict[str, Any]] = []
+    pending_action_list: List[Dict[str, Any]] = []
+    unmatched_524 = 0
+
+    for gp in gmr_524_gps:
+        mandal = gp.get("Mandal", "")
+        gp_name = gp.get("Gram_Panchayat", "")
+        ukey = gp.get("Unique_Key") or make_unique_key(mandal, gp_name)
+
+        birth_info = births_lookup.get(ukey)
+        if not birth_info:
+            unmatched_524 += 1
+            birth_status = gp.get("Births_Data_Entered") or "Entered"
+            bal_gps = 0 if birth_status == "Entered" else 1
+            bal_births = 0
+        else:
+            birth_status = birth_info.get("births_data_entered", "Entered")
+            bal_gps = birth_info.get("balance_gps_data_to_enter", 0)
+            bal_births = birth_info.get("balance_to_be_entered", 0)
+
+        merged_gp = {
+            "Unique_Key": ukey,
+            "Mandal": mandal,
+            "GP_SNo": gp.get("GP_SNo"),
+            "Gram_Panchayat": gp_name,
+            "MAS_Nursery": gp.get("MAS_Nursery"),
+            "MAS_Plantation": gp.get("MAS_Plantation"),
+            "MAS_Vaikunta Dhamam": gp.get("MAS_Vaikunta Dhamam"),
+            "MAS_Dump Yard": gp.get("MAS_Dump Yard"),
+            "MAS_Water Supply": gp.get("MAS_Water Supply"),
+            "MAS_GP Meeting": gp.get("MAS_GP Meeting"),
+            "MAS_Gram Sabha": gp.get("MAS_Gram Sabha"),
+            "MAS_Record Maintenance": gp.get("MAS_Record Maintenance"),
+            "MAS_Approvals & Certificates": gp.get("MAS_Approvals & Certificates"),
+            "MAS_Deaths": gp.get("MAS_Deaths"),
+            "MAS_Receipts": gp.get("MAS_Receipts"),
+            "MAS_Expenditure": gp.get("MAS_Expenditure"),
+            "MAS_Cheque Details": gp.get("MAS_Cheque Details"),
+            "MAS_Salary Details": gp.get("MAS_Salary Details"),
+            "MAS_VWSC & EGS Balance": gp.get("MAS_VWSC & EGS Balance"),
+            "MAS_MGNREGA Balance": gp.get("MAS_MGNREGA Balance"),
+            "MAS_Electricity Payment": gp.get("MAS_Electricity Payment"),
+            "Births_Data_Entered": birth_status,
+            "Births_GP_Balance": bal_gps,
+            "Births_Pending_Count": bal_births,
+        }
+
+        included_modules = [(label, col) for label, col in ALL_18_MODULES if label not in normalized_excluded]
+        total_incl = len(included_modules) or 18
+        pending_mods = [label for label, col in included_modules if merged_gp.get(col) not in ("Completed", "Entered")]
+
+        completed_cnt = total_incl - len(pending_mods)
+        comp_rate = round((completed_cnt / total_incl) * 100, 2)
+
+        merged_gp["Activities_Completed"] = completed_cnt
+        merged_gp["Total_Activities"] = total_incl
+        merged_gp["Completion_Rate"] = comp_rate
+        merged_gp["Compliance_Status"] = "Compliant" if not pending_mods else "Action Required"
+        merged_gp["Pending_Modules_List"] = pending_mods
+        joined_records.append(merged_gp)
+
+        if pending_mods:
+            pending_action_list.append(
+                {
+                    "S No": len(pending_action_list) + 1,
+                    "Mandal": mandal,
+                    "Gram_Panchayat": gp_name,
+                    "Pending_Count": len(pending_mods),
+                    "Pending_Modules": ", ".join(pending_mods),
+                    "Completed_Count": completed_cnt,
+                    "Total_Activities": total_incl,
+                    "Completion_Rate": f"{comp_rate}%",
+                    "Action_Required": "Immediate follow-up by MPO / PS",
+                }
+            )
+
+    logger.info("Joined %d GP records cleanly (Unmatched in 5.23: %d).", len(joined_records), unmatched_524)
+    return joined_records, pending_action_list, []
+
+
+def build_full_18_module_abstract(
+    joined_records: List[Dict[str, Any]],
+    mandal_birth_bal: Optional[Dict[str, int]] = None,
+    excluded_modules: Optional[List[str]] = None,
+    scraped_mandal_abstract: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any], List[str]]:
+    """Compute per-mandal and district-total 18-module matrix honoring excluded modules."""
+    if mandal_birth_bal is None:
+        mandal_birth_bal = {}
+
+    normalized_excluded = resolve_excluded_set(excluded_modules)
+    included_labels = [label for label, _ in ALL_18_MODULES if label not in normalized_excluded]
+    n_included = len(included_labels)
+    if n_included == 0:
+        n_included = len(ALL_18_MODULES)
+        normalized_excluded = set()
+
+    mandals_data: List[Dict[str, Any]] = []
+    tot_district_updated = 0
+    tot_district_fields = 0
+    module_district_totals = {label: {"Entered": 0, "Not Entered": 0} for label, _ in ALL_18_MODULES}
+
+    if scraped_mandal_abstract:
+        for i, m in enumerate(scraped_mandal_abstract, 1):
+            m_name = m["mandal_name"]
+            n_gps = m["no_of_gps"]
+            raw_mods = m.get("modules", {})
+            m_updated = 0
+            m_possible = 0
+
+            m_dict: Dict[str, Any] = {
+                "S No": i,
+                "Mandal Name": m_name,
+                "No of GPs": n_gps,
+                "modules": {},
+            }
+
+            for label, _ in ALL_18_MODULES:
+                is_excl = label in normalized_excluded
+                mod_info = raw_mods.get(label)
+                if not mod_info:
+                    for k, v in raw_mods.items():
+                        if (
+                            k.lower() == label.lower()
+                            or (label == "Recipts" and k.lower() == "receipts")
+                            or (label == "Receipts" and k.lower() == "recipts")
+                        ):
+                            mod_info = v
+                            break
+                if not mod_info:
+                    mod_info = {"entered": n_gps, "not_entered": 0, "pct": 100.0}
+
+                ent = mod_info.get("entered", 0)
+                not_ent = mod_info.get("not_entered", 0)
+                mod_total = ent + not_ent
+                pct = mod_info.get("pct") if "pct" in mod_info else (round((ent / mod_total * 100), 2) if mod_total > 0 else 100.0)
+
+                if not is_excl:
+                    m_updated += ent
+                    m_possible += mod_total
+
+                m_dict["modules"][label] = {
+                    "Entered": ent,
+                    "Not Entered": not_ent,
+                    "% Entered": pct,
+                    "formatted_compact": f"{not_ent} / {ent}",
+                    "is_excluded": is_excl,
+                }
+                module_district_totals[label]["Entered"] += ent
+                module_district_totals[label]["Not Entered"] += not_ent
+
+            overall_pct = round((m_updated / m_possible * 100), 2) if m_possible > 0 else 100.0
+            m_dict["Total Fields"] = m_possible
+            m_dict["No of Updated"] = m_updated
+            m_dict["Overall % Entered"] = overall_pct
+            m_dict["Included Modules Count"] = n_included
+            m_dict["Excluded Modules"] = sorted(list(normalized_excluded))
+
+            tot_district_updated += m_updated
+            tot_district_fields += m_possible
+            mandals_data.append(m_dict)
     else:
-        _session_reports.clear()
+        import pandas as pd
 
+        df = pd.DataFrame(joined_records)
+        mandal_groups = df.groupby("Mandal")
+        for i, m_name in enumerate(sorted(df["Mandal"].unique()), 1):
+            grp = mandal_groups.get_group(m_name)
+            n_gps = len(grp)
+            m_updated = 0
+            m_possible = 0
 
-def get_available_periods(bot: Any = None) -> dict[str, list[str]]:
-    """Returns available years (displaying from 2020), financial years, and reporting months.
+            m_dict = {
+                "S No": i,
+                "Mandal Name": m_name,
+                "No of GPs": n_gps,
+                "modules": {},
+            }
 
-    Extracts from live portal if bot session is active, else returns standard list.
-    """
-    if bot and getattr(bot, "page", None):
-        try:
-            return fetch_available_mas_periods(bot)
-        except Exception as exc:
-            logger.warning("Could not extract live MAS periods from portal: %s", exc)
+            for label, col in ALL_18_MODULES:
+                is_excl = label in normalized_excluded
+                if label == "Birth Details" and m_name in mandal_birth_bal:
+                    not_ent = mandal_birth_bal.get(m_name, 0)
+                    ent = n_gps - not_ent
+                else:
+                    ent = len(grp[grp[col].isin(["Completed", "Entered"])])
+                    not_ent = n_gps - ent
 
-    current_yr = datetime.now().year
-    years_from_2020 = [str(y) for y in range(2020, current_yr + 1)]
+                mod_total = ent + not_ent
+                pct = round((ent / mod_total * 100), 2) if mod_total > 0 else 100.0
 
-    return {
-        "years": years_from_2020,
-        "financial_years": ["2026-2027", "2025-2026", "2024-2025", "2023-2024", "2022-2023", "2021-2022", "2020-2021"],
-        "months": [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ],
+                if not is_excl:
+                    m_updated += ent
+                    m_possible += mod_total
+
+                m_dict["modules"][label] = {
+                    "Entered": ent,
+                    "Not Entered": not_ent,
+                    "% Entered": pct,
+                    "formatted_compact": f"{not_ent} / {ent}",
+                    "is_excluded": is_excl,
+                }
+                module_district_totals[label]["Entered"] += ent
+                module_district_totals[label]["Not Entered"] += not_ent
+
+            overall_pct = round((m_updated / m_possible * 100), 2) if m_possible > 0 else 100.0
+            m_dict["Total Fields"] = m_possible
+            m_dict["No of Updated"] = m_updated
+            m_dict["Overall % Entered"] = overall_pct
+            m_dict["Included Modules Count"] = n_included
+            m_dict["Excluded Modules"] = sorted(list(normalized_excluded))
+
+            tot_district_updated += m_updated
+            tot_district_fields += m_possible
+            mandals_data.append(m_dict)
+
+    district_overall_pct = round((tot_district_updated / tot_district_fields * 100), 2) if tot_district_fields > 0 else 100.0
+    total_row = {
+        "S No": "Total",
+        "Mandal Name": "District Total",
+        "No of GPs": sum(m["No of GPs"] for m in mandals_data) or len(joined_records),
+        "Total Fields": tot_district_fields,
+        "No of Updated": tot_district_updated,
+        "Overall % Entered": district_overall_pct,
+        "included_modules_count": n_included,
+        "excluded_modules": sorted(list(normalized_excluded)),
+        "modules": {},
     }
 
+    for label, _ in ALL_18_MODULES:
+        ent = module_district_totals[label]["Entered"]
+        not_ent = module_district_totals[label]["Not Entered"]
+        mod_tot = ent + not_ent
+        pct = round((ent / mod_tot * 100), 2) if mod_tot > 0 else 100.0
+        total_row["modules"][label] = {
+            "Entered": ent,
+            "Not Entered": not_ent,
+            "% Entered": pct,
+            "formatted_compact": f"{not_ent} / {ent}",
+            "is_excluded": label in normalized_excluded,
+        }
 
-def get_latest_mas_report(
-    financial_year: str = "",
-    month: str = "",
-    session_id: str = "",
-) -> Optional[DistrictMASReport]:
-    """Retrieves active cached report for the session and period."""
-    global _session_reports
-    clean_sid = (session_id or "default").strip()
-    clean_fy = (financial_year or "").strip()
-    clean_m = (month or "").strip()
-
-    # Exact key match
-    if clean_fy and clean_m and (clean_sid, clean_fy, clean_m) in _session_reports:
-        return _session_reports[(clean_sid, clean_fy, clean_m)]
-
-    # Match latest for this session if period is not specifically requested
-    if not clean_fy and not clean_m:
-        session_reps = [r for (s, fy, m), r in _session_reports.items() if s == clean_sid]
-        if session_reps:
-            return session_reps[-1]
-
-        # Fallback to default session
-        if clean_sid != "default":
-            default_reps = [r for (s, fy, m), r in _session_reports.items() if s == "default"]
-            if default_reps:
-                return default_reps[-1]
-
-    # Disk cache fallback
-    cache_path = ROOT_DIR / "data" / "mas_report_latest.pkl"
-    if cache_path.exists():
-        try:
-            import pickle
-            with open(cache_path, "rb") as f:
-                rep = pickle.load(f)
-                _session_reports[(clean_sid, rep.financial_year, rep.month_name)] = rep
-                if (not clean_fy or rep.financial_year == clean_fy) and (not clean_m or rep.month_name == clean_m):
-                    return rep
-        except Exception as exc:
-            logger.warning("Could not load mas_report_latest.pkl: %s", exc)
-
-    return None
+    return mandals_data, total_row, sorted(list(normalized_excluded))
 
 
-def get_mas_filename_prefix(report: DistrictMASReport) -> str:
-    """Computes a filesystem-safe filename prefix."""
-    clean_dist = (report.district_name or "").strip().title().replace(" ", "_")
-    if clean_dist.endswith("_District"):
-        clean_dist = clean_dist[:-9].strip()
-    if not clean_dist or clean_dist.lower() == "district":
-        return "Telangana_District"
-    return clean_dist
+def _resolve_output_dir(session_id: Optional[str] = None, output_dir: Optional[Path] = None) -> Path:
+    if output_dir is not None:
+        p = Path(output_dir)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    base = get_reports_dir()
+    if session_id:
+        safe_sid = re.sub(r"[^A-Za-z0-9_-]+", "_", str(session_id)).strip("_")[:48] or "default"
+        p = base / f"mas_{safe_sid}"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    base.mkdir(parents=True, exist_ok=True)
+    return base
 
 
-def filter_mas_report(report: DistrictMASReport, mandal: str = "all") -> DistrictMASReport:
-    """Filters a DistrictMASReport to a single mandal or returns the full district report."""
-    if not report:
-        return report
-    clean_mandal = (mandal or "").strip()
-    if not clean_mandal or clean_mandal.lower() in ("all", "all mandals", "district", "all mandals (district overview)"):
-        return report
+def generate_consolidated_report(
+    excluded_modules: Optional[List[str]] = None,
+    month: str = "July",
+    year: int = 2026,
+    page=None,
+    strict_live: bool = False,
+    district_name: str = "Khammam",
+    report_type: str = "abstract_and_gp",
+    session_id: Optional[str] = None,
+    output_dir: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """End-to-end MAS report consolidation and deliverable export."""
+    if excluded_modules is None:
+        excluded_modules = []
 
-    import re
-    norm_filter = re.sub(r"[^a-zA-Z0-9]", "", clean_mandal).lower()
-    matched_m = None
-    for m in report.mandals:
-        norm_m = re.sub(r"[^a-zA-Z0-9]", "", m.mandal_name).lower()
-        if norm_m == norm_filter or norm_filter in norm_m or norm_m in norm_filter:
-            matched_m = m
-            break
+    clean_dist, _ = normalize_district_and_slug(district_name)
+    include_gp_data = str(report_type or "abstract_and_gp").strip().lower() != "abstract_only"
 
-    if not matched_m:
-        return report
-
-    m_name = matched_m.mandal_name
-    filtered_pending = [
-        gp for gp in report.all_pending_gps
-        if re.sub(r"[^a-zA-Z0-9]", "", gp.mandal_name).lower() == re.sub(r"[^a-zA-Z0-9]", "", m_name).lower()
-    ]
-
-    filtered_birth_mandals = [
-        bm for bm in report.birth_mandals
-        if re.sub(r"[^a-zA-Z0-9]", "", bm.mandal_name).lower() == re.sub(r"[^a-zA-Z0-9]", "", m_name).lower()
-    ]
-    bm = filtered_birth_mandals[0] if filtered_birth_mandals else None
-    filtered_birth_pending = [
-        bgp for bgp in report.all_pending_birth_gps
-        if re.sub(r"[^a-zA-Z0-9]", "", bgp.mandal_name).lower() == re.sub(r"[^a-zA-Z0-9]", "", m_name).lower()
-    ]
-
-    clean_dist = report.district_name or "Khammam"
-    if clean_dist.upper().endswith("DISTRICT"):
-        base_name = clean_dist[:-8].strip()
-    else:
-        base_name = clean_dist
-
-    cloned = DistrictMASReport(
-        district_name=f"{base_name} ({m_name} Mandal)",
-        financial_year=report.financial_year,
-        month_name=report.month_name,
-        generated_at=report.generated_at,
-        mandals=[matched_m],
-        total_mandals=1,
-        total_gps=matched_m.total_gps,
-        total_completed_gps=matched_m.completed_gps,
-        total_pending_gps=matched_m.pending_gps,
-        overall_pct=matched_m.overall_pct_entered,
-        overall_pct_entered=matched_m.overall_pct_entered,
-        all_pending_gps=filtered_pending,
-        birth_mandals=filtered_birth_mandals,
-        total_birth_entered_gps=bm.entered_gps if bm else 0,
-        total_birth_pending_gps=bm.not_entered_gps if bm else 0,
-        births_overall_pct=bm.pct_entered if bm else 0.0,
-        total_district_births=bm.total_births if bm else 0,
-        all_pending_birth_gps=filtered_birth_pending,
+    live_data = mas_automation.get_or_create_monthly_data(
+        month=month,
+        year=year,
+        page=page,
+        excluded_modules=excluded_modules,
+        force_refresh=strict_live,
+        strict_live=strict_live,
+        district_name=clean_dist,
+        include_gp_data=include_gp_data,
     )
-    return cloned
 
+    scraped_abs = live_data.get("mandal_abstract")
+    all_gps = live_data.get("all_gps", [])
+    pending_action_list = live_data.get("pending_action_list", [])
+    births_map = live_data.get("births_map", {})
+    mandal_birth_bal = {k: int(v.get("balance_gps", 0)) for k, v in births_map.items()}
 
-def generate_mas_report_pipeline(
-    bot: Any = None,
-    financial_year: str = "",
-    month: str = "",
-    district_name: str = "",
-    session_id: str = "",
-    report_code: str = "5.24",
-) -> DistrictMASReport:
-    """Executes live scrape or structured generation, caches in memory, and writes PDF/Excel artifacts."""
-    global _session_reports
-    clean_sid = (session_id or "default").strip()
-    clean_fy = (financial_year or "2026").strip()
-    clean_m = (month or "October").strip()
-    clean_dist = (district_name or "Telangana District").strip()
+    if not include_gp_data:
+        pending_action_list = []
 
-    report: Optional[DistrictMASReport] = None
+    mandals_abstract, total_row, norm_excluded = build_full_18_module_abstract(
+        all_gps,
+        mandal_birth_bal=mandal_birth_bal,
+        excluded_modules=excluded_modules,
+        scraped_mandal_abstract=scraped_abs,
+    )
 
-    if bot and getattr(bot, "page", None):
-        logger.info("[%s] Executing live portal scraping for MAS GM-R %s Year='%s' Month='%s'", clean_sid[:6], report_code, clean_fy, clean_m)
-        report = run_mas_automation(
-            bot=bot,
-            financial_year=clean_fy,
-            month=clean_m,
-            district_name=clean_dist,
-            report_code=report_code,
+    pending_mandals_count = sum(
+        1
+        for m in mandals_abstract
+        if any(
+            (not mod_info.get("is_excluded", False)) and int(mod_info.get("Not Entered", 0) or 0) > 0
+            for mod_info in m.get("modules", {}).values()
         )
-    else:
-        # Check if Chrome debug port 9222 has active session
-        try:
-            from playwright.sync_api import sync_playwright
-            from mas.live_mas_extractor import scrape_live_mas_data
-            logger.info("Attempting CDP live scrape via Chrome port 9222 for %s %s...", clean_m, clean_fy)
-            with sync_playwright() as p:
-                browser = p.chromium.connect_over_cdp("http://127.0.0.1:9222")
-                ctx = browser.contexts[0]
-                pg = None
-                for c_pg in ctx.pages:
-                    if "epanchayat" in c_pg.url.lower():
-                        pg = c_pg
-                        break
-                if not pg and ctx.pages:
-                    pg = ctx.pages[0]
-                if pg:
-                    report = scrape_live_mas_data(pg, target_year=clean_fy, target_month=clean_m)
-                browser.close()
-        except Exception as cdp_err:
-            logger.warning("CDP extraction fallback error: %s", cdp_err)
+    )
 
-    if not report:
-        existing = get_latest_mas_report()
-        if existing and (clean_fy == existing.financial_year or clean_fy == "2026") and (clean_m.lower() == existing.month_name.lower() or clean_m.lower() == "october"):
-            report = existing
-        else:
-            raise PermissionError("e-Panchayat browser session is not active. Please log in with your credentials and OTP first.")
-
-    # Cache report
-    _session_reports[(clean_sid, clean_fy, clean_m)] = report
-
-    # Export PDF and Excel artifacts
-    safe_dist = get_mas_filename_prefix(report)
-    safe_fy = clean_fy.replace("/", "-")
-    safe_m = clean_m.replace(" ", "_")
-    short_sid = clean_sid[:6]
-
-    excel_path = REPORTS_DIR / f"{safe_dist}_MAS_Report_{safe_fy}_{safe_m}_{short_sid}.xlsx"
-    pdf_path = REPORTS_DIR / f"{safe_dist}_MAS_Report_{safe_fy}_{safe_m}_{short_sid}.pdf"
-
-    generate_mas_excel(report, output_path=excel_path)
-    generate_mas_pdf(report, target=pdf_path)
-
-    return report
-
-
-def get_mas_data_dict(
-    financial_year: str = "",
-    month: str = "",
-    mandal: str = "all",
-    session_id: str = "",
-) -> dict[str, Any]:
-    """Returns serialized JSON dictionary for frontend web dashboards."""
-    master = get_latest_mas_report(financial_year=financial_year, month=month, session_id=session_id)
-    if master:
-        filtered = filter_mas_report(master, mandal=mandal)
-        data = filtered.to_dict()
-        data["available"] = True
-        data["selected_mandal"] = mandal
-        data["available_mandals"] = [
-            m.mandal_name for m in master.mandals
-            if m.mandal_name.strip().upper() not in ("TOTAL", "GRAND TOTAL")
-        ]
-        return data
+    target_dir = _resolve_output_dir(session_id=session_id, output_dir=output_dir)
+    files = export_all_deliverables(
+        mandals_abstract=mandals_abstract,
+        total_row=total_row,
+        joined_records=all_gps,
+        pending_action_list=pending_action_list,
+        excluded_modules=norm_excluded,
+        output_dir=target_dir,
+        month=month,
+        year=year,
+        district_name=clean_dist,
+        include_gp_data=include_gp_data,
+    )
 
     return {
-        "available": False,
-        "message": "No Monthly Activity Statement (MAS) generated yet. Please select period and run extraction.",
-        "financial_year": financial_year,
-        "month_name": month,
-        "selected_mandal": mandal,
-        "available_mandals": [],
-        "mandals": [],
-        "all_pending_gps": [],
-        "total_mandals": 0,
-        "total_gps": 0,
-        "total_completed_gps": 0,
-        "total_pending_gps": 0,
-        "overall_pct": 0.0,
+        "success": True,
+        "status": "success",
+        "district": clean_dist,
+        "month": month.capitalize(),
+        "year": year,
+        "report_type": "abstract_and_gp" if include_gp_data else "abstract_only",
+        "include_gp_data": include_gp_data,
+        "data_source": live_data.get("data_source", "live"),
+        "total_gps": len(all_gps) or int(total_row.get("No of GPs") or 0),
+        "total_mandals": len(mandals_abstract),
+        "pending_mandals_count": pending_mandals_count,
+        "pending_gps_count": len(pending_action_list),
+        "included_modules_count": total_row["included_modules_count"],
+        "total_modules": len(ALL_18_MODULES),
+        "excluded_modules": norm_excluded,
+        "district_overall_pct": total_row["Overall % Entered"],
+        "total_updated_fields": total_row["No of Updated"],
+        "total_possible_fields": total_row["Total Fields"],
+        "mandals": mandals_abstract,
+        "total_row": total_row,
+        "pending_action_list": pending_action_list,
+        "files": files,
     }
 
 
-def get_mas_pdf_bytes(
-    financial_year: str = "",
-    month: str = "",
-    mandal: str = "all",
-    session_id: str = "",
-) -> tuple[str, bytes]:
-    """Retrieves PDF bytes for preview or download."""
-    master = get_latest_mas_report(financial_year=financial_year, month=month, session_id=session_id)
-    if master is not None:
-        report = filter_mas_report(master, mandal=mandal)
-        safe_dist = get_mas_filename_prefix(report)
-        safe_fy = report.financial_year.replace("/", "-")
-        safe_m = report.month_name.replace(" ", "_")
-        clean_m = (mandal or "").strip()
-        if clean_m and clean_m.lower() not in ("all", "all mandals", "district"):
-            safe_mnd = clean_m.replace(" ", "_")
-            filename = f"{safe_dist}_{safe_mnd}_MAS_Report_{safe_fy}_{safe_m}.pdf"
-        else:
-            filename = f"{safe_dist}_MAS_Report_{safe_fy}_{safe_m}.pdf"
-        data = generate_mas_pdf(report)
-        return filename, data
+def run_pipeline(
+    *,
+    bot: Any = None,
+    session: Optional[Dict[str, Any]] = None,
+    session_id: Optional[str] = None,
+    month: str = "July",
+    year: int = 2026,
+    financial_year: Optional[str] = None,
+    excluded_modules: Optional[List[str]] = None,
+    report_type: str = "abstract_and_gp",
+    district_name: Optional[str] = None,
+    officer_id: Optional[str] = None,
+    strict_live: bool = True,
+) -> Dict[str, Any]:
+    """Run MAS pipeline directly on the shared authenticated ``bot.page`` without opening a second browser."""
+    eff_year = year
+    if financial_year and str(financial_year).strip().isdigit():
+        eff_year = int(str(financial_year).strip())
 
-    # Disk Fallback
-    clean_sid = (session_id or "").strip()
-    short_sid = clean_sid[:6] if len(clean_sid) >= 6 else clean_sid
-    patterns = []
-    if short_sid:
-        patterns.append(f"*MAS_Report*_{short_sid}.pdf")
-    patterns.append("*MAS_Report*.pdf")
+    sess = session or {}
+    eff_district = (
+        district_name
+        or sess.get("district_name")
+        or "Khammam"
+    ).strip() or "Khammam"
+    eff_officer = (
+        officer_id
+        or sess.get("user_id")
+        or "Officer"
+    ).strip() or "Officer"
+    bot_page = getattr(bot, "page", None) if bot is not None else None
 
-    for pat in patterns:
-        matches = sorted(REPORTS_DIR.glob(pat), key=lambda p: p.stat().st_mtime, reverse=True)
-        if matches and matches[0].stat().st_size > 500:
-            return matches[0].name, matches[0].read_bytes()
+    result = generate_consolidated_report(
+        excluded_modules=excluded_modules,
+        month=month,
+        year=eff_year,
+        page=bot_page,
+        strict_live=strict_live,
+        district_name=eff_district,
+        report_type=report_type,
+        session_id=session_id,
+    )
 
-    raise ValueError("No MAS report generated yet. Please run extraction first.")
+    if isinstance(session, dict) and isinstance(result.get("files"), dict):
+        session["mas_files"] = dict(result["files"])
 
-
-def get_mas_excel_bytes(
-    financial_year: str = "",
-    month: str = "",
-    mandal: str = "all",
-    session_id: str = "",
-) -> tuple[str, bytes]:
-    """Retrieves Excel workbook bytes for download."""
-    master = get_latest_mas_report(financial_year=financial_year, month=month, session_id=session_id)
-    if master is not None:
-        report = filter_mas_report(master, mandal=mandal)
-        safe_dist = get_mas_filename_prefix(report)
-        safe_fy = report.financial_year.replace("/", "-")
-        safe_m = report.month_name.replace(" ", "_")
-        clean_m = (mandal or "").strip()
-        if clean_m and clean_m.lower() not in ("all", "all mandals", "district"):
-            safe_mnd = clean_m.replace(" ", "_")
-            filename = f"{safe_dist}_{safe_mnd}_MAS_Report_{safe_fy}_{safe_m}.xlsx"
-        else:
-            filename = f"{safe_dist}_MAS_Report_{safe_fy}_{safe_m}.xlsx"
-        data = generate_mas_excel(report)
-        return filename, data
-
-    # Disk Fallback
-    clean_sid = (session_id or "").strip()
-    short_sid = clean_sid[:6] if len(clean_sid) >= 6 else clean_sid
-    patterns = []
-    if short_sid:
-        patterns.append(f"*MAS_Report*_{short_sid}.xlsx")
-    patterns.append("*MAS_Report*.xlsx")
-
-    for pat in patterns:
-        matches = sorted(REPORTS_DIR.glob(pat), key=lambda p: p.stat().st_mtime, reverse=True)
-        if matches and matches[0].stat().st_size > 500:
-            return matches[0].name, matches[0].read_bytes()
-
-    raise ValueError("No MAS report generated yet. Please run extraction first.")
+    result["officer"] = eff_officer
+    return result

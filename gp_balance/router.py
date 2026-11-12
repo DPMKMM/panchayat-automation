@@ -3,40 +3,24 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 from fastapi import APIRouter, Form, HTTPException, Request, Response
 
+from core.firebase_store import log_usage
+from core.dependencies import enforce_console_api_access, enforce_department_api_access, extract_epts_session_id
 from gp_balance import service as gp_balance_service
 
 logger = logging.getLogger("gp_balance_router")
 router = APIRouter(tags=["GP Balance Entry (GM-R 14.2)"])
 
-
-def _get_sid(request: Request) -> str:
-    """Helper to extract session id from header or query or cookie."""
-    state_sid = getattr(request.state, "session_id", None)
-    if state_sid and str(state_sid).strip():
-        return str(state_sid).strip()
-    sid = (
-        request.headers.get("X-Session-ID")
-        or request.headers.get("x-session-id")
-        or ""
-    ).strip()
-    if not sid:
-        sid = request.query_params.get("session_id", "").strip()
-    if not sid:
-        sid = (
-            request.cookies.get("epts_session_id")
-            or request.cookies.get("ept_session_id")
-            or ""
-        ).strip()
-    return sid or "default"
+_get_sid = extract_epts_session_id
 
 
 @router.get("/api/balance/portal-dates", include_in_schema=False)
 @router.get("/api/balance/dates", include_in_schema=False)
 def get_balance_portal_dates(request: Request) -> dict[str, Any]:
     """Returns available Thursday dates scraped from e-Panchayat GM-R 14.2."""
+    enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
         from dsr import service as automation_service
@@ -44,25 +28,38 @@ def get_balance_portal_dates(request: Request) -> dict[str, Any]:
         bot = session.get("bot") if automation_service.is_authenticated(session_id=sid) else None
     except Exception:
         bot = None
-    return gp_balance_service.get_portal_dates(bot=bot)
+    return gp_balance_service.get_portal_dates(bot=bot, session_id=sid)
 
 
 @router.get("/api/balance/data", include_in_schema=False)
-def get_balance_data(request: Request, date: str = "") -> dict[str, Any]:
+def get_balance_data(request: Request, date: str = "", mandal: str = "", include_pmagy: Optional[bool] = None) -> dict[str, Any]:
     """Returns parsed balance report data for specified Thursday date."""
-    sid = _get_sid(request)
-    return gp_balance_service.get_balance_data_dict(date_str=date, session_id=sid)
+    _, sid = enforce_department_api_access(request)
+    return gp_balance_service.get_balance_data_dict(date_str=date, session_id=sid, mandal=mandal, include_pmagy=include_pmagy)
 
 
 @router.post("/api/balance/generate", include_in_schema=False)
-def generate_balance_api(request: Request, date: str = Form(default="")) -> dict[str, Any]:
+def generate_balance_api(request: Request, date: str = Form(default=""), include_pmagy: bool = Form(default=False)) -> dict[str, Any]:
     """Triggers live browser automation to scrape Thursday balance data for chosen date."""
-    sid = _get_sid(request)
+    console_user, sid = enforce_department_api_access(request, always_require=True)
     try:
         from dsr import service as automation_service
-        if not automation_service.is_authenticated(session_id=sid):
-            raise HTTPException(status_code=401, detail="Department Login & OTP required. Please log in first.")
-        return automation_service.generate_server_report(module="gp_balance", date_str=date, session_id=sid)
+        res = automation_service.generate_server_report(
+            module="gp_balance",
+            date_str=date,
+            session_id=sid,
+            include_pmagy=bool(include_pmagy),
+        )
+        if console_user:
+            log_usage(user_id=console_user["user_id"], platform_scope="console", module="gp_balance_automation", action="generate_report")
+        return res
+    except PermissionError as exc:
+        try:
+            from core.session_manager import mark_session_expired
+            mark_session_expired(sid, str(exc))
+        except Exception:
+            pass
+        raise HTTPException(status_code=401, detail=str(exc), headers={"X-Dept-Auth-Required": "true"}) from None
     except HTTPException:
         raise
     except Exception as exc:
@@ -71,11 +68,11 @@ def generate_balance_api(request: Request, date: str = Form(default="")) -> dict
 
 
 @router.get("/api/balance/report.pdf", include_in_schema=False)
-def view_balance_pdf(request: Request, date: str = "") -> Response:
+def view_balance_pdf(request: Request, date: str = "", mandal: str = "", include_pmagy: Optional[bool] = None) -> Response:
     """Previews generated GP Balance landscape PDF report."""
-    sid = _get_sid(request)
+    _, sid = enforce_department_api_access(request)
     try:
-        filename, pdf_bytes = gp_balance_service.get_balance_pdf_bytes(date_str=date, session_id=sid)
+        filename, pdf_bytes = gp_balance_service.get_balance_pdf_bytes(date_str=date, session_id=sid, mandal=mandal, include_pmagy=include_pmagy)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
     return Response(
@@ -86,11 +83,11 @@ def view_balance_pdf(request: Request, date: str = "") -> Response:
 
 
 @router.get("/api/balance/download-pdf", include_in_schema=False)
-def download_balance_pdf(request: Request, date: str = "") -> Response:
+def download_balance_pdf(request: Request, date: str = "", mandal: str = "", include_pmagy: Optional[bool] = None) -> Response:
     """Downloads generated GP Balance landscape PDF report."""
-    sid = _get_sid(request)
+    _, sid = enforce_department_api_access(request)
     try:
-        filename, pdf_bytes = gp_balance_service.get_balance_pdf_bytes(date_str=date, session_id=sid)
+        filename, pdf_bytes = gp_balance_service.get_balance_pdf_bytes(date_str=date, session_id=sid, mandal=mandal, include_pmagy=include_pmagy)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
     return Response(
@@ -104,11 +101,11 @@ def download_balance_pdf(request: Request, date: str = "") -> Response:
 
 
 @router.get("/api/balance/download-excel", include_in_schema=False)
-def download_balance_excel(request: Request, date: str = "") -> Response:
+def download_balance_excel(request: Request, date: str = "", include_pmagy: Optional[bool] = None) -> Response:
     """Downloads multi-sheet Excel file of GP Balance data."""
-    sid = _get_sid(request)
+    _, sid = enforce_department_api_access(request)
     try:
-        filename, excel_bytes = gp_balance_service.get_balance_excel_bytes(date_str=date, session_id=sid)
+        filename, excel_bytes = gp_balance_service.get_balance_excel_bytes(date_str=date, session_id=sid, include_pmagy=include_pmagy)
     except ValueError as err:
         raise HTTPException(status_code=400, detail=str(err))
     return Response(

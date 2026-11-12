@@ -130,6 +130,12 @@ class NumberedCanvas(canvas.Canvas):
         self.setFillColor(colors.HexColor("#222222"))
         page_str = f"Page {self._pageNumber} of {page_count}"
         # Landscape A4 width is 841.89 pt
+        self.setFillColor(colors.HexColor("#475569"))
+        self.setFont("Helvetica", 7.2)
+        self.drawString(24, 16, "e-Panchayat Automation")
+        self.drawRightString(841.89 - 24, 16, "Simplifying Panchayat Administration through Smart Reporting and Automation.")
+        self.setFillColor(colors.HexColor("#222222"))
+        self.setFont("Helvetica", 8)
         self.drawCentredString(841.89 / 2.0, 16, page_str)
         self.restoreState()
 
@@ -175,11 +181,12 @@ def generate_dcb_pdf(
     mandal_name: Optional[str] = None,
     output_path_or_buffer: Any = None,
     report_date_str: Optional[str] = None,
+    df_source: Optional[pd.DataFrame] = None,
 ) -> bytes:
     """Generate the official landscape Gram Panchayat Wise DCB PDF report.
     Returns bytes and writes to output_path_or_buffer if provided.
     """
-    df = tax_service.get_df()
+    df = df_source if df_source is not None else tax_service.get_df()
 
     if district_name and district_name.lower() not in ("all", "all districts"):
         df_dist = df[df["district"].str.lower() == district_name.strip().lower()].copy()
@@ -673,6 +680,9 @@ def generate_dcb_pdf(
             flowables.append(t)
 
             cursor += chunk_size
+
+    if not flowables:
+        flowables.append(Paragraph("No House Tax DCB records found for the selected filter.", title_style))
 
     doc.build(flowables, canvasmaker=NumberedCanvas)
 

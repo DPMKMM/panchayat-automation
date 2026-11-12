@@ -118,7 +118,7 @@ def fetch_available_thursday_dates(bot) -> list[str]:
     return dates
 
 
-def run_balance_automation(bot, target_date: str = "") -> DistrictBalanceReport:
+def run_balance_automation(bot, target_date: str = "", include_pmagy: bool = False) -> DistrictBalanceReport:
     """Executes the full automated scraping pipeline for GM-R 14.2."""
     page = bot.page
     district_name = "District"
@@ -287,10 +287,11 @@ def run_balance_automation(bot, target_date: str = "") -> DistrictBalanceReport:
             tgbpass_updated=r["tgbpass"],
             fc15_tied_updated=r["fc15_tied"],
             fc15_untied_updated=r["fc15_untied"],
+            pmagy_updated=r["pmagy"],
             vwsc_updated=r["vwsc"],
             mgnregs_updated=r["mgnregs"],
         )
-        m.calculate_metrics()
+        m.calculate_metrics(include_pmagy=include_pmagy)
         mandals_list.append(m)
 
     # Dynamic District Detection (works for all 33 districts across Telangana without hardcoding)
@@ -486,6 +487,7 @@ def run_balance_automation(bot, target_date: str = "") -> DistrictBalanceReport:
                 }""")
 
                 m.pending_gps = []
+                m.all_gps = []
                 for gp_raw in gp_rows_raw:
                     gp = GPBalanceDetail(
                         s_no=gp_raw["s_no"],
@@ -496,10 +498,12 @@ def run_balance_automation(bot, target_date: str = "") -> DistrictBalanceReport:
                         tgbpass=gp_raw["tgbpass"],
                         fc15_tied=gp_raw["fc15_tied"],
                         fc15_untied=gp_raw["fc15_untied"],
+                        pmagy=gp_raw.get("pmagy", "Yes"),
                         vwsc=gp_raw["vwsc"],
                         mgnregs=gp_raw["mgnregs"],
                     )
-                    gp.evaluate_pending()
+                    gp.evaluate_pending(include_pmagy=include_pmagy)
+                    m.all_gps.append(gp)
                     if gp.is_pending:
                         m.pending_gps.append(gp)
 
@@ -571,24 +575,23 @@ def run_balance_automation(bot, target_date: str = "") -> DistrictBalanceReport:
                 pass
 
     # Ensure all mandals with pending GPs have concrete GP records populated
-    populate_pending_gps_from_directory(mandals_list, district_name=district_name)
+    populate_pending_gps_from_directory(mandals_list, district_name=district_name, include_pmagy=include_pmagy)
 
     # 10. Enrich Secretary Details using in-memory live portal data
     match_secretary_details(mandals_list)
-
-
 
     report = DistrictBalanceReport(
         district_name=district_name,
         report_date_str=selected_date_text,
         generated_at=datetime.now().strftime("%d-%b-%Y %I:%M %p"),
         mandals=mandals_list,
+        include_pmagy=include_pmagy,
     )
     report.compute_totals()
     return report
 
 
-def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], district_name: str = "") -> None:
+def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], district_name: str = "", include_pmagy: bool = False) -> None:
     """Ensures that every mandal with not_entered_gps > 0 has its pending_gps list populated.
     Uses in-memory live portal data from tax_service (zero offline files) as fallback if web drilldown timed out.
     STRICT RULE: NEVER synthesize placeholder names like '<Mandal> GP-1' or '<Mandal> GP-2'.
@@ -640,6 +643,7 @@ def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], dis
             if m.tgbpass_pending > 0: missing.append("State Matching Grant (TG-bPASS)")
             if m.fc15_tied_pending > 0: missing.append("15th FC Tied (e-Gram Swaraj)")
             if m.fc15_untied_pending > 0: missing.append("15th FC Untied (e-Gram Swaraj)")
+            if include_pmagy and m.pmagy_pending > 0: missing.append("PMAGY (Adarsh Gram Yojana)")
             if m.vwsc_pending > 0: missing.append("VWSC (SBM)")
             if m.mgnregs_pending > 0: missing.append("MGNREGS (Material Component)")
             if not missing:
@@ -655,6 +659,7 @@ def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], dis
                 m.tgbpass_pending,
                 m.fc15_tied_pending,
                 m.fc15_untied_pending,
+                m.pmagy_pending if include_pmagy else 0,
                 m.vwsc_pending,
                 m.mgnregs_pending,
                 1,
@@ -662,6 +667,8 @@ def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], dis
             needed_count = min(needed_count, len(unique_avail_gps)) if unique_avail_gps else needed_count
             selected_gps = unique_avail_gps[:needed_count]
 
+            m.all_gps = []
+            # First, add the pending GPs
             for gp_name in selected_gps:
                 gp_detail = GPBalanceDetail(
                     s_no=global_counter,
@@ -672,6 +679,7 @@ def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], dis
                     tgbpass="No" if "TG-bPASS" in " ".join(missing) else "Yes",
                     fc15_tied="No" if "Tied" in " ".join(missing) else "Yes",
                     fc15_untied="No" if "Untied" in " ".join(missing) else "Yes",
+                    pmagy="No" if "PMAGY" in " ".join(missing) else "Yes",
                     vwsc="No" if "VWSC" in " ".join(missing) else "Yes",
                     mgnregs="No" if "MGNREGS" in " ".join(missing) else "Yes",
                     missing_accounts=list(missing),
@@ -680,7 +688,29 @@ def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], dis
                     secretary_phone="—",
                 )
                 m.pending_gps.append(gp_detail)
+                m.all_gps.append(gp_detail)
                 global_counter += 1
+
+            # Next, add the entered GPs to m.all_gps so all GPs are present
+            entered_names = [g for g in unique_avail_gps if g not in selected_gps]
+            for ent_name in entered_names:
+                ent_detail = GPBalanceDetail(
+                    s_no=len(m.all_gps) + 1,
+                    mandal_name=m.mandal_name,
+                    panchayat_name=ent_name,
+                    entered=True,
+                    gp_pd="Yes",
+                    tgbpass="Yes",
+                    fc15_tied="Yes",
+                    fc15_untied="Yes",
+                    vwsc="Yes",
+                    mgnregs="Yes",
+                    missing_accounts=[],
+                    is_pending=False,
+                    secretary_name="Panchayat Secretary",
+                    secretary_phone="—",
+                )
+                m.all_gps.append(ent_detail)
 
             m.has_pending = True
 
@@ -711,7 +741,11 @@ def match_secretary_details(mandals: list[MandalBalanceSummary]) -> None:
 
         for m in mandals:
             m_key = normalize_mandal_key(m.mandal_name)
-            for gp in m.pending_gps:
+            target_list = list(m.pending_gps)
+            for g in (m.all_gps or []):
+                if g not in target_list:
+                    target_list.append(g)
+            for gp in target_list:
                 gp_key = re.sub(r'[^a-zA-Z0-9]', '', str(gp.panchayat_name)).lower()
                 sec = lookup.get((m_key, gp_key))
                 if not sec:

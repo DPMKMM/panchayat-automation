@@ -171,6 +171,13 @@ def get_df(force_reload: bool = False) -> pd.DataFrame:
     return _DF_CACHE
 
 
+def _resolve_df(df_source: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    """Use supplied DataFrame directly or fetch cached live DCB DataFrame."""
+    if df_source is not None:
+        return df_source
+    return get_df()
+
+
 def get_districts_list() -> List[Dict[str, Any]]:
     """Return all districts in Telangana with GP counts scraped live."""
     df = get_df()
@@ -205,10 +212,11 @@ def get_mandals_for_district(district_name: str) -> List[str]:
 
 def get_filtered_data(
     district_name: Optional[str] = None,
-    mandal_name: Optional[str] = None
+    mandal_name: Optional[str] = None,
+    df_source: Optional[pd.DataFrame] = None,
 ) -> Dict[str, Any]:
-    """Filter live dataset by district and mandal, computing summaries and mandal abstract."""
-    df = get_df()
+    """Filter live or uploaded dataset by district and mandal, computing summaries and mandal abstract."""
+    df = _resolve_df(df_source)
 
     if district_name and district_name.lower() not in ("all", "all districts"):
         filtered = df[df["district"].str.lower() == district_name.strip().lower()].copy()
@@ -216,7 +224,22 @@ def get_filtered_data(
         filtered = df.copy()
 
     if mandal_name and mandal_name.lower() not in ("all", "all mandals"):
-        filtered = filtered[filtered["mandal"].str.lower() == mandal_name.strip().lower()].copy()
+        target_m = mandal_name.strip().lower()
+        m_series = filtered["mandal"].str.lower()
+        exact = filtered[m_series == target_m]
+        if not exact.empty:
+            filtered = exact.copy()
+        else:
+            clean_target = target_m.replace("oo", "u").replace("ee", "i").rstrip("u").rstrip("y")
+            fuzzy = filtered[m_series.str.replace("oo", "u").str.replace("ee", "i").str.rstrip("u").str.rstrip("y") == clean_target]
+            if not fuzzy.empty:
+                filtered = fuzzy.copy()
+            else:
+                prefix = filtered[m_series.str.startswith(target_m[:4])]
+                if not prefix.empty:
+                    filtered = prefix.copy()
+                else:
+                    filtered = filtered[m_series == target_m].copy()
 
     # Sort detailed GP records: first alphabetically by Mandal, then ascending by % Collection
     filtered = filtered.sort_values(
@@ -281,9 +304,12 @@ def get_filtered_data(
     }
 
 
-def generate_consolidated_excel(district_name: Optional[str] = None) -> bytes:
-    """Generate dynamic multi-sheet Excel file from live scraped data."""
-    df = get_df()
+def generate_consolidated_excel(
+    district_name: Optional[str] = None,
+    df_source: Optional[pd.DataFrame] = None,
+) -> bytes:
+    """Generate dynamic multi-sheet Excel file from live or uploaded DCB data."""
+    df = _resolve_df(df_source)
     if district_name and district_name.lower() not in ("all", "all districts"):
         df_sub = df[df["district"].str.lower() == district_name.strip().lower()].copy()
     else:
@@ -322,16 +348,21 @@ def generate_consolidated_excel(district_name: Optional[str] = None) -> bytes:
     ]
 
     out = io.BytesIO()
+    from core.branding import apply_openpyxl_branding
     with pd.ExcelWriter(out, engine="openpyxl") as writer:
         mandal_summary.to_excel(writer, sheet_name="Mandal Abstract", index=False)
         detail_df.to_excel(writer, sheet_name="GP Wise DCB Detail", index=False)
+        apply_openpyxl_branding(writer.book)
 
     return out.getvalue()
 
 
-def generate_consolidated_csv(district_name: Optional[str] = None) -> bytes:
-    """Generate dynamic CSV file from live scraped data."""
-    df = get_df()
+def generate_consolidated_csv(
+    district_name: Optional[str] = None,
+    df_source: Optional[pd.DataFrame] = None,
+) -> bytes:
+    """Generate dynamic CSV file from live or uploaded DCB data."""
+    df = _resolve_df(df_source)
     if district_name and district_name.lower() not in ("all", "all districts"):
         df_sub = df[df["district"].str.lower() == district_name.strip().lower()].copy()
     else:

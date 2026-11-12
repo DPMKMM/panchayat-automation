@@ -1,0 +1,379 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Database: (default) Cloud Firestore (Standard Edition, asia-south1)
+// Project: epanchayat-automation-tg (FastAPI + Firebase Auth + firebase-admin)
+//
+// Collection: users
+// Document ID: {userId} (user_id, e.g., "usr_<hex>" or Firebase Auth UID)
+// Fields:
+//   - user_id: string (required, 3..128 chars, equals document ID, immutable)
+//   - firebase_uid: string (required, 3..128 chars, immutable)
+//   - google_uid: string (optional legacy alias, 3..128 chars, equals firebase_uid, immutable)
+//   - email: string (required when present on record, valid email 5..254 chars, immutable on client update)
+//   - gmail: string (required, lowercase email 5..254 chars matching email.lower(), immutable)
+//   - name: string (required, 1..150 chars)
+//   - designation: string (optional "" or in ["DPO", "DPM", "DLPO", "MPDO", "MPO", "PS", "DEO"])
+//   - role: string (optional "" or in ["Mandal Level", "Division Level", "District Level"])
+//   - mobile_number: string (optional "" or 10-digit Indian mobile ^[6-9][0-9]{9}$)
+//   - profile_picture: string (optional "" or http/https URL <= 500 chars)
+//   - registration_date: string (required ISO 8601 timestamp, 19..40 chars, immutable)
+//   - last_login: string (required ISO 8601 timestamp, 19..40 chars)
+//   - updated_at: string (required when present on record, ISO 8601 timestamp, 19..40 chars)
+//   - account_status: string (required, "Active" | "Disabled", admin/server-only mutable)
+//   - profile_completed: bool (required)
+//   - is_admin: bool (required, admin/server-only mutable)
+//   - can_access_portal: bool (required, admin/server-only mutable)
+//   - can_access_console: bool (required, admin/server-only mutable)
+//
+// Collection: sessions
+// Document ID: {sessionToken} (opaque session token or SHA-256 token hash)
+// Fields:
+//   - token / token_hash: string
+//   - user_id: string (3..128 chars)
+//   - firebase_uid: string (optional, 3..128 chars)
+//   - app_scope: string ("portal" | "console")
+//   - created_at: number or ISO string
+//   - last_seen: number (optional)
+//   - expires_at / expires_at_ts: number or ISO string
+//   - user_agent / ip_address / revoked: optional server session metadata
+// Access: Backend Admin SDK only (all client SDK reads/writes denied).
+//
+// Collection: feedback
+// Document ID: {feedbackId} (auto/uuid)
+// Fields:
+//   - id / feedback_id: string or number (server-assigned)
+//   - user_id: string (optional, <= 128 chars)
+//   - name: string (optional, <= 150 chars)
+//   - email / gmail: string (optional, <= 150 chars)
+//   - designation: string (optional, <= 40 chars)
+//   - role: string (optional, <= 40 chars)
+//   - rating: int (1..5)
+//   - category: string (optional, <= 60 chars)
+//   - app_scope: string (optional, "portal" | "console")
+//   - message: string (required, 1..5000 chars)
+//   - created_at: string (required ISO 8601 timestamp)
+// Access: Backend Admin SDK writes (/api/feedback); admins may read via client SDK;
+//         all client writes denied under least privilege.
+//
+// Collection: usage_logs
+// Document ID: {logId} (auto/uuid)
+// Fields:
+//   - log_id: string (optional server ID)
+//   - user_id: string (<= 128 chars)
+//   - gmail: string (optional, <= 254 chars)
+//   - platform_scope: string ("portal" | "console")
+//   - module: string (<= 80 chars)
+//   - action: string (<= 80 chars)
+//   - filename: string (optional, <= 240 chars)
+//   - status: string (optional, <= 40 chars)
+//   - details: string (<= 500 chars)
+//   - created_at: string (required ISO 8601 timestamp)
+//   - created_at_ts: number (optional epoch seconds)
+// Access: Server-side audit logs only; admins may read; client writes denied.
+//
+// Collection: access_policy
+// Document ID: {policyKey} (policy flag identifier)
+// Fields:
+//   - key: string (required, equals document ID, 1..80 chars, ^[a-z][a-z0-9_]{0,79}$)
+//   - value: string (required, "true" | "false")
+//   - updated_at: string (required ISO 8601 timestamp, 19..40 chars)
+//   - updated_by: string (required, 0..150 chars)
+// Access: Active signed-in users may read; admins may create/update; deletes denied.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request carries a valid Firebase Auth identity
+    function isAuthenticated() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    // Check if the authenticated caller owns a document keyed by userId
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if the authenticated caller owns an existing user document via firebase_uid
+    function isDocOwner() {
+      return isAuthenticated() && resource.data.firebase_uid == request.auth.uid;
+    }
+
+    // Ensure firebase_uid field is not modified on update
+    function uidNotModified() {
+      return !('firebase_uid' in request.resource.data) ||
+             request.resource.data.firebase_uid == resource.data.firebase_uid;
+    }
+
+    // Validate required fields exist on a data map
+    function hasRequiredFields(data, fields) {
+      return data.keys().hasAll(fields);
+    }
+
+    // Validate that a data map contains only allowed fields
+    function hasOnlyAllowedFields(data, fields) {
+      return data.keys().hasOnly(fields);
+    }
+
+    // Validate string type and length bounds on a value
+    function validStringLength(val, minLen, maxLen) {
+      return val is string &&
+             val.size() >= minLen &&
+             val.size() <= maxLen;
+    }
+
+    // Ensure protected fields are not changed during an update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate email format and RFC length bounds
+    function isValidEmail(email) {
+      return validStringLength(email, 5, 254) &&
+             email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate HTTP/HTTPS URL format and length bounds
+    function isValidUrl(url) {
+      return validStringLength(url, 10, 500) &&
+             url.matches("^https?://[^\\s]{3,}$");
+    }
+
+    // Validate bounded ISO 8601 timestamp string format (supports Z and +/-HH:MM offsets)
+    // NOTE: Validates string syntax and field ranges (months 01-12, days 01-31, etc.),
+    // not calendar month lengths (e.g., Feb 30). Backend uses UTC ISO 8601 strings.
+    function isValidDateString(dateStr) {
+      return validStringLength(dateStr, 19, 40) &&
+             dateStr.matches("^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\\.[0-9]{1,9})?(Z|[+-]([01][0-9]|2[0-3]):[0-5][0-9])?$");
+    }
+
+    // Verify caller has not been marked Disabled in /users/{uid} (if keyed by Firebase UID)
+    function isActiveAccount() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isAuthenticated() && (
+        !exists(userPath) ||
+        get(userPath).data.get('account_status', 'Active') == 'Active'
+      );
+    }
+
+    // Verify administrator authority from trusted custom claim or active users/{uid} record.
+    // Never trusts request.resource.data. If users/{uid} exists and is Disabled or demoted,
+    // custom claim admin access is immediately revoked without waiting for token expiry.
+    function isAdmin() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return isAuthenticated() && (
+        (
+          request.auth.token.get('admin', false) == true &&
+          (!exists(userPath) || (
+            get(userPath).data.get('account_status', 'Active') == 'Active' &&
+            get(userPath).data.get('is_admin', true) == true
+          ))
+        ) ||
+        (
+          exists(userPath) &&
+          get(userPath).data.get('is_admin', false) == true &&
+          get(userPath).data.get('account_status', '') == 'Active'
+        )
+      );
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Full schema and constraint validator for users documents
+    function isValidUser(data, userId) {
+      let requiredFields = [
+        'user_id',
+        'firebase_uid',
+        'gmail',
+        'name',
+        'registration_date',
+        'last_login',
+        'account_status',
+        'profile_completed',
+        'is_admin',
+        'can_access_portal',
+        'can_access_console'
+      ];
+      let allowedFields = [
+        'user_id',
+        'firebase_uid',
+        'google_uid',
+        'email',
+        'gmail',
+        'name',
+        'designation',
+        'role',
+        'mobile_number',
+        'profile_picture',
+        'registration_date',
+        'last_login',
+        'updated_at',
+        'account_status',
+        'profile_completed',
+        'is_admin',
+        'can_access_portal',
+        'can_access_console'
+      ];
+      let validDesignations = ['', 'DPO', 'DPM', 'DLPO', 'MPDO', 'MPO', 'PS', 'DEO'];
+      let validRoles = ['', 'Mandal Level', 'Division Level', 'District Level'];
+
+      return hasRequiredFields(data, requiredFields) &&
+             hasOnlyAllowedFields(data, allowedFields) &&
+             validStringLength(data.user_id, 3, 128) &&
+             data.user_id == userId &&
+             validStringLength(data.firebase_uid, 3, 128) &&
+             (!('google_uid' in data) || (
+               validStringLength(data.google_uid, 3, 128) &&
+               data.google_uid == data.firebase_uid
+             )) &&
+             isValidEmail(data.gmail) &&
+             data.gmail == data.gmail.lower() &&
+             (!('email' in resource.data) || 'email' in data) &&
+             (!('email' in data) || (isValidEmail(data.email) && data.gmail == data.email.lower())) &&
+             validStringLength(data.name, 1, 150) &&
+             (!('designation' in data) || (data.designation is string && data.designation in validDesignations)) &&
+             (!('role' in data) || (data.role is string && data.role in validRoles)) &&
+             (!('mobile_number' in data) || (
+               data.mobile_number is string &&
+               (data.mobile_number == '' || data.mobile_number.matches("^[6-9][0-9]{9}$"))
+             )) &&
+             (!('profile_picture' in data) || (
+               data.profile_picture is string &&
+               data.profile_picture.size() <= 500 &&
+               (data.profile_picture == '' || isValidUrl(data.profile_picture))
+             )) &&
+             isValidDateString(data.registration_date) &&
+             isValidDateString(data.last_login) &&
+             (!('updated_at' in resource.data) || 'updated_at' in data) &&
+             (!('updated_at' in data) || isValidDateString(data.updated_at)) &&
+             data.account_status is string &&
+             data.account_status in ['Active', 'Disabled'] &&
+             data.profile_completed is bool &&
+             data.is_admin is bool &&
+             data.can_access_portal is bool &&
+             data.can_access_console is bool;
+    }
+
+    // Administrator update constraints including self-lockout protections
+    function isValidAdminUserUpdate(userId) {
+      let isSelf = (resource.data.get('firebase_uid', '') == request.auth.uid || userId == request.auth.uid);
+      return (isSelf || areImmutableFieldsUnchanged(['last_login'])) &&
+             (
+               !isSelf ||
+               (
+                 request.resource.data.account_status == 'Active' &&
+                 request.resource.data.is_admin == true &&
+                 (request.resource.data.can_access_portal == true ||
+                  request.resource.data.can_access_console == true)
+               )
+             );
+    }
+
+    // Non-admin owner update constraints preventing self-escalation and incomplete profile bypass
+    function isValidSelfUserUpdate() {
+      let data = request.resource.data;
+      let validCompletedProfile = !data.profile_completed || (
+        'designation' in data && data.designation in ['DPO', 'DPM', 'DLPO', 'MPDO', 'MPO', 'PS', 'DEO'] &&
+        'role' in data && data.role in ['Mandal Level', 'Division Level', 'District Level'] &&
+        'mobile_number' in data && data.mobile_number.matches("^[6-9][0-9]{9}$")
+      );
+      return isDocOwner() &&
+             resource.data.account_status == 'Active' &&
+             areImmutableFieldsUnchanged([
+               'account_status',
+               'is_admin',
+               'can_access_portal',
+               'can_access_console'
+             ]) &&
+             (!resource.data.profile_completed || data.profile_completed == true) &&
+             validCompletedProfile;
+    }
+
+    // Full schema and constraint validator for access_policy documents
+    function isValidAccessPolicy(data, policyKey) {
+      let fields = ['key', 'value', 'updated_at', 'updated_by'];
+      return hasRequiredFields(data, fields) &&
+             hasOnlyAllowedFields(data, fields) &&
+             validStringLength(data.key, 1, 80) &&
+             data.key == policyKey &&
+             data.key.matches("^[a-z][a-z0-9_]{0,79}$") &&
+             data.value is string &&
+             data.value in ['true', 'false'] &&
+             isValidDateString(data.updated_at) &&
+             validStringLength(data.updated_by, 0, 150);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // 1. Users collection (Server Admin SDK manages creation & deletion)
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        (resource == null && isOwner(userId)) ||
+        isDocOwner() ||
+        isAdmin()
+      );
+      allow create: if false;
+      allow update: if isAuthenticated() &&
+                       isValidUser(request.resource.data, userId) &&
+                       uidNotModified() &&
+                       areImmutableFieldsUnchanged([
+                         'user_id',
+                         'firebase_uid',
+                         'google_uid',
+                         'email',
+                         'gmail',
+                         'registration_date'
+                       ]) &&
+                       (
+                         (isAdmin() && isValidAdminUserUpdate(userId)) ||
+                         (!isAdmin() && isValidSelfUserUpdate())
+                       );
+      allow delete: if false;
+    }
+
+    // 2. Sessions collection (Backend Admin SDK only — prevents token enumeration/hijacking)
+    match /sessions/{sessionToken} {
+      allow read, write: if false;
+    }
+
+    // 3. Feedback collection (Backend Admin SDK writes /api/feedback; admin-only client read)
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // 4. Usage logs collection (Server-side audit logs; admin-only client read)
+    match /usage_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // 5. Access policy collection (Active signed-in users may read; admin-only create/update)
+    match /access_policy/{policyKey} {
+      allow read: if isActiveAccount();
+      allow create: if isAdmin() && isValidAccessPolicy(request.resource.data, policyKey);
+      allow update: if isAdmin() &&
+                       isValidAccessPolicy(request.resource.data, policyKey) &&
+                       areImmutableFieldsUnchanged(['key']);
+      allow delete: if false;
+    }
+
+    // Default deny fallback for all other collections and subcollections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

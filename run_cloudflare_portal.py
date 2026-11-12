@@ -1,5 +1,5 @@
 """
-Launcher for e-Panchayat Automated DSR Portal via Cloudflare Tunnel.
+Launcher for e-Panchayat Automation via Cloudflare Tunnel.
 
 Starts the local Uvicorn server and establishes a secure, public HTTPS tunnel
 routed through Cloudflare's Hyderabad edge network. The public URL can be opened
@@ -52,8 +52,7 @@ if not token_from_env and env_file.exists():
     except Exception:
         pass
 
-DEFAULT_TUNNEL_TOKEN = "eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0IjoiOTlmODY1MWYtNjZmMi00YTIzLTllZjktYjYxYjhjOTg2MzkzIiwicyI6IlpHTmxPRFkxTVRNdE1XSm1NUzAwWmpNM0xXRXhNVFV0TjJVMk1UQXpPRGczWXprMSJ9"
-TUNNEL_TOKEN = token_from_env or DEFAULT_TUNNEL_TOKEN
+TUNNEL_TOKEN = token_from_env
 PORT = int(os.getenv("PORT", "8050"))
 
 
@@ -124,10 +123,7 @@ def kill_stale_cloudflared():
 def kill_stale_uvicorn():
     try:
         if sys.platform != "win32":
-            subprocess.run(["pkill", "-9", "-f", "uvicorn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["pkill", "-9", "-f", "python.*uvicorn"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["fuser", "-k", "-9", f"{PORT}/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["fuser", "-k", "-9", "8000/tcp"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             time.sleep(1)
     except Exception:
         pass
@@ -142,7 +138,7 @@ def is_port_in_use(port: int = None) -> bool:
 
 def main():
     print("=" * 68)
-    print("  e-Panchayat Automated DSR Portal - Cloudflare Public Gateway")
+    print("  e-Panchayat Automation - Cloudflare Public Gateway")
     print("=" * 68)
 
     # 1. Clean up any stale uvicorn process and start fresh
@@ -196,7 +192,7 @@ def main():
         print("=" * 68)
         print(f"  Public URL       :  {perm_url}")
         print("  Status           :  Connected to Hyderabad & Mumbai edge nodes (hyd03/bom10)")
-        print("  Local Access URL :  http://127.0.0.1:{PORT}/")
+        print(f"  Local Access URL :  http://127.0.0.1:{PORT}/")
         print("=" * 68)
         print(f"  Your permanent website is live at {perm_url} !")
         print("  Running silently in background.\n")

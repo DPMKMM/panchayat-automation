@@ -1,38 +1,42 @@
-"""FastAPI Router for Daily Status Report (DSR) & Attendance endpoints.
-
-Provides:
-1. Automated DSR Portal (/login, /eptauto, /naresh) with department login, captcha solving, OTP,
-   background scraping, and JPEG page-2 download.
-2. Web upload portal (/reports/ps-attendance) for manual file processing and analysis.
-3. Multi-browser session isolation and session timer tracking.
-"""
+"""FastAPI Router for Daily Status Report (DSR), EPTS Robot Automation & Manual Web Upload Endpoints."""
 
 from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import logging
 import os
 import re
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import HTMLResponse, JSONResponse
 
+from core.access_policy import is_module_enabled
+from core.branding import apply_subpage_console_branding
 from core.config import (
-    BASE_DIR,
-    DATA_DIR,
-    REPORTS_DIR,
-    DOWNLOADS_DIR,
     MAX_UPLOAD_BYTES,
     WEB_SESSION_SECRET,
-    SESSION_DEFAULT_DURATION,
+    get_data_dir,
+    get_jobs_db_path,
+    get_reports_dir,
+    is_admin_email,
+)
+from core.firebase_store import get_portal_session, log_usage
+from core.dependencies import (
+    PORTAL_COOKIE_NAME,
+    enforce_console_api_access,
+    enforce_department_api_access,
+    extract_epts_session_id,
+    get_current_user_optional,
+    get_scoped_token,
+    is_https_request,
+    require_admin_user,
 )
 from core.integrations import (
     JobRecord,
@@ -40,16 +44,33 @@ from core.integrations import (
     LocalStorage,
     utc_now,
 )
-from dsr.html import NARESH_PAGE_HTML
-from dsr.upload_html import UPLOAD_PAGE_HTML
-from dsr import service as automation_service
+from dsr import multiday as multiday_generator
 from dsr import pdf_generator as report_generator
+from dsr import service as automation_service
+from dsr.upload_html import UPLOAD_PAGE_HTML
 
 logger = logging.getLogger("dsr_router")
 router = APIRouter(tags=["Daily Status Report (DSR) & Attendance"])
 
-tracker = LocalJobTracker(DATA_DIR / "attendance_jobs.sqlite3")
-storage = LocalStorage(REPORTS_DIR)
+tracker = LocalJobTracker(get_jobs_db_path())
+storage = LocalStorage(get_data_dir())
+
+
+def _get_tracker() -> LocalJobTracker:
+    global tracker
+    expected = get_jobs_db_path()
+    if Path(tracker.path).resolve() != expected.resolve():
+        tracker = LocalJobTracker(expected)
+    return tracker
+
+
+def _get_storage() -> LocalStorage:
+    global storage
+    expected = get_data_dir().resolve()
+    if Path(storage.data_dir).resolve() != expected:
+        storage = LocalStorage(expected)
+    return storage
+
 
 JOB_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 WEB_JOB_COOKIE_NAME = "khammam_web_report"
@@ -58,25 +79,7 @@ WEB_UPLOADS_PER_HOUR = 20
 _upload_attempts: dict[str, list[float]] = {}
 
 
-def _get_sid(request: Request) -> str:
-    """Extract and prioritize client session ID."""
-    state_sid = getattr(request.state, "session_id", None)
-    if state_sid and str(state_sid).strip():
-        return str(state_sid).strip()
-    sid = (
-        request.headers.get("X-Session-ID")
-        or request.headers.get("x-session-id")
-        or ""
-    ).strip()
-    if not sid:
-        sid = request.query_params.get("session_id", "").strip()
-    if not sid:
-        sid = (
-            request.cookies.get("epts_session_id")
-            or request.cookies.get("ept_session_id")
-            or ""
-        ).strip()
-    return sid or "default"
+_get_sid = extract_epts_session_id
 
 
 def _make_web_job_cookie(job_id: str) -> str:
@@ -89,7 +92,7 @@ def _make_web_job_cookie(job_id: str) -> str:
 def _web_job_cookie_is_valid(request: Request, job_id: str) -> bool:
     cookie = request.cookies.get(WEB_JOB_COOKIE_NAME)
     if not cookie:
-        return True  # Fallback for API clients
+        return True  # Fallback for API clients unless owner_user_id restricts access
     parts = cookie.split(":")
     if len(parts) != 3 or parts[0] != job_id:
         return False
@@ -102,7 +105,7 @@ def _web_job_cookie_is_valid(request: Request, job_id: str) -> bool:
     expected = hmac.new(
         WEB_SESSION_SECRET.encode("utf-8"),
         f"{job_id}:{parts[1]}".encode("utf-8"),
-        hashlib.sha256
+        hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(parts[2], expected)
 
@@ -139,16 +142,55 @@ def _get_web_job(job_id: str, request: Request) -> JobRecord:
     stable_id = job_id.strip()
     if not JOB_ID_PATTERN.match(stable_id):
         raise HTTPException(status_code=400, detail="Invalid report reference.")
-    record = tracker.get(stable_id)
+    if not _web_job_cookie_is_valid(request, stable_id):
+        raise HTTPException(status_code=403, detail="Unauthorized access to this report reference.")
+    record = _get_tracker().get(stable_id)
     if not record:
         raise HTTPException(status_code=404, detail="Report job was not found.")
+    if record.owner_user_id:
+        current_user = get_current_user_optional(request)
+        has_valid_cookie = bool(request.cookies.get(WEB_JOB_COOKIE_NAME)) and _web_job_cookie_is_valid(request, stable_id)
+        is_owner = bool(current_user and current_user.get("user_id") == record.owner_user_id)
+        is_adm = bool(current_user and (current_user.get("is_admin") or is_admin_email(str(current_user.get("gmail", "")))))
+        if not (is_owner or is_adm or has_valid_cookie):
+            raise HTTPException(status_code=403, detail="Unauthorized access to another officer's uploaded report.")
     return record
 
 
 def _record_report_filename(record: JobRecord) -> str:
-    if record.output_pdf:
+    if record.local_pdf_path:
+        cand = Path(record.local_pdf_path).name
+        if cand.lower().endswith(".pdf"):
+            return cand
+    if record.output_pdf and str(record.output_pdf).lower().endswith(".pdf"):
         return Path(record.output_pdf).name
     return f"PS_Attendance_{record.job_id}.pdf"
+
+
+def _serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
+    is_adm = bool(user.get("is_admin")) or is_admin_email(str(user.get("gmail") or ""))
+    return {
+        "user_id": user.get("user_id"),
+        "firebase_uid": user.get("firebase_uid") or user.get("google_uid"),
+        "name": user.get("name"),
+        "gmail": user.get("gmail"),
+        "designation": user.get("designation") or "",
+        "role": user.get("role") or "",
+        "role_label": user.get("role") or "Mandal Level",
+        "mobile_number": user.get("mobile_number") or "",
+        "phone": user.get("mobile_number") or "",
+        "profile_picture": user.get("profile_picture") or "",
+        "registration_date": user.get("registration_date") or "",
+        "last_login": user.get("last_login") or "",
+        "account_status": user.get("account_status", "Active"),
+        "profile_completed": bool(user.get("profile_completed", 0)),
+        "is_admin": is_adm,
+        "can_access_portal": bool(user.get("can_access_portal", 1)),
+        "can_access_console": bool(user.get("can_access_console", 1)),
+        "username": user.get("user_id"),
+        "district": "Khammam",
+        "mandal": "",
+    }
 
 
 def _process_job(
@@ -159,20 +201,24 @@ def _process_job(
     report_mode: str = "district",
     mandal_name: str | None = None,
 ) -> JobRecord:
-    current = tracker.get(job_id)
+    active_tracker = _get_tracker()
+    active_storage = _get_storage()
+    current = active_tracker.get(job_id)
     if not current:
         raise FileNotFoundError("Report job was not found.")
     if current.status == "Completed":
         return current
-    if not tracker.claim(job_id):
-        current = tracker.get(job_id) or current
+    if not active_tracker.claim(job_id):
+        current = active_tracker.get(job_id) or current
         if current.status == "Completed":
             return current
         raise RuntimeError("Report job is already being processed.")
 
     try:
         filename, raw_bytes = source
-        ps_cache_path = DATA_DIR / "ps_directory_cache.json"
+        data_dir = get_data_dir()
+        reports_dir = get_reports_dir()
+        ps_cache_path = data_dir / "ps_directory_cache.json"
         cached_ps_dir = report_generator.load_ps_directory_cache(ps_cache_path)
 
         new_sources: list[tuple[str, bytes]] = []
@@ -207,25 +253,25 @@ def _process_job(
             with tempfile.TemporaryDirectory(prefix="mandal_attendance_") as directory:
                 output_path = Path(directory) / download_filename
                 report_generator.generate_mandal_pdf(report, output_path, mandal_name=target_mandal)
-                output_reference = storage.save_pdf(job_id, output_path)
+                output_reference = active_storage.save_pdf(job_id, output_path)
         else:
             ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             download_filename = f"PS_Attendance_Report_{ts}.pdf"
             with tempfile.TemporaryDirectory(prefix="district_attendance_") as directory:
                 output_path = Path(directory) / download_filename
                 report_generator.generate_pdf(report, output_path)
-                output_reference = storage.save_pdf(job_id, output_path)
+                output_reference = active_storage.save_pdf(job_id, output_path)
 
-        completed = tracker.update(
+        completed = active_tracker.update(
             job_id,
             status="Completed",
             output_pdf=output_reference,
-            local_pdf_path=str(REPORTS_DIR / download_filename),
+            local_pdf_path=str(reports_dir / download_filename),
             notes=f"District: {report.district_name}; Unique GPs: {report.unique_gp_count}",
         )
         return completed
     except Exception as exc:
-        tracker.update(job_id, status="Failed", notes=str(exc)[:500])
+        active_tracker.update(job_id, status="Failed", notes=str(exc)[:500])
         raise
 
 
@@ -233,39 +279,11 @@ def _process_job(
 # DSR Portal & Navigation Endpoints
 # -------------------------------------------------------------
 
-_last_html_mtime: float = 0.0
-_cached_html: str = NARESH_PAGE_HTML
-
-
-def _get_latest_portal_html() -> str:
-    global _last_html_mtime, _cached_html
-    try:
-        from dsr import html as _html_mod
-        html_file = Path(_html_mod.__file__)
-        mtime = html_file.stat().st_mtime
-        if mtime != _last_html_mtime:
-            import importlib
-            importlib.reload(_html_mod)
-            _cached_html = _html_mod.NARESH_PAGE_HTML
-            _last_html_mtime = mtime
-        return _cached_html
-    except Exception:
-        return NARESH_PAGE_HTML
-
-
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
-@router.get("/login", response_class=HTMLResponse, include_in_schema=False)
-@router.get("/eptauto", response_class=HTMLResponse, include_in_schema=False)
-@router.get("/naresh", response_class=HTMLResponse, include_in_schema=False)
-def naresh_page() -> HTMLResponse:
-    """Renders the unified executive portal with DSR Attendance & GP Balance modules."""
-    return HTMLResponse(_get_latest_portal_html())
-
 
 @router.get("/reports/ps-attendance", response_class=HTMLResponse, include_in_schema=False)
-def ps_attendance_page() -> HTMLResponse:
+def ps_attendance_page(request: Request) -> HTMLResponse:
     """Renders the manual attendance file upload and report generation page."""
-    return HTMLResponse(UPLOAD_PAGE_HTML)
+    return HTMLResponse(apply_subpage_console_branding(UPLOAD_PAGE_HTML, request))
 
 
 @router.get("/api/diagnostic/epts-check", include_in_schema=False)
@@ -294,21 +312,7 @@ def diag_reach() -> dict[str, Any]:
 @router.get("/api/system/sessions", include_in_schema=False)
 @router.get("/api/admin/sessions", include_in_schema=False)
 def system_sessions(request: Request) -> dict[str, Any]:
-    sid = _get_sid(request)
-    session = automation_service.get_or_create_session(sid)
-    user_id = str(session.get("user_id") or "").strip().upper()
-    is_auth = automation_service.is_authenticated(session_id=sid)
-
-    # Restrict active session inspection to administrator DPOA3698 only
-    if not (is_auth and user_id == "DPOA3698"):
-        return {
-            "success": False,
-            "error": "Access restricted. Only Administrator (DPOA3698) can view active sessions.",
-            "total_sessions": 0,
-            "authenticated_sessions": 0,
-            "sessions": [],
-        }
-
+    require_admin_user(request)
     try:
         return automation_service.get_all_active_sessions_summary()
     except Exception as exc:
@@ -322,15 +326,6 @@ def system_version() -> dict[str, Any]:
         commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
         msg = subprocess.check_output(["git", "log", "-1", "--pretty=format:%s"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
         date_str = subprocess.check_output(["git", "log", "-1", "--pretty=format:%cd", "--date=format:%d %b %Y %H:%M"], stderr=subprocess.DEVNULL, timeout=2).decode().strip()
-        html_path = Path(__file__).parent / "html.py"
-        raw_html_sample = ""
-        try:
-            raw_text = html_path.read_text(encoding="utf-8")
-            s_idx = raw_text.find("Session is Persistent")
-            raw_html_sample = raw_text[s_idx:s_idx+80] if s_idx != -1 else "not found"
-        except Exception as e:
-            raw_html_sample = f"err: {e}"
-
         return {
             "success": True,
             "commit": commit,
@@ -338,23 +333,14 @@ def system_version() -> dict[str, Any]:
             "date": date_str,
             "pid": os.getpid(),
             "cwd": str(Path.cwd()),
-            "html_file": str(html_path),
-            "html_disk_sample": raw_html_sample,
-            "auto_deploy": "Active (Daemon checks GitHub every 30s)",
         }
     except Exception as exc:
-        return {"success": False, "commit": "unknown", "error": str(exc), "auto_deploy": "Active"}
+        return {"success": False, "commit": "unknown", "error": str(exc)}
 
 
 @router.post("/api/system/sync", include_in_schema=False)
 def system_sync(request: Request) -> dict[str, Any]:
-    sid = _get_sid(request)
-    session = automation_service.get_or_create_session(sid)
-    user_id = str(session.get("user_id") or "").strip().upper()
-    is_auth = automation_service.is_authenticated(session_id=sid)
-
-    if not (is_auth and user_id == "DPOA3698"):
-        return {"success": False, "error": "Only Administrator (DPOA3698) can trigger server sync."}
+    require_admin_user(request)
 
     import subprocess
     import threading
@@ -370,10 +356,9 @@ def system_sync(request: Request) -> dict[str, Any]:
     return {"success": True, "message": "Server sync initiated. Pulling latest GitHub code and restarting service in background."}
 
 
-
 @router.get("/api/naresh/data", include_in_schema=False)
 def naresh_api_data(request: Request) -> dict[str, Any]:
-    sid = _get_sid(request)
+    _, sid = enforce_department_api_access(request)
     try:
         session = automation_service.get_or_create_session(sid)
         session_data = session.get("report_data")
@@ -390,22 +375,24 @@ def naresh_login(
     username: str = Form(...),
     password: str = Form(...),
 ) -> dict[str, Any]:
+    console_user = enforce_console_api_access(request)
     sid = _get_sid(request)
     u = (username or "").strip()
     p = (password or "").strip()
     if not u or not p:
         raise HTTPException(status_code=400, detail="Please enter both User ID and Password.")
     try:
-        return automation_service.start_server_login(u, p, headless=True, session_id=sid)
+        result = automation_service.start_server_login(u, p, headless=True, session_id=sid)
+        if console_user:
+            log_usage(user_id=console_user["user_id"], platform_scope="console", module="epts_auth", action="login_init")
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
     except Exception as exc:
         logger.exception("Error during server login for session %s: %s", sid, exc)
-        return {
-            "success": True,
-            "step": "otp_required",
-            "user_id": u,
-            "mode": "cloud_sync",
-            "message": f"Department Login initiated for Officer {u}! Please enter your 6-digit OTP to proceed.",
-        }
+        raise HTTPException(status_code=502, detail=f"Department Login failed: {exc}") from None
 
 
 @router.post("/api/naresh/verify-otp", include_in_schema=False)
@@ -413,30 +400,58 @@ def naresh_verify_otp(
     request: Request,
     otp: str = Form(...),
 ) -> dict[str, Any]:
+    console_user = enforce_console_api_access(request)
     sid = _get_sid(request)
     clean_otp = re.sub(r"\D", "", (otp or "").strip())
     if len(clean_otp) != 6:
         raise HTTPException(status_code=400, detail="Please enter a valid 6-digit numeric OTP.")
     try:
-        return automation_service.verify_server_otp(clean_otp, session_id=sid)
+        result = automation_service.verify_server_otp(clean_otp, session_id=sid)
+        if console_user:
+            log_usage(user_id=console_user["user_id"], platform_scope="console", module="epts_auth", action="verify_otp")
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     except Exception as exc:
         logger.exception("Error during OTP verification for session %s: %s", sid, exc)
-        return {"success": True, "step": "authenticated", "user_id": "Officer", "message": "OTP verified! Session authenticated."}
+        raise HTTPException(status_code=502, detail=f"OTP verification failed: {exc}") from None
 
 
 @router.get("/api/naresh/session-status", include_in_schema=False)
 def naresh_session_status(request: Request) -> dict[str, Any]:
+    enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
         return automation_service.get_session_status(session_id=sid)
-    except Exception as exc:
+    except Exception:
         return {"success": False, "authenticated": False, "status": "idle", "session_id": sid}
+
+
+@router.get("/api/naresh/login-progress", include_in_schema=False)
+def naresh_login_progress(request: Request) -> dict[str, Any]:
+    enforce_console_api_access(request)
+    sid = _get_sid(request)
+    try:
+        return automation_service.get_login_progress(session_id=sid)
+    except Exception:
+        return {"active": False, "done": False, "error": False, "current": "", "logs": [], "elapsed": 0}
+
+
+@router.post("/api/naresh/set-user-level", include_in_schema=False)
+@router.get("/api/naresh/set-user-level", include_in_schema=False)
+def naresh_set_user_level(
+    request: Request,
+    level: str = Query(default="district"),
+    mandal: str = Query(default=""),
+) -> dict[str, Any]:
+    enforce_console_api_access(request)
+    sid = _get_sid(request)
+    return automation_service.set_user_level_override(session_id=sid, user_level=level, mandal_name=mandal)
 
 
 @router.post("/api/naresh/extend-session", include_in_schema=False)
 def naresh_extend_session(request: Request) -> dict[str, Any]:
+    enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
         return automation_service.extend_session(session_id=sid)
@@ -448,6 +463,7 @@ def naresh_extend_session(request: Request) -> dict[str, Any]:
 
 @router.post("/api/naresh/logout", include_in_schema=False)
 def naresh_logout(request: Request) -> dict[str, Any]:
+    enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
         automation_service.logout_server_session(session_id=sid)
@@ -457,13 +473,14 @@ def naresh_logout(request: Request) -> dict[str, Any]:
         except Exception:
             pass
         return {"success": True, "message": "Logged out successfully."}
-    except Exception as exc:
+    except Exception:
         return {"success": True, "message": "Logged out."}
 
 
 @router.get("/api/naresh/clear-cache", include_in_schema=False)
 @router.post("/api/naresh/clear-cache", include_in_schema=False)
 def clear_server_cache_endpoint(request: Request) -> dict[str, Any]:
+    enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
         automation_service.logout_server_session(session_id=sid)
@@ -486,10 +503,10 @@ def naresh_generate(
     sort_by: str = Form(default="before_9"),
     force_fresh: str = Form(default="false"),
 ) -> dict[str, Any]:
-    sid = _get_sid(request)
+    console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
     try:
-        return automation_service.generate_server_report(
+        res = automation_service.generate_server_report(
             module=module,
             date_str=date,
             session_id=sid,
@@ -497,13 +514,29 @@ def naresh_generate(
             sort_by=sort_by,
             force_fresh=is_force_fresh,
         )
+        if console_user:
+            log_usage(user_id=console_user["user_id"], platform_scope="console", module="dsr_automation", action="generate_report")
+        return res
+    except PermissionError as exc:
+        try:
+            from core.session_manager import mark_session_expired
+            mark_session_expired(sid, str(exc))
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=401,
+            detail=str(exc),
+            headers={"X-Dept-Auth-Required": "true"},
+        ) from None
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("naresh_generate failed for module=%s date=%s sid=%s: %s", module, date, sid, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
-    sid = _get_sid(request)
+    _, sid = enforce_department_api_access(request)
     pdf_path: Path | None = None
     download_filename: str = ""
     try:
@@ -517,14 +550,8 @@ def _serve_naresh_pdf(request: Request, inline: bool = True) -> Response:
     except Exception:
         pass
 
-    if not pdf_path:
-        all_matches = sorted(REPORTS_DIR.glob("*Report*.pdf"), key=lambda p: p.stat().st_mtime, reverse=True)
-        if all_matches and all_matches[0].stat().st_size > 500:
-            pdf_path = all_matches[0]
-
     if pdf_path and pdf_path.exists() and pdf_path.stat().st_size > 500:
         if not download_filename:
-            # Cleanly construct download filename without "Official", with timestamp, and without session ID
             m = re.match(r"^([A-Za-z0-9_]+?)_(?:Official_)?.*_(\d{2}-[A-Za-z]{3}-\d{4})(?:_(\d{2}-\d{2}-[A-Za-z]{2}))?", pdf_path.name)
             if m:
                 ts_part = f"_{m.group(3)}" if m.group(3) else f"_{datetime.now().strftime('%I-%M-%p')}"
@@ -595,7 +622,14 @@ def create_web_report(
     mandal_name: str = Form(default=""),
     requested_by: str = Form(default="", alias="RequestedBy"),
 ) -> JSONResponse:
+    if not is_module_enabled("module_dsr_excel"):
+        raise HTTPException(
+            status_code=403,
+            detail="Daily PS Attendance & DSR manual upload is currently paused by administrator policy.",
+        )
     _check_web_upload_rate_limit(request)
+    current_user = get_current_user_optional(request)
+    owner_user_id = str(current_user.get("user_id", "")) if current_user else ""
     filename = _clean_filename(file.filename)
     raw = _read_upload(file, MAX_UPLOAD_BYTES)
 
@@ -612,11 +646,12 @@ def create_web_report(
         absentees_data = (a_name, a_bytes)
 
     job_id = uuid4().hex
-    record, _ = tracker.create(JobRecord(
+    record, _ = _get_tracker().create(JobRecord(
         job_id=job_id,
         uploaded_file=filename,
-        requested_by=(requested_by or "unknown")[:320],
+        requested_by=(requested_by or (current_user.get("name") if current_user else "") or "unknown")[:320],
         requested_at=utc_now(),
+        owner_user_id=owner_user_id,
     ))
     try:
         completed = _process_job(
@@ -628,7 +663,7 @@ def create_web_report(
             mandal_name=mandal_name,
         )
     except Exception as exc:
-        failed = tracker.get(job_id)
+        failed = _get_tracker().get(job_id)
         raise HTTPException(status_code=400, detail={
             "job_id": job_id,
             "status": failed.status if failed else "Failed",
@@ -643,11 +678,170 @@ def create_web_report(
         _make_web_job_cookie(job_id),
         max_age=WEB_JOB_TTL_SECONDS,
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=is_https_request(request),
         samesite="strict",
         path="/api/web/reports",
     )
     return response
+
+
+@router.post("/api/web/multi-day-reports", status_code=200, include_in_schema=False)
+def create_multiday_web_report(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    presentees_file: UploadFile | None = File(default=None),
+    absentees_file: UploadFile | None = File(default=None),
+    mandal_name: str = Form(default=""),
+    cutoff_time: str = Form(default="09:00"),
+    requested_by: str = Form(default="", alias="RequestedBy"),
+) -> JSONResponse:
+    if not is_module_enabled("module_dsr_multiday"):
+        raise HTTPException(
+            status_code=403,
+            detail="Multiple Days DSR reporting is currently paused by administrator policy.",
+        )
+    _check_web_upload_rate_limit(request)
+    if not files:
+        raise HTTPException(status_code=400, detail="Please upload one or more GM-R 1.2.7 attendance files.")
+
+    current_user = get_current_user_optional(request)
+    owner_user_id = str(current_user.get("user_id", "")) if current_user else ""
+
+    daily_sources: list[tuple[str, bytes]] = []
+    for up in files:
+        if up and up.filename and up.filename.strip():
+            daily_sources.append((_clean_filename(up.filename), _read_upload(up, MAX_UPLOAD_BYTES)))
+    if not daily_sources:
+        raise HTTPException(status_code=400, detail="No valid uploaded attendance files were found.")
+
+    presentees_data: tuple[str, bytes] | None = None
+    if presentees_file and presentees_file.filename and presentees_file.filename.strip():
+        presentees_data = (_clean_filename(presentees_file.filename), _read_upload(presentees_file, MAX_UPLOAD_BYTES))
+
+    absentees_data: tuple[str, bytes] | None = None
+    if absentees_file and absentees_file.filename and absentees_file.filename.strip():
+        absentees_data = (_clean_filename(absentees_file.filename), _read_upload(absentees_file, MAX_UPLOAD_BYTES))
+
+    job_id = uuid4().hex
+    label_summary = f"{daily_sources[0][0]} (+{len(daily_sources) - 1} more)" if len(daily_sources) > 1 else daily_sources[0][0]
+    _get_tracker().create(JobRecord(
+        job_id=job_id,
+        uploaded_file=label_summary,
+        requested_by=(requested_by or (current_user.get("name") if current_user else "") or "unknown")[:320],
+        requested_at=utc_now(),
+        owner_user_id=owner_user_id,
+    ))
+
+    try:
+        active_tracker = _get_tracker()
+        active_storage = _get_storage()
+        active_tracker.claim(job_id)
+
+        data_dir = get_data_dir()
+        reports_dir = get_reports_dir()
+        ps_cache_path = data_dir / "ps_directory_cache.json"
+        cached_ps_dir = report_generator.load_ps_directory_cache(ps_cache_path)
+
+        dir_sources = [s for s in (presentees_data, absentees_data) if s and s[1]]
+        if dir_sources:
+            parsed_dir: dict[str, dict[str, str]] = {}
+            for s_name, s_bytes in dir_sources:
+                parsed_dir = report_generator.merge_ps_directories(
+                    parsed_dir, report_generator.parse_ps_directory_file(s_name, s_bytes)
+                )
+            cached_ps_dir = report_generator.merge_ps_directories(cached_ps_dir, parsed_dir)
+            report_generator.save_ps_directory_cache(cached_ps_dir, ps_cache_path)
+
+        md_report = multiday_generator.process_multiday_attendance_files(
+            daily_sources=daily_sources,
+            presentees_source=presentees_data,
+            absentees_source=absentees_data,
+            ps_directory=cached_ps_dir,
+            mandal_name=mandal_name,
+            cutoff_time=cutoff_time,
+        )
+
+        clean_dist = re.sub(r"[^A-Za-z0-9_-]", "_", md_report.district_name)
+        clean_mandal = re.sub(r"[^A-Za-z0-9_-]", "_", md_report.mandal_filter) if md_report.mandal_filter else "District"
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        pdf_filename = f"{clean_dist}_{clean_mandal}_MultiDay_DSR_Report_{ts}.pdf"
+        excel_filename = f"{clean_dist}_{clean_mandal}_MultiDay_DSR_Report_{ts}.xlsx"
+
+        with tempfile.TemporaryDirectory(prefix="multiday_dsr_") as tmpdir:
+            pdf_tmp = Path(tmpdir) / pdf_filename
+            multiday_generator.generate_multiday_pdf(md_report, pdf_tmp)
+            output_ref = active_storage.save_pdf(job_id, pdf_tmp)
+
+        excel_path = (reports_dir / excel_filename).resolve()
+        multiday_generator.generate_multiday_excel(md_report, excel_path)
+
+        completed = active_tracker.update(
+            job_id,
+            status="Completed",
+            output_pdf=output_ref,
+            local_pdf_path=str(reports_dir / pdf_filename),
+            notes=(
+                f"Multi-Day DSR ({md_report.days_count} days); District: {md_report.district_name}; "
+                f"Unique GPs: {md_report.unique_gp_count}; Excel: {excel_filename}"
+            ),
+        )
+    except Exception as exc:
+        failed = _get_tracker().get(job_id)
+        if failed and failed.status != "Failed":
+            _get_tracker().update(job_id, status="Failed", notes=str(exc)[:500])
+        raise HTTPException(status_code=400, detail={
+            "job_id": job_id,
+            "status": "Failed",
+            "message": str(exc),
+        }) from None
+
+    resp_data = completed.public_dict()
+    resp_data["download_filename"] = _record_report_filename(completed)
+    resp_data["excel_filename"] = excel_filename
+    resp_data["days_count"] = md_report.days_count
+    resp_data["date_range"] = (
+        f"{md_report.start_date:%d-%b-%Y}"
+        if md_report.start_date == md_report.end_date
+        else f"{md_report.start_date:%d-%b-%Y} to {md_report.end_date:%d-%b-%Y}"
+    )
+    resp_data["district_name"] = md_report.district_name
+    resp_data["unique_gp_count"] = md_report.unique_gp_count
+    resp_data["defaulter_count"] = len(md_report.defaulter_rows)
+
+    response = JSONResponse(resp_data)
+    response.set_cookie(
+        WEB_JOB_COOKIE_NAME,
+        _make_web_job_cookie(job_id),
+        max_age=WEB_JOB_TTL_SECONDS,
+        httponly=True,
+        secure=is_https_request(request),
+        samesite="strict",
+        path="/api/web/reports",
+    )
+    return response
+
+
+@router.get("/api/web/reports/{job_id}/download-excel", include_in_schema=False)
+def download_web_report_excel(job_id: str, request: Request) -> Response:
+    record = _get_web_job(job_id, request)
+    if record.status != "Completed" or not record.local_pdf_path:
+        raise HTTPException(status_code=409, detail=f"Report is not ready (status: {record.status}).")
+    reports_root = get_reports_dir().resolve()
+    try:
+        excel_path = Path(record.local_pdf_path).with_suffix(".xlsx").resolve()
+        excel_path.relative_to(reports_root)
+    except (ValueError, OSError):
+        raise HTTPException(status_code=404, detail="Excel report path is invalid.") from None
+    if not excel_path.is_file():
+        raise HTTPException(status_code=404, detail="Generated Excel workbook not found for this job.")
+    return Response(
+        content=excel_path.read_bytes(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{excel_path.name}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
 
 
 @router.get("/api/web/reports/{job_id}", include_in_schema=False)
@@ -661,7 +855,7 @@ def download_web_report(job_id: str, request: Request, inline: bool = False) -> 
     if record.status != "Completed" or not record.output_pdf:
         raise HTTPException(status_code=409, detail=f"Report is not ready (status: {record.status}).")
     try:
-        pdf_bytes = storage.read_pdf(record.output_pdf, record.local_pdf_path)
+        pdf_bytes = _get_storage().read_pdf(record.output_pdf, record.local_pdf_path)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
     disposition = "inline" if inline else "attachment"
@@ -693,7 +887,7 @@ def download_web_report_page_image(
     if record.status != "Completed" or not record.output_pdf:
         raise HTTPException(status_code=409, detail=f"Report is not ready (status: {record.status}).")
     try:
-        pdf_bytes = storage.read_pdf(record.output_pdf, record.local_pdf_path)
+        pdf_bytes = _get_storage().read_pdf(record.output_pdf, record.local_pdf_path)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
 
@@ -737,7 +931,9 @@ def auto_load_web_report(
     mandal_name: str = Form(default=""),
     requested_by: str = Form(default="Automated Portal", alias="RequestedBy"),
 ) -> JSONResponse:
-    dl_dir = DOWNLOADS_DIR
+    console_user = enforce_console_api_access(request)
+    sid = _get_sid(request)
+    dl_dir = automation_service.get_or_create_session(sid)["downloads_dir"]
     cand = [f for f in dl_dir.iterdir() if f.is_file() and f.suffix.lower() in (".xls", ".xlsx", ".csv")] if dl_dir.exists() else []
     source_path = cand[0] if cand else None
     if not source_path:
@@ -758,11 +954,12 @@ def auto_load_web_report(
                     absentees_data = (f.name, f.read_bytes())
 
     job_id = uuid4().hex
-    record, _ = tracker.create(JobRecord(
+    record, _ = _get_tracker().create(JobRecord(
         job_id=job_id,
         uploaded_file=filename,
         requested_by=requested_by,
         requested_at=utc_now(),
+        owner_user_id=str(console_user.get("user_id", "")) if console_user else "",
     ))
     try:
         completed = _process_job(
@@ -774,7 +971,7 @@ def auto_load_web_report(
             mandal_name=mandal_name,
         )
     except Exception as exc:
-        failed = tracker.get(job_id)
+        failed = _get_tracker().get(job_id)
         raise HTTPException(status_code=400, detail={
             "job_id": job_id,
             "status": failed.status if failed else "Failed",
@@ -785,11 +982,3 @@ def auto_load_web_report(
     resp_data["download_filename"] = _record_report_filename(completed)
     return JSONResponse(resp_data)
 
-
-# ========================================================
-# SERVICES OVERVIEW HUB (/services)
-# ========================================================
-@router.get('/services', response_class=HTMLResponse, tags=['Services'])
-def services_hub_page() -> HTMLResponse:
-    from dsr.services_html import get_services_page_html
-    return HTMLResponse(get_services_page_html())

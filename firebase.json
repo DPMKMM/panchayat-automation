@@ -1,0 +1,20 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-south1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "e-Panchayat Automation",
+        "supportEmail": "dpmkmm7@gmail.com",
+        "authorizedRedirectUris": [
+          "https://epanchayat-automation-tg.firebaseapp.com/__/auth/handler",
+          "http://localhost:8050"
+        ]
+      }
+    }
+  }
+}

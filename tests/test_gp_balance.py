@@ -261,3 +261,107 @@ def test_sathupally_partial_pending_shown_in_pdf():
     assert "Sathupally" in p2_text
     assert "15th FC Untied (e-Gram Swaraj)" in p2_text
     assert "VWSC (SBM)" in p2_text
+
+
+def test_pmagy_include_and_exclude_option():
+    """Verify PMAGY can be cleanly excluded (default) or included across models, PDF, and Excel."""
+    from gp_balance.models import PMAGY_ACCOUNT_LABEL
+
+    gp_only_pmagy_missing = GPBalanceDetail(
+        s_no=1,
+        mandal_name="Nelakondapally",
+        panchayat_name="Appalanarasimhapuram",
+        entered=True,
+        gp_pd="Yes",
+        tgbpass="Yes",
+        fc15_tied="Yes",
+        fc15_untied="Yes",
+        pmagy="No",
+        vwsc="Yes",
+        mgnregs="Yes",
+    )
+    gp_only_pmagy_missing.evaluate_pending(include_pmagy=False)
+    assert gp_only_pmagy_missing.is_pending is False
+    assert gp_only_pmagy_missing.missing_accounts == []
+
+    m = MandalBalanceSummary(
+        s_no=1,
+        mandal_name="Nelakondapally",
+        total_gps=10,
+        entered_gps=10,
+        not_entered_gps=0,
+        gp_pd_updated=10,
+        tgbpass_updated=10,
+        fc15_tied_updated=10,
+        fc15_untied_updated=10,
+        pmagy_updated=9,  # 1 PMAGY missing
+        vwsc_updated=10,
+        mgnregs_updated=10,
+        all_gps=[gp_only_pmagy_missing],
+    )
+    m.calculate_metrics(include_pmagy=False)
+    assert m.has_pending is False
+    assert m.pmagy_pending == 0
+
+    base_report = DistrictBalanceReport(
+        district_name="Khammam",
+        report_date_str="29-10-2026",
+        generated_at="11-Nov-2026 10:00 PM",
+        mandals=[m],
+        include_pmagy=False,
+    )
+    base_report.compute_totals()
+    assert base_report.total_not_entered_gps == 0
+    assert base_report.total_pmagy_pending == 0
+
+    # Excluded Excel & PDF -> 19 columns (no PMAGY column)
+    wb_excl = openpyxl.load_workbook(io.BytesIO(generate_balance_excel(base_report)))
+    ws_excl = wb_excl["Mandal_Summary"]
+    assert ws_excl.max_column == 19
+    assert "PMAGY account excluded" in str(ws_excl["A3"].value)
+
+    pdf_excl_txt = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(generate_balance_pdf(base_report))).pages)
+    assert "PMAGY Excluded" in pdf_excl_txt
+
+    # Included -> flips GP & Mandal to pending cleanly, adds PMAGY column to Excel/PDF & Mandal PDF
+    inc_report = base_report.clone_with_pmagy_option(True)
+    assert inc_report.include_pmagy is True
+    assert inc_report.total_not_entered_gps == 1
+    assert inc_report.total_pmagy_pending == 1
+    assert inc_report.mandals[0].all_gps[0].is_pending is True
+    assert inc_report.mandals[0].all_gps[0].missing_accounts == [PMAGY_ACCOUNT_LABEL]
+
+    wb_inc = openpyxl.load_workbook(io.BytesIO(generate_balance_excel(inc_report)))
+    ws_inc = wb_inc["Mandal_Summary"]
+    assert ws_inc.max_column == 21
+    assert "PMAGY account included" in str(ws_inc["A3"].value)
+    assert "PMAGY" in str(ws_inc["O4"].value)
+
+    pdf_inc_txt = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(generate_balance_pdf(inc_report))).pages)
+    assert "PMAGY Included" in pdf_inc_txt
+    assert "PMAGY" in pdf_inc_txt
+
+    mandal_pdf_inc = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(generate_balance_pdf(inc_report, mandal_name="Nelakondapally"))).pages)
+    assert "PMAGY Included" in mandal_pdf_inc
+
+    # Re-excluding reverses cleanly back to 0 pending
+    reverted = inc_report.clone_with_pmagy_option(False)
+    assert reverted.include_pmagy is False
+    assert reverted.total_not_entered_gps == 0
+    assert reverted.total_pmagy_pending == 0
+
+
+def test_pmagy_option_in_ui_and_api():
+    """Verify UI checkbox & JS wiring expose Include/Exclude PMAGY toggle in GP Balance Station."""
+    from fastapi.testclient import TestClient
+    from app import create_app
+
+    client = TestClient(create_app())
+    html = client.get("/?site=console").text
+    assert 'id="chk-balance-include-pmagy"' in html
+    assert "Include PMAGY" in html
+    assert "onBalancePmagyChanged()" in html
+
+    console_js = client.get("/static/js/console.js").text
+    assert "isBalancePmagyIncluded" in console_js
+    assert "include_pmagy" in console_js

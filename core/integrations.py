@@ -6,8 +6,8 @@ import re
 import shutil
 import sqlite3
 from contextlib import closing
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Protocol
 
@@ -48,6 +48,7 @@ class JobRecord:
     output_pdf: str = ""
     notes: str = ""
     local_pdf_path: str = ""
+    owner_user_id: str = ""
 
     @property
     def download_filename(self) -> str:
@@ -104,13 +105,35 @@ class LocalJobTracker:
                     status TEXT NOT NULL,
                     output_pdf TEXT NOT NULL DEFAULT '',
                     notes TEXT NOT NULL DEFAULT '',
-                    local_pdf_path TEXT NOT NULL DEFAULT ''
+                    local_pdf_path TEXT NOT NULL DEFAULT '',
+                    owner_user_id TEXT NOT NULL DEFAULT ''
                 )
             """)
+            cols = {
+                str(r["name"])
+                for r in connection.execute("PRAGMA table_info(attendance_jobs)").fetchall()
+            }
+            if "owner_user_id" not in cols:
+                connection.execute(
+                    "ALTER TABLE attendance_jobs ADD COLUMN owner_user_id TEXT NOT NULL DEFAULT '';"
+                )
 
     @staticmethod
     def _record(row: sqlite3.Row | None) -> JobRecord | None:
-        return JobRecord(**dict(row)) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        return JobRecord(
+            job_id=str(d.get("job_id", "")),
+            uploaded_file=str(d.get("uploaded_file", "")),
+            requested_by=str(d.get("requested_by", "")),
+            requested_at=str(d.get("requested_at", "")),
+            status=str(d.get("status", "Submitted")),
+            output_pdf=str(d.get("output_pdf", "")),
+            notes=str(d.get("notes", "")),
+            local_pdf_path=str(d.get("local_pdf_path", "")),
+            owner_user_id=str(d.get("owner_user_id", "")),
+        )
 
     def get(self, job_id: str) -> JobRecord | None:
         with closing(self._connect()) as connection:
@@ -123,14 +146,24 @@ class LocalJobTracker:
         with closing(self._connect()) as connection:
             connection.execute("""
                 INSERT OR IGNORE INTO attendance_jobs
-                (job_id, uploaded_file, requested_by, requested_at, status, output_pdf, notes, local_pdf_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, tuple(asdict(record).values()))
+                (job_id, uploaded_file, requested_by, requested_at, status, output_pdf, notes, local_pdf_path, owner_user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record.job_id,
+                record.uploaded_file,
+                record.requested_by,
+                record.requested_at,
+                record.status,
+                record.output_pdf,
+                record.notes,
+                record.local_pdf_path,
+                record.owner_user_id,
+            ))
             created = connection.execute("SELECT changes()").fetchone()[0] == 1
         return self.get(record.job_id) or record, created
 
     def update(self, job_id: str, **values: str) -> JobRecord:
-        allowed = {"uploaded_file", "status", "output_pdf", "notes", "local_pdf_path"}
+        allowed = {"uploaded_file", "status", "output_pdf", "notes", "local_pdf_path", "owner_user_id"}
         if not values or not set(values).issubset(allowed):
             raise ValueError("Unsupported job update field.")
         assignments = ", ".join(f"{key} = ?" for key in values)

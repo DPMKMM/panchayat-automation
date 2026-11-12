@@ -49,17 +49,16 @@ if [ -f "$PROJECT_DIR/cloudflared" ]; then
     chmod +x "$PROJECT_DIR/cloudflared" 2>/dev/null || true
 fi
 
-# 4. Create or update .env with new tunnel token
-echo "[*] Configuring .env with new Cloudflare Tunnel token..."
-tee "$PROJECT_DIR/.env" > /dev/null <<'EOF'
-WEB_SESSION_SECRET=b71c84f509e5bca393c5d888f4c2810ab512a863d0859339e1a10ebf19a3b6d2
-DATA_DIR=./data
-MAX_UPLOAD_BYTES=31457280
-LOG_LEVEL=INFO
-PORT=8050
-CLOUDFLARE_TUNNEL_TOKEN=eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0IjoiOTlmODY1MWYtNjZmMi00YTIzLTllZjktYjYxYjhjOTg2MzkzIiwicyI6IlpHTmxPRFkxTVRNdE1XSm1NUzAwWmpNM0xXRXhNVFV0TjJVMk1UQXpPRGczWXprMSJ9
-CUSTOM_DOMAIN=panchayatautomation.in
-EOF
+# 4. Preserve existing .env (or initialize from .env.example if missing)
+if [ ! -f "$PROJECT_DIR/.env" ]; then
+    echo "[*] Initializing .env from .env.example..."
+    cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
+    GEN_SECRET=$(openssl rand -hex 32 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(32))")
+    sed -i "s/^WEB_SESSION_SECRET=.*/WEB_SESSION_SECRET=$GEN_SECRET/" "$PROJECT_DIR/.env"
+    sed -i "s/^ENVIRONMENT=.*/ENVIRONMENT=production/" "$PROJECT_DIR/.env"
+else
+    echo "[+] Preserving existing $PROJECT_DIR/.env (Firebase & tunnel secrets untouched)."
+fi
 
 # 5. Terminate any legacy processes on port 8000 and port 8050
 echo "[*] Clearing legacy local host and stale server processes..."
@@ -140,11 +139,9 @@ echo ""
 echo "======================================================================"
 echo "  [+] NEW TUNNEL CONNECTED & 24/7 CI/CD ACTIVE!"
 echo "======================================================================"
-echo "  * New Tunnel ID   : 99f8651f-66f2-4a23-9ef9-b61b8c986393"
 echo "  * Main Service    : epanchayat.service (Running on Port 8050)"
 echo "  * Auto-Deploy CI  : epanchayat-updater.service (Every 15s)"
 echo "  * Public Domain   : https://panchayatautomation.in"
 echo ""
-echo "  Old machine D:\DPM-ept is now completely cut off."
 echo "  All future git pushes will auto-deploy within 15 seconds!"
 echo "======================================================================"

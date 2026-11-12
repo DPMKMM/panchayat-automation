@@ -1,21 +1,6 @@
-"""Telangana e-Panchayat Monthly Activity Statement (MAS) Module.
+"""Monthly Activity Statement (MAS) Consolidated Reporting Module.
 
-Provides end-to-end automation, auditing, and official departmental reporting
-for the Monthly Activity Statement (MAS) from the Telangana e-Panchayat portal.
+Integrates GM-R 5.24 (17 MAS Indicators) + GM-R 5.23 (Births Register) using
+the shared authenticated Playwright session from ``dsr.service`` (zero
+duplicate login).
 """
-
-from mas.models import (
-    DEFAULT_MAS_ACTIVITIES,
-    DistrictMASReport,
-    GPMASDetail,
-    MandalMASSummary,
-)
-from mas.router import router
-
-__all__ = [
-    "DEFAULT_MAS_ACTIVITIES",
-    "DistrictMASReport",
-    "GPMASDetail",
-    "MandalMASSummary",
-    "router",
-]

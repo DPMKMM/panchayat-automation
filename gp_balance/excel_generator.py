@@ -57,8 +57,26 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
     if clean_dist.upper().endswith("DISTRICT"):
         clean_dist = clean_dist[:-8].strip()
     dist_suffix = f" - {clean_dist.upper()} DISTRICT" if clean_dist and clean_dist.lower() != "district" else ""
+    include_pmagy = bool(getattr(report, "include_pmagy", False))
+
+    accounts_meta = [
+        ("GP PD Account (General/15FC/SFC)", "gp_pd_updated", "gp_pd_pending", "total_gp_pd_pending"),
+        ("State Matching Grant (TG-bPASS)", "tgbpass_updated", "tgbpass_pending", "total_tgbpass_pending"),
+        ("15th FC Grant - Tied", "fc15_tied_updated", "fc15_tied_pending", "total_fc15_tied_pending"),
+        ("15th FC Grant - Untied", "fc15_untied_updated", "fc15_untied_pending", "total_fc15_untied_pending"),
+    ]
+    if include_pmagy:
+        accounts_meta.append(("PMAGY (Adarsh Gram)", "pmagy_updated", "pmagy_pending", "total_pmagy_pending"))
+    accounts_meta.extend([
+        ("VWSC (SBM)", "vwsc_updated", "vwsc_pending", "total_vwsc_pending"),
+        ("MGNREGS (Material)", "mgnregs_updated", "mgnregs_pending", "total_mgnregs_pending"),
+    ])
+
+    total_cols = 6 + (2 * len(accounts_meta)) + 1
+    last_col_letter = get_column_letter(total_cols)
+
     # Title Banner
-    ws1.merge_cells("A1:Q1")
+    ws1.merge_cells(f"A1:{last_col_letter}1")
     t1 = ws1["A1"]
     t1.value = f"Data Entry Status Report on Balances in GP Accounts{dist_suffix}"
     t1.font = font_title
@@ -66,7 +84,7 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
     t1.alignment = align_center
     ws1.row_dimensions[1].height = 28
 
-    ws1.merge_cells("A2:Q2")
+    ws1.merge_cells(f"A2:{last_col_letter}2")
     t2 = ws1["A2"]
     t2_dist = f" - {clean_dist.upper()} DISTRICT" if clean_dist and clean_dist.lower() != "district" else ""
     t2.value = f"STATUS REPORT ON DATA ENTERED GPs (GM-R 14.2){t2_dist} | BALANCE DATE: {report.report_date_str}"
@@ -75,12 +93,10 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
     t2.alignment = align_center
     ws1.row_dimensions[2].height = 22
 
-    ws1.merge_cells("A3:Q3")
+    ws1.merge_cells(f"A3:{last_col_letter}3")
     t3 = ws1["A3"]
-    t3.value = (
-        f"Generated: {report.generated_at} | Rule: Total GPs - Updated GPs = Pending | "
-        f"PMAGY account excluded (Not applicable in district)"
-    )
+    pmagy_note = "PMAGY account included" if include_pmagy else "PMAGY account excluded (Not applicable in district)"
+    t3.value = f"Generated: {report.generated_at} | Rule: Total GPs - Updated GPs = Pending | {pmagy_note}"
     t3.font = font_sec
     t3.alignment = align_center
     ws1.row_dimensions[3].height = 18
@@ -93,14 +109,18 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
         ("D4:D5", "No. of GPs Entered Data"),
         ("E4:E5", "No. of GPs not Entered Data"),
         ("F4:F5", "% Data Entered"),
-        ("G4:H4", "GP PD Account (General/15FC/SFC)"),
-        ("I4:J4", "State Matching Grant (TG-bPASS)"),
-        ("K4:L4", "15th FC Grant - Tied"),
-        ("M4:N4", "15th FC Grant - Untied"),
-        ("O4:P4", "VWSC (SBM)"),
-        ("Q4:R4", "MGNREGS (Material)"),
-        ("S4:S5", "Mandal Status"),
     ]
+    sub_cols = []
+    cur_col = 7
+    for title, _, _, _ in accounts_meta:
+        c1 = get_column_letter(cur_col)
+        c2 = get_column_letter(cur_col + 1)
+        headers_row4.append((f"{c1}4:{c2}4", title))
+        sub_cols.append((f"{c1}5", "Updated"))
+        sub_cols.append((f"{c2}5", "Pending"))
+        cur_col += 2
+    status_col_letter = get_column_letter(cur_col)
+    headers_row4.append((f"{status_col_letter}4:{status_col_letter}5", "Mandal Status"))
 
     for cell_range, title in headers_row4:
         ws1.merge_cells(cell_range)
@@ -110,15 +130,6 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
         top_cell.fill = fill_header
         top_cell.alignment = align_center
 
-    # Row 5: Sub-headers for Updated / Pending
-    sub_cols = [
-        ("G5", "Updated"), ("H5", "Pending"),
-        ("I5", "Updated"), ("J5", "Pending"),
-        ("K5", "Updated"), ("L5", "Pending"),
-        ("M5", "Updated"), ("N5", "Pending"),
-        ("O5", "Updated"), ("P5", "Pending"),
-        ("Q5", "Updated"), ("R5", "Pending"),
-    ]
     for cell_ref, text in sub_cols:
         c = ws1[cell_ref]
         c.value = text
@@ -130,7 +141,7 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
     ws1.row_dimensions[4].height = 20
     ws1.row_dimensions[5].height = 16
     for row in range(4, 6):
-        for col in range(1, 20):
+        for col in range(1, total_cols + 1):
             ws1.cell(row=row, column=col).border = border_cell
 
     # Populate Mandal Data
@@ -139,7 +150,8 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
         bg = fill_alt if idx % 2 == 0 else PatternFill(fill_type=None)
         status_fill = fill_complete if not m.has_pending else fill_pending
         status_font = font_success if not m.has_pending else font_pending
-        pending_cnt = max(m.not_entered_gps, len(m.pending_gps), m.gp_pd_pending, m.tgbpass_pending, m.fc15_tied_pending, m.fc15_untied_pending, m.vwsc_pending, m.mgnregs_pending) if m.has_pending else 0
+        acc_pending_vals = [getattr(m, p_attr, 0) for _, _, p_attr, _ in accounts_meta]
+        pending_cnt = max([m.not_entered_gps, len(m.pending_gps), *acc_pending_vals]) if m.has_pending else 0
         status_text = "100% Done" if not m.has_pending else f"{max(1, pending_cnt)} Pending"
 
         row_vals = [
@@ -149,20 +161,13 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
             (m.entered_gps, align_right, font_success if m.entered_gps == m.total_gps else font_data, bg),
             (m.not_entered_gps, align_right, font_pending if m.not_entered_gps > 0 else font_data, bg),
             (f"{m.pct_entered:.1f}%", align_right, font_bold, bg),
-            (m.gp_pd_updated, align_right, font_data, bg),
-            (m.gp_pd_pending, align_right, font_pending if m.gp_pd_pending > 0 else font_data, bg),
-            (m.tgbpass_updated, align_right, font_data, bg),
-            (m.tgbpass_pending, align_right, font_pending if m.tgbpass_pending > 0 else font_data, bg),
-            (m.fc15_tied_updated, align_right, font_data, bg),
-            (m.fc15_tied_pending, align_right, font_pending if m.fc15_tied_pending > 0 else font_data, bg),
-            (m.fc15_untied_updated, align_right, font_data, bg),
-            (m.fc15_untied_pending, align_right, font_pending if m.fc15_untied_pending > 0 else font_data, bg),
-            (m.vwsc_updated, align_right, font_data, bg),
-            (m.vwsc_pending, align_right, font_pending if m.vwsc_pending > 0 else font_data, bg),
-            (m.mgnregs_updated, align_right, font_data, bg),
-            (m.mgnregs_pending, align_right, font_pending if m.mgnregs_pending > 0 else font_data, bg),
-            (status_text, align_center, status_font, status_fill),
         ]
+        for _, u_attr, p_attr, _ in accounts_meta:
+            u_val = getattr(m, u_attr, 0)
+            p_val = getattr(m, p_attr, 0)
+            row_vals.append((u_val, align_right, font_data, bg))
+            row_vals.append((p_val, align_right, font_pending if p_val > 0 else font_data, bg))
+        row_vals.append((status_text, align_center, status_font, status_fill))
 
         for col_idx, (val, al, fnt, fill) in enumerate(row_vals, start=1):
             cell = ws1.cell(row=current_row, column=col_idx, value=val)
@@ -188,36 +193,29 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
         (4, report.total_entered_gps),
         (5, report.total_not_entered_gps),
         (6, f"{report.overall_pct_entered:.1f}%"),
-        (7, sum(m.gp_pd_updated for m in report.mandals)),
-        (8, report.total_gp_pd_pending),
-        (9, sum(m.tgbpass_updated for m in report.mandals)),
-        (10, report.total_tgbpass_pending),
-        (11, sum(m.fc15_tied_updated for m in report.mandals)),
-        (12, report.total_fc15_tied_pending),
-        (13, sum(m.fc15_untied_updated for m in report.mandals)),
-        (14, report.total_fc15_untied_pending),
-        (15, sum(m.vwsc_updated for m in report.mandals)),
-        (16, report.total_vwsc_pending),
-        (17, sum(m.mgnregs_updated for m in report.mandals)),
-        (18, report.total_mgnregs_pending),
-        (19, f"{report.total_not_entered_gps} Total Pending" if report.total_not_entered_gps > 0 else "100% Completed"),
     ]
+    cur_tcol = 7
+    for _, u_attr, _, tot_p_attr in accounts_meta:
+        tot_cols.append((cur_tcol, sum(getattr(m, u_attr, 0) for m in report.mandals)))
+        tot_cols.append((cur_tcol + 1, getattr(report, tot_p_attr, 0)))
+        cur_tcol += 2
+    tot_cols.append((cur_tcol, f"{report.total_not_entered_gps} Total Pending" if report.total_not_entered_gps > 0 else "100% Completed"))
 
     for col_idx, val in tot_cols:
         cell = ws1.cell(row=current_row, column=col_idx, value=val)
         cell.font = font_bold
-        cell.alignment = align_right if col_idx != 19 else align_center
+        cell.alignment = align_right if col_idx != total_cols else align_center
         cell.fill = fill_total
         cell.border = thick_bottom
 
     ws1.row_dimensions[current_row].height = 22
 
-    # Column widths (Status column decreased to 12)
-    col_widths = {
-        1: 6, 2: 20, 3: 12, 4: 12, 5: 12, 6: 12,
-        7: 10, 8: 9, 9: 10, 10: 9, 11: 10, 12: 9,
-        13: 10, 14: 9, 15: 10, 16: 9, 17: 10, 18: 9, 19: 12,
-    }
+    # Column widths
+    col_widths = {1: 6, 2: 20, 3: 12, 4: 12, 5: 12, 6: 12}
+    for i in range(len(accounts_meta)):
+        col_widths[7 + 2 * i] = 10
+        col_widths[8 + 2 * i] = 9
+    col_widths[total_cols] = 12
     for col_idx, w in col_widths.items():
         ws1.column_dimensions[get_column_letter(col_idx)].width = w
 
@@ -295,6 +293,9 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
     ws2.column_dimensions["E"].width = 44
     ws2.column_dimensions["F"].width = 24
     ws2.column_dimensions["G"].width = 18
+
+    from core.branding import apply_openpyxl_branding
+    apply_openpyxl_branding(wb)
 
     # Save
     buf = io.BytesIO()

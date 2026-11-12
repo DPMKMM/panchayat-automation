@@ -47,7 +47,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFillColor(colors.HexColor("#4B5563"))
         page_text = f"Page {self._pageNumber} of {page_count}"
         self.drawRightString(825, 12, page_text)
-        self.drawString(16, 12, "Telangana PR & RD Department — GP Balance Entry Monitoring Portal (GM-R 14.2)")
+        self.drawString(16, 12, "Telangana PR & RD Department — GP Balance Entry Monitoring (GM-R 14.2) | e-Panchayat Automation")
         self.restoreState()
 
 
@@ -63,7 +63,9 @@ def format_display_timestamp(dt_str: str) -> str:
     return datetime.now().strftime("%d-%B-%Y %I:%M %p")
 
 
-def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[Path, str, io.BytesIO]] = None) -> bytes:
+def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[Path, str, io.BytesIO]] = None, mandal_name: Optional[str] = None) -> bytes:
+    if mandal_name and mandal_name.strip():
+        return generate_mandal_balance_pdf(report, target, mandal_name=mandal_name.strip())
     if isinstance(target, Path):
         dest_filename = str(target)
         dest = dest_filename
@@ -256,8 +258,10 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
         title_style,
     ))
     flowables.append(Spacer(1, 3))
+    include_pmagy = bool(getattr(report, "include_pmagy", False))
+    pmagy_label = "PMAGY Included" if include_pmagy else "PMAGY Excluded (Not maintained in district)"
     flowables.append(Paragraph(
-        f"Thursday Balance Update Date: <b>{report.report_date_str}</b> | Portal GM-R 14.2 | PMAGY Excluded (Not maintained in district)",
+        f"Thursday Balance Update Date: <b>{report.report_date_str}</b> | Portal GM-R 14.2 | {pmagy_label}",
         meta_style,
     ))
     flowables.append(Spacer(1, 6))
@@ -293,28 +297,31 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
     flowables.append(t_kpi)
     flowables.append(Spacer(1, 7))
 
-    # 3. Mandal Summary Table (Full page width utilization & increased header heights)
-    widths = [
-        24,   # 0: S.No
-        118,  # 1: Mandal Name
-        42,   # 2: Total GPs
-        44,   # 3: GPs Entered
-        46,   # 4: GPs Not Entered
-        46,   # 5: % Data Entered
-        36,   # 6: GP PD Upd
-        34,   # 7: GP PD Pnd
-        38,   # 8: TG-bPASS Upd
-        36,   # 9: TG-bPASS Pend
-        38,   # 10: 15th FC Tied Upd
-        36,   # 11: 15th FC Tied Pend
-        38,   # 12: 15th FC Untied Upd
-        36,   # 13: 15th FC Untied Pend
-        36,   # 14: VWSC Upd
-        34,   # 15: VWSC Pend
-        38,   # 16: MGNREGS Upd
-        36,   # 17: MGNREGS Pend
-        62,   # 18: Status (Spacious width prevents text wrapping or overlap)
+    # 3. Mandal Summary Table (Full page width utilization & dynamic account columns)
+    accounts_pdf = [
+        ("GP PD Account", "gp_pd_updated", "gp_pd_pending", "total_gp_pd_pending", (36, 34) if not include_pmagy else (33, 31)),
+        ("State Matching<br/>(TG-bPASS)", "tgbpass_updated", "tgbpass_pending", "total_tgbpass_pending", (38, 36) if not include_pmagy else (35, 33)),
+        ("15th FC Tied", "fc15_tied_updated", "fc15_tied_pending", "total_fc15_tied_pending", (38, 36) if not include_pmagy else (35, 33)),
+        ("15th FC Untied", "fc15_untied_updated", "fc15_untied_pending", "total_fc15_untied_pending", (38, 36) if not include_pmagy else (35, 33)),
     ]
+    if include_pmagy:
+        accounts_pdf.append(("PMAGY<br/>(Adarsh)", "pmagy_updated", "pmagy_pending", "total_pmagy_pending", (33, 31)))
+    accounts_pdf.extend([
+        ("VWSC (SBM)", "vwsc_updated", "vwsc_pending", "total_vwsc_pending", (36, 34) if not include_pmagy else (33, 31)),
+        ("MGNREGS (Mat)", "mgnregs_updated", "mgnregs_pending", "total_mgnregs_pending", (38, 36) if not include_pmagy else (35, 33)),
+    ])
+
+    widths = [
+        24 if not include_pmagy else 22,    # S.No
+        118 if not include_pmagy else 100,  # Mandal Name
+        42 if not include_pmagy else 38,    # Total GPs
+        44 if not include_pmagy else 40,    # GPs Entered
+        46 if not include_pmagy else 42,    # GPs Not Entered
+        46 if not include_pmagy else 42,    # % Data Entered
+    ]
+    for _, _, _, _, (w_u, w_p) in accounts_pdf:
+        widths.extend([w_u, w_p])
+    widths.append(62 if not include_pmagy else 56)  # Status
 
     # Distribute any fractional points to Mandal Name so table spans 100% of landscape content width
     total_w = sum(widths)
@@ -330,50 +337,38 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
         Paragraph("GPs<br/>Entered", th_style),
         Paragraph("GPs Not<br/>Entered", th_style),
         Paragraph("% Data<br/>Entered", th_style),
-        Paragraph("GP PD Account", th_style), "",
-        Paragraph("State Matching<br/>(TG-bPASS)", th_style), "",
-        Paragraph("15th FC Tied", th_style), "",
-        Paragraph("15th FC Untied", th_style), "",
-        Paragraph("VWSC (SBM)", th_style), "",
-        Paragraph("MGNREGS (Mat)", th_style), "",
-        Paragraph("Status", th_style),
     ]
-
-    hdr_row2 = [
-        "", "", "", "", "", "",
-        Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style),
-        Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style),
-        Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style),
-        Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style),
-        Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style),
-        Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style),
-        "",
-    ]
-
-    table_data = [hdr_row1, hdr_row2]
-    # Header heights: Super-header 26pt, Sub-header 16pt (Total 42pt)
-    row_heights = [26, 16]
-    table_styles = [
+    hdr_row2 = ["", "", "", "", "", ""]
+    span_cmds = [
         ("SPAN", (0, 0), (0, 1)),
         ("SPAN", (1, 0), (1, 1)),
         ("SPAN", (2, 0), (2, 1)),
         ("SPAN", (3, 0), (3, 1)),
         ("SPAN", (4, 0), (4, 1)),
         ("SPAN", (5, 0), (5, 1)),
-        ("SPAN", (6, 0), (7, 0)),
-        ("SPAN", (8, 0), (9, 0)),
-        ("SPAN", (10, 0), (11, 0)),
-        ("SPAN", (12, 0), (13, 0)),
-        ("SPAN", (14, 0), (15, 0)),
-        ("SPAN", (16, 0), (17, 0)),
-        ("SPAN", (18, 0), (18, 1)),
+    ]
+    c_idx = 6
+    for label, _, _, _, _ in accounts_pdf:
+        hdr_row1.extend([Paragraph(label, th_style), ""])
+        hdr_row2.extend([Paragraph("Upd", th_sub_style), Paragraph("Pnd", th_sub_style)])
+        span_cmds.append(("SPAN", (c_idx, 0), (c_idx + 1, 0)))
+        c_idx += 2
+    status_col_idx = c_idx
+    hdr_row1.append(Paragraph("Status", th_style))
+    hdr_row2.append("")
+    span_cmds.append(("SPAN", (status_col_idx, 0), (status_col_idx, 1)))
+
+    table_data = [hdr_row1, hdr_row2]
+    # Header heights: Super-header 26pt, Sub-header 16pt (Total 42pt)
+    row_heights = [26, 16]
+    table_styles = span_cmds + [
         # Seamless solid dark green for all spanned columns from top to bottom
         ("BACKGROUND", (0, 0), (5, 1), colors.HexColor("#0C3829")),
-        ("BACKGROUND", (18, 0), (18, 1), colors.HexColor("#0C3829")),
+        ("BACKGROUND", (status_col_idx, 0), (status_col_idx, 1), colors.HexColor("#0C3829")),
         # Super-headers for account columns
-        ("BACKGROUND", (6, 0), (17, 0), colors.HexColor("#0C3829")),
+        ("BACKGROUND", (6, 0), (status_col_idx - 1, 0), colors.HexColor("#0C3829")),
         # Sub-headers for Upd / Pnd
-        ("BACKGROUND", (6, 1), (17, 1), colors.HexColor("#165B43")),
+        ("BACKGROUND", (6, 1), (status_col_idx - 1, 1), colors.HexColor("#165B43")),
         # Header alignment: strictly centered horizontally and middle vertically
         ("ALIGN", (0, 0), (-1, 1), "CENTER"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
@@ -393,7 +388,8 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
     for idx, m in enumerate(report.mandals, start=1):
         r_idx = len(table_data)
         bg = colors.HexColor("#F8FAFC") if idx % 2 == 0 else colors.white
-        pending_cnt = max(m.not_entered_gps, len(m.pending_gps), m.gp_pd_pending, m.tgbpass_pending, m.fc15_tied_pending, m.fc15_untied_pending, m.vwsc_pending, m.mgnregs_pending) if m.has_pending else 0
+        acc_pend_vals = [getattr(m, p_attr, 0) for _, _, p_attr, _, _ in accounts_pdf]
+        pending_cnt = max([m.not_entered_gps, len(m.pending_gps), *acc_pend_vals]) if m.has_pending else 0
         status_text = "100% Done" if not m.has_pending else f"{max(1, pending_cnt)} Pending"
         status_style = td_status_done if not m.has_pending else td_status_pending
 
@@ -404,20 +400,14 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
             Paragraph(str(m.entered_gps), td_success_center if m.entered_gps == m.total_gps else td_center),
             Paragraph(str(m.not_entered_gps), td_pending_center if m.not_entered_gps > 0 else td_center),
             Paragraph(f"{m.pct_entered:.1f}%", td_bold_center),
-            Paragraph(str(m.gp_pd_updated), td_center),
-            Paragraph(str(m.gp_pd_pending), td_pending_center if m.gp_pd_pending > 0 else td_center),
-            Paragraph(str(m.tgbpass_updated), td_center),
-            Paragraph(str(m.tgbpass_pending), td_pending_center if m.tgbpass_pending > 0 else td_center),
-            Paragraph(str(m.fc15_tied_updated), td_center),
-            Paragraph(str(m.fc15_tied_pending), td_pending_center if m.fc15_tied_pending > 0 else td_center),
-            Paragraph(str(m.fc15_untied_updated), td_center),
-            Paragraph(str(m.fc15_untied_pending), td_pending_center if m.fc15_untied_pending > 0 else td_center),
-            Paragraph(str(m.vwsc_updated), td_center),
-            Paragraph(str(m.vwsc_pending), td_pending_center if m.vwsc_pending > 0 else td_center),
-            Paragraph(str(m.mgnregs_updated), td_center),
-            Paragraph(str(m.mgnregs_pending), td_pending_center if m.mgnregs_pending > 0 else td_center),
-            Paragraph(status_text, status_style),
         ]
+        for _, u_attr, p_attr, _, _ in accounts_pdf:
+            u_val = getattr(m, u_attr, 0)
+            p_val = getattr(m, p_attr, 0)
+            row.append(Paragraph(str(u_val), td_center))
+            row.append(Paragraph(str(p_val), td_pending_center if p_val > 0 else td_center))
+        row.append(Paragraph(status_text, status_style))
+
         table_data.append(row)
         row_heights.append(data_row_h)
         table_styles.append(("BACKGROUND", (0, r_idx), (-1, r_idx), bg))
@@ -433,20 +423,13 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
         Paragraph(f"<b>{report.total_entered_gps}</b>", td_bold_center),
         Paragraph(f"<b>{report.total_not_entered_gps}</b>", td_pending_center if report.total_not_entered_gps > 0 else td_bold_center),
         Paragraph(f"<b>{report.overall_pct_entered:.1f}%</b>", td_bold_center),
-        Paragraph(f"<b>{sum(m.gp_pd_updated for m in report.mandals)}</b>", td_bold_center),
-        Paragraph(f"<b>{report.total_gp_pd_pending}</b>", td_pending_center if report.total_gp_pd_pending > 0 else td_bold_center),
-        Paragraph(f"<b>{sum(m.tgbpass_updated for m in report.mandals)}</b>", td_bold_center),
-        Paragraph(f"<b>{report.total_tgbpass_pending}</b>", td_pending_center if report.total_tgbpass_pending > 0 else td_bold_center),
-        Paragraph(f"<b>{sum(m.fc15_tied_updated for m in report.mandals)}</b>", td_bold_center),
-        Paragraph(f"<b>{report.total_fc15_tied_pending}</b>", td_pending_center if report.total_fc15_tied_pending > 0 else td_bold_center),
-        Paragraph(f"<b>{sum(m.fc15_untied_updated for m in report.mandals)}</b>", td_bold_center),
-        Paragraph(f"<b>{report.total_fc15_untied_pending}</b>", td_pending_center if report.total_fc15_untied_pending > 0 else td_bold_center),
-        Paragraph(f"<b>{sum(m.vwsc_updated for m in report.mandals)}</b>", td_bold_center),
-        Paragraph(f"<b>{report.total_vwsc_pending}</b>", td_pending_center if report.total_vwsc_pending > 0 else td_bold_center),
-        Paragraph(f"<b>{sum(m.mgnregs_updated for m in report.mandals)}</b>", td_bold_center),
-        Paragraph(f"<b>{report.total_mgnregs_pending}</b>", td_pending_center if report.total_mgnregs_pending > 0 else td_bold_center),
-        Paragraph(tot_status_text, tot_status_style),
     ]
+    for _, u_attr, _, tot_p_attr, _ in accounts_pdf:
+        u_sum = sum(getattr(m, u_attr, 0) for m in report.mandals)
+        p_sum = getattr(report, tot_p_attr, 0)
+        tot_row.append(Paragraph(f"<b>{u_sum}</b>", td_bold_center))
+        tot_row.append(Paragraph(f"<b>{p_sum}</b>", td_pending_center if p_sum > 0 else td_bold_center))
+    tot_row.append(Paragraph(tot_status_text, tot_status_style))
     table_data.append(tot_row)
     row_heights.append(16)
     table_styles.extend([
@@ -508,6 +491,201 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
         t_pending = Table(p_table, colWidths=p_widths, repeatRows=1)
         t_pending.setStyle(TableStyle(p_styles))
         flowables.append(t_pending)
+
+    doc.build(flowables, canvasmaker=NumberedCanvas)
+
+    if buffer is not None:
+        return buffer.getvalue()
+    elif isinstance(target, (str, Path)):
+        return Path(target).read_bytes()
+    return b""
+
+
+def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[Path, str, io.BytesIO]] = None, mandal_name: Optional[str] = None) -> bytes:
+    """Generates an executive Gram Panchayat wise Thursday Balance PDF report for a single Mandal."""
+    if isinstance(target, Path):
+        dest = str(target)
+        buffer = None
+    elif target is None or isinstance(target, io.BytesIO):
+        buffer = io.BytesIO() if target is None else target
+        dest = buffer
+    else:
+        dest = str(target)
+        buffer = None
+
+    req_name = (mandal_name or "").strip().casefold()
+    target_m = None
+    for m in report.mandals:
+        if m.mandal_name.strip().casefold() == req_name:
+            target_m = m
+            break
+    if not target_m and report.mandals:
+        target_m = report.mandals[0]
+
+    m_name = target_m.mandal_name if target_m else (mandal_name or "Mandal")
+    tot_gps = target_m.total_gps if target_m else 0
+    ent_gps = target_m.entered_gps if target_m else 0
+    not_ent = target_m.not_entered_gps if target_m else 0
+    pct_ent = target_m.pct_entered if target_m else 0.0
+
+    page_width, page_height = landscape(A4)
+    margin = 16
+    content_width = page_width - (2 * margin)
+
+    doc = SimpleDocTemplate(
+        dest,
+        pagesize=landscape(A4),
+        leftMargin=margin,
+        rightMargin=margin,
+        topMargin=14,
+        bottomMargin=22,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle("MTitle", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=12, leading=14, alignment=1, textColor=colors.HexColor("#0C3829"))
+    subtitle_style = ParagraphStyle("MSubtitle", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=9.5, leading=12, alignment=1, textColor=colors.HexColor("#165B43"))
+    meta_style = ParagraphStyle("MMeta", parent=styles["Normal"], fontName="Helvetica-Oblique", fontSize=7.5, leading=9.5, alignment=1, textColor=colors.HexColor("#4E6B60"))
+
+    kpi_lbl = ParagraphStyle("MKPILabel", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=8, alignment=1, textColor=colors.HexColor("#374151"))
+    kpi_val = ParagraphStyle("MKPIVal", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=12, leading=14, alignment=1, textColor=colors.HexColor("#0C3829"))
+
+    th_s = ParagraphStyle("MTH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=8, alignment=1, textColor=colors.white)
+    td_l = ParagraphStyle("MTDL", parent=styles["Normal"], fontName="Helvetica", fontSize=6.5, leading=8, alignment=0, textColor=colors.HexColor("#1F2937"))
+    td_c = ParagraphStyle("MTDC", parent=styles["Normal"], fontName="Helvetica", fontSize=6.5, leading=8, alignment=1, textColor=colors.HexColor("#1F2937"))
+    td_done = ParagraphStyle("MTDDone", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=8, alignment=1, textColor=colors.HexColor("#059669"))
+    td_pend = ParagraphStyle("MTDPend", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=8, alignment=1, textColor=colors.HexColor("#DC2626"))
+
+    flowables = []
+    flowables.append(Paragraph("TELANGANA STATE E-PANCHAYAT (ePTS) AUTOMATION PLATFORM", title_style))
+    flowables.append(Spacer(1, 2))
+    flowables.append(Paragraph(f"GRAM PANCHAYAT BANK BALANCE ENTRY REPORT (GM-R 14.2) — {m_name.upper()} MANDAL", subtitle_style))
+    flowables.append(Spacer(1, 2))
+    gen_time = format_display_timestamp(report.generated_at)
+    include_pmagy = bool(getattr(report, "include_pmagy", False))
+    pmagy_note = "PMAGY Included" if include_pmagy else "PMAGY Excluded"
+    flowables.append(Paragraph(f"Mandal: <b>{m_name}</b> | District: <b>{report.district_name}</b> | Thursday Date: <b>{report.report_date_str}</b> | {pmagy_note} | Compiled: {gen_time}", meta_style))
+    flowables.append(Spacer(1, 6))
+
+    # KPI Summary Cards for Mandal
+    kpi_card_w = (content_width - (3 * 8)) / 4.0
+    kpi_table_data = [
+        [
+            Paragraph("TOTAL GRAM PANCHAYATS", kpi_lbl),
+            Paragraph("COMPLETED GPs (100%)", kpi_lbl),
+            Paragraph("PENDING GPs", kpi_lbl),
+            Paragraph("COMPLIANCE RATE", kpi_lbl),
+        ],
+        [
+            Paragraph(str(tot_gps), kpi_val),
+            Paragraph(f"<font color='#059669'>{ent_gps}</font>", kpi_val),
+            Paragraph(f"<font color='#DC2626'>{not_ent}</font>", kpi_val),
+            Paragraph(f"<font color='{'#059669' if pct_ent >= 90 else ('#0284C7' if pct_ent >= 75 else '#D97706')}'>{pct_ent:.1f}%</font>", kpi_val),
+        ],
+    ]
+    kpi_table = Table(kpi_table_data, colWidths=[kpi_card_w]*4)
+    kpi_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#F0FDF4")),
+        ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#DCFCE7")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#FEE2E2")),
+        ("BACKGROUND", (3, 0), (3, -1), colors.HexColor("#FEF3C7")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    flowables.append(kpi_table)
+    flowables.append(Spacer(1, 6))
+
+    # Detailed GP Table
+    mandal_acc_cols = [
+        ("GP PD", "gp_pd", "gp_pd_updated", 38 if not include_pmagy else 35),
+        ("TG-bPASS", "tgbpass", "tgbpass_updated", 42 if not include_pmagy else 39),
+        ("15th Tied", "fc15_tied", "fc15_tied_updated", 42 if not include_pmagy else 39),
+        ("15th Untied", "fc15_untied", "fc15_untied_updated", 44 if not include_pmagy else 40),
+    ]
+    if include_pmagy:
+        mandal_acc_cols.append(("PMAGY", "pmagy", "pmagy_updated", 36))
+    mandal_acc_cols.extend([
+        ("VWSC", "vwsc", "vwsc_updated", 38 if not include_pmagy else 35),
+        ("MGNREGS", "mgnregs", "mgnregs_updated", 45 if not include_pmagy else 40),
+    ])
+
+    col_w = [
+        22,
+        115 if not include_pmagy else 105,
+        52 if not include_pmagy else 48,
+    ] + [w for _, _, _, w in mandal_acc_cols] + [
+        140 if not include_pmagy else 128,
+        0,
+    ]
+    col_w[-1] = content_width - sum(col_w[:-1])
+
+    hdr = [
+        Paragraph("S.No", th_s),
+        Paragraph("Gram Panchayat Name", th_s),
+        Paragraph("Status", th_s),
+    ] + [Paragraph(lbl, th_s) for lbl, _, _, _ in mandal_acc_cols] + [
+        Paragraph("Missing Bank Account(s)", th_s),
+        Paragraph("Panchayat Secretary & Phone", th_s),
+    ]
+    t_data = [hdr]
+    t_styles = [
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0C3829")),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#D4E0DA")),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]
+
+    gps_to_render = (target_m.all_gps if target_m and target_m.all_gps else (target_m.pending_gps if target_m else []))
+    for idx, gp in enumerate(gps_to_render, start=1):
+        row_idx = len(t_data)
+        is_p = gp.is_pending
+        bg = colors.HexColor("#FEE2E2") if is_p else (colors.HexColor("#F9FAFB") if idx % 2 == 1 else colors.white)
+
+        status_p = Paragraph("Pending", td_pend) if is_p else Paragraph("100% Done", td_done)
+        missing_str = ", ".join(gp.missing_accounts) if gp.missing_accounts else ("Data Not Entered" if is_p else "—")
+        missing_p = Paragraph(missing_str, td_pend if is_p else td_c)
+
+        sec_contact = f"{gp.secretary_name or 'PS'}" + (f" ({gp.secretary_phone})" if gp.secretary_phone and gp.secretary_phone != '—' else "")
+
+        def _ac_cell(v: str):
+            is_y = str(v).strip().lower() in ("yes", "1", "true", "done", "y")
+            return Paragraph("Yes", td_done) if is_y else Paragraph("No", td_pend)
+
+        t_data.append(
+            [
+                Paragraph(str(idx), td_c),
+                Paragraph(f"<b>{gp.panchayat_name}</b>", td_l),
+                status_p,
+            ]
+            + [_ac_cell(getattr(gp, attr, "Yes")) for _, attr, _, _ in mandal_acc_cols]
+            + [missing_p, Paragraph(sec_contact, td_l)]
+        )
+        t_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), bg))
+
+    # Summary Row
+    summary_row_idx = len(t_data)
+    t_data.append(
+        [
+            Paragraph("TOTAL", th_s),
+            Paragraph(f"<b>{m_name} Mandal ({tot_gps} GPs)</b>", th_s),
+            Paragraph(f"<b>{ent_gps}/{tot_gps}</b>", th_s),
+        ]
+        + [Paragraph(f"<b>{getattr(target_m, upd_attr, 0) if target_m else 0}</b>", th_s) for _, _, upd_attr, _ in mandal_acc_cols]
+        + [
+            Paragraph(f"<b>Pending GPs: {not_ent}</b>", th_s),
+            Paragraph(f"<b>Compliance: {pct_ent:.1f}%</b>", th_s),
+        ]
+    )
+    t_styles.append(("BACKGROUND", (0, summary_row_idx), (-1, summary_row_idx), colors.HexColor("#0C3829")))
+
+    table = Table(t_data, colWidths=col_w, repeatRows=1)
+    table.setStyle(TableStyle(t_styles))
+    flowables.append(table)
 
     doc.build(flowables, canvasmaker=NumberedCanvas)
 

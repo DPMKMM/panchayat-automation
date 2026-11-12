@@ -352,6 +352,13 @@ def draw_district_page(c: canvas.Canvas, district_name: str, data: dict[str, Any
     img_gauge = create_gauge_img(tot_pct, "DISTRICT TAX COLLECTION %", title_col="#DC2626", min_val="0", max_val="100")
     c.drawImage(img_gauge, 612, 24, width=208, height=216)
 
+    c.saveState()
+    c.setFont("Helvetica", 6.5)
+    c.setFillColor(colors.HexColor("#64748B"))
+    c.drawString(20, 5.5, "e-Panchayat Automation Console — Simplifying Panchayat Administration through Smart Reporting and Automation.")
+    c.drawRightString(822, 5.5, "e-Panchayat Automation")
+    c.restoreState()
+
 
 def draw_mandal_page(c: canvas.Canvas, mandal_name: str, m_data: dict[str, Any]) -> None:
     """Render a Mandal Executive Power BI Dashboard page."""
@@ -474,11 +481,19 @@ def draw_mandal_page(c: canvas.Canvas, mandal_name: str, m_data: dict[str, Any])
     img_clustered = create_clustered_chart_img(names, d_vals, c_vals, b_vals, "Panchayat wise Demand, Collection and Balance", ["#DC2626", "#16A34A", "#2563EB"])
     c.drawImage(img_clustered, 352, 18, width=468, height=250)
 
+    c.saveState()
+    c.setFont("Helvetica", 6.5)
+    c.setFillColor(colors.HexColor("#64748B"))
+    c.drawString(20, 5.5, "e-Panchayat Automation Console — Simplifying Panchayat Administration through Smart Reporting and Automation.")
+    c.drawRightString(822, 5.5, "e-Panchayat Automation")
+    c.restoreState()
+
 
 def generate_powerbi_pdf(
     district_name: str = "Khammam",
     mandal_name: Optional[str] = None,
     output_path_or_buffer: Any = None,
+    df_source: Any = None,
 ) -> bytes:
     """Generate the Power BI A4 Landscape PDF Report:
     - If district level: Page 1 (District) + Pages 2 to 21 (All Mandals).
@@ -492,12 +507,12 @@ def generate_powerbi_pdf(
 
     if is_single_mandal and mandal_name:
         # Generate single mandal report (1 page)
-        m_data = tax_service.get_filtered_data(district_name, mandal_name)
+        m_data = tax_service.get_filtered_data(district_name, mandal_name, df_source=df_source)
         draw_mandal_page(c, mandal_name.strip().title(), m_data)
         c.showPage()
     else:
         # Generate District Report (Page 1) + All Mandals (Pages 2 to 21)
-        dist_data = tax_service.get_filtered_data(district_name, "all")
+        dist_data = tax_service.get_filtered_data(district_name, "all", df_source=df_source)
         draw_district_page(c, district_name.strip().title(), dist_data)
         c.showPage()
 
@@ -505,7 +520,7 @@ def generate_powerbi_pdf(
         mandals = dist_data.get("mandal_abstract", [])
         m_names = sorted([m.get("mandal") for m in mandals if m.get("mandal")])
         for m_name in m_names:
-            m_data = tax_service.get_filtered_data(district_name, m_name)
+            m_data = tax_service.get_filtered_data(district_name, m_name, df_source=df_source)
             draw_mandal_page(c, m_name.strip().title(), m_data)
             c.showPage()
 

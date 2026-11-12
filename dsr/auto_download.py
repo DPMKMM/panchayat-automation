@@ -15,12 +15,14 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    from dsr.automation import EPTSAutomation, BASE_DIR, DOWNLOADS_DIR, OTP_FILE
+    from dsr.automation import EPTSAutomation, BASE_DIR, DEBUG_DIR, DOWNLOADS_DIR, OTP_FILE
 except (ImportError, ModuleNotFoundError):
     from epts_automation import EPTSAutomation, BASE_DIR, DOWNLOADS_DIR, OTP_FILE
+    DEBUG_DIR = DOWNLOADS_DIR.parent / "debug"
 
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-REPORTS_SCREENSHOT = BASE_DIR / "enlarged_reports.png"
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+REPORTS_SCREENSHOT = DEBUG_DIR / "enlarged_reports.png"
 MENU_URL = "https://tgprepanchayat.telangana.gov.in/PSPerformance/DynamicReportsMenu2Array"
 
 
@@ -139,7 +141,7 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
     time.sleep(3)
 
     # Screenshot initial view
-    ss_path = BASE_DIR / f"page_{code.replace('.', '_')}.png"
+    ss_path = DEBUG_DIR / f"page_{code.replace('.', '_')}.png"
     try:
         page.screenshot(path=str(ss_path))
         print(f"[+] Saved view screenshot to {ss_path}", flush=True)
@@ -176,7 +178,7 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
         print(f"[-] Note on fill: {e}", flush=True)
 
     # Save verification screenshot showing date filled in
-    after_date_ss = BASE_DIR / f"after_date_{code.replace('.', '_')}.png"
+    after_date_ss = DEBUG_DIR / f"after_date_{code.replace('.', '_')}.png"
     try:
         page.screenshot(path=str(after_date_ss))
         print(f"[+] Saved date verification screenshot to {after_date_ss}", flush=True)
@@ -238,7 +240,7 @@ def download_single_report(page, iframe, code, key, today_str):
 
 def run_pipeline(target_date: str = ""):
     print("=" * 65, flush=True)
-    print("  e-Panchayat Automated DSR Report Generation Pipeline", flush=True)
+    print("  e-Panchayat Automation - DSR Report Generation Pipeline", flush=True)
     print("=" * 65, flush=True)
 
     date_str = target_date.strip() if target_date else datetime.now().strftime("%Y-%m-%d")
@@ -320,7 +322,11 @@ def run_pipeline(target_date: str = ""):
             absentees_source=absentees_source,
         )
 
-        reports_dir = BASE_DIR.parent / "data" / "reports"
+        try:
+            from core.config import get_reports_dir
+            reports_dir = get_reports_dir()
+        except Exception:
+            reports_dir = BASE_DIR.parent / "data" / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)
         output_pdf = reports_dir / f"{report.district_name.replace(' ', '_')}_Official_DSR_Report_{date_formatted}.pdf"
         generate_pdf(report, output_pdf)

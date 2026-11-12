@@ -1,35 +1,24 @@
-"""Official Landscape PDF Report Generator for Monthly Activity Statement (MAS) Module.
+"""High-Density Vector ReportLab PDF Generator for MAS Consolidated Report.
 
-Matches the official Departmental Legal Landscape (1008 x 612 pt) format exactly:
-  - Main Report is STRICTLY 2 Pages:
-      * Page 1 (9 Activities): Nursery, Plantation, Vaikunta Dhamam, Dump Yard, Water Supply,
-                              GP Meetings, Gram Sabha, Record Maintenance, Approvals and Certificates
-      * Page 2 (9 Activities): Deaths, Recipts, Expenditure, Cheque Details, Salary Details,
-                              VWSC Bank Balance, MGNRE Bank Balance, Payment of Electricity, Birth Details
-  - Guaranteed zero table spillover on Page 1 and Page 2 (scaled row heights fit within printable height).
-  - Overall % Entered column with light sky blue fill (#BAE6FD).
-  - 100% Completed cells with soft light green fill (#C6EFCE).
-  - Lagging / Partial cells with soft light red/pink fill (#FFC7CE).
-  - % Entered sub-header with light sky blue fill (#BAE6FD).
-  - Total row with bold red percentage values.
-  - Page 3+: Actionable Pending Gram Panchayats list with:
-      * S.No, Mandal Name, Gram Panchayat Name, Pending Activities
-      * Gram Panchayat names cleaned of synthetic "Mandal GP-X" numbers addition
-      * Comma-separated (", ") activity list to minimize row height and compact pages
-      * (Panchayat Secretary, Phone, and Action Status removed per user specification)
+Layout:
+- A4 Landscape (841.89pt x 595.28pt)
+- Dynamic Page 1 Fit: Single-page Mandal Abstract across all 18 modules + Overall %.
+- Page 2+: GP-Wise Pending Action Plan Table (with 100%-compliant fallback card or optional omission in abstract_only mode).
+- Canonical e-Panchayat Automation footer.
 """
 
 from __future__ import annotations
 
-import io
-import re
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import landscape, legal
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     PageBreak,
@@ -40,93 +29,33 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from mas.models import (
-    OFFICIAL_MAS_REPORT_ACTIVITIES,
-    DistrictMASReport,
-    GPMASDetail,
-    MandalMASSummary,
-    normalize_activity_key,
-)
+from core.branding import PLATFORM_NAME, TAGLINE
+from mas.models import ALL_18_MODULES, normalize_district_and_slug
 
-# Comprehensive lookup of authentic Telangana Gram Panchayats for Khammam District
-KHAMMAM_VILLAGES_MAP: dict[str, list[str]] = {
-    "bonakal": ["Allinagaram", "Govindapuram", "Chirunomula", "Ravikampadu", "Ramanakkapeta", "Musalimadugu", "Aswapuram"],
-    "chinthakani": ["Chinthakani", "Nagulavancha", "Thimmineni Palem", "Matkeedupally", "Proddutur", "Vennavaram"],
-    "enkoor": ["Enkoor", "Nacharam", "Thimmaropeta", "Burhanpur", "Jangambodu", "Kothur"],
-    "kallur": ["Kallur", "Chinna Kothuru", "Pedda Kothuru", "Gokavaram", "Kistapuram", "Muthagudem"],
-    "kamepally": ["Kamepally", "Pandillapalli", "Lingala", "Gompally", "Pinjaramadugu", "Madharam"],
-    "khammam (rural)": ["Mallemadugu", "Aregudem", "Polepalli", "Theegalamada", "Edulapuram", "Barugudem"],
-    "khammam rural": ["Mallemadugu", "Aregudem", "Polepalli", "Theegalamada", "Edulapuram", "Barugudem"],
-    "konijerla": ["Konijerla", "Basavapuram", "Gubbagurthy", "Pallipadu", "Thanamcherla", "Lalapuram"],
-    "kusumanchi": ["Palair", "Nayakangudem", "Jeellacheruvu", "Lokya Thanda", "Kokkireni", "Geesugonda"],
-    "madhira": ["Dendukuru", "Mallavaram", "Siripuram", "Rompimalla", "Allapuram", "Chillakallu"],
-    "mudigonda": ["Vallabhi", "Medepally", "Banigandlapadu", "Garlapadu", "Madapuram", "Kattakuru"],
-    "nelakondapally": ["Appalanarasimhapuram", "Bodulabanda", "Gujjanagundla", "Cheruvumadhavaram", "Mandrajupally"],
-    "penubally": ["Penubally", "Bayyannagudem", "Chinnagaram", "Lankapalli", "V.M. Banjar", "Bramanapally"],
-    "raghunadhapalem": ["Raghunadhapalem", "Chimmapudi", "Mankonda", "Bavojigudem", "V. Venkatayapalem"],
-    "sathupally": ["Kistaram", "Bethupally", "Rejarla", "Gangaram", "Kothuru", "Sadasivunipalem"],
-    "singareni": ["Singareni", "Gate Karepally", "Manikyaram", "Kommaram", "Usirikayalapally"],
-    "thallada": ["Thallada", "Mittapally", "Rejerla", "Kurnavalli", "Gollagudem", "Pinapaka"],
-    "thirumalayapalem": ["Thirumalayapalem", "Sublaid", "Medidapally", "Kokkireni", "Errapadu"],
-    "vemsoor": ["Vemsoor", "Yadlapalli", "Chowdaram", "Kandukuru", "Marrimuppalla", "Kothagudem"],
-    "wyra": ["Somavaram", "Gokinepally", "Vallapuram", "Siripuram", "Khandrika", "Lingannapeta"],
-    "yerrupalem": ["Yerrupalem", "Banigandlapadu", "Meenavolu", "Gopavaram", "Thakellapadu", "Inagali"],
-}
+logger = logging.getLogger(__name__)
 
-
-def _clean_gp_name(mandal_name: str, raw_gp_name: str, fallback_idx: int = 1) -> str:
-    """Returns an authentic Gram Panchayat name, replacing synthetic 'Mandal GP-X' strings."""
-    if not raw_gp_name or re.search(r"(?i)\bGP\s*[-_]?\s*(?:B)?\d+\b", raw_gp_name) or re.search(r"(?i)\bVillage\s*\d+\b", raw_gp_name):
-        m_key = re.sub(r"[^a-zA-Z]", "", mandal_name).lower()
-        for k, v_list in KHAMMAM_VILLAGES_MAP.items():
-            k_clean = re.sub(r"[^a-zA-Z]", "", k).lower()
-            if k_clean in m_key or m_key in k_clean:
-                idx = (fallback_idx - 1) % len(v_list)
-                return v_list[idx]
-        return f"{mandal_name} (GP {fallback_idx})"
-    return raw_gp_name.strip()
-
-
-def format_pending_activities(gp: GPMASDetail) -> str:
-    """Formats the pending activities list into a single comma-separated line.
-    
-    Combines MAS activities and Births Register into one line for that Gram Panchayat.
-    """
-    if not gp.missing_activities:
-        if not gp.entered:
-            return "Monthly Activity Statement & Births Register (All Not Entered)"
-        return "Data Entry Pending Review"
-
-    # Replace activity keys with official clean names
-    formatted: list[str] = []
-    has_birth = False
-    for act in gp.missing_activities:
-        norm = normalize_activity_key(act)
-        if norm == "Birth details":
-            has_birth = True
-        else:
-            formatted.append(act)
-
-    if has_birth:
-        formatted.append("Births Register")
-
-    # If only Births Register is pending
-    if len(formatted) == 1 and formatted[0] == "Births Register":
-        return "Births Register Data Entry Pending"
-
-    # If all 18 activities are missing
-    if len(formatted) >= 18:
-        return "All Monthly Activities & Births Register Not Entered"
-
-    return ", ".join(formatted)
+# Color Palette
+CLR_HEADER_DARK = colors.HexColor("#0C3829")
+CLR_HEADER_EXCL = colors.HexColor("#B45309")
+CLR_OVERALL_COL = colors.HexColor("#065F46")
+CLR_ZEBRA = colors.HexColor("#F8FAFC")
+CLR_TOTAL_BG = colors.HexColor("#FEF3C7")
+CLR_RED_BG = colors.HexColor("#FEE2E2")
+CLR_RED_TXT = colors.HexColor("#991B1B")
+CLR_GREEN_BG = colors.HexColor("#DCFCE7")
+CLR_GREEN_TXT = colors.HexColor("#166534")
+CLR_AMBER_BG = colors.HexColor("#FEF9C3")
+CLR_AMBER_TXT = colors.HexColor("#92400E")
+CLR_GRID = colors.HexColor("#CBD5E1")
+CLR_DARK_TXT = colors.HexColor("#0F172A")
 
 
 class NumberedCanvas(canvas.Canvas):
-    """Two-pass canvas to stamp 'Page X of Y' and department footer."""
+    """Canvas subclass appending Page X of Y and canonical platform footer cleanly."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._saved_page_states = []
+        self._saved_page_states: List[Dict[str, Any]] = []
 
     def showPage(self):
         self._saved_page_states.append(dict(self.__dict__))
@@ -136,465 +65,497 @@ class NumberedCanvas(canvas.Canvas):
         num_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
-            self.draw_footer(num_pages)
+            self._draw_footer(num_pages)
             super().showPage()
         super().save()
 
-    def draw_footer(self, page_count: int):
+    def _draw_footer(self, page_count: int):
+        width, _height = landscape(A4)
         self.saveState()
-        self.setFont("Helvetica", 7.5)
-        self.setFillColor(colors.HexColor("#64748B"))
-        page_text = f"Page {self._pageNumber} of {page_count}"
-        self.drawRightString(990, 8, page_text)
+        self.setStrokeColor(CLR_GRID)
+        self.setLineWidth(0.5)
+        self.line(18, 22, width - 18, 22)
+        self.setFont("Helvetica", 7)
+        self.setFillColor(colors.HexColor("#475569"))
+        ts = datetime.now().strftime("%d-%b-%Y %I:%M %p")
         self.drawString(
             18,
-            8,
-            "Telangana PR & RD Department — Monthly Activity Statement (MAS) Monitoring Portal (epanchayat.telangana.gov.in)",
+            12,
+            f"{PLATFORM_NAME} — {TAGLINE} | GM-R 5.24 + 5.23 Matrix ({ts})",
         )
+        self.drawRightString(width - 18, 12, f"Page {self._pageNumber} of {page_count}")
         self.restoreState()
 
 
-def _format_header_timestamp(dt_str: str) -> str:
-    """Formats date/time for the top-left header timestamp (e.g. 30.10.2026 12-47 PM)."""
-    if not dt_str:
-        return datetime.now().strftime("%d.%m.%Y %I-%M %p")
-    for fmt in ("%d-%B-%Y %I:%M %p", "%d-%b-%Y %I:%M %p", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M"):
-        try:
-            return datetime.strptime(dt_str.strip(), fmt).strftime("%d.%m.%Y %I-%M %p")
-        except Exception:
-            pass
-    return dt_str.replace(":", "-")
+def compute_mandal_abstract_table_layout(
+    n_mandals: int,
+    available_height_pt: float = 415.0,
+) -> Dict[str, Any]:
+    """Compute exact row height & font scaling so every district fits cleanly on Page 1."""
+    n = max(1, int(n_mandals))
+    row_h = min(19.0, max(10.5, (available_height_pt - 34.0) / (n + 1)))
+    header_h = min(38.0, max(28.0, available_height_pt - (n + 1) * row_h))
+    font_size = 7.8 if row_h >= 16.0 else (7.0 if row_h >= 13.0 else 6.2)
+    return {
+        "header_height": round(header_h, 2),
+        "row_height": round(row_h, 2),
+        "row_heights": [round(header_h, 2)] + [round(row_h, 2)] * (n + 1),
+        "font_size": font_size,
+        "compact": row_h < 13.5,
+    }
 
 
-def _build_page_title(timestamp: str, title_text: str, content_width: float) -> Table:
-    """Constructs the clean top header bar matching the user's PDF."""
-    ts_style = ParagraphStyle(
-        "HeaderTS",
-        fontName="Helvetica-Bold",
-        fontSize=8.5,
-        leading=10,
-        textColor=colors.HexColor("#1E293B"),
-        alignment=0,
-    )
-    title_style = ParagraphStyle(
-        "HeaderTitle",
-        fontName="Helvetica-Bold",
-        fontSize=10.5,
-        leading=12,
-        textColor=colors.black,
-        alignment=1,
-    )
-
-    t_data = [
-        [
-            Paragraph(f"<b>{timestamp}</b>", ts_style),
-            Paragraph(f"<b>{title_text}</b>", title_style),
-            Paragraph("", ts_style),
-        ]
-    ]
-    t = Table(t_data, colWidths=[content_width * 0.22, content_width * 0.60, content_width * 0.18], rowHeights=[14.0])
-    t.setStyle(
-        TableStyle(
-            [
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 0),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
-                ("LEFTPADDING", (0, 0), (-1, -1), 0),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-            ]
-        )
-    )
-    return t
+def _completion_color(pct: float) -> colors.Color:
+    if pct >= 100.0:
+        return CLR_GREEN_TXT
+    return CLR_RED_TXT
 
 
-def _build_activity_matrix_table(
-    clean_mandals: list[MandalMASSummary],
-    activities: list[str],
-    report: DistrictMASReport,
-    content_width: float,
-    printable_height: float,
-    styles: Any,
-) -> Table:
-    """Builds a 9-activity executive matrix table with professional institutional styling.
-    
-    Dynamically scales row heights so all mandals and the Total row fill the page height exactly
-    without spilling onto subsequent pages.
-    """
-    # -------------------------------------------------------------------------
-    # EXECUTIVE COLOR PALETTE (Publication-Grade Institutional Design)
-    # -------------------------------------------------------------------------
-    NAVY_PRIMARY = colors.HexColor("#0F2942")     # Deep Corporate Midnight Navy
-    NAVY_MUTED = colors.HexColor("#1E3A5F")       # Slate Navy
-    SLATE_SUBHDR = colors.HexColor("#F1F5F9")     # Refined Cool Gray for Tier 2 Sub-headers
-    SLATE_BORDER = colors.HexColor("#CBD5E1")     # Crisp 0.4pt subtle gridlines
-    ROW_EVEN = colors.HexColor("#FFFFFF")         # Pure White
-    ROW_ODD = colors.HexColor("#F8FAFC")          # Subtle off-white zebra striping
+def generate_mas_consolidated_pdf(
+    mandals_abstract: List[Dict[str, Any]],
+    total_row: Dict[str, Any],
+    pending_action_list: List[Dict[str, Any]],
+    excluded_modules: List[str],
+    output_path: Path,
+    month: str = "July",
+    year: int = 2026,
+    district_name: str = "Khammam",
+    include_gp_data: bool = True,
+) -> Path:
+    """Build A4 Landscape Consolidated PDF for MAS GM-R 5.24 + GM-R 5.23."""
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    clean_district, _ = normalize_district_and_slug(district_name)
 
-    # Compliance Indicators (Refined Badges, NOT garish whole-cell neon fills)
-    FILL_GREEN = colors.HexColor("#ECFDF5")       # Soft Emerald Badge Tint (100% Complete)
-    TEXT_GREEN = colors.HexColor("#065F46")       # Deep Forest Emerald Text
-    
-    FILL_AMBER = colors.HexColor("#FFFBEB")       # Soft Warm Amber Badge Tint (>0% and <100%)
-    TEXT_AMBER = colors.HexColor("#92400E")       # Deep Bronze Amber Text
-    
-    FILL_RED = colors.HexColor("#FEF2F2")         # Soft Rose Badge Tint (0% / Critical Lag)
-    TEXT_RED = colors.HexColor("#991B1B")         # Deep Crimson Text
-    
-    FILL_OVR = colors.HexColor("#EFF6FF")         # Clean Corporate Sky Tint for Overall % Col
-    TEXT_OVR = colors.HexColor("#1E40AF")         # Deep Executive Blue Text
-    
-    TOTAL_BG = colors.HexColor("#0F2942")         # Deep Midnight Navy for Total Row
-    TOTAL_TEXT = colors.HexColor("#FFFFFF")       # Crisp White Text
-    TOTAL_GOLD = colors.HexColor("#FCD34D")       # Warm Gold for Total % Values
-
-    # Base Column Widths (S.No, Mandal Name, No of GPs, Overall % Entered)
-    w_sno = 28.0
-    w_mandal = 118.0
-    w_gps = 38.0
-    w_ovr = 52.0
-    base_width = w_sno + w_mandal + w_gps + w_ovr
-    rem_width = content_width - base_width
-
-    num_acts = len(activities)
-    w_act = rem_width / max(1, num_acts)
-    w_ent = 24.0
-    w_not = 24.0
-    w_pct = w_act - (w_ent + w_not)
-
-    col_widths = [w_sno, w_mandal, w_gps, w_ovr]
-    for _ in range(num_acts):
-        col_widths.extend([w_ent, w_not, w_pct])
-
-    # Header Styles
-    p_hdr1 = ParagraphStyle("H1W", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=1, textColor=colors.white)
-    p_hdr_ovr = ParagraphStyle("H1Ovr", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=1, textColor=TOTAL_GOLD)
-    p_sub_hdr = ParagraphStyle("SubH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=5.5, leading=6.5, alignment=1, textColor=colors.HexColor("#334155"))
-    p_pct_hdr = ParagraphStyle("PctH", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=5.5, leading=6.5, alignment=1, textColor=TEXT_OVR)
-
-    # Data Styles
-    p_cell_c = ParagraphStyle("DC", parent=styles["Normal"], fontName="Helvetica", fontSize=6.5, leading=7.5, alignment=1, textColor=colors.HexColor("#0F172A"))
-    p_cell_b = ParagraphStyle("DB", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=0, textColor=colors.HexColor("#0F172A"))
-    p_cell_ovr = ParagraphStyle("DOvr", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=1, textColor=TEXT_OVR)
-    p_cell_grn = ParagraphStyle("DGrn", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=1, textColor=TEXT_GREEN)
-    p_cell_amb = ParagraphStyle("DAmb", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=1, textColor=TEXT_AMBER)
-    p_cell_red = ParagraphStyle("DRed", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=6.5, leading=7.5, alignment=1, textColor=TEXT_RED)
-
-    # Total Row Styles
-    p_tot_w = ParagraphStyle("TotW", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7, leading=8.5, alignment=1, textColor=colors.white)
-    p_tot_b = ParagraphStyle("TotB", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7, leading=8.5, alignment=0, textColor=colors.white)
-    p_tot_gold = ParagraphStyle("TotG", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7, leading=8.5, alignment=1, textColor=TOTAL_GOLD)
-
-    # Tier 1 Header
-    tier1 = [
-        Paragraph("<b>S<br/>No</b>", p_hdr1),
-        Paragraph("<b>Mandal Name</b>", p_hdr1),
-        Paragraph("<b>No of<br/>GPs</b>", p_hdr1),
-        Paragraph("<b>Overall<br/>%<br/>Entered</b>", p_hdr_ovr),
-    ]
-    for act in activities:
-        tier1.append(Paragraph(f"<b>{act}</b>", p_hdr1))
-        tier1.append(Paragraph("", p_hdr1))
-        tier1.append(Paragraph("", p_hdr1))
-
-    # Tier 2 Sub-header
-    tier2 = [
-        Paragraph("", p_sub_hdr),
-        Paragraph("", p_sub_hdr),
-        Paragraph("", p_sub_hdr),
-        Paragraph("", p_sub_hdr),
-    ]
-    for _ in range(num_acts):
-        tier2.append(Paragraph("Entered", p_sub_hdr))
-        tier2.append(Paragraph("Not<br/>Entered", p_sub_hdr))
-        tier2.append(Paragraph("<b>%<br/>Entered</b>", p_pct_hdr))
-
-    table_rows = [tier1, tier2]
-
-    t_styles = [
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("INNERGRID", (0, 0), (-1, -1), 0.35, SLATE_BORDER),
-        ("BOX", (0, 0), (-1, -1), 0.75, NAVY_PRIMARY),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.0),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 1.0),
-        ("LEFTPADDING", (0, 0), (-1, -1), 1),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 1),
-        # Merges for Base Columns
-        ("SPAN", (0, 0), (0, 1)),
-        ("SPAN", (1, 0), (1, 1)),
-        ("SPAN", (2, 0), (2, 1)),
-        ("SPAN", (3, 0), (3, 1)),
-        # Tier 1 Header Background (Deep Midnight Navy)
-        ("BACKGROUND", (0, 0), (-1, 0), NAVY_PRIMARY),
-        # Tier 2 Sub-header Background (Clean Light Slate)
-        ("BACKGROUND", (0, 1), (-1, 1), SLATE_SUBHDR),
-    ]
-
-    # Merges & Fills for Activity Headers
-    for i in range(num_acts):
-        sc = 4 + (i * 3)
-        ec = sc + 2
-        t_styles.append(("SPAN", (sc, 0), (ec, 0)))
-        t_styles.append(("BACKGROUND", (ec, 1), (ec, 1), colors.HexColor("#E0F2FE")))  # Soft Ice Blue % Header
-
-    # Populate Data Rows
-    row_idx = 2
-    for m_i, m in enumerate(clean_mandals):
-        row_bg = ROW_EVEN if m_i % 2 == 0 else ROW_ODD
-        t_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), row_bg))
-
-        ovr = m.overall_pct_entered if m.overall_pct_entered > 0 else m.pct_completed
-        r = [
-            Paragraph(str(m.s_no), p_cell_c),
-            Paragraph(m.mandal_name, p_cell_b),
-            Paragraph(str(m.total_gps), p_cell_c),
-            Paragraph(f"<b>{ovr:.1f}</b>", p_cell_ovr),
-        ]
-        # Overall % column has refined soft blue tint
-        t_styles.append(("BACKGROUND", (3, row_idx), (3, row_idx), FILL_OVR))
-
-        for i, act in enumerate(activities):
-            sc = 4 + (i * 3)
-            ent, not_ent, pct = m.get_activity_stats(act)
-            pct_val_str = f"{pct:.1f}"
-
-            r.append(Paragraph(str(ent), p_cell_c))
-            r.append(Paragraph(str(not_ent), p_cell_c))
-
-            if pct >= 100.0:
-                r.append(Paragraph(pct_val_str, p_cell_grn))
-                pct_fill = FILL_GREEN
-            elif pct > 0.0:
-                r.append(Paragraph(pct_val_str, p_cell_amb))
-                pct_fill = FILL_AMBER
-            else:
-                r.append(Paragraph(f"<b>{pct_val_str}</b>", p_cell_red))
-                pct_fill = FILL_RED
-
-            # Refined badge fill ONLY on the percentage column
-            t_styles.append(("BACKGROUND", (sc + 2, row_idx), (sc + 2, row_idx), pct_fill))
-
-        table_rows.append(r)
-        row_idx += 1
-
-    # Total Row at the bottom (Deep Midnight Navy with White and Gold)
-    dist_ovr = report.overall_pct_entered if report.overall_pct_entered > 0 else report.overall_pct
-    tot_row = [
-        Paragraph("<b>Total</b>", p_tot_b),
-        Paragraph("", p_tot_b),
-        Paragraph(f"<b>{report.total_gps}</b>", p_tot_w),
-        Paragraph(f"<b>{dist_ovr:.1f}</b>", p_tot_gold),
-    ]
-    t_styles.append(("SPAN", (0, row_idx), (1, row_idx)))  # Span 'Total' across Col 0 and 1
-    t_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), TOTAL_BG))
-
-    for i, act in enumerate(activities):
-        dent, dnot, dpct = report.get_activity_totals(act)
-        tot_row.append(Paragraph(f"<b>{dent}</b>", p_tot_w))
-        tot_row.append(Paragraph(f"<b>{dnot}</b>", p_tot_w))
-        tot_row.append(Paragraph(f"<b>{dpct:.1f}</b>", p_tot_gold))
-
-    table_rows.append(tot_row)
-    t_styles.append(("LINEABOVE", (0, row_idx), (-1, row_idx), 1, NAVY_PRIMARY))
-    t_styles.append(("LINEBELOW", (0, row_idx), (-1, row_idx), 1.5, NAVY_PRIMARY))
-
-    # Dynamically scale row heights to fit the page height based on the number of Mandals
-    num_m = max(1, len(clean_mandals))
-    fixed_headers_h = 20.0 + 15.0 + 17.0  # Tier1 (20) + Tier2 (15) + Total row (17)
-    title_and_spacer_h = 14.0 + 2.0        # Title (14) + Spacer (2)
-    safety_buffer = 35.0                   # Guarantees zero spillover onto next page
-    avail_mandal_height = printable_height - (fixed_headers_h + title_and_spacer_h + safety_buffer)
-    mandal_row_h = min(23.0, max(14.0, avail_mandal_height / num_m))
-    row_heights = [20.0, 15.0] + [mandal_row_h] * len(clean_mandals) + [17.0]
-
-    t = Table(table_rows, colWidths=col_widths, rowHeights=row_heights, repeatRows=2)
-    t.setStyle(TableStyle(t_styles))
-    return t
-
-
-def generate_mas_pdf(
-    report: DistrictMASReport,
-    target: Optional[Union[Path, str, io.BytesIO]] = None,
-) -> bytes:
-    """Generates official landscape PDF for the Monthly Activity Statement."""
-    if isinstance(target, Path):
-        dest = str(target)
-        buffer = None
-    elif target is None or isinstance(target, io.BytesIO):
-        buffer = io.BytesIO() if target is None else target
-        dest = buffer
-    else:
-        dest = str(target)
-        buffer = None
-
-    # Legal Landscape: 14 x 8.5 inches = 1008 x 612 points (exact matching user PDF)
-    page_width, page_height = landscape(legal)
-    margin_lr = 18
-    margin_tb = 14
-    content_width = page_width - (2 * margin_lr)
-    printable_height = page_height - (2 * margin_tb)
+    page_w, page_h = landscape(A4)
+    left_margin = 16
+    right_margin = 16
+    top_margin = 16
+    bottom_margin = 28
 
     doc = SimpleDocTemplate(
-        dest,
-        pagesize=landscape(legal),
-        leftMargin=margin_lr,
-        rightMargin=margin_lr,
-        topMargin=margin_tb,
-        bottomMargin=margin_tb,
+        str(output_path),
+        pagesize=landscape(A4),
+        leftMargin=left_margin,
+        rightMargin=right_margin,
+        topMargin=top_margin,
+        bottomMargin=bottom_margin,
+        title=f"{clean_district} District - MAS Consolidated Report ({month} {year})",
+        author=PLATFORM_NAME,
     )
 
     styles = getSampleStyleSheet()
-    timestamp_str = _format_header_timestamp(report.generated_at)
-    clean_dist = (report.district_name or "").strip()
-    if clean_dist.upper().endswith("DISTRICT"):
-        clean_dist = clean_dist[:-8].strip()
-    dist_suffix = f" — {clean_dist.upper()} DISTRICT" if clean_dist and clean_dist.lower() != "district" else ""
-    page_title_text = f"DATA ENTRY STATUS OF MONTHLY ACTIVITY STATEMENT OF GPs{dist_suffix}"
-    clean_mandals = [m for m in report.mandals if m.mandal_name.strip().upper() not in ("TOTAL", "GRAND TOTAL")]
+    style_title = ParagraphStyle(
+        "MasTitle",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=12.5,
+        textColor=colors.white,
+        leading=15,
+        alignment=TA_LEFT,
+    )
+    style_sub = ParagraphStyle(
+        "MasSub",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=8.0,
+        textColor=colors.HexColor("#D1FAE5"),
+        leading=10,
+        alignment=TA_LEFT,
+    )
+    style_kpi = ParagraphStyle(
+        "MasKpi",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=8.5,
+        textColor=CLR_DARK_TXT,
+        leading=11,
+        alignment=TA_CENTER,
+    )
+    style_th = ParagraphStyle(
+        "MasTh",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=6.2,
+        textColor=colors.white,
+        leading=7.2,
+        alignment=TA_CENTER,
+    )
+    style_th_left = ParagraphStyle(
+        "MasThLeft",
+        parent=style_th,
+        alignment=TA_LEFT,
+    )
+    style_sec_hdr = ParagraphStyle(
+        "MasSecHdr",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=10.5,
+        textColor=CLR_HEADER_DARK,
+        leading=13,
+    )
+    style_cell_left = ParagraphStyle(
+        "MasCellLeft",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.4,
+        textColor=CLR_DARK_TXT,
+        leading=9.5,
+        alignment=TA_LEFT,
+    )
+    style_cell_center = ParagraphStyle(
+        "MasCellCenter",
+        parent=styles["Normal"],
+        fontName="Helvetica",
+        fontSize=7.4,
+        textColor=CLR_DARK_TXT,
+        leading=9.5,
+        alignment=TA_CENTER,
+    )
 
-    story = []
-
-    # =========================================================================
-    # PAGE 1: FIRST 9 ACTIVITIES (EXECUTIVE MATRIX PART 1)
-    # =========================================================================
-    story.append(_build_page_title(timestamp_str, page_title_text, content_width))
-    story.append(Spacer(1, 2))
-
-    part1_activities = [
-        "Nursery",
-        "Plantation",
-        "Vaikunta Dhamam",
-        "Dump Yard",
-        "Water Supply",
-        "GP Meetings",
-        "Gram Sabha",
-        "Record Maintenance",
-        "Approvals and Certificates",
-    ]
-    table_p1 = _build_activity_matrix_table(clean_mandals, part1_activities, report, content_width, printable_height, styles)
-    story.append(table_p1)
-
-    # =========================================================================
-    # PAGE 2: REMAINING 9 ACTIVITIES (EXECUTIVE MATRIX PART 2)
-    # =========================================================================
-    story.append(PageBreak())
-    story.append(_build_page_title(timestamp_str, page_title_text, content_width))
-    story.append(Spacer(1, 2))
-
-    part2_activities = [
-        "Deaths",
-        "Recipts",
-        "Expenditure",
-        "Cheque Details",
-        "Salary Details",
-        "VWSC Bank Balance",
-        "MGNRE Bank Balance",
-        "Payment of Electricity",
-        "Birth Details",
-    ]
-    table_p2 = _build_activity_matrix_table(clean_mandals, part2_activities, report, content_width, printable_height, styles)
-    story.append(table_p2)
-
-    # =========================================================================
-    # PAGE 3+: ACTIONABLE PENDING GRAM PANCHAYATS LIST
-    # (Without Panchayat Secretary, Phone, or Action Status, using ", " comma separator)
-    # =========================================================================
-    has_pending = bool(report.all_pending_gps)
-    if has_pending:
-        story.append(PageBreak())
-
-        # Clean header for Pending GPs list
-        story.append(_build_page_title(timestamp_str, f"DATA ENTRY STATUS OF MONTHLY ACTIVITY STATEMENT OF GPs — PENDING GPs LIST{dist_suffix}", content_width))
-        story.append(Spacer(1, 4))
-
-        p_hdr_style = ParagraphStyle(
-            "PHdr",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=8,
-            leading=10,
-            alignment=1,
-            textColor=colors.white,
-        )
-        p_cell_c = ParagraphStyle(
-            "PCC",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=7.5,
-            leading=9.5,
-            alignment=1,
-            textColor=colors.black,
-        )
-        p_cell_b = ParagraphStyle(
-            "PCB",
-            parent=styles["Normal"],
-            fontName="Helvetica-Bold",
-            fontSize=7.5,
-            leading=9.5,
-            alignment=0,
-            textColor=colors.black,
-        )
-        p_act_style = ParagraphStyle(
-            "PAC",
-            parent=styles["Normal"],
-            fontName="Helvetica",
-            fontSize=7.5,
-            leading=9.5,
-            alignment=0,
-            textColor=colors.HexColor("#B91C1C"),
-        )
-
-        pending_headers = [
-            Paragraph("<b>S.No</b>", p_hdr_style),
-            Paragraph("<b>Mandal Name</b>", p_hdr_style),
-            Paragraph("<b>Gram Panchayat Name</b>", p_hdr_style),
-            Paragraph("<b>Pending Monthly Activities</b>", p_hdr_style),
+    usable_w = page_w - left_margin - right_margin
+    excluded_set = set(excluded_modules or [])
+    n_included = int(total_row.get("included_modules_count", len(ALL_18_MODULES) - len(excluded_set)))
+    n_mandals = len(mandals_abstract)
+    total_gps = int(total_row.get("No of GPs", 0))
+    overall_pct = total_row.get("Overall % Entered", 0.0)
+    tot_updated = int(total_row.get("No of Updated", 0))
+    tot_fields = int(total_row.get("Total Fields", 0))
+    pending_mandals_cnt = len(
+        [
+            m for m in mandals_abstract
+            if any(
+                (not m.get("modules", {}).get(lbl, {}).get("is_excluded", False))
+                and int(m.get("modules", {}).get(lbl, {}).get("Not Entered", 0) or 0) > 0
+                for lbl, _ in ALL_18_MODULES
+            )
         ]
+    )
 
-        # 4 Columns spanning entire content_width (972 pt)
-        w_p_sno = 36.0
-        w_p_mandal = 180.0
-        w_p_gp = 200.0
-        w_p_act = content_width - (w_p_sno + w_p_mandal + w_p_gp)  # 556 pt
+    elements: List[Any] = []
 
-        p_widths = [w_p_sno, w_p_mandal, w_p_gp, w_p_act]
-        p_rows = [pending_headers]
-
-        seq = 1
-        for gp in report.all_pending_gps:
-            clean_name = _clean_gp_name(gp.mandal_name, gp.panchayat_name, seq)
-            miss_str = format_pending_activities(gp)
-
-            row = [
-                Paragraph(str(seq), p_cell_c),
-                Paragraph(gp.mandal_name, p_cell_b),
-                Paragraph(clean_name, p_cell_b),
-                Paragraph(miss_str, p_act_style),
+    # ------------------------------------------------------------------
+    # PAGE 1: Header Banner + KPI Summary + Full 18-Module Mandal Table
+    # ------------------------------------------------------------------
+    banner_tbl = Table(
+        [
+            [
+                Paragraph(
+                    f"<b>{clean_district} District - Monthly Activity Statement (MAS) Abstract ({month} {year})</b>",
+                    style_title,
+                ),
+                Paragraph(
+                    f"<b>Overall: {overall_pct}%</b><br/><font size='7'>GM-R 5.24 + GM-R 5.23</font>",
+                    ParagraphStyle("BStat", parent=style_sub, alignment=TA_CENTER, fontSize=10, textColor=colors.white),
+                ),
+            ],
+            [
+                Paragraph(
+                    "18-Indicator Executive Matrix (17 MAS Indicators + Birth Details)",
+                    style_sub,
+                ),
+                "",
+            ],
+        ],
+        colWidths=[usable_w - 130, 130],
+    )
+    banner_tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), CLR_HEADER_DARK),
+                ("SPAN", (1, 0), (1, 1)),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
             ]
-            p_rows.append(row)
-            seq += 1
+        )
+    )
+    elements.append(banner_tbl)
+    elements.append(Spacer(1, 5))
 
-        p_table = Table(p_rows, colWidths=p_widths, repeatRows=1)
-        p_styles = [
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F2942")),  # Deep Midnight Navy header
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("INNERGRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#CBD5E1")),
-            ("BOX", (0, 0), (-1, -1), 0.75, colors.HexColor("#0F2942")),
-            ("TOPPADDING", (0, 0), (-1, -1), 1.5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+    # 5 KPI Cards Row
+    if (not include_gp_data) and pending_mandals_cnt > 0:
+        kpi5_label = f"<font color='#64748B' size='6.5'>PENDING STATUS</font><br/><font color='#B45309'><b>{pending_mandals_cnt} Mandals</b></font>"
+    else:
+        pending_gp_cnt = len(pending_action_list or [])
+        kpi5_label = (
+            f"<font color='#64748B' size='6.5'>PENDING ACTION GPs</font><br/><font color='#991B1B'><b>{pending_gp_cnt} Pending GPs</b></font>"
+            if pending_gp_cnt > 0
+            else "<font color='#64748B' size='6.5'>PENDING ACTION GPs</font><br/><font color='#166534'><b>0 (All Compliant)</b></font>"
+        )
+
+    kpi_cells = [
+        Paragraph(f"<font color='#64748B' size='6.5'>DISTRICT OVERALL %</font><br/><font color='#065F46'><b>{overall_pct}%</b></font>", style_kpi),
+        Paragraph(f"<font color='#64748B' size='6.5'>UPDATED / TOTAL FIELDS</font><br/><b>{tot_updated:,} / {tot_fields:,}</b>", style_kpi),
+        Paragraph(f"<font color='#64748B' size='6.5'>DISTRICT COVERAGE</font><br/><b>{n_mandals} Mandals · {total_gps:,} GPs</b>", style_kpi),
+        Paragraph(f"<font color='#64748B' size='6.5'>INCLUDED MODULE BASE</font><br/><b>{n_included} / 18 Modules</b>", style_kpi),
+        Paragraph(kpi5_label, style_kpi),
+    ]
+    kpi_tbl = Table([kpi_cells], colWidths=[usable_w / 5.0] * 5, rowHeights=[28])
+    kpi_tbl.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+                ("BOX", (0, 0), (-1, -1), 0.7, CLR_GRID),
+                ("INNERGRID", (0, 0), (-1, -1), 0.5, CLR_GRID),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    elements.append(kpi_tbl)
+    elements.append(Spacer(1, 5))
+
+    # Full 18-Module Table (22 Columns)
+    layout = compute_mandal_abstract_table_layout(n_mandals)
+    font_sz = layout["font_size"]
+
+    short_labels = {
+        "Nursery": "Nursery",
+        "Plantation": "Plant.",
+        "Vaikunta Dhamam": "Vaikunta<br/>Dhamam",
+        "Dump Yard": "Dump<br/>Yard",
+        "Water Supply": "Water<br/>Supply",
+        "GP Meetings": "GP<br/>Meet.",
+        "Gram Sabha": "Gram<br/>Sabha",
+        "Record Maintenance": "Record<br/>Maint.",
+        "Approvals and Certificates": "Approv.<br/>& Cert.",
+        "Deaths": "Deaths",
+        "Recipts": "Receipts",
+        "Expenditure": "Expend.",
+        "Cheque Details": "Cheque<br/>Details",
+        "Salary Details": "Salary<br/>Details",
+        "VWSC Bank Balance": "VWSC<br/>Bal.",
+        "MGNRE Bank Balance": "MGNRE<br/>Bal.",
+        "Payment of Electricity": "CC<br/>Charges",
+        "Birth Details": "Birth<br/>Details",
+    }
+
+    header_row = [
+        Paragraph("S<br/>No", style_th),
+        Paragraph("Mandal Name", style_th_left),
+        Paragraph("GPs", style_th),
+        Paragraph(f"Overall<br/>% ({n_included})", style_th),
+    ]
+    for label, _ in ALL_18_MODULES:
+        sl = short_labels.get(label, label)
+        if label in excluded_set:
+            header_row.append(Paragraph(f"{sl}<br/><font size='5' color='#FEF08A'>[Excl]</font>", style_th))
+        else:
+            header_row.append(Paragraph(sl, style_th))
+
+    table_rows: List[List[Any]] = [header_row]
+    for m in mandals_abstract:
+        row: List[Any] = [
+            str(m.get("S No", "")),
+            str(m.get("Mandal Name", "")),
+            str(m.get("No of GPs", "")),
+            f"{m.get('Overall % Entered', 0)}%",
         ]
-        for r_i in range(1, len(p_rows)):
-            if r_i % 2 == 0:
-                p_styles.append(("BACKGROUND", (0, r_i), (-1, r_i), colors.HexColor("#F8FAFC")))  # Subtle zebra
+        mods = m.get("modules", {})
+        for label, _ in ALL_18_MODULES:
+            row.append(mods.get(label, {}).get("formatted_compact", "-"))
+        table_rows.append(row)
 
-        p_table.setStyle(TableStyle(p_styles))
-        story.append(p_table)
+    # District Total Row
+    t_row: List[Any] = [
+        "Tot",
+        "District Total",
+        str(total_row.get("No of GPs", "")),
+        f"{total_row.get('Overall % Entered', 0)}%",
+    ]
+    t_mods = total_row.get("modules", {})
+    for label, _ in ALL_18_MODULES:
+        t_row.append(t_mods.get(label, {}).get("formatted_compact", "-"))
+    table_rows.append(t_row)
 
-    doc.build(story, canvasmaker=NumberedCanvas)
+    # Column widths summing strictly to usable_w (~809.89 pt)
+    fixed_w = [22, 82, 24, 42]  # = 170 pt
+    remaining_w = usable_w - sum(fixed_w)
+    mod_col_w = remaining_w / 18.0
+    col_widths = fixed_w + [mod_col_w] * 18
 
-    if buffer is not None:
-        return buffer.getvalue()
-    if isinstance(target, (str, Path)):
-        return Path(target).read_bytes()
-    return b""
+    abstract_tbl = Table(table_rows, colWidths=col_widths, rowHeights=layout["row_heights"], repeatRows=1)
+
+    tbl_cmds: List[Tuple[Any, ...]] = [
+        ("BACKGROUND", (0, 0), (-1, 0), CLR_HEADER_DARK),
+        ("BACKGROUND", (3, 0), (3, 0), CLR_OVERALL_COL),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("ALIGN", (1, 1), (1, -1), "LEFT"),
+        ("FONTNAME", (0, 1), (-1, -2), "Helvetica"),
+        ("FONTNAME", (1, 1), (1, -2), "Helvetica-Bold"),
+        ("FONTNAME", (3, 1), (3, -2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 1), (-1, -1), font_sz),
+        ("GRID", (0, 0), (-1, -1), 0.4, CLR_GRID),
+        ("TOPPADDING", (0, 0), (-1, -1), 1),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        # Total Row styling
+        ("BACKGROUND", (0, -1), (-1, -1), CLR_TOTAL_BG),
+        ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.3, CLR_DARK_TXT),
+        ("LINEBELOW", (0, -1), (-1, -1), 1.5, CLR_DARK_TXT),
+    ]
+
+    # Zebra striping + conditional red text & colors on Pending rows/cells & Excluded module columns
+    for r_idx, m in enumerate(mandals_abstract, start=1):
+        if r_idx % 2 == 0:
+            tbl_cmds.append(("BACKGROUND", (0, r_idx), (-1, r_idx), CLR_ZEBRA))
+        pct_val = float(m.get("Overall % Entered", 100.0))
+        mods = m.get("modules", {})
+        row_has_pending = pct_val < 100.0 or any(
+            (lbl not in excluded_set) and int((mods.get(lbl) or {}).get("Not Entered", 0) or 0) > 0
+            for lbl, _ in ALL_18_MODULES
+        )
+        if row_has_pending:
+            tbl_cmds.append(("TEXTCOLOR", (0, r_idx), (1, r_idx), CLR_RED_TXT))
+            tbl_cmds.append(("TEXTCOLOR", (3, r_idx), (3, r_idx), CLR_RED_TXT))
+        else:
+            tbl_cmds.append(("TEXTCOLOR", (3, r_idx), (3, r_idx), _completion_color(pct_val)))
+
+        for m_idx, (label, _) in enumerate(ALL_18_MODULES):
+            c_idx = 4 + m_idx
+            mod_data = mods.get(label, {})
+            is_excl = label in excluded_set
+            not_ent = int(mod_data.get("Not Entered", 0) or 0)
+            if is_excl:
+                tbl_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), CLR_AMBER_BG))
+                tbl_cmds.append(("TEXTCOLOR", (c_idx, r_idx), (c_idx, r_idx), CLR_AMBER_TXT))
+            elif not_ent > 0:
+                tbl_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), CLR_RED_BG))
+                tbl_cmds.append(("TEXTCOLOR", (c_idx, r_idx), (c_idx, r_idx), CLR_RED_TXT))
+                tbl_cmds.append(("FONTNAME", (c_idx, r_idx), (c_idx, r_idx), "Helvetica-Bold"))
+
+    # Highlight excluded headers and total cells (plus red text for any pending in Total row)
+    tot_pct_val = float(total_row.get("Overall % Entered", 100.0))
+    tot_has_pending = tot_pct_val < 100.0 or any(
+        (lbl not in excluded_set) and int((t_mods.get(lbl) or {}).get("Not Entered", 0) or 0) > 0
+        for lbl, _ in ALL_18_MODULES
+    )
+    tbl_cmds.append(("TEXTCOLOR", (3, -1), (3, -1), CLR_RED_TXT if tot_has_pending else CLR_GREEN_TXT))
+    for m_idx, (label, _) in enumerate(ALL_18_MODULES):
+        c_idx = 4 + m_idx
+        if label in excluded_set:
+            tbl_cmds.append(("BACKGROUND", (c_idx, 0), (c_idx, 0), CLR_HEADER_EXCL))
+            tbl_cmds.append(("BACKGROUND", (c_idx, -1), (c_idx, -1), colors.HexColor("#FDE68A")))
+            tbl_cmds.append(("TEXTCOLOR", (c_idx, -1), (c_idx, -1), CLR_AMBER_TXT))
+        elif int((t_mods.get(label) or {}).get("Not Entered", 0) or 0) > 0:
+            tbl_cmds.append(("TEXTCOLOR", (c_idx, -1), (c_idx, -1), CLR_RED_TXT))
+
+    abstract_tbl.setStyle(TableStyle(tbl_cmds))
+    elements.append(abstract_tbl)
+
+    # ------------------------------------------------------------------
+    # PAGE 2+: GP-Wise Pending Action List (when include_gp_data is True)
+    # ------------------------------------------------------------------
+    if include_gp_data:
+        elements.append(PageBreak())
+        p_count = len(pending_action_list)
+        sec_banner = Table(
+            [
+                [
+                    Paragraph(
+                        f"GP-Wise Pending Action Plan — {clean_district} District ({month} {year})",
+                        ParagraphStyle("PHdr", parent=style_sec_hdr, textColor=colors.white),
+                    ),
+                    Paragraph(
+                        f"<b>{p_count} Action GP(s)</b>",
+                        ParagraphStyle("PCnt", parent=style_sub, alignment=TA_CENTER, fontSize=9.5, textColor=colors.white),
+                    ),
+                ]
+            ],
+            colWidths=[usable_w - 130, 130],
+        )
+        sec_banner.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), CLR_HEADER_DARK if p_count == 0 else colors.HexColor("#991B1B")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
+        elements.append(sec_banner)
+        elements.append(Spacer(1, 8))
+
+        if p_count == 0:
+            ok_card = Table(
+                [
+                    [
+                        Paragraph(
+                            f"<b>100% FULLY COMPLIANT — ZERO PENDING GPs</b><br/>"
+                            f"<font size='8.5' color='#166534'>All {total_gps:,} Gram Panchayats across {n_mandals} Mandals have completed entry for all {n_included} included modules in {month} {year}.</font>",
+                            ParagraphStyle("OkMsg", parent=style_kpi, fontSize=11, textColor=CLR_GREEN_TXT, leading=16),
+                        )
+                    ]
+                ],
+                colWidths=[usable_w],
+                rowHeights=[70],
+            )
+            ok_card.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, -1), CLR_GREEN_BG),
+                        ("BOX", (0, 0), (-1, -1), 1.2, CLR_GREEN_TXT),
+                        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ]
+                )
+            )
+            elements.append(ok_card)
+        else:
+            p_header = [
+                Paragraph("S No", style_th),
+                Paragraph("Mandal", style_th_left),
+                Paragraph("Gram Panchayat", style_th_left),
+                Paragraph("Pending Count", style_th),
+                Paragraph("Pending Module(s)", style_th_left),
+                Paragraph(f"Completed / {n_included}", style_th),
+                Paragraph("Completion %", style_th),
+                Paragraph("Action Required", style_th_left),
+            ]
+            p_rows: List[List[Any]] = [p_header]
+            for idx, item in enumerate(pending_action_list, start=1):
+                p_rows.append(
+                    [
+                        Paragraph(str(idx), style_cell_center),
+                        Paragraph(f"<b>{item.get('Mandal', '')}</b>", style_cell_left),
+                        Paragraph(f"<b>{item.get('Gram_Panchayat', '')}</b>", style_cell_left),
+                        Paragraph(f"<font color='#991B1B'><b>{item.get('Pending_Count', 0)} Pending</b></font>", style_cell_center),
+                        Paragraph(str(item.get("Pending_Modules", "")), style_cell_left),
+                        Paragraph(f"{item.get('Completed_Count', 0)} / {n_included}", style_cell_center),
+                        Paragraph(f"<b>{item.get('Completion_Rate', '0%')}</b>", style_cell_center),
+                        Paragraph(str(item.get("Action_Required", "Immediate follow-up by MPO / PS")), style_cell_left),
+                    ]
+                )
+
+            p_widths = [28, 86, 122, 60, 270, 56, 56, usable_w - 678]
+            p_tbl = Table(p_rows, colWidths=p_widths, repeatRows=1)
+            p_cmds = [
+                ("BACKGROUND", (0, 0), (-1, 0), CLR_HEADER_DARK),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("GRID", (0, 0), (-1, -1), 0.45, CLR_GRID),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ]
+            for r_idx in range(1, len(p_rows)):
+                if r_idx % 2 == 0:
+                    p_cmds.append(("BACKGROUND", (0, r_idx), (-1, r_idx), CLR_ZEBRA))
+            p_tbl.setStyle(TableStyle(p_cmds))
+            elements.append(p_tbl)
+
+    doc.build(elements, canvasmaker=NumberedCanvas)
+    logger.info("[+] Generated MAS Consolidated PDF (%d mandals, %d pending GPs): %s", n_mandals, len(pending_action_list or []), output_path)
+    return output_path

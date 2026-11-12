@@ -107,17 +107,18 @@ fi
 
 cd "$PROJECT_DIR"
 
-# 4. Configure .env file with permanent Cloudflare Tunnel token
-echo "[*] Writing production environment variables..."
+# 4. Configure .env safely without hardcoded secrets
+echo "[*] Checking production .env configuration..."
 ENV_FILE="$PROJECT_DIR/.env"
-cat << 'EOF' | sudo -u "$ACTUAL_USER" tee "$ENV_FILE" > /dev/null
-# Telangana e-Panchayat Automated Portal Configuration
-CLOUDFLARE_TUNNEL_TOKEN="eyJhIjoiOTFjZWUxYjY3ZGY5MzYwNzZlZDg1NDI5MGIxZTgwNTMiLCJ0IjoiZTU3ZmZkZTgtZGRjYy00NTI4LTg2NTUtNjhmZmEwOWUwMjIyIiwicyI6Ik1qQmxORFV5TXpJdFpESTJZUzAwWWpFeUxXSmxObVl0WmpaaU9UTTNaakk0WTJaaCJ9"
-CUSTOM_DOMAIN="panchayatautomation.in"
-PORT=8000
-HOST="0.0.0.0"
-LOG_LEVEL="INFO"
-EOF
+if [ ! -f "$ENV_FILE" ]; then
+    sudo -u "$ACTUAL_USER" cp "$PROJECT_DIR/.env.example" "$ENV_FILE"
+    GEN_SECRET=$(openssl rand -hex 32 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(32))")
+    sudo -u "$ACTUAL_USER" sed -i "s/^WEB_SESSION_SECRET=.*/WEB_SESSION_SECRET=$GEN_SECRET/" "$ENV_FILE"
+    sudo -u "$ACTUAL_USER" sed -i "s/^ENVIRONMENT=.*/ENVIRONMENT=production/" "$ENV_FILE"
+    echo "[*] Created $ENV_FILE from .env.example. Populate FIREBASE_SERVICE_ACCOUNT_PATH, ADMIN_EMAILS, and CLOUDFLARE_TUNNEL_TOKEN."
+else
+    echo "[+] Preserving existing $ENV_FILE configuration."
+fi
 
 # 5. Setup Python Virtual Environment
 echo "[*] Creating Python virtual environment..."
@@ -136,7 +137,7 @@ sudo -u "$ACTUAL_USER" "$PROJECT_DIR/.venv/bin/python" -m playwright install chr
 
 # 7. Configure Linux firewall rules (iptables)
 echo "[*] Configuring host firewall rules..."
-sudo iptables -I INPUT -p tcp --dport 8000 -j ACCEPT 2>/dev/null || true
+sudo iptables -I INPUT -p tcp --dport 8050 -j ACCEPT 2>/dev/null || true
 sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
 sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT 2>/dev/null || true
 sudo netfilter-persistent save 2>/dev/null || true
@@ -226,7 +227,7 @@ echo "  [+] PRODUCTION CLOUD HOST INSTALLATION COMPLETED SUCCESSFULLY!"
 echo "====================================================================="
 echo "  * Public Domain  : https://panchayatautomation.in"
 echo "  * Alternate URL  : https://www.panchayatautomation.in"
-echo "  * Local Port     : http://127.0.0.1:8000/"
+echo "  * Local Port     : http://127.0.0.1:8050/"
 echo "  * 24/7 Daemon    : epanchayat.service (Enabled on boot)"
 echo "  * Continuous CI  : GitHub auto-pull active every 60s"
 echo "====================================================================="
@@ -234,7 +235,7 @@ echo ""
 echo "[*] Waiting for services to initialize..."
 HEALTHY=false
 for i in {1..15}; do
-    if curl -s http://127.0.0.1:8000/health | grep -q "ok"; then
+    if curl -s http://127.0.0.1:8050/health | grep -q "ok"; then
         HEALTHY=true
         break
     fi
@@ -242,7 +243,7 @@ for i in {1..15}; do
 done
 
 if [ "$HEALTHY" = true ]; then
-    echo "  [OK] Local FastAPI server is HEALTHY on port 8000."
+    echo "  [OK] Local FastAPI server is HEALTHY on port 8050."
 else
     echo "  [*] Service is initializing in background..."
 fi

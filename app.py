@@ -1,30 +1,35 @@
-"""Telangana ePanchayat Automation & Analytics Portal.
+"""e-Panchayat Automation & e-Panchayat Automation Console Portal.
 
 Unified backend server cleanly mounting modular sub-applications:
-- DSR Module: Daily Status Report & Attendance Automation
+- Portal Module: Dual-domain Homepage, Firebase Auth (Google Sign-In), Cloud Firestore Profiles & Admin Dashboard
+- DSR Module: Daily Status Report & Attendance Automation + Manual DSR Excel Upload
 - DCB Module: House Tax Demand Collection Balance Analytics (100% Live Web Scraped)
 - GP Balance Module: Thursday Gram Panchayat Bank/Cash Balance Tracking
+- MAS Module: Monthly Activity Statement 18-Indicator Executive Matrix (GM-R 5.24 + GM-R 5.23 Births)
 """
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 import re
 import secrets
-import sys
-from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from core.branding import CONSOLE_NAME, PLATFORM_NAME, TAGLINE
 from core.config import BASE_DIR, LOG_LEVEL
-from dsr.router import router as dsr_router
 from dcb.router import router as dcb_router
-from gp_balance.router import router as gp_balance_router
-from mas.router import router as mas_router, web_router as mas_web_router
 from dsr import service as automation_service
+from dsr.router import router as dsr_router
+from gp_balance.router import router as gp_balance_router
+from mas.router import mas_alias_router, mas_upper_router, router as mas_router, web_router as mas_web_router
+from portal.admin_router import router as admin_router
+from portal.router import router as portal_router
+from tools.excel.router import router as tools_excel_router
+from tools.pdf.router import router as tools_pdf_router
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("epanchayat_app")
@@ -42,9 +47,9 @@ def create_app() -> FastAPI:
     enable_docs = os.getenv("ENABLE_DOCS", "false" if is_production else "true").lower() in ("true", "1")
 
     app = FastAPI(
-        title="Telangana ePanchayat Automation & Executive Analytics",
+        title=f"{PLATFORM_NAME} · {CONSOLE_NAME}",
         version="4.0.0",
-        description="Unified portal for Attendance/DSR, House Tax DCB, and GP Thursday Balance Tracking.",
+        description=f"{TAGLINE} Unified portal for Attendance/DSR, House Tax DCB, and GP Thursday Balance Tracking.",
         docs_url="/api/docs" if enable_docs else None,
         redoc_url=None,
         openapi_url="/api/openapi.json" if enable_docs else None,
@@ -54,6 +59,16 @@ def create_app() -> FastAPI:
     allowed_origins = [
         "https://panchayatautomation.in",
         "https://www.panchayatautomation.in",
+        "https://autoreports.panchayatautomation.in",
+        "https://www.autoreports.panchayatautomation.in",
+        "https://manualreports.panchayatautomation.in",
+        "https://www.manualreports.panchayatautomation.in",
+        "https://tools.panchayatautomation.in",
+        "https://www.tools.panchayatautomation.in",
+        "https://admin.panchayatautomation.in",
+        "https://www.admin.panchayatautomation.in",
+        "https://reports.panchayatautomation.in",
+        "https://www.reports.panchayatautomation.in",
         "http://127.0.0.1:8000",
         "http://localhost:8000",
         "http://127.0.0.1:8050",
@@ -68,9 +83,9 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
-        allow_origin_regex=r"^https?://(www\.)?panchayatautomation\.in(:[0-9]+)?$",
+        allow_origin_regex=r"^https?://([a-zA-Z0-9_-]+\.)*panchayatautomation\.in(:[0-9]+)?$",
         allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
         allow_headers=["*"],
     )
 
@@ -80,8 +95,8 @@ def create_app() -> FastAPI:
         sid = (
             request.headers.get("X-Session-ID")
             or request.headers.get("x-session-id")
-            or request.cookies.get("epts_session_id")
             or request.query_params.get("session_id")
+            or request.cookies.get("epts_session_id")
             or ""
         ).strip()
 
@@ -98,7 +113,7 @@ def create_app() -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        
+
         # Strict anti-caching headers for dynamic governance reports
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
         response.headers["Pragma"] = "no-cache"
@@ -109,8 +124,9 @@ def create_app() -> FastAPI:
         if is_https:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-        # Security Patch 3: Secure Session Cookie with HttpOnly and Lax SameSite
-        if is_new or not request.cookies.get("epts_session_id"):
+        # Security Patch 3: Keep HttpOnly epts_session_id cookie synchronized across page & asset requests
+        cookie_sid = (request.cookies.get("epts_session_id") or "").strip()
+        if not request.url.path.startswith("/static/") and (is_new or not cookie_sid or cookie_sid != sid):
             response.set_cookie(
                 key="epts_session_id",
                 value=sid,
@@ -126,17 +142,30 @@ def create_app() -> FastAPI:
     def health_check() -> dict[str, str]:
         return {
             "status": "ok",
-            "platform": "Telangana ePanchayat Automation",
-            "modules": "DSR, DCB, GP_BALANCE, MAS",
+            "platform": PLATFORM_NAME,
+            "console": CONSOLE_NAME,
+            "tagline": TAGLINE,
+            "modules": "DSR, DCB, GP_BALANCE, MAS, TOOLS",
             "version": "4.0.0",
         }
 
     # Mount modular application routers
+    app.include_router(portal_router)
+    app.include_router(admin_router)
     app.include_router(dsr_router)
     app.include_router(dcb_router)
     app.include_router(gp_balance_router)
-    app.include_router(mas_router)
     app.include_router(mas_web_router)
+    app.include_router(mas_router)
+    app.include_router(mas_alias_router)
+    app.include_router(mas_upper_router)
+    app.include_router(tools_excel_router)
+    app.include_router(tools_pdf_router)
+
+    # Mount static files directory
+    static_dir = BASE_DIR / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     return app
 
@@ -145,5 +174,6 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("PORT", "8050"))
-    uvicorn.run("app:app", host="127.0.0.1", port=port, reload=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=port, reload=False)

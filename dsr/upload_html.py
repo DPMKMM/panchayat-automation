@@ -5,7 +5,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Telangana PR &amp; RD · Executive Analytics Portal</title>
+  <title>PS Attendance &amp; DSR Analytics | e-Panchayat Automation Console</title>
   <style>
     :root { color-scheme: light; font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif; }
     * { box-sizing: border-box; }
@@ -92,7 +92,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
     .guideline-list { margin: 0; padding-left: 20px; color: #486158; font-size: 0.92rem; line-height: 1.7; }
 
     /* REPORT VIEW STYLES */
-    .breadcrumb-bar { margin-bottom: 16px; }
+    .breadcrumb-bar { margin-bottom: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .back-btn { display: inline-flex; align-items: center; gap: 6px; color: #167451; text-decoration: none; font-weight: 700; font-size: 0.92rem; padding: 7px 14px; background: white; border: 1px solid #cfe0d7; border-radius: 8px; transition: background 0.15s; cursor: pointer; font-family: inherit; }
     .back-btn:hover { background: #eaf5ef; }
 
@@ -313,11 +313,14 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
     /* Footer */
     footer { border-top: 1px solid #dce6e1; margin-top: 60px; padding: 22px 20px; text-align: center; color: #5a7369; font-size: 0.84rem; background: white; }
 
-    @media (max-width: 640px) {
+    @media (max-width: 768px) {
+      .nav-inner { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 6px; }
+      .nav-brand { gap: 8px; }
+      .nav-brand-main { font-size: 0.94rem; }
+      .nav-menu { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: 4px; }
       .nav-brand-sup { display: none; }
-      .nav-menu { gap: 2px; }
-      .nav-link, .dropdown-btn { padding: 8px 10px; font-size: 0.85rem; }
-      .dropdown-menu { min-width: 270px; right: -30px; }
+      .nav-link, .dropdown-btn { padding: 7px 10px; font-size: 0.84rem; }
+      .dropdown-menu { min-width: 270px; left: 0; right: auto; }
       .hero-banner { padding: 22px; }
     }
   </style>
@@ -326,14 +329,16 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
   <!-- Top Navigation Bar -->
   <header class="navbar">
     <div class="nav-inner">
-      <a class="nav-brand" href="#home" onclick="navigateTo('home')">
+      <a class="nav-brand" href="#home" onclick="navigateTo('home'); return false;">
         <span class="nav-brand-logo">🏛️</span>
-        <div class="nav-brand-titles">
-          <span class="nav-brand-main">Panchayat Raj Analytics Reports</span>
+        <div class="nav-brand-titles" style="flex-direction:row; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="nav-brand-main">e-Panchayat Automation</span>
+          <span id="subpage-console-pill" style="display:none; align-items:center; background:rgba(255,255,255,0.16); border:1px solid rgba(251,191,36,0.65); color:#fde68a; font-size:0.68rem; font-weight:800; padding:2px 8px; border-radius:999px; letter-spacing:0.35px; text-transform:uppercase;">e-Panchayat Automation Console</span>
         </div>
       </a>
       <nav class="nav-menu">
-        <a class="nav-link active" id="nav-home" href="#home" onclick="navigateTo('home')">Home</a>
+        <a class="nav-link" id="nav-main-portal" href="/">Main Dashboard</a>
+        <a class="nav-link active" id="nav-home" href="#home" onclick="navigateTo('home'); return false;">Home</a>
         
         <!-- Reports Submenu Dropdown -->
         <div class="dropdown" id="reports-dropdown-container">
@@ -342,18 +347,26 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           </button>
           <div class="dropdown-menu" id="reports-dropdown-menu">
             <div class="dropdown-header">Active Reports</div>
-            <a class="dropdown-item" href="#reports-district" onclick="navigateTo('reports', 'district')">
+            <a class="dropdown-item" href="#reports-district" onclick="navigateTo('reports', 'district'); return false;">
               <span class="dropdown-item-icon">🏢</span>
               <div class="dropdown-item-content">
                 <strong>District Level Monitoring</strong>
                 <span>7-Section Comprehensive District PDF Report</span>
               </div>
             </a>
-            <a class="dropdown-item" href="#reports-mandal" onclick="navigateTo('reports', 'mandal')">
+            <a class="dropdown-item" href="#reports-mandal" onclick="navigateTo('reports', 'mandal'); return false;">
               <span class="dropdown-item-icon">🏛️</span>
               <div class="dropdown-item-content">
                 <strong>Mandal Level Monitoring</strong>
                 <span>Focused 2-Page Mandal Officer PDF Report</span>
+              </div>
+            </a>
+            <a class="dropdown-item" href="#reports-multiday" onclick="navigateTo('reports', 'multiday'); return false;">
+              <span class="dropdown-item-icon">📅</span>
+              <div class="dropdown-item-content">
+                <strong>Multiple Days DSR Report</strong>
+                <span>Consolidated Multi-Date PDF &amp; Excel Matrix</span>
+                <span class="badge-soon">Upcoming</span>
               </div>
             </a>
 
@@ -378,10 +391,13 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
     <!-- VIEW 1: Home Dashboard -->
     <div id="view-home" class="page-view active">
       <section class="hero-banner">
-        <span class="hero-badge">Panchayat Raj &amp; Rural Development Department</span>
-        <h1 class="hero-title">Executive Monitoring &amp; Analytics Portal</h1>
+        <span class="hero-badge">Welcome to e-Panchayat Automation · e-Panchayat Automation Console</span>
+        <h1 class="hero-title">e-Panchayat Automation Console · Monitoring &amp; Reports</h1>
+        <p style="margin:0 0 10px; font-size:1rem; font-weight:700; color:#fde68a;">
+          Simplifying Panchayat Administration through Smart Reporting and Automation.
+        </p>
         <p class="hero-desc">
-          An integrated departmental analytics platform designed to empower District Officers and Mandal Officers with automated performance monitoring, daily morning attendance tracking, compliance management, and real-time administrative status analytics. It enables transparent monitoring, efficient reporting, and data-driven decision-making across all administrative levels.
+          An integrated Panchayat Raj &amp; Rural Development analytics platform designed to empower District Officers and Mandal Officers with automated performance monitoring, daily morning attendance tracking, compliance management, and real-time administrative status analytics.
         </p>
       </section>
 
@@ -410,6 +426,9 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
             <button type="button" class="btn-action btn-secondary" onclick="navigateTo('reports', 'mandal')">
               🏛️ Mandal Monitoring
             </button>
+            <button type="button" class="btn-action btn-secondary" onclick="navigateTo('reports', 'multiday')">
+              📅 Multiple Days DSR <span class="badge-soon" style="margin-top:0; margin-left:4px;">Upcoming</span>
+            </button>
           </div>
         </div>
 
@@ -437,13 +456,14 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
     <!-- VIEW 2: Report Tool (PS Attendance & DSR Analytics) -->
     <div id="view-reports" class="page-view">
       <div class="breadcrumb-bar">
+        <a class="back-btn" href="/">🏠 Main Dashboard</a>
         <button type="button" class="back-btn" onclick="navigateTo('home')">
           ← Back to Home Dashboard
         </button>
       </div>
 
       <section class="report-card">
-        <div class="eyebrow" id="page-eyebrow">Telangana Panchayat Raj &amp; Rural Development</div>
+        <div class="eyebrow" id="page-eyebrow">e-Panchayat Automation Console &bull; Telangana Panchayat Raj &amp; Rural Development</div>
         <h1>PS Attendance &amp; DSR Analytics</h1>
         <p class="intro">Generate official Gram Panchayat morning attendance and DSR analytics reports directly from your uploaded portal exports.</p>
         
@@ -454,6 +474,9 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           </button>
           <button type="button" class="tab-btn" id="tab-btn-mandal" onclick="switchMonitoringTab('mandal')">
             🏛️ Mandal Level Monitoring
+          </button>
+          <button type="button" class="tab-btn" id="tab-btn-multiday" onclick="switchMonitoringTab('multiday')">
+            📅 Multiple Days DSR <span class="badge-soon" style="margin-top:0; margin-left:4px;">Upcoming</span>
           </button>
         </div>
 
@@ -516,6 +539,49 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           </form>
         </div>
 
+        <!-- TAB 3: Multiple Days DSR Monitoring -->
+        <div id="tab-multiday" class="tab-content">
+          <div class="notice">
+            <strong>Multiple Days DSR Consolidation:</strong> Select two or more daily GM-R 1.2.7 Attendance &amp; DSR spreadsheets (or a multi-date file) along with optional Presentees and Absentees directories to generate a consolidated <strong>Multi-Day Abstract PDF</strong> and <strong>4-Sheet Excel Workbook</strong> tracking punctuality, DSR completion, and recurring defaulters.
+          </div>
+
+          <form id="multiday-form">
+            <div class="field-group">
+              <label for="multiday-files">1. Daily Attendance &amp; DSR Raw Data Files (Select Multiple) <span class="req">*</span></label>
+              <input id="multiday-files" name="files" type="file" multiple required>
+              <div class="hint" id="multiday-files-hint">Hold Ctrl / Shift (or select multiple files in your picker) to upload 2 or more daily exports (.xls, .xlsx, .csv, or portal HTML tables).</div>
+            </div>
+
+            <div class="field-group">
+              <label for="multiday-presentees-file">2. Presentees PS Details File <span class="badge badge-rec">Recommended</span></label>
+              <input id="multiday-presentees-file" name="presentees_file" type="file">
+              <div class="hint">Enriches Panchayat Secretary Name, Mobile Number, Designation, and Nature of Posting across all selected dates.</div>
+            </div>
+
+            <div class="field-group">
+              <label for="multiday-absentees-file">3. Absentees PS Details File <span class="badge badge-opt">Optional</span></label>
+              <input id="multiday-absentees-file" name="absentees_file" type="file">
+              <div class="hint">Optional directory for completing contact details of absent secretaries.</div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px;">
+              <div class="field-group" style="margin:0;">
+                <label for="multiday-mandal">4. Mandal Filter <span class="badge badge-opt">Optional</span></label>
+                <input id="multiday-mandal" name="mandal_name" type="text" placeholder="Leave blank for District (or type Mandal name)">
+              </div>
+              <div class="field-group" style="margin:0;">
+                <label for="multiday-cutoff">5. Cutoff Time</label>
+                <input id="multiday-cutoff" name="cutoff_time" type="time" value="09:00" style="width:100%; box-sizing:border-box; padding:11px 13px; border:1px solid #bfd1c7; border-radius:9px; background:white; color:#15332b; font-size:0.95rem; font-family:inherit;">
+              </div>
+            </div>
+
+            <div class="actions">
+              <button id="multiday-generate-button" type="submit">Generate Multiple Days DSR Report (PDF &amp; Excel)</button>
+            </div>
+            <div id="multiday-report-message" class="message" role="status" aria-live="polite"></div>
+          </form>
+        </div>
+
         <p class="fine-print">Supported formats: Excel (.xls, .xlsx), CSV, or portal HTML tables exported with a .xls extension. The PDF report downloads automatically once analytics finish.</p>
       </section>
     </div>
@@ -529,7 +595,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           <div class="toast-spinner"></div>
         </div>
         <div class="download-toast-body">
-          <div id="download-toast-title" class="download-toast-title">Generating DSR Report...</div>
+          <div id="download-toast-title" class="download-toast-title">e-Panchayat Automation · Generating DSR Report...</div>
           <div id="download-toast-subtitle" class="download-toast-subtitle">Processing attendance data, please wait...</div>
         </div>
         <button type="button" id="download-toast-close-btn" class="download-toast-close" onclick="window.dismissDownloadToast &amp;&amp; window.dismissDownloadToast()" aria-label="Close notification">&times;</button>
@@ -550,13 +616,16 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
   </div>
 
   <footer>
-    Executive Analytics &amp; Monitoring Portal Owned, maintained and updated by DPM Khammam
+    <div style="max-width:1080px; margin:0 auto; padding:6px 10px; text-align:center; line-height:1.55;">
+      <strong style="display:block; font-size:0.95rem; font-weight:800; color:#0c3829;">e-Panchayat Automation</strong>
+      <div style="font-size:0.84rem; color:#486158; margin-top:2px;">Simplifying Panchayat Administration through Smart Reporting and Automation.</div>
+    </div>
   </footer>
 
   <script>
     (() => {
       // View Navigation
-      window.navigateTo = function(view, tab, anchor) {
+      window.navigateTo = function(view, tab, anchor, skipHashUpdate) {
         const homeView = document.getElementById('view-home');
         const reportsView = document.getElementById('view-reports');
         const navHome = document.getElementById('nav-home');
@@ -568,25 +637,31 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           reportsView.classList.add('active');
           navHome.classList.remove('active');
           navReportsBtn.classList.add('active');
+          const targetHash = tab ? `#reports-${tab}` : '#reports';
           if (tab) {
             window.switchMonitoringTab(tab);
-            window.location.hash = `#reports-${tab}`;
-          } else {
-            window.location.hash = '#reports';
           }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (!skipHashUpdate && window.location.hash !== targetHash) {
+            window.location.hash = targetHash;
+          }
+          if (!skipHashUpdate) window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
           reportsView.classList.remove('active');
           homeView.classList.add('active');
           navHome.classList.add('active');
           navReportsBtn.classList.remove('active');
           if (anchor) {
-            window.location.hash = `#${anchor}`;
+            const anchorHash = `#${anchor}`;
+            if (!skipHashUpdate && window.location.hash !== anchorHash) {
+              window.location.hash = anchorHash;
+            }
             const el = document.getElementById(anchor);
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           } else {
-            window.location.hash = '#home';
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (!skipHashUpdate && window.location.hash && window.location.hash !== '#home') {
+              window.location.hash = '#home';
+            }
+            if (!skipHashUpdate) window.scrollTo({ top: 0, behavior: 'smooth' });
           }
         }
       };
@@ -606,25 +681,31 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
       });
 
       // Hash routing
-      function handleHash() {
+      function handleHash(isInitialLoad) {
         const hash = window.location.hash.toLowerCase();
-        if (hash.startsWith('#reports-mandal')) {
-          window.navigateTo('reports', 'mandal');
+        const isInit = isInitialLoad === true;
+        if (hash.startsWith('#reports-multiday')) {
+          window.navigateTo('reports', 'multiday', null, isInit);
+        } else if (hash.startsWith('#reports-mandal')) {
+          window.navigateTo('reports', 'mandal', null, isInit);
         } else if (hash.startsWith('#reports-district') || hash.startsWith('#reports')) {
-          window.navigateTo('reports', 'district');
+          window.navigateTo('reports', 'district', null, isInit);
         } else if (hash === '#guidelines' || hash === '#guidelines-section') {
-          window.navigateTo('home', null, 'guidelines-section');
+          window.navigateTo('home', null, 'guidelines-section', isInit);
         } else {
-          window.navigateTo('home');
+          window.navigateTo('home', null, null, isInit || !hash);
         }
       }
-      window.addEventListener('hashchange', handleHash);
+      window.addEventListener('hashchange', () => handleHash(false));
 
       // Tab switching inside report
       window.switchMonitoringTab = function(mode) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        if (mode === 'mandal') {
+        if (mode === 'multiday') {
+          document.getElementById('tab-btn-multiday').classList.add('active');
+          document.getElementById('tab-multiday').classList.add('active');
+        } else if (mode === 'mandal') {
           document.getElementById('tab-btn-mandal').classList.add('active');
           document.getElementById('tab-mandal').classList.add('active');
         } else {
@@ -687,8 +768,8 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
 
         iconWrap.className = 'download-toast-icon-wrap loading';
         iconWrap.innerHTML = '<div class="toast-spinner"></div>';
-        titleEl.textContent = title || 'Generating Report...';
-        subtitleEl.textContent = subtitle || 'Processing attendance data, please wait...';
+        titleEl.textContent = title || 'e-Panchayat Automation · Generating Report...';
+        subtitleEl.textContent = subtitle || 'e-Panchayat Automation is processing attendance data, please wait...';
         actionsEl.style.display = 'none';
         progressBar.style.display = 'block';
         progressBar.className = 'download-toast-progress loading';
@@ -1041,6 +1122,85 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
         runReportJob(data, document.getElementById('mandal-generate-button'), document.getElementById('mandal-report-message'), `${mandalName || 'Mandal'}_Attendance_Report.pdf`);
       });
 
+      const multidayFilesInput = document.getElementById('multiday-files');
+      const multidayHint = document.getElementById('multiday-files-hint');
+      if (multidayFilesInput && multidayHint) {
+        multidayFilesInput.addEventListener('change', () => {
+          const fl = Array.from(multidayFilesInput.files || []);
+          multidayHint.textContent = fl.length
+            ? `Selected ${fl.length} file(s): ${fl.map(f => f.name).join(', ')}`
+            : 'Hold Ctrl / Shift (or select multiple files in your picker) to upload 2 or more daily exports (.xls, .xlsx, .csv, or portal HTML tables).';
+        });
+      }
+
+      const multidayForm = document.getElementById('multiday-form');
+      if (multidayForm) {
+        multidayForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const selectedFiles = Array.from((multidayFilesInput && multidayFilesInput.files) || []);
+          if (!selectedFiles.length) return;
+          const submitBtn = document.getElementById('multiday-generate-button');
+          const msgEl = document.getElementById('multiday-report-message');
+          submitBtn.disabled = true;
+          showToastLoading('Generating Multiple Days DSR Report...', `Consolidating ${selectedFiles.length} attendance file(s)...`);
+          showMessage(msgEl, `Processing ${selectedFiles.length} daily file(s) and compiling consolidated PDF &amp; Excel…`, 'info');
+          try {
+            const fd = new FormData();
+            selectedFiles.forEach((f) => fd.append('files', f));
+            const pFile = document.getElementById('multiday-presentees-file').files[0];
+            if (pFile) fd.append('presentees_file', pFile);
+            const aFile = document.getElementById('multiday-absentees-file').files[0];
+            if (aFile) fd.append('absentees_file', aFile);
+            const mFilter = (document.getElementById('multiday-mandal').value || '').trim();
+            if (mFilter) fd.append('mandal_name', mFilter);
+            const cTime = (document.getElementById('multiday-cutoff').value || '09:00').trim();
+            fd.append('cutoff_time', cTime);
+
+            const job = await apiJson('/api/web/multi-day-reports', { method: 'POST', body: fd });
+            const jobId = job.job_id;
+            if (!jobId) throw new Error('The service did not return a report job ID.');
+
+            const pdfRes = await fetch(`/api/web/reports/${encodeURIComponent(jobId)}/download`, { credentials: 'same-origin' });
+            if (!pdfRes.ok) await readResponse(pdfRes);
+            const pdfBlob = await pdfRes.blob();
+            const pdfObjUrl = URL.createObjectURL(pdfBlob);
+            const pdfName = job.download_filename || 'MultiDay_DSR_Report.pdf';
+            const link = document.createElement('a');
+            link.href = pdfObjUrl;
+            link.download = pdfName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            const pdfViewUrl = `/api/web/reports/${encodeURIComponent(jobId)}/view`;
+            const excelDlUrl = `/api/web/reports/${encodeURIComponent(jobId)}/download-excel`;
+            const excelName = job.excel_filename || 'MultiDay_DSR_Report.xlsx';
+            const actionButtonsHtml = `
+              <a href="${pdfViewUrl}" target="_blank" rel="noopener noreferrer" class="message-btn-open">
+                <span>📄</span> Open PDF
+              </a>
+              <a href="${excelDlUrl}" download="${excelName}" class="message-btn-open" style="background:#0f766e;">
+                <span>📊</span> Download Excel
+              </a>
+            `;
+            const summaryTxt = `Multi-Day Consolidated Report (${job.days_count || 1} day(s): ${job.date_range || ''}, ${job.unique_gp_count || 0} GPs) compiled successfully!`;
+            const msgHtml = `
+              <div style="font-weight:700; color:#14532d;">${summaryTxt}</div>
+              <div style="font-size:0.82rem; font-weight:500; color:#166534; margin-top:2px;">📁 ${pdfName} &bull; 📊 ${excelName}</div>
+            `;
+            showMessage(msgEl, msgHtml, 'success', actionButtonsHtml);
+            showToastSuccess('Multi-Day Report Ready!', `${pdfName} downloaded.`, pdfName, pdfViewUrl);
+            setTimeout(() => URL.revokeObjectURL(pdfObjUrl), 300000);
+          } catch (err) {
+            const errMsg = err.message || 'Multi-day report generation failed.';
+            showToastError('Multi-Day Report Failed', errMsg);
+            showMessage(msgEl, errMsg, 'error');
+          } finally {
+            submitBtn.disabled = false;
+          }
+        });
+      }
+
       // Wire direct event listeners for toast dismissal
       const closeBtn = document.getElementById('download-toast-close-btn');
       if (closeBtn) closeBtn.onclick = () => window.dismissDownloadToast();
@@ -1048,7 +1208,25 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
       if (dismissBtn) dismissBtn.onclick = () => window.dismissDownloadToast();
 
       // Handle initial route on page load
-      handleHash();
+      handleHash(true);
+    })();
+  </script>
+  <script>
+    (() => {
+      try {
+        const sp = new URLSearchParams(window.location.search || '');
+        const siteVal = (sp.get('site') || '').trim().toLowerCase();
+        if (!siteVal || (siteVal !== 'console' && siteVal !== 'reports' && siteVal !== 'portal')) return;
+        document.querySelectorAll('a[href]').forEach((a) => {
+          const href = a.getAttribute('href') || '';
+          if (!href.startsWith('/') || href.startsWith('//') || href.startsWith('/api/')) return;
+          const parsed = new URL(href, window.location.origin);
+          if (!parsed.searchParams.has('site')) {
+            parsed.searchParams.set('site', siteVal);
+            a.setAttribute('href', parsed.pathname + parsed.search + parsed.hash);
+          }
+        });
+      } catch (e) {}
     })();
   </script>
 </body>

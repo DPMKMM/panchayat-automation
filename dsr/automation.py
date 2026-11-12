@@ -13,6 +13,8 @@ Features:
 import os
 import sys
 import json
+import re
+import threading
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
@@ -20,19 +22,52 @@ import ddddocr
 
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
-DATA_DIR = ROOT_DIR / "data"
-DOWNLOADS_DIR = DATA_DIR / "downloads"
+try:
+    from core.config import get_data_dir, get_debug_dir, get_downloads_dir, PROFILES_DIR, SESSIONS_DIR
+    DATA_DIR = get_data_dir()
+    DEBUG_DIR = get_debug_dir()
+    DOWNLOADS_DIR = get_downloads_dir()
+    PROFILE_DIR = PROFILES_DIR / "default"
+    STORAGE_STATE_FILE = SESSIONS_DIR / "storage_state.json"
+except Exception:
+    DATA_DIR = ROOT_DIR / "data"
+    DEBUG_DIR = DATA_DIR / "debug"
+    DOWNLOADS_DIR = DATA_DIR / "downloads"
+    PROFILE_DIR = DATA_DIR / "browser_profiles" / "default"
+    STORAGE_STATE_FILE = DATA_DIR / "sessions" / "storage_state.json"
+
 CONFIG_FILE = BASE_DIR / "config.json"
-CAPTCHA_CACHE_FILE = DATA_DIR / "temp_captcha.png"
+CAPTCHA_CACHE_FILE = DEBUG_DIR / "temp_captcha.png"
 OTP_FILE = DATA_DIR / "otp.txt"
 COMMAND_FILE = DATA_DIR / "command.txt"
-OTP_SCREENSHOT = DATA_DIR / "otp_screen.png"
-DASHBOARD_SCREENSHOT = DATA_DIR / "dashboard_screen.png"
-CURRENT_SCREENSHOT = DATA_DIR / "current_screen.png"
-PROFILE_DIR = DATA_DIR / "browser_profiles" / "default"
+OTP_SCREENSHOT = DEBUG_DIR / "otp_screen.png"
+DASHBOARD_SCREENSHOT = DEBUG_DIR / "dashboard_screen.png"
+CURRENT_SCREENSHOT = DEBUG_DIR / "current_screen.png"
 
+DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+
+_OCR_LOCK = threading.Lock()
+_SHARED_OCR = None
+
+
+def get_shared_ocr():
+    """Return a cached thread-safe DdddOcr instance so logins skip the ~4s cold ONNX load."""
+    global _SHARED_OCR
+    if _SHARED_OCR is None:
+        with _OCR_LOCK:
+            if _SHARED_OCR is None:
+                _SHARED_OCR = ddddocr.DdddOcr(show_ad=False)
+    return _SHARED_OCR
+
+
+def warm_ocr() -> None:
+    """Best-effort background warmup for DdddOcr at server startup."""
+    try:
+        get_shared_ocr()
+    except Exception:
+        pass
 
 
 def load_config():
@@ -51,61 +86,86 @@ def save_config(config_data):
 
 
 class EPTSAutomation:
-    def __init__(self, headless=False, profile_dir=None, downloads_dir=None):
+    def __init__(self, headless=False, profile_dir=None, downloads_dir=None, on_status=None):
         self.headless = headless
         self.profile_dir = Path(profile_dir) if profile_dir else PROFILE_DIR
         self.downloads_dir = Path(downloads_dir) if downloads_dir else DOWNLOADS_DIR
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.downloads_dir.mkdir(parents=True, exist_ok=True)
         self.playwright = None
+        self.browser = None
         self.context = None
         self.page = None
-        self.ocr = ddddocr.DdddOcr(show_ad=False)
+        self.ocr = get_shared_ocr()
         self.otp_message = ""
+        self.on_status = on_status
+
+    def _emit(self, message: str) -> None:
+        print(message, flush=True)
+        if callable(self.on_status):
+            try:
+                self.on_status(message)
+            except Exception:
+                pass
 
     def start_browser(self):
-        print(f"[*] Launching Chrome with persistent profile at {self.profile_dir} (Headless: {self.headless})...", flush=True)
+        print(f"[*] Launching browser (Headless: {self.headless})...", flush=True)
+        self._emit("Opening Browser")
         self.playwright = sync_playwright().start()
-        launch_args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--disable-blink-features=AutomationControlled"]
-        try:
-            self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(self.profile_dir),
-                channel="chrome",
-                headless=self.headless,
-                accept_downloads=True,
-                downloads_path=str(self.downloads_dir),
-                args=launch_args,
-            )
-        except Exception as e:
-            print(f"[-] Chrome channel launch failed ({e}), attempting msedge channel...", flush=True)
+        launch_args = [
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-extensions",
+            "--disable-background-networking",
+            "--disable-sync",
+            "--no-first-run",
+        ]
+        # Headless mode uses fast ephemeral Chromium launch + isolated context (~1.3s vs ~6.5s persistent profile).
+        if self.headless:
             try:
-                self.context = self.playwright.chromium.launch_persistent_context(
+                self.browser = self.playwright.chromium.launch(
+                    headless=True,
+                    downloads_path=str(self.downloads_dir),
+                    args=launch_args,
+                )
+                self.context = self.browser.new_context(accept_downloads=True)
+                self.page = self.context.new_page()
+                return
+            except Exception as exc:
+                print(f"[-] Fast bundled Chromium launch failed ({exc}), trying persistent channels...", flush=True)
+
+        channels = ["chrome", "msedge", None]
+        last_err = None
+        for ch in channels:
+            try:
+                kwargs = dict(
                     user_data_dir=str(self.profile_dir),
-                    channel="msedge",
                     headless=self.headless,
                     accept_downloads=True,
                     downloads_path=str(self.downloads_dir),
                     args=launch_args,
                 )
-            except Exception as e_edge:
-                print(f"[-] msedge channel launch failed ({e_edge}), falling back to default Chromium...", flush=True)
-                self.context = self.playwright.chromium.launch_persistent_context(
-                    user_data_dir=str(self.profile_dir),
-                    headless=self.headless,
-                    accept_downloads=True,
-                    downloads_path=str(self.downloads_dir),
-                    args=launch_args,
-                )
+                if ch:
+                    kwargs["channel"] = ch
+                self.context = self.playwright.chromium.launch_persistent_context(**kwargs)
+                break
+            except Exception as exc:
+                last_err = exc
+                print(f"[-] Browser launch ({ch or 'bundled-chromium'}) failed ({exc}), trying fallback...", flush=True)
+        if self.context is None:
+            raise last_err or RuntimeError("Failed to launch Chromium browser context.")
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
 
     def is_logged_in(self):
         try:
             print("[*] Checking if active session already exists...", flush=True)
             self.page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=15000)
-            time.sleep(1)
             if "deptLoginVerified" in self.page.url and "Office ID:" in self.page.content():
                 print("[+] Active session verified! Already logged in.", flush=True)
-                self.page.screenshot(path=str(DASHBOARD_SCREENSHOT))
+                if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+                    self.page.screenshot(path=str(DASHBOARD_SCREENSHOT))
                 return True
         except Exception as e:
             print(f"[-] Session check note: {e}", flush=True)
@@ -114,8 +174,7 @@ class EPTSAutomation:
     def navigate_home(self):
         url = "https://epanchayat.telangana.gov.in/cs"
         print(f"[*] Navigating to {url} ...", flush=True)
-        self.page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        time.sleep(1)
+        self.page.goto(url, wait_until="domcontentloaded", timeout=15000)
 
     def open_department_login_modal(self):
         print("[*] Opening 'Department Login' modal...", flush=True)
@@ -124,32 +183,43 @@ class EPTSAutomation:
         dept_link.click()
         self.page.wait_for_selector("#userId", state="visible", timeout=10000)
         print("[+] Department Login modal is open.", flush=True)
+        self._emit("Browser Opened")
 
     def solve_captcha(self, retries=5):
+        self._emit("Solving Captcha")
+        save_dbg = os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1"
         for attempt in range(1, retries + 1):
-            time.sleep(0.5)
             captcha_img = self.page.locator("#img1")
             captcha_img.wait_for(state="visible", timeout=5000)
+            try:
+                self.page.wait_for_function(
+                    "() => { const img = document.getElementById('img1'); return !!(img && img.complete && img.naturalWidth > 0); }",
+                    timeout=3000,
+                )
+            except Exception:
+                pass
             img_bytes = captcha_img.screenshot()
-            
-            with open(CAPTCHA_CACHE_FILE, "wb") as f:
-                f.write(img_bytes)
-                
-            code = self.ocr.classification(img_bytes)
+
+            if save_dbg:
+                with open(CAPTCHA_CACHE_FILE, "wb") as f:
+                    f.write(img_bytes)
+
+            with _OCR_LOCK:
+                code = self.ocr.classification(img_bytes)
             code = code.strip().replace(" ", "").lower()
             if len(code) >= 4:
                 print(f"[+] Captcha auto-detected (attempt {attempt}): {code}", flush=True)
                 return code
-            else:
-                print(f"[-] Low confidence on captcha '{code}', refreshing...", flush=True)
-                refresh_btn = self.page.locator("button.fa-refresh").first
-                if refresh_btn.is_visible():
-                    try:
-                        with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=5000):
-                            refresh_btn.click()
-                    except Exception:
+            print(f"[-] Low confidence on captcha '{code}', refreshing...", flush=True)
+            self._emit("Refreshing Captcha")
+            refresh_btn = self.page.locator("button.fa-refresh").first
+            if refresh_btn.is_visible():
+                try:
+                    with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=4000):
                         refresh_btn.click()
-                time.sleep(1)
+                except Exception:
+                    refresh_btn.click()
+                time.sleep(0.15)
         return ""
 
     def get_dynamic_otp_message(self) -> str:
@@ -159,6 +229,7 @@ class EPTSAutomation:
             return ""
         try:
             text = self.page.evaluate("""() => {
+                if (!document.body) return '';
                 const pvals = document.getElementById('pvals');
                 if (pvals && /registered mobile/i.test(pvals.innerText || '')) {
                     return pvals.innerText.trim();
@@ -205,60 +276,94 @@ class EPTSAutomation:
         max_attempts = 5
         for attempt in range(1, max_attempts + 1):
             print(f"[*] Entering credentials (attempt {attempt})...", flush=True)
+            self._emit("Entering User ID & Password")
             self.page.fill("#userId", username)
             self.page.fill("#npwd", password)
-            
+
             captcha_text = self.solve_captcha()
-            print(f"[*] Filling captcha field: {captcha_text}", flush=True)
+            print(f"[*] Filling captcha field ({captcha_text}) & clicking 'Generate OTP to Login'...", flush=True)
+            self._emit("Logging In")
             self.page.fill("#cp", captcha_text)
-            
+
             # Clear previous error message if present
             self.page.evaluate("() => { const el = document.getElementById('pvals'); if(el) el.innerText = ''; }")
-            
-            print("[*] Clicking 'Generate OTP to Login'...", flush=True)
-            submit_btn = self.page.locator("#submit1")
-            
+            self.page.locator("#submit1").click()
+
+            # Wait immediately for EITHER fully-rendered OTP screen OR inline error message (#pvals)
+            error_text = ""
+            reached_otp = False
             try:
-                with self.page.expect_navigation(timeout=10000):
-                    submit_btn.click()
+                outcome_handle = self.page.wait_for_function(
+                    """() => {
+                        if (!document.body || document.readyState === 'loading') return false;
+                        const otpEl = document.querySelector("#otp, input[placeholder*='otp' i]");
+                        if (otpEl && otpEl.offsetParent !== null) {
+                            return 'otp';
+                        }
+                        const pvals = document.getElementById('pvals');
+                        const err = pvals ? (pvals.innerText || '').trim() : '';
+                        if (err) {
+                            return 'error:' + err;
+                        }
+                        return false;
+                    }""",
+                    timeout=18000,
+                )
+                outcome = str(outcome_handle.json_value() or "")
+                if outcome == "otp":
+                    reached_otp = True
+                elif outcome.startswith("error:"):
+                    error_text = outcome[6:].strip()
             except Exception:
-                time.sleep(2)
-            
-            # Check if OTP screen reached
-            if "login" in self.page.url.lower() or self.page.locator("#otp").is_visible() or self.page.locator("input[placeholder*='otp' i]").is_visible():
+                reached_otp = (
+                    "login" in self.page.url.lower()
+                    or self.page.locator("#otp").is_visible()
+                    or self.page.locator("input[placeholder*='otp' i]").is_visible()
+                )
+                if not reached_otp:
+                    pvals = self.page.locator("#pvals")
+                    error_text = pvals.inner_text().strip() if pvals.is_visible() else ""
+
+            if reached_otp:
                 print("[+] OTP generation triggered successfully! Reached OTP verification screen.", flush=True)
-                time.sleep(1)
+                self._emit("OTP Sent")
                 self.otp_message = self.get_dynamic_otp_message()
+                if not self.otp_message:
+                    try:
+                        self.page.wait_for_function(
+                            "() => Boolean(document.body && /registered mobile/i.test(document.body.innerText || ''))",
+                            timeout=1500,
+                        )
+                        self.otp_message = self.get_dynamic_otp_message()
+                    except Exception:
+                        pass
                 if self.otp_message:
                     print(f"[+] Dynamic OTP Notice captured: {self.otp_message}", flush=True)
-                self.page.screenshot(path=str(OTP_SCREENSHOT))
-                print(f"[+] Saved OTP screen to {OTP_SCREENSHOT}", flush=True)
+                if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+                    self.page.screenshot(path=str(OTP_SCREENSHOT))
                 return True
 
-            pvals = self.page.locator("#pvals")
-            error_text = pvals.inner_text().strip() if pvals.is_visible() else ""
-            
             if "invalid captcha" in error_text.lower():
-                print(f"[-] Captcha rejected by server. Retrying with fresh captcha...", flush=True)
-                # Re-open modal if needed
+                print("[-] Captcha rejected by server. Retrying immediately with fresh captcha...", flush=True)
+                self._emit("Retrying Captcha")
                 if not self.page.locator("#userId").is_visible():
                     self.open_department_login_modal()
                 else:
                     refresh_btn = self.page.locator("button.fa-refresh").first
                     if refresh_btn.is_visible():
                         try:
-                            with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=5000):
+                            with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=4000):
                                 refresh_btn.click()
                         except Exception:
                             refresh_btn.click()
-                        time.sleep(1)
+                        time.sleep(0.15)
                 continue
-            
+
             if error_text:
                 print(f"[!] Server message: {error_text}", flush=True)
                 if "invalid user" in error_text.lower() or "password" in error_text.lower():
                     raise ValueError(f"Login failed: {error_text}")
-                
+
         raise RuntimeError("Failed to generate OTP after multiple captcha attempts.")
 
     def prompt_and_validate_otp(self, otp_code=None):
@@ -300,18 +405,31 @@ class EPTSAutomation:
         else:
             self.page.fill("input[placeholder*='otp' i]", otp_code)
 
-        time.sleep(0.5)
         print("[*] Clicking 'Validate OTP'...", flush=True)
+        self.page.evaluate("() => { const el = document.getElementById('pvals'); if (el) el.innerText = ''; }")
         validate_btn = self.page.locator("button:has-text('Validate OTP'), input[value='Validate OTP']").first
         validate_btn.click()
 
         print("[*] Validating OTP on portal...", flush=True)
-        time.sleep(4)
+        try:
+            self.page.wait_for_function(
+                """() => {
+                    const url = window.location.href || '';
+                    const txt = (document.body && document.body.innerText) || '';
+                    if (url.includes('deptLoginVerified') || txt.includes('Office ID:')) return 'ok';
+                    const pvals = document.getElementById('pvals');
+                    if (pvals && (pvals.innerText || '').trim()) return 'err';
+                    return false;
+                }""",
+                timeout=12000,
+            )
+        except Exception:
+            pass
 
         current_url = self.page.url
         print(f"[+] Current URL after OTP validation: {current_url}", flush=True)
-        self.page.screenshot(path=str(DASHBOARD_SCREENSHOT))
-        print(f"[+] Saved dashboard screenshot to {DASHBOARD_SCREENSHOT}", flush=True)
+        if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+            self.page.screenshot(path=str(DASHBOARD_SCREENSHOT))
 
         try:
             self.context.storage_state(path=str(STORAGE_STATE_FILE))
@@ -357,10 +475,18 @@ class EPTSAutomation:
         print(f"[+] Screenshot saved to {CURRENT_SCREENSHOT}", flush=True)
 
     def close(self):
-        if self.context:
-            self.context.close()
-        if self.playwright:
-            self.playwright.stop()
+        for attr in ("context", "browser", "playwright"):
+            obj = getattr(self, attr, None)
+            if obj is not None:
+                try:
+                    if attr == "playwright":
+                        obj.stop()
+                    else:
+                        obj.close()
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+        self.page = None
 
 
 def main():

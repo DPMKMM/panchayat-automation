@@ -1,591 +1,451 @@
-"""Excel Workbook Generator for Monthly Activity Statement (MAS) and Births Register Module.
-
-Produces a formatted, executive multi-sheet workbook matching Telangana PR&RD departmental standards:
-  - Sheet 1: GM-R_5.24_MAS_Summary (The exact 58-column Two-Tier Executive Matrix with 18 indicators,
-             Entered / Not Entered / % Entered triplets, Executive Navy headers, and Refined Indicator Highlights)
-  - Sheet 2: GM-R_5.23_Births_Register (Total GPs, Entered, Not Entered, Total Births, % Achievement)
-  - Sheet 3: Pending_GPs_Action_List (Actionable 4-column call-list of exact GPs and missing activities)
-"""
+"""Excel (5-sheet styled workbook), CSV, JSON, Markdown & PDF deliverable exporter for MAS."""
 
 from __future__ import annotations
 
-import io
+import json
+import logging
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List
 
-from openpyxl import Workbook
+import openpyxl
+import pandas as pd
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from mas.models import (
-    OFFICIAL_MAS_REPORT_ACTIVITIES,
-    DistrictMASReport,
-    GPMASDetail,
-    normalize_activity_key,
-)
-
-
-def format_pending_activities(gp: GPMASDetail) -> str:
-    """Formats pending activities list into a single comma-separated line combining MAS & Births."""
-    if not gp.missing_activities:
-        if not gp.entered:
-            return "All Monthly Activities & Births Register Not Entered"
-        return "Data Entry Pending Review"
-
-    formatted: list[str] = []
-    has_birth = False
-    for act in gp.missing_activities:
-        norm = normalize_activity_key(act)
-        if norm == "Birth details":
-            has_birth = True
-        else:
-            formatted.append(act)
-
-    if has_birth:
-        formatted.append("Births Register")
-
-    if len(formatted) == 1 and formatted[0] == "Births Register":
-        return "Births Register Data Entry Pending"
-
-    if len(formatted) >= 18:
-        return "All Monthly Activities & Births Register Not Entered"
-
-    return ", ".join(formatted)
-
-
-def _style_range(ws, min_col, min_row, max_col, max_row, font=None, fill=None, border=None, alignment=None):
-    """Applies styles to every cell in a range including merged cells."""
-    for row in ws.iter_rows(min_row=min_row, max_row=max_row, min_col=min_col, max_col=max_col):
-        for cell in row:
-            if font:
-                cell.font = font
-            if fill:
-                cell.fill = fill
-            if border:
-                cell.border = border
-            if alignment:
-                cell.alignment = alignment
-
-
-def generate_mas_excel(report: DistrictMASReport, output_path: Optional[Path] = None) -> bytes:
-    """Generates an executive multi-sheet Excel workbook for MAS & Births reporting."""
-    wb = Workbook()
-
-    # -------------------------------------------------------------------------
-    # EXECUTIVE INSTITUTIONAL DESIGN SYSTEM
-    # -------------------------------------------------------------------------
-    # Typography
-    font_title = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
-    font_sub = Font(name="Calibri", size=9.5, color="E2E8F0")
-    font_hdr_tier1 = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-    font_overall_hdr = Font(name="Calibri", size=10, bold=True, color="FCD34D")  # Warm Gold
-    font_sub_hdr = Font(name="Calibri", size=9, bold=True, color="334155")
-    font_pct_hdr = Font(name="Calibri", size=9, bold=True, color="1E40AF")
-
-    font_data = Font(name="Calibri", size=9.5, color="0F172A")
-    font_data_bold = Font(name="Calibri", size=9.5, bold=True, color="0F172A")
-    font_total = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
-    font_total_gold = Font(name="Calibri", size=10, bold=True, color="FCD34D")
-
-    # Header Fills
-    fill_navy = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")        # Deep Midnight Navy
-    fill_sub_hdr = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")      # Clean Light Slate
-    fill_pct_hdr = PatternFill(start_color="E0F2FE", end_color="E0F2FE", fill_type="solid")      # Soft Sky Blue
-
-    # Data Rows Alternating Zebra
-    fill_even = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-    fill_odd = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
-
-    # Refined Indicator Badges (Soft Tints with Dark Readable Text)
-    fill_green = PatternFill(start_color="ECFDF5", end_color="ECFDF5", fill_type="solid")        # Soft Emerald (100%)
-    font_green = Font(name="Calibri", size=9.5, bold=True, color="065F46")
-
-    fill_amber = PatternFill(start_color="FFFBEB", end_color="FFFBEB", fill_type="solid")        # Soft Warm Amber (>0% and <100%)
-    font_amber = Font(name="Calibri", size=9.5, bold=True, color="92400E")
-
-    fill_red = PatternFill(start_color="FEF2F2", end_color="FEF2F2", fill_type="solid")          # Soft Rose (0%)
-    font_red = Font(name="Calibri", size=9.5, bold=True, color="991B1B")
-
-    fill_ovr = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")          # Soft Blue
-    font_ovr = Font(name="Calibri", size=9.5, bold=True, color="1E40AF")
-
-    fill_total = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")        # Deep Midnight Navy
-
-    # Borders
-    thin = Side(border_style="thin", color="CBD5E1")
-    border_cell = Border(left=thin, right=thin, top=thin, bottom=thin)
-    border_total = Border(
-        left=thin,
-        right=thin,
-        top=Side(border_style="thin", color="0F2942"),
-        bottom=Side(border_style="double", color="0F2942"),
-    )
-
-    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
-
-    clean_dist = (report.district_name or "").strip()
-    if clean_dist.upper().endswith("DISTRICT"):
-        clean_dist = clean_dist[:-8].strip()
-    dist_suffix = f" — {clean_dist.upper()} DISTRICT" if clean_dist and clean_dist.lower() != "district" else ""
-
-    # =========================================================================
-    # SHEET 1: GM-R 5.24 MAS EXECUTIVE TWO-TIER SUMMARY (58 COLUMNS)
-    # =========================================================================
-    ws1 = wb.active
-    ws1.title = "GM-R_5.24_MAS_Summary"
-    ws1.views.sheetView[0].showGridLines = True
-
-    total_cols = 4 + (len(OFFICIAL_MAS_REPORT_ACTIVITIES) * 3)  # 4 base + 18*3 = 58 columns
-    max_col_letter = get_column_letter(total_cols)
-
-    # Title & Metadata Banner
-    ws1.merge_cells(f"A1:{max_col_letter}1")
-    t1 = ws1["A1"]
-    t1.value = f"MONTHLY ACTIVITY STATEMENT (GM-R 5.24) & BIRTHS REGISTER (GM-R 5.23) REPORT{dist_suffix}"
-    t1.font = font_title
-    t1.fill = fill_navy
-    t1.alignment = align_center
-    ws1.row_dimensions[1].height = 26
-    _style_range(ws1, 1, 1, total_cols, 1, font=font_title, fill=fill_navy, alignment=align_center)
-
-    ws1.merge_cells(f"A2:{max_col_letter}2")
-    t2 = ws1["A2"]
-    t2.value = (
-        f"REPORTING YEAR: {report.financial_year} | "
-        f"MONTH: {report.month_name} | "
-        f"GENERATED: {report.generated_at}"
-    )
-    t2.font = font_sub
-    t2.fill = fill_navy
-    t2.alignment = align_center
-    ws1.row_dimensions[2].height = 20
-    _style_range(ws1, 1, 2, total_cols, 2, font=font_sub, fill=fill_navy, alignment=align_center)
-
-    ws1.row_dimensions[3].height = 6  # Spacer row
-
-    # -------------------------------------------------------------------------
-    # TWO-TIER TABLE HEADERS (Rows 4 and 5)
-    # -------------------------------------------------------------------------
-    ws1.row_dimensions[4].height = 28
-    ws1.row_dimensions[5].height = 22
-
-    # Col 1: S.No (merged A4:A5)
-    ws1.merge_cells("A4:A5")
-    ws1["A4"] = "S.No"
-    _style_range(ws1, 1, 4, 1, 5, font=font_hdr_tier1, fill=fill_navy, border=border_cell, alignment=align_center)
-
-    # Col 2: Mandal Name (merged B4:B5)
-    ws1.merge_cells("B4:B5")
-    ws1["B4"] = "Mandal Name"
-    _style_range(ws1, 2, 4, 2, 5, font=font_hdr_tier1, fill=fill_navy, border=border_cell, alignment=align_center)
-
-    # Col 3: No of GPs (merged C4:C5)
-    ws1.merge_cells("C4:C5")
-    ws1["C4"] = "No of GPs"
-    _style_range(ws1, 3, 4, 3, 5, font=font_hdr_tier1, fill=fill_navy, border=border_cell, alignment=align_center)
-
-    # Col 4: Overall % Entered (merged D4:D5)
-    ws1.merge_cells("D4:D5")
-    ws1["D4"] = "Overall % Entered"
-    _style_range(ws1, 4, 4, 4, 5, font=font_overall_hdr, fill=fill_navy, border=border_cell, alignment=align_center)
-
-    # Columns 5 to 58: 18 Activities with 3 sub-columns each
-    for act_idx, act_name in enumerate(OFFICIAL_MAS_REPORT_ACTIVITIES):
-        start_c = 5 + (act_idx * 3)
-        end_c = start_c + 2
-
-        # Tier 1 Header (Activity Name merged across 3 columns)
-        ws1.merge_cells(start_row=4, start_column=start_c, end_row=4, end_column=end_c)
-        ws1.cell(row=4, column=start_c, value=act_name)
-        _style_range(ws1, start_c, 4, end_c, 4, font=font_hdr_tier1, fill=fill_navy, border=border_cell, alignment=align_center)
-
-        # Tier 2 Sub-headers (Entered, Not Entered, % Entered)
-        c_ent = ws1.cell(row=5, column=start_c, value="Entered")
-        c_ent.font = font_sub_hdr
-        c_ent.fill = fill_sub_hdr
-        c_ent.border = border_cell
-        c_ent.alignment = align_center
-
-        c_not = ws1.cell(row=5, column=start_c + 1, value="Not Entered")
-        c_not.font = font_sub_hdr
-        c_not.fill = fill_sub_hdr
-        c_not.border = border_cell
-        c_not.alignment = align_center
-
-        # Refined Soft Sky Blue fill for % Entered column
-        c_pct = ws1.cell(row=5, column=start_c + 2, value="% Entered")
-        c_pct.font = font_pct_hdr
-        c_pct.fill = fill_pct_hdr
-        c_pct.border = border_cell
-        c_pct.alignment = align_center
-
-    # -------------------------------------------------------------------------
-    # DATA ROWS (Row 6 onwards)
-    # -------------------------------------------------------------------------
-    current_row = 6
-    clean_mandals = [m for m in report.mandals if m.mandal_name.strip().upper() not in ("TOTAL", "GRAND TOTAL")]
-
-    for m_idx, m in enumerate(clean_mandals):
-        ws1.row_dimensions[current_row].height = 20
-        row_bg = fill_even if m_idx % 2 == 0 else fill_odd
-
-        # Col 1: S.No
-        c_sno = ws1.cell(row=current_row, column=1, value=m.s_no)
-        c_sno.font = font_data
-        c_sno.fill = row_bg
-        c_sno.alignment = align_center
-        c_sno.border = border_cell
-
-        # Col 2: Mandal Name
-        c_name = ws1.cell(row=current_row, column=2, value=m.mandal_name)
-        c_name.font = font_data_bold
-        c_name.fill = row_bg
-        c_name.alignment = align_left
-        c_name.border = border_cell
-
-        # Col 3: No of GPs
-        c_tot = ws1.cell(row=current_row, column=3, value=m.total_gps)
-        c_tot.font = font_data
-        c_tot.fill = row_bg
-        c_tot.alignment = align_center
-        c_tot.border = border_cell
-
-        # Col 4: Overall % Entered
-        ovr_val = m.overall_pct_entered if m.overall_pct_entered > 0 else m.pct_completed
-        c_ovr = ws1.cell(row=current_row, column=4, value=f"{ovr_val:.1f}")
-        c_ovr.alignment = align_center
-        c_ovr.border = border_cell
-        c_ovr.fill = fill_ovr
-        c_ovr.font = font_ovr
-
-        # Columns 5 to 58: 18 Activity triplets
-        for act_idx, act_name in enumerate(OFFICIAL_MAS_REPORT_ACTIVITIES):
-            start_c = 5 + (act_idx * 3)
-            entered, not_entered, pct = m.get_activity_stats(act_name)
-
-            # Entered
-            c_e = ws1.cell(row=current_row, column=start_c, value=entered)
-            c_e.font = font_data
-            c_e.fill = row_bg
-            c_e.alignment = align_center
-            c_e.border = border_cell
-
-            # Not Entered
-            c_ne = ws1.cell(row=current_row, column=start_c + 1, value=not_entered)
-            c_ne.font = font_data
-            c_ne.fill = row_bg
-            c_ne.alignment = align_center
-            c_ne.border = border_cell
-
-            # % Entered (Refined Badge Highlight)
-            c_p = ws1.cell(row=current_row, column=start_c + 2, value=f"{pct:.1f}")
-            c_p.alignment = align_center
-            c_p.border = border_cell
-            if pct >= 100.0:
-                c_p.fill = fill_green
-                c_p.font = font_green
-            elif pct > 0.0:
-                c_p.fill = fill_amber
-                c_p.font = font_amber
-            else:
-                c_p.fill = fill_red
-                c_p.font = font_red
-
-        current_row += 1
-
-    # -------------------------------------------------------------------------
-    # DISTRICT TOTAL ROW (Deep Midnight Navy with White and Gold)
-    # -------------------------------------------------------------------------
-    ws1.row_dimensions[current_row].height = 24
-
-    c_tot_sno = ws1.cell(row=current_row, column=1, value="")
-    c_tot_sno.fill = fill_total
-    c_tot_sno.border = border_total
-
-    c_tot_name = ws1.cell(row=current_row, column=2, value="DISTRICT TOTAL")
-    c_tot_name.font = font_total
-    c_tot_name.alignment = align_left
-    c_tot_name.fill = fill_total
-    c_tot_name.border = border_total
-
-    c_tot_gps = ws1.cell(row=current_row, column=3, value=report.total_gps)
-    c_tot_gps.font = font_total
-    c_tot_gps.alignment = align_center
-    c_tot_gps.fill = fill_total
-    c_tot_gps.border = border_total
-
-    dist_ovr = report.overall_pct_entered if report.overall_pct_entered > 0 else report.overall_pct
-    c_tot_ovr = ws1.cell(row=current_row, column=4, value=f"{dist_ovr:.1f}")
-    c_tot_ovr.alignment = align_center
-    c_tot_ovr.fill = fill_total
-    c_tot_ovr.font = font_total_gold
-    c_tot_ovr.border = border_total
-
-    # 18 Activity District Totals
-    for act_idx, act_name in enumerate(OFFICIAL_MAS_REPORT_ACTIVITIES):
-        start_c = 5 + (act_idx * 3)
-        dist_ent, dist_not, dist_pct = report.get_activity_totals(act_name)
-
-        c_de = ws1.cell(row=current_row, column=start_c, value=dist_ent)
-        c_de.font = font_total
-        c_de.alignment = align_center
-        c_de.fill = fill_total
-        c_de.border = border_total
-
-        c_dne = ws1.cell(row=current_row, column=start_c + 1, value=dist_not)
-        c_dne.font = font_total
-        c_dne.alignment = align_center
-        c_dne.fill = fill_total
-        c_dne.border = border_total
-
-        c_dp = ws1.cell(row=current_row, column=start_c + 2, value=f"{dist_pct:.1f}")
-        c_dp.alignment = align_center
-        c_dp.fill = fill_total
-        c_dp.font = font_total_gold
-        c_dp.border = border_total
-
-    # -------------------------------------------------------------------------
-    # COLUMN WIDTHS & FREEZE PANES
-    # -------------------------------------------------------------------------
-    ws1.column_dimensions["A"].width = 7.0
-    ws1.column_dimensions["B"].width = 26.0
-    ws1.column_dimensions["C"].width = 11.0
-    ws1.column_dimensions["D"].width = 15.0
-
-    for act_idx in range(len(OFFICIAL_MAS_REPORT_ACTIVITIES)):
-        start_c = 5 + (act_idx * 3)
-        ws1.column_dimensions[get_column_letter(start_c)].width = 9.5
-        ws1.column_dimensions[get_column_letter(start_c + 1)].width = 11.5
-        ws1.column_dimensions[get_column_letter(start_c + 2)].width = 11.5
-
-    # Freeze panes at E6 (Keeps S.No, Mandal Name, No of GPs, Overall % and Headers fixed)
-    ws1.freeze_panes = "E6"
-
-    # =========================================================================
-    # SHEET 2: GM-R 5.23 BIRTHS REGISTER
-    # =========================================================================
-    ws2 = wb.create_sheet(title="GM-R_5.23_Births_Register")
-    ws2.views.sheetView[0].showGridLines = True
-
-    ws2.merge_cells("A1:G1")
-    t21 = ws2["A1"]
-    t21.value = f"REPORT ON BIRTHS REGISTER IN GP (GM-R 5.23){dist_suffix}"
-    t21.font = font_title
-    t21.fill = fill_navy
-    t21.alignment = align_center
-    ws2.row_dimensions[1].height = 28
-
-    ws2.merge_cells("A2:G2")
-    t22 = ws2["A2"]
-    t22.value = (
-        f"REPORTING YEAR: {report.financial_year} | "
-        f"MONTH: {report.month_name} | "
-        f"GENERATED: {report.generated_at}"
-    )
-    t22.font = font_sub
-    t22.fill = fill_navy
-    t22.alignment = align_center
-    ws2.row_dimensions[2].height = 20
-
-    # KPI Row
-    ws2.merge_cells("A3:B3")
-    ws2["A3"] = f"Total GPs: {report.total_gps}"
-    ws2["A3"].font = font_data_bold
-    ws2["A3"].fill = fill_sub_hdr
-    ws2["A3"].alignment = align_center
-    ws2["A3"].border = border_cell
-    ws2["B3"].border = border_cell
-
-    ws2["C3"] = f"Entered GPs: {report.total_birth_entered_gps}"
-    ws2["C3"].font = font_green
-    ws2["C3"].fill = fill_green
-    ws2["C3"].alignment = align_center
-    ws2["C3"].border = border_cell
-
-    ws2["D3"] = f"Not Entered: {report.total_birth_pending_gps}"
-    ws2["D3"].font = font_red
-    ws2["D3"].fill = fill_red
-    ws2["D3"].alignment = align_center
-    ws2["D3"].border = border_cell
-
-    ws2["E3"] = f"Total Births: {report.total_district_births}"
-    ws2["E3"].font = font_data_bold
-    ws2["E3"].fill = fill_sub_hdr
-    ws2["E3"].alignment = align_center
-    ws2["E3"].border = border_cell
-
-    ws2.merge_cells("F3:G3")
-    ws2["F3"] = f"Achievement: {report.births_overall_pct:.1f}%"
-    ws2["F3"].font = font_ovr
-    ws2["F3"].fill = fill_ovr
-    ws2["F3"].alignment = align_center
-    ws2["F3"].border = border_cell
-    ws2["G3"].border = border_cell
-    ws2.row_dimensions[3].height = 22
-
-    headers2 = ["S.No", "Mandal Name", "Total GPs", "Entered GPs", "Not Entered", "Total Births Registered", "% Achievement"]
-    for col_idx, h_text in enumerate(headers2, start=1):
-        cell = ws2.cell(row=5, column=col_idx, value=h_text)
-        cell.font = font_hdr_tier1
-        cell.fill = fill_navy
-        cell.alignment = align_center
-        cell.border = border_cell
-    ws2.row_dimensions[5].height = 24
-
-    r2_curr = 6
-    clean_birth_mandals = [bm for bm in report.birth_mandals if bm.mandal_name.strip().upper() not in ("TOTAL", "GRAND TOTAL")]
-    for b_idx, bm in enumerate(clean_birth_mandals):
-        row_bg = fill_even if b_idx % 2 == 0 else fill_odd
-
-        c_sno = ws2.cell(row=r2_curr, column=1, value=bm.s_no)
-        c_name = ws2.cell(row=r2_curr, column=2, value=bm.mandal_name)
-        c_tot = ws2.cell(row=r2_curr, column=3, value=bm.total_gps)
-        c_ent = ws2.cell(row=r2_curr, column=4, value=bm.entered_gps)
-        c_not = ws2.cell(row=r2_curr, column=5, value=bm.not_entered_gps)
-        c_brt = ws2.cell(row=r2_curr, column=6, value=bm.total_births)
-        c_pct = ws2.cell(row=r2_curr, column=7, value=f"{bm.pct_entered:.1f}%")
-
-        c_sno.alignment = align_center
-        c_name.alignment = align_left
-        c_tot.alignment = align_center
-        c_ent.alignment = align_center
-        c_not.alignment = align_center
-        c_brt.alignment = align_center
-        c_pct.alignment = align_center
-
-        for cell in (c_sno, c_name, c_tot, c_ent, c_not, c_brt, c_pct):
-            cell.font = font_data
-            cell.fill = row_bg
-            cell.border = border_cell
-
-        if bm.not_entered_gps > 0:
-            c_not.font = font_red
-            c_not.fill = fill_red
-
-        if bm.pct_entered >= 100.0:
-            c_pct.font = font_green
-            c_pct.fill = fill_green
-        elif bm.pct_entered < 50.0:
-            c_pct.font = font_red
-            c_pct.fill = fill_red
-        else:
-            c_pct.font = font_amber
-            c_pct.fill = fill_amber
-
-        r2_curr += 1
-
-    # Births Total Row
-    ws2.row_dimensions[r2_curr].height = 24
-    tot_cells2 = [
-        ws2.cell(row=r2_curr, column=1, value=""),
-        ws2.cell(row=r2_curr, column=2, value="DISTRICT TOTAL"),
-        ws2.cell(row=r2_curr, column=3, value=report.total_gps),
-        ws2.cell(row=r2_curr, column=4, value=report.total_birth_entered_gps),
-        ws2.cell(row=r2_curr, column=5, value=report.total_birth_pending_gps),
-        ws2.cell(row=r2_curr, column=6, value=report.total_district_births),
-        ws2.cell(row=r2_curr, column=7, value=f"{report.births_overall_pct:.1f}%"),
+from core.branding import PLATFORM_NAME, TAGLINE, apply_openpyxl_branding
+from mas.models import ALL_18_MODULES, normalize_district_and_slug
+from mas.pdf_generator import generate_mas_consolidated_pdf
+
+logger = logging.getLogger(__name__)
+
+
+def generate_abstract_markdown(
+    mandals_abstract: List[Dict[str, Any]],
+    total_row: Dict[str, Any],
+    pending_action_list: List[Dict[str, Any]],
+    excluded_modules: List[str],
+    month: str = "July",
+    year: int = 2026,
+    district_name: str = "Khammam",
+    include_gp_data: bool = True,
+) -> str:
+    """Build clean Markdown summary matching MAS GM-R 5.24 + GM-R 5.23 matrix."""
+    clean_district, _ = normalize_district_and_slug(district_name)
+    excl_str = ", ".join(excluded_modules) if excluded_modules else "None (All 18 Included)"
+    n_incl = total_row.get("included_modules_count", 18)
+
+    lines = [
+        f"# {clean_district} District - Consolidated MAS Mandal & GP Abstract ({month} {year})",
+        f"**Platform:** {PLATFORM_NAME} — *{TAGLINE}*",
+        f"**Source:** Live EPTS Webscrape (`GM-R 5.24` 17 Indicators + `GM-R 5.23` Birth Details)",
+        f"**Excluded Modules from % Calculation:** `{excl_str}`",
+        f"**District Overall Completion ({n_incl} Included Modules):** **{total_row['Overall % Entered']}%** ({total_row['No of Updated']:,} / {total_row['Total Fields']:,} Fields Updated across {total_row['No of GPs']} GPs)",
+        "",
+        "> **Format Note:** Module columns display `Not Updated / Updated` (e.g. `0 / 22` = 0 Pending, 22 Entered).",
+        "",
+        "## Mandal-Wise Compact Abstract (All 18 Modules)",
+        "",
     ]
-    for idx_c, cell in enumerate(tot_cells2, start=1):
-        cell.font = font_total_gold if idx_c == 7 else font_total
-        cell.fill = fill_total
-        cell.border = border_total
-        cell.alignment = align_left if idx_c == 2 else align_center
 
-    ws2.column_dimensions["A"].width = 8
-    ws2.column_dimensions["B"].width = 26
-    ws2.column_dimensions["C"].width = 14
-    ws2.column_dimensions["D"].width = 14
-    ws2.column_dimensions["E"].width = 14
-    ws2.column_dimensions["F"].width = 22
-    ws2.column_dimensions["G"].width = 16
-
-    # =========================================================================
-    # SHEET 3: PENDING GPs ACTION LIST
-    # =========================================================================
-    ws3 = wb.create_sheet(title="Pending_GPs_Action_List")
-    ws3.views.sheetView[0].showGridLines = True
-
-    ws3.merge_cells("A1:D1")
-    t31 = ws3["A1"]
-    t31.value = f"ACTIONABLE PENDING GRAM PANCHAYATS CALL-LIST{dist_suffix}"
-    t31.font = font_title
-    t31.fill = fill_navy
-    t31.alignment = align_center
-    ws3.row_dimensions[1].height = 28
-
-    ws3.merge_cells("A2:D2")
-    t32 = ws3["A2"]
-    t32.value = (
-        f"REPORTING YEAR: {report.financial_year} | "
-        f"MONTH: {report.month_name} | "
-        f"TOTAL PENDING GPs: {report.total_pending_gps}"
-    )
-    t32.font = font_sub
-    t32.fill = fill_navy
-    t32.alignment = align_center
-    ws3.row_dimensions[2].height = 20
-
-    headers3 = [
-        "S.No",
-        "Mandal Name",
-        "Gram Panchayat Name",
-        "Pending Monthly Activities",
+    headers = ["S No", "Mandal Name", "No of GPs", f"Overall % ({n_incl} Mod)"] + [
+        f"{lbl} [Excl]" if lbl in excluded_modules else lbl for lbl, _ in ALL_18_MODULES
     ]
-    for col_idx, h_text in enumerate(headers3, start=1):
-        cell = ws3.cell(row=4, column=col_idx, value=h_text)
-        cell.font = font_hdr_tier1
-        cell.fill = fill_navy
-        cell.alignment = align_center
-        cell.border = border_cell
-    ws3.row_dimensions[4].height = 24
+    lines.append("| " + " | ".join(headers) + " |")
+    lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
 
-    r3_curr = 5
-    if report.all_pending_gps:
-        seq = 1
-        for gp in report.all_pending_gps:
-            row_bg = fill_even if seq % 2 != 0 else fill_odd
+    for m in mandals_abstract:
+        row_vals = [str(m["S No"]), f"**{m['Mandal Name']}**", str(m["No of GPs"]), f"**{m['Overall % Entered']}%**"]
+        for lbl, _ in ALL_18_MODULES:
+            row_vals.append(m["modules"][lbl]["formatted_compact"])
+        lines.append("| " + " | ".join(row_vals) + " |")
 
-            c_sno = ws3.cell(row=r3_curr, column=1, value=seq)
-            c_mnd = ws3.cell(row=r3_curr, column=2, value=gp.mandal_name)
-            c_gp = ws3.cell(row=r3_curr, column=3, value=gp.panchayat_name)
+    tot_vals = [
+        "**Total**",
+        "**District Total**",
+        f"**{total_row['No of GPs']}**",
+        f"**{total_row['Overall % Entered']}%**",
+    ]
+    for lbl, _ in ALL_18_MODULES:
+        tot_vals.append(f"**{total_row['modules'][lbl]['formatted_compact']}**")
+    lines.append("| " + " | ".join(tot_vals) + " |")
 
-            miss_str = format_pending_activities(gp)
-            c_act = ws3.cell(row=r3_curr, column=4, value=miss_str)
-
-            c_sno.alignment = align_center
-            c_mnd.alignment = align_left
-            c_gp.alignment = align_left
-            c_act.alignment = align_left
-
-            for cell in (c_sno, c_mnd, c_gp, c_act):
-                cell.font = font_data
-                cell.border = border_cell
-                cell.fill = row_bg
-
-            c_act.font = Font(name="Calibri", size=9.5, bold=True, color="991B1B")
-            r3_curr += 1
-            seq += 1
+    lines.extend(["", "---", ""])
+    if include_gp_data:
+        lines.extend([
+            f"## Gram Panchayats Pending Entry ({len(pending_action_list)} GPs Requiring Action)",
+            "",
+        ])
+        if pending_action_list:
+            lines.append("| S No | Mandal | Gram Panchayat | Pending Count | Pending Module(s) | Completed / Total | Completion % |")
+            lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+            for item in pending_action_list:
+                lines.append(
+                    f"| {item['S No']} | {item['Mandal']} | **{item['Gram_Panchayat']}** | **{item['Pending_Count']} Pending** | {item['Pending_Modules']} | {item['Completed_Count']} / {n_incl} | **{item['Completion_Rate']}** |"
+                )
+        else:
+            lines.append("**All Gram Panchayats in the district are 100% compliant!** Zero pending entries found.")
     else:
-        ws3.merge_cells("A5:D5")
-        no_pend = ws3["A5"]
-        no_pend.value = "100% COMPLIANCE ACHIEVED: Zero Pending Gram Panchayats across all Activities!"
-        no_pend.font = font_green
-        no_pend.alignment = align_center
-        no_pend.fill = fill_green
-        _style_range(ws3, 1, 5, 4, 5, border=border_cell)
+        lines.extend([
+            "## Report Mode: Mandal Abstract Only",
+            "GP-wise drill-down was skipped for faster execution. Select **Mandal Abstract & GP-Wise Data** when individual pending GP lists are required.",
+        ])
 
-    ws3.column_dimensions["A"].width = 8
-    ws3.column_dimensions["B"].width = 24
-    ws3.column_dimensions["C"].width = 28
-    ws3.column_dimensions["D"].width = 75
+    return "\n".join(lines)
 
-    # Finalize Output
-    if output_path:
-        out = Path(output_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        wb.save(out)
 
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
+def _export_styled_excel(
+    excel_path: Path,
+    mandals_abstract: List[Dict[str, Any]],
+    total_row: Dict[str, Any],
+    compact_rows: List[Dict[str, Any]],
+    pending_action_list: List[Dict[str, Any]],
+    joined_records: List[Dict[str, Any]],
+    excluded_modules: List[str],
+    month: str,
+    year: int,
+    clean_district: str,
+) -> None:
+    """Create the 5-sheet professionally styled openpyxl MAS workbook with canonical branding."""
+    df_compact = pd.DataFrame(compact_rows)
+    df_pending = pd.DataFrame(pending_action_list)
+    df_joined = pd.DataFrame(joined_records)
+
+    wb = openpyxl.Workbook()
+    ws_abs = wb.active
+    ws_abs.title = "Mandal_Abstract"
+
+    header_fill = PatternFill(start_color="0C3829", end_color="0C3829", fill_type="solid")
+    sub_fill = PatternFill(start_color="165B43", end_color="165B43", fill_type="solid")
+    excl_fill = PatternFill(start_color="B45309", end_color="B45309", fill_type="solid")
+    total_fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F9FAFB", end_color="F9FAFB", fill_type="solid")
+    red_fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+
+    font_title = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+    font_hdr = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+    font_data = Font(name="Calibri", size=10, color="111827")
+    font_bold = Font(name="Calibri", size=10, bold=True, color="0C3829")
+    font_red = Font(name="Calibri", size=10, bold=True, color="B91C1C")
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+
+    ws_abs.merge_cells(start_row=1, start_column=1, end_row=1, end_column=4 + len(ALL_18_MODULES))
+    c_title = ws_abs.cell(
+        row=1,
+        column=1,
+        value=f"{clean_district} District - Monthly Activity Statement (MAS) Abstract ({month} {year}) | Overall: {total_row['Overall % Entered']}%",
+    )
+    c_title.font = font_title
+    c_title.fill = header_fill
+    c_title.alignment = Alignment(horizontal="center", vertical="center")
+    ws_abs.row_dimensions[1].height = 28
+
+    excl_str = ", ".join(excluded_modules) if excluded_modules else "None (All 18 Included)"
+    ws_abs.merge_cells(start_row=2, start_column=1, end_row=2, end_column=4 + len(ALL_18_MODULES))
+    c_sub = ws_abs.cell(
+        row=2,
+        column=1,
+        value=(
+            f"Excluded from %: {excl_str} | Formula: Sum(Updated)/({total_row['included_modules_count']} x GPs) | "
+            f"Format: Not Updated / Updated (0/22 = 0 Pending)"
+        ),
+    )
+    c_sub.font = Font(name="Calibri", size=9, italic=True, color="D1FAE5")
+    c_sub.fill = sub_fill
+    c_sub.alignment = Alignment(horizontal="center", vertical="center")
+    ws_abs.row_dimensions[2].height = 20
+
+    abs_headers = ["S No", "Mandal Name", "No of GPs", f"Overall % ({total_row['included_modules_count']} Mod)"] + [
+        f"{lbl} [Excl]" if lbl in excluded_modules else lbl for lbl, _ in ALL_18_MODULES
+    ]
+    for col_idx, h_text in enumerate(abs_headers, 1):
+        cell = ws_abs.cell(row=3, column=col_idx, value=h_text)
+        cell.font = font_hdr
+        is_excl_col = col_idx > 4 and ALL_18_MODULES[col_idx - 5][0] in excluded_modules
+        cell.fill = excl_fill if is_excl_col else header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = thin_border
+    ws_abs.row_dimensions[3].height = 32
+
+    excluded_set = set(excluded_modules or [])
+    for r_offset, row_data in enumerate(compact_rows):
+        r_num = 4 + r_offset
+        is_tot = row_data["S No"] == "Total"
+        vals = [
+            row_data["S No"],
+            row_data["Mandal Name"],
+            row_data["No of GPs"],
+            f"{row_data['Overall % Entered']}%",
+        ] + [row_data[lbl] for lbl, _ in ALL_18_MODULES]
+
+        row_has_pending = float(row_data.get("Overall % Entered", 100.0)) < 100.0 or any(
+            (lbl not in excluded_set)
+            and " / " in str(row_data.get(lbl, ""))
+            and not str(row_data.get(lbl, "")).startswith("0 /")
+            for lbl, _ in ALL_18_MODULES
+        )
+
+        for col_idx, val in enumerate(vals, 1):
+            cell = ws_abs.cell(row=r_num, column=col_idx, value=val)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="left" if col_idx == 2 else "center", vertical="center")
+            mod_label = ALL_18_MODULES[col_idx - 5][0] if col_idx > 4 else ""
+            is_excl_col = col_idx > 4 and mod_label in excluded_set
+            is_mod_pending = (not is_excl_col) and col_idx > 4 and " / " in str(val) and not str(val).startswith("0 /")
+
+            if is_tot:
+                cell.fill = PatternFill(start_color="FDE68A", end_color="FDE68A", fill_type="solid") if is_excl_col else total_fill
+                cell.font = font_red if ((col_idx == 4 and row_has_pending) or is_mod_pending) else font_bold
+            else:
+                if r_offset % 2 == 1:
+                    cell.fill = zebra_fill
+                if is_excl_col:
+                    cell.fill = PatternFill(start_color="FFFBEB", end_color="FFFBEB", fill_type="solid")
+                    cell.font = Font(name="Calibri", size=10, color="92400E")
+                elif is_mod_pending:
+                    cell.fill = red_fill
+                    cell.font = font_red
+                elif row_has_pending and col_idx in (1, 2, 4):
+                    cell.font = font_red
+                else:
+                    cell.font = font_bold if col_idx == 4 else font_data
+
+    ws_abs.column_dimensions["A"].width = 7
+    ws_abs.column_dimensions["B"].width = 22
+    ws_abs.column_dimensions["C"].width = 11
+    ws_abs.column_dimensions["D"].width = 15
+    for idx in range(5, 5 + len(ALL_18_MODULES)):
+        ws_abs.column_dimensions[get_column_letter(idx)].width = 16
+
+    # Sheet 2: Detailed 58 Columns (3 cols per module: Entered, Not Entered, % Entered)
+    ws_det = wb.create_sheet("Mandal_58_Col_Detail")
+    det_headers = ["S No", "Mandal Name", "No of GPs", "Overall % Entered"]
+    for lbl, _ in ALL_18_MODULES:
+        det_headers.extend([f"{lbl}_Entered", f"{lbl}_NotEntered", f"{lbl}_Pct%"])
+    for col_idx, h in enumerate(det_headers, 1):
+        c = ws_det.cell(row=1, column=col_idx, value=h)
+        c.font = font_hdr
+        c.fill = header_fill
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        c.border = thin_border
+
+    for r_idx, m in enumerate(mandals_abstract + [total_row], 2):
+        row_vals = [m["S No"], m["Mandal Name"], m["No of GPs"], m["Overall % Entered"]]
+        for lbl, _ in ALL_18_MODULES:
+            row_vals.extend([m["modules"][lbl]["Entered"], m["modules"][lbl]["Not Entered"], m["modules"][lbl]["% Entered"]])
+        for c_idx, val in enumerate(row_vals, 1):
+            cell = ws_det.cell(row=r_idx, column=c_idx, value=val)
+            cell.border = thin_border
+            if m["S No"] == "Total":
+                cell.fill = total_fill
+                cell.font = font_bold
+
+    # Sheet 3: Pending GPs Action List
+    ws_pend = wb.create_sheet("Pending_GPs_Action_List")
+    pend_cols = (
+        list(df_pending.columns)
+        if not df_pending.empty
+        else ["S No", "Mandal", "Gram_Panchayat", "Pending_Count", "Pending_Modules", "Completed_Count", "Completion_Rate", "Action_Required"]
+    )
+    for col_idx, h in enumerate(pend_cols, 1):
+        c = ws_pend.cell(row=1, column=col_idx, value=h)
+        c.font = font_hdr
+        c.fill = header_fill
+        c.border = thin_border
+    for r_idx, row_rec in enumerate(pending_action_list, 2):
+        for col_idx, col_key in enumerate(pend_cols, 1):
+            c = ws_pend.cell(row=r_idx, column=col_idx, value=row_rec.get(col_key, ""))
+            c.border = thin_border
+            if col_key == "Pending_Count":
+                c.font = font_red
+    ws_pend.column_dimensions["A"].width = 7
+    ws_pend.column_dimensions["B"].width = 18
+    ws_pend.column_dimensions["C"].width = 25
+    ws_pend.column_dimensions["D"].width = 14
+    ws_pend.column_dimensions["E"].width = 45
+    ws_pend.column_dimensions["H"].width = 30
+
+    # Sheet 4: Full GP Joined Records
+    ws_gp = wb.create_sheet("Full_GP_18_Module_Records")
+    gp_cols = list(df_joined.columns) if not df_joined.empty else []
+    for col_idx, h in enumerate(gp_cols, 1):
+        c = ws_gp.cell(row=1, column=col_idx, value=h)
+        c.font = font_hdr
+        c.fill = header_fill
+    for r_idx, row_rec in enumerate(joined_records, 2):
+        for col_idx, col_key in enumerate(gp_cols, 1):
+            ws_gp.cell(row=r_idx, column=col_idx, value=row_rec.get(col_key, ""))
+
+    # Sheet 5: Formula & Exclusions Metadata
+    ws_meta = wb.create_sheet("Methodology_And_Exclusions")
+    ws_meta.append(["Parameter", "Value"])
+    ws_meta.append(["Platform", PLATFORM_NAME])
+    ws_meta.append(["District", clean_district])
+    ws_meta.append(["Reporting Period", f"{month} {year}"])
+    ws_meta.append(["Data Source", "Live EPTS Portal GM-R 5.24 + GM-R 5.23"])
+    ws_meta.append(["Included Modules Count", total_row["included_modules_count"]])
+    ws_meta.append(["Excluded Modules", excl_str])
+    ws_meta.append(["District Overall % Entered", f"{total_row['Overall % Entered']}%"])
+    ws_meta.append(["Total Updated Fields (Included)", total_row["No of Updated"]])
+    ws_meta.append(["Total Possible Fields (Included)", total_row["Total Fields"]])
+    ws_meta.append(["Total Pending Action GPs", len(pending_action_list)])
+    ws_meta.append(["Formula", f"Sum(Updated in Included Modules) / ({total_row['included_modules_count']} Modules x GPs) x 100"])
+
+    apply_openpyxl_branding(wb)
+    wb.save(excel_path)
+    _ = df_compact  # keep helper structure explicit
+
+
+def export_all_deliverables(
+    mandals_abstract: List[Dict[str, Any]],
+    total_row: Dict[str, Any],
+    joined_records: List[Dict[str, Any]],
+    pending_action_list: List[Dict[str, Any]],
+    excluded_modules: List[str],
+    output_dir: Path,
+    month: str = "July",
+    year: int = 2026,
+    district_name: str = "Khammam",
+    include_gp_data: bool = True,
+) -> Dict[str, str]:
+    """Export Excel (5-sheet styled), CSVs, JSON, Markdown, and PDFs cleanly inside ``output_dir``."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    clean_district, dist_slug = normalize_district_and_slug(district_name)
+    month_tag = f"{month.capitalize()}_{year}"
+    base_name = f"{dist_slug}_MAS_18_Modules_{month_tag}"
+
+    # 1. Compact Abstract CSV
+    compact_rows = []
+    for m in mandals_abstract + [total_row]:
+        r = {
+            "S No": m["S No"],
+            "Mandal Name": m["Mandal Name"],
+            "No of GPs": m["No of GPs"],
+            "Overall % Entered": m["Overall % Entered"],
+        }
+        for lbl, _ in ALL_18_MODULES:
+            r[lbl] = m["modules"][lbl]["formatted_compact"]
+        compact_rows.append(r)
+    compact_csv_path = output_dir / f"{base_name}_Compact.csv"
+    pd.DataFrame(compact_rows).to_csv(compact_csv_path, index=False)
+
+    # 2. Full 58-column CSV
+    detail_rows = []
+    for m in mandals_abstract + [total_row]:
+        r = {
+            "S No": m["S No"],
+            "Mandal Name": m["Mandal Name"],
+            "No of GPs": m["No of GPs"],
+            "Overall % Entered": m["Overall % Entered"],
+        }
+        for lbl, _ in ALL_18_MODULES:
+            r[f"{lbl}_Entered"] = m["modules"][lbl]["Entered"]
+            r[f"{lbl}_NotEntered"] = m["modules"][lbl]["Not Entered"]
+            r[f"{lbl}_Pct"] = m["modules"][lbl]["% Entered"]
+        detail_rows.append(r)
+    full_csv_path = output_dir / f"{base_name}_58Cols.csv"
+    pd.DataFrame(detail_rows).to_csv(full_csv_path, index=False)
+
+    # 3. Full GP Joined CSV
+    joined_gp_csv_path = output_dir / f"{dist_slug}_Joined_MAS_Births_Full_GP_{month_tag}.csv"
+    pd.DataFrame(joined_records).to_csv(joined_gp_csv_path, index=False)
+
+    # 4. Pending Action List CSV
+    pending_csv_path = output_dir / f"{dist_slug}_MAS_Pending_GPs_Action_List_{month_tag}.csv"
+    pd.DataFrame(pending_action_list).to_csv(pending_csv_path, index=False)
+
+    # 5. Master JSON
+    master_json = {
+        "district": clean_district,
+        "month": month.capitalize(),
+        "year": year,
+        "report_type": "abstract_and_gp" if include_gp_data else "abstract_only",
+        "include_gp_data": include_gp_data,
+        "total_gps": len(joined_records) or int(total_row.get("No of GPs") or 0),
+        "pending_gps_count": len(pending_action_list),
+        "included_modules_count": total_row["included_modules_count"],
+        "excluded_modules": excluded_modules,
+        "district_overall_pct": total_row["Overall % Entered"],
+        "mandals_abstract": mandals_abstract,
+        "total_row": total_row,
+        "pending_action_list": pending_action_list,
+    }
+    json_path = output_dir / f"{dist_slug}_MAS_Consolidated_Master_{month_tag}.json"
+    json_path.write_text(json.dumps(master_json, indent=2), encoding="utf-8")
+
+    # 6. Styled Multi-Sheet Excel Workbook
+    excel_path = output_dir / f"{dist_slug}_MAS_Consolidated_Master_{month_tag}.xlsx"
+    _export_styled_excel(
+        excel_path=excel_path,
+        mandals_abstract=mandals_abstract,
+        total_row=total_row,
+        compact_rows=compact_rows,
+        pending_action_list=pending_action_list,
+        joined_records=joined_records,
+        excluded_modules=excluded_modules,
+        month=month,
+        year=year,
+        clean_district=clean_district,
+    )
+
+    # 7. Markdown Report
+    md_text = generate_abstract_markdown(
+        mandals_abstract,
+        total_row,
+        pending_action_list,
+        excluded_modules,
+        month=month,
+        year=year,
+        district_name=clean_district,
+        include_gp_data=include_gp_data,
+    )
+    md_path = output_dir / f"{dist_slug}_MAS_18_Modules_Abstract_{month_tag}.md"
+    md_path.write_text(md_text, encoding="utf-8")
+
+    # 8A. Mandal Abstract PDF (Single-Page Portrait-Fitted Landscape Abstract ONLY)
+    abstract_pdf_path = output_dir / f"{dist_slug}_MAS_Mandal_Abstract_{month_tag}.pdf"
+    generate_mas_consolidated_pdf(
+        mandals_abstract=mandals_abstract,
+        total_row=total_row,
+        pending_action_list=pending_action_list,
+        excluded_modules=excluded_modules,
+        output_path=abstract_pdf_path,
+        month=month,
+        year=year,
+        district_name=clean_district,
+        include_gp_data=False,
+    )
+
+    # 8B. Full Combined Mandal + GP Pending Action Plan PDF (when include_gp_data is True)
+    files_map: Dict[str, str] = {
+        "excel": str(excel_path),
+        "abstract_pdf": str(abstract_pdf_path),
+        "compact_csv": str(compact_csv_path),
+        "full_csv": str(full_csv_path),
+        "joined_csv": str(joined_gp_csv_path),
+        "pending_csv": str(pending_csv_path),
+        "json": str(json_path),
+        "markdown": str(md_path),
+    }
+
+    if include_gp_data:
+        pdf_path = output_dir / f"{dist_slug}_MAS_Consolidated_Report_{month_tag}.pdf"
+        generate_mas_consolidated_pdf(
+            mandals_abstract=mandals_abstract,
+            total_row=total_row,
+            pending_action_list=pending_action_list,
+            excluded_modules=excluded_modules,
+            output_path=pdf_path,
+            month=month,
+            year=year,
+            district_name=clean_district,
+            include_gp_data=True,
+        )
+        files_map["pdf"] = str(pdf_path)
+
+    return files_map

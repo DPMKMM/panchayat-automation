@@ -211,7 +211,7 @@ def get_services_page_html() -> str:
       font-size: 0.9rem;
       color: #475569;
       line-height: 1.55;
-      margin: 0 0 16px;
+      margin: 0;
       flex-grow: 1;
     }
     .service-meta {
@@ -308,7 +308,9 @@ def get_services_page_html() -> str:
     @media (max-width: 768px) {
       .hero-title { font-size: 1.65rem; }
       .hub-intro-card { padding: 22px 18px; }
-      .nav-inner { padding: 0 14px; }
+      .nav-inner { height: auto; min-height: 58px; padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+      .nav-brand { flex-wrap: wrap; gap: 6px; }
+      .nav-links { width: 100%; justify-content: flex-start; flex-wrap: wrap; gap: 6px; }
       .footer-inner { flex-direction: column; text-align: center; }
     }
   </style>
@@ -319,6 +321,7 @@ def get_services_page_html() -> str:
       <a class="nav-brand" href="/">
         <span>🏛️</span>
         <span class="nav-brand-badge">e-Panchayat Automation</span>
+        <span id="subpage-console-pill" style="display:none; align-items:center; background:rgba(255,255,255,0.16); border:1px solid rgba(251,191,36,0.6); color:#fde68a; font-size:0.7rem; font-weight:800; padding:3px 8px; border-radius:999px; letter-spacing:0.35px; text-transform:uppercase;">e-Panchayat Automation Console</span>
       </a>
       <nav class="nav-links">
         <a class="nav-link" href="/">🏠 Home</a>
@@ -329,8 +332,14 @@ def get_services_page_html() -> str:
   </header>
 
   <section class="hero-banner">
+    <div style="font-size:0.82rem; font-weight:800; color:#fde68a; letter-spacing:0.4px; text-transform:uppercase; margin-bottom:6px;">
+      Welcome to e-Panchayat Automation
+    </div>
     <h1 class="hero-title">Services &amp; Modules Hub</h1>
-    <p class="hero-subtitle">
+    <p class="hero-subtitle" style="font-weight:700; color:#ffffff; margin-bottom:8px;">
+      Simplifying Panchayat Administration through Smart Reporting and Automation.
+    </p>
+    <p class="hero-subtitle" style="font-size:0.95rem;">
       Automated background robot pipelines, daily &amp; multi-day attendance analytics, weekly balance tracking, and real-time governance monitoring.
     </p>
   </section>
@@ -341,7 +350,7 @@ def get_services_page_html() -> str:
         Executive Service Architecture
       </h2>
       <p style="color:#475569; font-size:0.96rem; margin:0 0 20px; line-height:1.6;">
-        e-Panchayat Automation eliminates manual portal clicking by running background headless browser robots equipped with AI OCR captcha solvers and OTP authentication. Choose an active pipeline below or review upcoming analytical modules.
+        e-Panchayat Automation eliminates manual portal clicking by running background headless browser robots equipped with AI OCR captcha solvers and OTP authentication. Review the active and upcoming analytical modules available after login below.
       </p>
 
       <div class="service-grid">
@@ -355,11 +364,6 @@ def get_services_page_html() -> str:
           <p>
             Automated multi-report extraction of GM-R 1.2.7 DSR raw data, 1.2.11 Presentees, and 1.2.10 Absentees. Features custom cutoff times (e.g. 9:00 AM), 5 sorting options, matched secretary details, and 6-section Landscape District PDF compilation.
           </p>
-          <div class="service-meta">
-            <div><strong>Frequency:</strong> Daily Morning (8:00 AM – 11:00 AM)</div>
-            <div><strong>Outputs:</strong> 1-Page Landscape PDF, Exception Tables</div>
-          </div>
-          <a href="/?station=dsr" class="btn-service btn-service-primary">Launch Attendance Robot →</a>
         </div>
 
         <!-- Service 2: Multi-Day Attendance & DSR Report (Roadmap & Development) -->
@@ -370,13 +374,8 @@ def get_services_page_html() -> str:
           </div>
           <h3>Multi-Day Attendance &amp; DSR Report</h3>
           <p>
-            Aggregate and analyze attendance trends across multiple days, weekly intervals, or custom date ranges. Automatically correlates daily punctuality, identifies chronic absentees, and prepares consolidated multi-day review sheets for DPO and DLPO reviews.
+            Aggregate and analyze attendance trends across multiple days, weekly intervals, or custom date ranges. Automatically correlates daily punctuality, identifies chronic absentees, and prepares consolidated multi-day review sheets for DPO and DLPO, MPO reviews.
           </p>
-          <div class="service-meta">
-            <div><strong>Capability:</strong> Multi-Date Range Scraping &amp; Aggregation</div>
-            <div><strong>Feature:</strong> Habitual Pendency Tracking &amp; Trend Charts</div>
-          </div>
-          <a href="javascript:void(0)" onclick="alert('Multi-Day Attendance & DSR Module is currently in active development. Stay tuned for the upcoming release!');" class="btn-service btn-service-outline" style="border-color:#f59e0b; color:#b45309;">Multi-Day Scope Details</a>
         </div>
 
         <!-- Service 3: GP Thursday Bank Balance Tracking -->
@@ -389,28 +388,18 @@ def get_services_page_html() -> str:
           <p>
             Automated compliance tracking for Thursday bank and cash balance entries (GM-R 14.2). Scrapes General Fund, SFC, 15th Finance Commission (Tied &amp; Untied), and TGBPASS accounts across all 589 Panchayats.
           </p>
-          <div class="service-meta">
-            <div><strong>Frequency:</strong> Weekly Every Thursday</div>
-            <div><strong>Outputs:</strong> Legal 2-Page PDF &amp; Filterable Excel</div>
-          </div>
-          <a href="/?station=balance" class="btn-service btn-service-primary">Launch Balance Robot →</a>
         </div>
 
         <!-- Service 4: Gram Panchayat Inspections -->
-        <div class="service-card">
+        <div class="service-card upcoming-highlight">
           <div class="service-card-header">
             <div class="service-icon" style="background:#e0f2fe; color:#0284c7;">🔍</div>
-            <span class="status-badge status-active">Official Report</span>
+            <span class="status-badge status-upcoming">Roadmap &bull; Coming Soon</span>
           </div>
           <h3>Gram Panchayat Inspections</h3>
           <p>
             Comprehensive compliance monitoring of field inspections conducted by District Panchayat Officers (DPO), Divisional Panchayat Officers (DLPO), and Mandal Panchayat Officers (MPO) with GP drill-down observations.
           </p>
-          <div class="service-meta">
-            <div><strong>Tracking:</strong> DPO, DLPO, MPO Field Visits</div>
-            <div><strong>Outputs:</strong> Interactive Table &amp; CSV Export</div>
-          </div>
-          <a href="/?station=inspections" class="btn-service btn-service-primary">Open Inspections Station →</a>
         </div>
 
         <!-- Service 5: House Tax Collection (DCB) -->
@@ -423,28 +412,18 @@ def get_services_page_html() -> str:
           <p>
             Real-time scraped analytics from the Telangana e-Panchayat tax server. Displays arrear demand, current assessments, collections, balances, and collection rates across all 20 Mandals and 589 Panchayats with zero login required.
           </p>
-          <div class="service-meta">
-            <div><strong>Access:</strong> Public / No Login Required</div>
-            <div><strong>Outputs:</strong> PowerBI Visual Report, PDF, Excel</div>
-          </div>
-          <a href="/#tax-station" class="btn-service btn-service-primary">Open House Tax DCB →</a>
         </div>
 
         <!-- Service 6: Monthly Activity Statement (MAS) -->
-        <div class="service-card" style="border-color:#f59e0b; background:#fffdf8;">
+        <div class="service-card" style="border-color:#059669; background:#f0fdf4;">
           <div class="service-card-header">
-            <div class="service-icon" style="background:#fef3c7; color:#b45309;">📑</div>
-            <span class="status-badge status-upcoming">Under Process</span>
+            <div class="service-icon" style="background:#dcfce7; color:#15803d;">📑</div>
+            <span class="status-badge status-live">● Live &amp; Integrated</span>
           </div>
           <h3>Monthly Activity Statement (MAS)</h3>
           <p>
-            Official 18-Indicator Executive Matrix (GM-R 5.24 &amp; GM-R 5.23 Births Register). Compiles the 2-page legal district abstract and 58-column formatted Excel workbook.
+            Official 18-Indicator Executive Matrix (GM-R 5.24 &amp; GM-R 5.23 Births Register). Compiles the 2-page Legal Landscape PDF and 5-sheet styled Excel workbook using the shared Console EPTS session.
           </p>
-          <div class="service-meta">
-            <div><strong>Frequency:</strong> Monthly Governance Review</div>
-            <div><strong>Status:</strong> Verification &amp; Portal Sync in Progress</div>
-          </div>
-          <a href="/reports/mas" class="btn-service btn-service-outline">View MAS Station →</a>
         </div>
       </div>
     </div>
@@ -463,7 +442,7 @@ def get_services_page_html() -> str:
       </div>
 
       <div class="faq-card">
-        <div class="faq-question">❓ Are there any subscription or usage charges?</div>
+        <div class="faq-question">❓ Are there any service or usage charges?</div>
         <div class="faq-answer">
           No. This platform is 100% free of cost for all Panchayat Raj, Mandal, and District officers in Telangana. It is built as a departmental public service utility to streamline governance analytics.
         </div>
@@ -486,15 +465,29 @@ def get_services_page_html() -> str:
   </div>
 
   <footer>
-    <div class="footer-inner" style="justify-content:center; text-align:center;">
-      <div>
-        <strong>e-Panchayat Automated Console</strong> &bull; Executive Analytics Platform
-        <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">
-          Dedicated administrative companion tool for Telangana Panchayat Raj &amp; Rural Development officers.
-        </div>
-      </div>
+    <div style="max-width:1200px; margin:0 auto; padding:6px 10px; text-align:center; line-height:1.55;">
+      <strong style="display:block; font-size:0.95rem; font-weight:800; color:#f8fafc;">e-Panchayat Automation</strong>
+      <div style="font-size:0.84rem; color:#cbd5e1; margin-top:2px;">Simplifying Panchayat Administration through Smart Reporting and Automation.</div>
     </div>
   </footer>
+  <script>
+    (() => {
+      try {
+        const sp = new URLSearchParams(window.location.search || '');
+        const siteVal = (sp.get('site') || '').trim().toLowerCase();
+        if (!siteVal || (siteVal !== 'console' && siteVal !== 'reports' && siteVal !== 'portal')) return;
+        document.querySelectorAll('a[href]').forEach((a) => {
+          const href = a.getAttribute('href') || '';
+          if (!href.startsWith('/') || href.startsWith('//') || href.startsWith('/api/')) return;
+          const parsed = new URL(href, window.location.origin);
+          if (!parsed.searchParams.has('site')) {
+            parsed.searchParams.set('site', siteVal);
+            a.setAttribute('href', parsed.pathname + parsed.search + parsed.hash);
+          }
+        });
+      } catch (e) {}
+    })();
+  </script>
 </body>
 </html>
 """

@@ -1,0 +1,1945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title id="doc-page-title">e-Panchayat Automation</title>
+  <link rel="stylesheet" href="/static/css/common.css?v=11">
+</head>
+<body class="state-home-login">
+
+  <!-- Main Content -->
+  <main class="container" style="padding-top: 24px;">
+
+    <!-- Unified Non-Blocking Notice Banner -->
+    <div id="portal-notice-banner" class="portal-notice-banner" role="status" aria-live="polite">
+      <span id="portal-notice-text"></span>
+      <button type="button" onclick="clearPortalNotice()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:inherit; line-height:1; padding:0 4px;" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <!-- Global Persistent Header Bar (Styled distinctly by screen state: Workspace Hub vs Automation Engine) -->
+    <div id="global-browser-status-bar" class="global-status-bar" style="display: none;">
+      <div id="workspace-hub-brand-left" class="hub-brand-left" style="display: none; align-items: center; gap: 12px;">
+        <div class="hub-brand-emblem">🏛️</div>
+        <div>
+          <div class="hub-brand-title" id="hub-bar-title">e-Panchayat Automation &bull; Officer Workspace</div>
+          <div class="hub-brand-sub" id="hub-bar-sub">Choose Manual Reports, Automated Portal Robots, or Document Tools below.</div>
+        </div>
+      </div>
+      <div id="telemetry-engine-bar-left" style="display: flex; align-items: center; gap: 12px;">
+        <div style="position: relative; width: 12px; height: 12px; flex-shrink: 0;">
+          <span id="browser-status-ping" style="display:none; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: #10b981; opacity: 0.75; animation: livePing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+          <span id="browser-status-dot" style="position: relative; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #9ca3af;"></span>
+        </div>
+        <div>
+          <div style="font-size: 0.88rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span>e-Panchayat Automation &bull; Background Browser Engine:</span>
+            <span id="browser-status-pill" style="background: rgba(255,255,255,0.15); color: #e2e8f0; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.5px;">STANDBY · NOT LOGGED IN</span>
+          </div>
+          <div id="browser-status-desc" style="font-size: 0.8rem; color: #a7f3d0; margin-top: 2px;">
+            e-Panchayat Automation browser engine ready. Click "Department Login" to connect and authenticate.
+          </div>
+        </div>
+      </div>
+      <div id="browser-status-action" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <button type="button" id="btn-active-sessions" onclick="openSessionsModal()" style="display:none; background:rgba(255,255,255,0.12); color:#a7f3d0; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:0.75rem; font-weight:700; padding:4px 10px; cursor:pointer; align-items:center; gap:5px;" title="View all connected officers and background sessions">👥 Active Sessions</button>
+        <span id="browser-status-officer" style="font-size: 0.82rem; font-weight: 700; color: #fbbf24;">🔒 Login Required</span>
+
+        <button type="button" id="nav-btn-dept-login" onclick="handleNavDeptLoginClick()" style="display:none; align-items:center; gap:8px; font-size:0.8rem; font-weight:800; background:linear-gradient(135deg, #059669, #047857); border:1.5px solid rgba(255,255,255,0.35); padding:6px 14px; border-radius:20px; color:#ffffff; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.25);" title="Connect official e-Panchayat Departmental Login">
+          <span id="nav-dept-login-dot" style="width:8px; height:8px; border-radius:50%; background:#fcd34d; display:inline-block;"></span>
+          <span id="nav-dept-login-text">Department Login</span>
+        </button>
+
+        <a class="nav-link" href="javascript:void(0)" onclick="disconnectEptsSession();" id="nav-btn-disconnect-epts" style="display:none; align-items:center; gap:5px; font-size:0.78rem; font-weight:700; color:#fde68a; border:1px solid rgba(251,191,36,0.3); border-radius:8px; padding:4px 10px; background:rgba(245,158,11,0.12);" title="Disconnect e-Panchayat departmental session">
+          <span>🔒</span> Disconnect ePanchayat
+        </a>
+
+        <a class="nav-link" href="javascript:void(0)" onclick="handleHomeNavigation();" id="nav-btn-home" style="display:none; align-items:center; gap:6px; font-weight:700;">
+          <span>🏠</span> Dashboard
+        </a>
+
+        <a class="nav-link" href="javascript:void(0)" onclick="openAdminDashboardStation();" id="nav-btn-admin-dashboard" style="display:none; align-items:center; gap:6px; font-weight:700; color:#fde68a; border:1px solid rgba(251,191,36,0.45); background:rgba(245,158,11,0.14);">
+          <span>🛡️</span> Admin Dashboard
+        </a>
+
+        <div id="nav-officer-profile-bar" role="button" tabindex="0" onclick="openOfficerProfileView();" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); openOfficerProfileView();}" title="Click to view or update your e-Panchayat Automation Officer Profile" style="display:none; align-items:center; gap:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.25); padding:4px 12px; border-radius:12px; cursor:pointer;">
+          <img id="nav-user-avatar" src="" alt="Profile" style="width:30px; height:30px; border-radius:50%; border:1.5px solid #10b981; object-fit:cover; display:none;" onerror="this.style.display='none'; document.getElementById('nav-user-icon-fallback').style.display='inline';">
+          <span id="nav-user-icon-fallback" style="font-size:1.15rem; display:inline;">👤</span>
+          <div style="display:flex; flex-direction:column; line-height:1.2;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span id="nav-user-name" style="font-weight:800; font-size:0.84rem; color:#ffffff;">Officer Name</span>
+              <span id="nav-user-desig" style="background:#f59e0b; color:#064e3b; font-size:0.7rem; font-weight:800; padding:1px 6px; border-radius:4px;">OFFICER</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; font-size:0.72rem; color:#a7f3d0;">
+              <span id="nav-user-role" style="font-weight:700;">Mandal Level</span>
+              <span>•</span>
+              <span id="nav-user-gmail" style="color:#e2e8f0; opacity:0.9;">officer@gmail.com</span>
+            </div>
+          </div>
+        </div>
+
+        <a class="nav-link" href="javascript:void(0)" onclick="logoutPortalApp();" id="nav-btn-portal-logout" style="display:none; align-items:center; gap:5px; font-size:0.78rem; font-weight:700; color:#fca5a5; border:1px solid rgba(248,113,113,0.3); border-radius:8px; padding:4px 12px; background:rgba(239,68,68,0.12);" title="Logout from current session">
+          <span>🚪</span> Logout
+        </a>
+      </div>
+    </div>
+
+    <!-- Home Screen: Official Google Authentication Login Card -->
+    <div id="portal-hero-card" class="gov-login-wrapper" style="margin-bottom: 24px;">
+      <div class="gov-login-card" id="gov-login-card">
+        <div class="gov-card-right">
+          <div class="gov-login-form-inner">
+            <div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #e2e8f0; text-align:center;">
+              <div style="width:48px; height:48px; margin:0 auto 10px; border-radius:12px; background:#ecfdf5; border:1.5px solid #a7f3d0; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">
+                🏛️
+              </div>
+              <span id="hero-console-chip" style="display:none; align-items:center; background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.72rem; font-weight:800; padding:3px 10px; border-radius:999px; letter-spacing:0.3px; margin-bottom:8px;">e-Panchayat Automation Console</span>
+              <h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>
+              <p id="hero-platform-tagline" style="margin:6px 0 0; font-size:0.86rem; font-weight:700; color:#0f766e; line-height:1.4;">Simplifying Panchayat Administration through Smart Reporting and Automation.</p>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+              <h2 class="gov-login-main-title" style="margin:0;">LOGIN</h2>
+              <div id="login-console-badge" style="display:none; align-items:center; background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.68rem; font-weight:800; padding:2px 7px; border-radius:999px; text-transform:uppercase;">e-Panchayat Automation Console</div>
+            </div>
+            <p class="gov-login-main-subtitle" id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation</p>
+
+            <div id="portal-login-alert" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:18px; font-size:0.86rem; font-weight:700;"></div>
+
+            <div class="gov-google-box" style="margin-bottom:20px;">
+              <button type="button" id="btn-google-login-action" class="btn-google-official" onclick="triggerGoogleSignIn()">
+                <svg width="24" height="24" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                <span>Sign in with Google</span>
+              </button>
+            </div>
+
+            <div class="gov-auth-notes">
+              <div class="gov-auth-note-item">
+                <span class="gov-note-icon">🏛️</span>
+                <div>
+                  <strong>Official Departmental Access</strong>
+                  <span>For DPO, DPM, DLPO, MPDO, MPO Logins</span>
+                </div>
+              </div>
+              <div class="gov-auth-note-item">
+                <span class="gov-note-icon">🔥</span>
+                <div>
+                  <strong>Firebase Auth &amp; Cloud Firestore</strong>
+                  <span>Verified Google Sign-In powered by Firebase with scoped sessions.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="gov-card-quick-links">
+              <a href="/services" class="gov-quick-link" id="login-services-link">📑 Services</a>
+              <span>•</span>
+              <a href="javascript:void(0)" onclick="openPrivacyLegalModal()" class="gov-quick-link">⚖️ Privacy &amp; Legal</a>
+              <span>•</span>
+              <a href="javascript:void(0)" onclick="openFeedbackModal()" class="gov-quick-link">💬 Feedback</a>
+              <span>•</span>
+              <a href="javascript:void(0)" id="login-switch-platform-link" class="gov-quick-link">Switch Platform ↗</a>
+            </div>
+            <div id="login-section-nav" style="margin-top:12px; display:flex; justify-content:center; flex-wrap:wrap; gap:8px;">
+              <a href="/autoreports?site=console" id="login-link-autoreports" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#065f46; border-color:#a7f3d0; background:#ecfdf5; text-decoration:none;">⚡ Auto Reports</a>
+              <a href="/manualreports" id="login-link-manualreports" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#92400e; border-color:#fde68a; background:#fffbeb; text-decoration:none;">📂 Manual Reports</a>
+              <a href="/tools" id="login-link-tools" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#3730a3; border-color:#c7d2fe; background:#eef2ff; text-decoration:none;">🧰 Tools Studio</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dedicated Departmental Login Modal (Stage 2 Auth inside Console) -->
+    <div id="dept-login-modal" style="display:none; position:fixed; inset:0; background:rgba(6,78,59,0.84); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(6px);">
+      <div style="background:#ffffff; border-radius:18px; padding:28px 32px; max-width:480px; width:100%; box-shadow:0 25px 60px rgba(0,0,0,0.45); color:#1f2937; position:relative;">
+        <button type="button" onclick="closeDepartmentLoginModal()" style="position:absolute; right:18px; top:18px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:#9ca3af; padding:4px; line-height:1;" title="Close">&times;</button>
+
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:18px;">
+          <div style="width:44px; height:44px; border-radius:12px; background:#ecfdf5; display:flex; align-items:center; justify-content:center; font-size:1.5rem; border:1px solid #a7f3d0;">
+            🏛️
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:1.25rem; font-weight:800; color:#064e3b;">Departmental Login</h3>
+            <p style="margin:2px 0 0; font-size:0.8rem; color:#6b7280;">e-Panchayat Automation Console</p>
+          </div>
+        </div>
+
+        <!-- STEP 1: Enter Credentials -->
+        <div id="dept-modal-step-1">
+          <p style="font-size:0.84rem; color:#4b5563; line-height:1.5; margin:0 0 16px;">
+            Enter your official government credentials. The background AI robot solves the portal captcha automatically and triggers your 6-digit SMS OTP.
+          </p>
+
+          <div id="dept-modal-alert-1" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.84rem; font-weight:700;"></div>
+
+          <form id="dept-modal-creds-form" onsubmit="handleDeptModalCredsSubmit(event)" style="display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <label for="dept-modal-user" style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:4px;">
+                e-Panchayat User ID *
+              </label>
+              <input type="text" id="dept-modal-user" value="" required placeholder="Enter e-Panchayat User ID" style="width:100%; box-sizing:border-box; padding:11px 14px; border:1.5px solid #d1d5db; border-radius:8px; font-size:0.95rem; font-weight:700; color:#111827; letter-spacing:0.5px;">
+            </div>
+
+            <div>
+              <label for="dept-modal-pwd" style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:4px;">
+                e-Panchayat Password *
+              </label>
+              <div style="position:relative;">
+                <input type="password" id="dept-modal-pwd" required placeholder="Enter your portal password" style="width:100%; box-sizing:border-box; padding:11px 40px 11px 14px; border:1.5px solid #d1d5db; border-radius:8px; font-size:0.95rem; font-weight:600; color:#111827;">
+                <button type="button" onclick="toggleDeptModalPwdVisibility()" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:1.1rem; color:#6b7280; padding:4px;" title="Show/Hide Password">👁️</button>
+              </div>
+            </div>
+
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; font-size:0.75rem; color:#64748b; line-height:1.4;">
+              ⚡ <strong>Zero-Wait Robot Engine:</strong> Auto-solves dynamic captcha, secures live session, and maintains persistent automation readiness.
+            </div>
+
+            <div id="dept-modal-live-progress" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 14px; font-size:0.82rem; line-height:1.5; color:#064e3b;">
+              <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #dcfce7; padding-bottom:5px; margin-bottom:6px; font-weight:800; color:#065f46; font-size:0.78rem;">
+                <span>⚡ Portal Login Status</span>
+                <span id="dept-modal-progress-elapsed" style="color:#047857; background:#dcfce7; padding:1px 8px; border-radius:99px; font-size:0.74rem;">0s</span>
+              </div>
+              <div id="dept-modal-progress-list" style="display:flex; flex-direction:column; gap:4px; max-height:140px; overflow-y:auto;"></div>
+            </div>
+
+            <button type="submit" id="btn-dept-modal-login" style="width:100%; padding:13px; background:linear-gradient(135deg, #059669, #047857); color:white; border:none; border-radius:10px; font-size:0.95rem; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(5,150,105,0.35); transition:all 0.2s;">
+              <span id="btn-dept-modal-login-text">Connect to e-Panchayat &amp; Generate OTP →</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- STEP 2: Enter 6-Digit OTP -->
+        <div id="dept-modal-step-2" style="display:none;">
+          <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:14px; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+              <span style="font-size:1.3rem;">📱</span>
+              <strong style="color:#065f46; font-size:0.92rem;">6-Digit OTP Sent to Registered Mobile</strong>
+            </div>
+            <p id="dept-modal-otp-msg" style="margin:0; font-size:0.84rem; color:#dc2626; font-weight:700; line-height:1.45;">
+              A 6 digit OTP has been sent to your registered mobile number <strong id="dept-modal-mobile-span">xxxxxx5586</strong>. Enter OTP to continue.
+            </p>
+          </div>
+
+          <div id="dept-modal-alert-2" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.84rem; font-weight:700;"></div>
+
+          <form id="dept-modal-otp-form" onsubmit="handleDeptModalOtpSubmit(event)" style="display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <label for="dept-modal-otp-input" style="display:block; font-size:0.8rem; font-weight:700; color:#374151; margin-bottom:6px; text-align:center;">
+                Enter 6-Digit SMS OTP *
+              </label>
+              <input type="text" id="dept-modal-otp-input" maxlength="6" pattern="[0-9]{6}" required placeholder="• • • • • •" autocomplete="one-time-code" style="width:100%; box-sizing:border-box; padding:12px; border:2px solid #059669; border-radius:10px; font-size:1.8rem; font-weight:800; color:#064e3b; text-align:center; letter-spacing:10px; background:#f0fdf4;">
+            </div>
+
+            <button type="submit" id="btn-dept-modal-verify-otp" style="width:100%; padding:13px; background:linear-gradient(135deg, #f59e0b, #d97706); color:#1a1a1a; border:none; border-radius:10px; font-size:0.95rem; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 14px rgba(245,158,11,0.35); transition:all 0.2s;">
+              <span id="btn-dept-modal-verify-text">✓ Validate OTP &amp; Connect Session</span>
+            </button>
+
+            <div style="display:flex; justify-content:flex-start; align-items:center; font-size:0.8rem; margin-top:4px;">
+              <a href="javascript:void(0)" onclick="switchDeptModalStep(1)" style="color:#6b7280; text-decoration:none; font-weight:600;">← Change User ID</a>
+            </div>
+          </form>
+        </div>
+
+        <!-- STEP 3: Connected Success Card -->
+        <div id="dept-modal-step-success" style="display:none; text-align:center; padding:10px 0;">
+          <div style="width:56px; height:56px; border-radius:50%; background:#ecfdf5; color:#059669; font-size:2rem; display:flex; align-items:center; justify-content:center; margin:0 auto 12px; border:2px solid #a7f3d0;">
+            ✓
+          </div>
+          <h4 style="margin:0 0 6px; font-size:1.2rem; font-weight:800; color:#064e3b;">Departmental Session Active!</h4>
+          <p id="dept-modal-success-msg" style="margin:0 0 18px; font-size:0.85rem; color:#4b5563; line-height:1.5;">
+            Official e-Panchayat session connected for Officer. Background automation engine is ready.
+          </p>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <a id="dept-modal-open-console-link" href="/?site=console" style="display:flex; align-items:center; justify-content:center; gap:8px; padding:12px; background:linear-gradient(135deg, #f59e0b, #d97706); color:#1a1a1a; font-weight:800; border-radius:10px; text-decoration:none; font-size:0.92rem; box-shadow:0 4px 12px rgba(245,158,11,0.3);">
+              📊 Open e-Panchayat Automation Console →
+            </a>
+            <button type="button" onclick="closeDepartmentLoginModal()" style="padding:9px; background:#f3f4f6; border:1px solid #d1d5db; border-radius:8px; font-size:0.82rem; font-weight:700; color:#374151; cursor:pointer;">
+              Continue on Current Page
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Privacy & Legal In-Page Modal -->
+    <div id="privacy-legal-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+      <div style="background:#ffffff; border-radius:16px; max-width:760px; width:100%; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 25px 50px rgba(0,0,0,0.4); color:#0f172a; position:relative; overflow:hidden;">
+        <div style="padding:18px 24px; background:#064e3b; color:white; display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #f59e0b;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.3rem;">⚖️</span>
+            <div>
+              <h3 style="margin:0; font-size:1.12rem; font-weight:800;">Privacy Policy &amp; Terms of Service</h3>
+              <p style="margin:2px 0 0; font-size:0.76rem; color:#a7f3d0;">e-Panchayat Automation • Government of Telangana • Panchayat Raj &amp; Rural Development</p>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <a href="/privacy-legal" target="_blank" id="privacy-fullpage-link" style="color:white; font-size:0.75rem; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); padding:4px 10px; border-radius:6px; text-decoration:none; font-weight:700;">↗ Full Page</a>
+            <button type="button" onclick="closePrivacyLegalModal()" style="background:none; border:none; color:white; font-size:1.4rem; cursor:pointer; line-height:1; padding:0 4px;" title="Close">&times;</button>
+          </div>
+        </div>
+
+        <div style="padding:22px 28px; overflow-y:auto; font-size:0.88rem; line-height:1.6; color:#334155;">
+          <div style="background:#ecfdf5; border-left:4px solid #059669; padding:12px 16px; border-radius:0 8px 8px 0; margin-bottom:18px; font-size:0.86rem; color:#064e3b;">
+            <strong>Platform Purpose:</strong> e-Panchayat Automation is an administrative companion system for officers of the Panchayat Raj &amp; Rural Development Department, Telangana. It simplifies Panchayat Administration through smart reporting and automation without storing portal passwords or citizen personal data.
+          </div>
+
+          <h4 style="font-size:1rem; font-weight:800; color:#064e3b; margin:16px 0 8px;">1. Privacy Policy &amp; Data Handling</h4>
+          <ul style="padding-left:20px; margin-bottom:14px;">
+            <li><strong>User-Isolated Workspaces:</strong> Excel spreadsheets uploaded in Platform 1 are stored strictly under per-user isolated directories and cleaned up automatically according to retention settings.</li>
+            <li><strong>RAM-Resident Departmental Credentials:</strong> Console credentials and login OTPs are relayed over TLS connections to <code>epanchayat.telangana.gov.in</code> and never stored on disk.</li>
+            <li><strong>Independent Application Sessions:</strong> Authentication sessions between Platform 1 and the Automation Console remain cryptographically separated.</li>
+          </ul>
+
+          <h4 style="font-size:1rem; font-weight:800; color:#064e3b; margin:16px 0 8px;">2. Terms of Service &amp; Eligibility</h4>
+          <ul style="padding-left:20px; margin-bottom:14px;">
+            <li><strong>Permitted Personnel:</strong> Exclusively for authorized officers (DPO, DPM, DLPO, MPDO, MPO, PS, DEO) for official review meetings, attendance tracking, and report preparation.</li>
+            <li><strong>User Responsibilities:</strong> Officers agree to use valid credentials, keep OTPs confidential, and verify statutory submissions against state portal records.</li>
+          </ul>
+        </div>
+
+        <div style="padding:14px 24px; background:#f8fafc; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end;">
+          <button type="button" onclick="closePrivacyLegalModal()" style="padding:8px 20px; background:#064e3b; color:white; border:none; border-radius:8px; font-size:0.88rem; font-weight:700; cursor:pointer;">
+            Understood &amp; Close
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback In-Page Modal -->
+    <div id="feedback-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+      <div style="background:#ffffff; border-radius:16px; max-width:480px; width:100%; box-shadow:0 25px 50px rgba(0,0,0,0.4); color:#0f172a; position:relative; overflow:hidden;">
+        <div style="padding:18px 24px; background:#064e3b; color:white; display:flex; justify-content:space-between; align-items:center; border-bottom:3px solid #f59e0b;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.3rem;">💬</span>
+            <div>
+              <h3 style="margin:0; font-size:1.15rem; font-weight:800;">Departmental Feedback</h3>
+              <p style="margin:2px 0 0; font-size:0.76rem; color:#a7f3d0;">e-Panchayat Automation • Share suggestions, bug reports, or feature requests</p>
+            </div>
+          </div>
+          <button type="button" onclick="closeFeedbackModal()" style="background:none; border:none; color:white; font-size:1.4rem; cursor:pointer; line-height:1; padding:0 4px;" title="Close">&times;</button>
+        </div>
+
+        <form id="feedback-form" onsubmit="handleFeedbackSubmit(event)" style="padding:22px 24px; display:flex; flex-direction:column; gap:13px;">
+          <div id="feedback-alert" style="display:none; padding:10px 14px; border-radius:8px; font-size:0.84rem; font-weight:700;"></div>
+
+          <div class="two-col-grid">
+            <div>
+              <label for="fb-name" style="display:block; font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:3px;">Your Name</label>
+              <input type="text" id="fb-name" placeholder="Officer Name" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1.5px solid #cbd5e1; border-radius:6px; font-size:0.86rem; font-weight:600;">
+            </div>
+            <div>
+              <label for="fb-desig" style="display:block; font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:3px;">Designation</label>
+              <select id="fb-desig" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1.5px solid #cbd5e1; border-radius:6px; font-size:0.86rem; font-weight:600;">
+                <option value="DPO">DPO</option>
+                <option value="DPM">DPM</option>
+                <option value="DLPO">DLPO</option>
+                <option value="MPDO">MPDO</option>
+                <option value="MPO">MPO</option>
+                <option value="PS">PS</option>
+                <option value="DEO">DEO</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label for="fb-category" style="display:block; font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:3px;">Feedback Category</label>
+            <select id="fb-category" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1.5px solid #cbd5e1; border-radius:6px; font-size:0.86rem; font-weight:600;">
+              <option value="Feature Request">💡 Feature Request</option>
+              <option value="Bug / Error Report">🐛 Bug / Error Report</option>
+              <option value="Data Verification">📊 Data Accuracy / Verification</option>
+              <option value="General Appreciation">⭐ General Appreciation</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="fb-message" style="display:block; font-size:0.78rem; font-weight:700; color:#334155; margin-bottom:3px;">Your Message / Feedback *</label>
+            <textarea id="fb-message" rows="4" required placeholder="Describe your suggestions, reports needed, or any difficulties encountered..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.88rem; font-family:inherit; resize:vertical;"></textarea>
+          </div>
+
+          <button type="submit" id="btn-submit-feedback" style="width:100%; padding:11px; background:#059669; color:white; border:none; border-radius:8px; font-size:0.92rem; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(5,150,105,0.3);">
+            <span>📤</span> Submit Feedback
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Mandatory First-Time User Profile Registration / Update View -->
+    <div id="officer-profile-modal" style="display:none; position:fixed; inset:0; background:rgba(6,78,59,0.85); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+      <div style="background:#ffffff; border-radius:16px; padding:28px 32px; max-width:500px; width:100%; box-shadow:0 25px 50px rgba(0,0,0,0.38); color:#0f172a; position:relative; border-top:5px solid #059669;">
+        <button type="button" id="prof-modal-close-btn" onclick="closeOfficerProfileModal()" style="display:none; position:absolute; right:16px; top:14px; background:none; border:none; font-size:1.35rem; cursor:pointer; color:#64748b; padding:4px;" title="Close">&times;</button>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+          <div style="width:44px; height:44px; border-radius:12px; background:#ecfdf5; border:1.5px solid #a7f3d0; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+            📋
+          </div>
+          <div>
+            <div style="font-size:0.72rem; font-weight:800; color:#047857; text-transform:uppercase; letter-spacing:0.4px;">e-Panchayat Automation</div>
+            <h3 id="prof-modal-title" style="margin:0; font-size:1.24rem; font-weight:800; color:#064e3b;">User Profile Registration</h3>
+            <p id="prof-modal-subtitle" style="margin:2px 0 0; font-size:0.84rem; color:#64748b;">Complete your official e-Panchayat Automation details to activate your account</p>
+          </div>
+        </div>
+
+        <div id="profile-modal-alert" style="display:none; padding:10px 14px; border-radius:8px; margin:14px 0 8px; font-size:0.84rem; font-weight:700;"></div>
+
+        <form id="officer-profile-form" onsubmit="handleOfficerProfileSubmit(event)" style="display:flex; flex-direction:column; gap:13px; margin-top:14px;">
+          <div>
+            <label for="prof-gmail" style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+              Gmail Address <span style="font-weight:600; color:#64748b; font-size:0.75rem;">(Authenticated via Google • Read-Only)</span>
+            </label>
+            <div style="position:relative;">
+              <input type="email" id="prof-gmail" readonly required style="width:100%; box-sizing:border-box; padding:10px 38px 10px 14px; background:#f1f5f9; color:#475569; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.9rem; font-weight:600; cursor:not-allowed;">
+              <span style="position:absolute; right:12px; top:50%; transform:translateY(-50%); font-size:0.95rem; color:#64748b;" title="Read-only authenticated Google account">🔒</span>
+            </div>
+          </div>
+
+          <div>
+            <label for="prof-name" style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+              Full Name *
+            </label>
+            <input type="text" id="prof-name" placeholder="Enter your full official name" required autocomplete="name" style="width:100%; box-sizing:border-box; padding:10px 14px; background:#ffffff; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.92rem; font-weight:600;">
+          </div>
+
+          <div>
+            <label for="prof-desig" style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+              Designation *
+            </label>
+            <select id="prof-desig" onchange="syncDesignationToRole(this.value)" required style="width:100%; box-sizing:border-box; padding:10px 14px; background:#ffffff; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.92rem; font-weight:600; cursor:pointer;">
+              <option value="" disabled selected>-- Select Designation --</option>
+              <option value="DPO">DPO (District Panchayat Officer)</option>
+              <option value="DPM">DPM (District Project Manager)</option>
+              <option value="DLPO">DLPO (Divisional Panchayat Officer)</option>
+              <option value="MPDO">MPDO (Mandal Parishad Development Officer)</option>
+              <option value="MPO">MPO (Mandal Panchayat Officer)</option>
+              <option value="PS">PS (Panchayat Secretary)</option>
+              <option value="DEO">DEO (Data Entry Operator)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="prof-role" style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+              Role / Access Level *
+            </label>
+            <select id="prof-role" required style="width:100%; box-sizing:border-box; padding:10px 14px; background:#ffffff; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.92rem; font-weight:600; cursor:pointer;">
+              <option value="" disabled selected>-- Select Role / Access Level --</option>
+              <option value="Mandal Level">Mandal Level</option>
+              <option value="Division Level">Division Level</option>
+              <option value="District Level">District Level</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="prof-phone" style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:4px;">
+              Mobile Number * <span style="font-weight:600; color:#64748b; font-size:0.75rem;">(10-digit Indian mobile starting 6-9)</span>
+            </label>
+            <input type="tel" id="prof-phone" placeholder="e.g. 9876543210" pattern="[6-9][0-9]{9}" required autocomplete="tel" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);" style="width:100%; box-sizing:border-box; padding:10px 14px; background:#ffffff; color:#0f172a; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.92rem; font-weight:600;">
+          </div>
+
+          <button type="submit" id="btn-save-profile" style="width:100%; padding:12px; margin-top:8px; font-size:0.98rem; font-weight:800; background:#059669; color:#ffffff; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 14px rgba(5,150,105,0.35); display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span>📝</span> Submit / Complete Registration →
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========================================================
+         EXECUTIVE DASHBOARD (Platform 1 & Console Dual Sections)
+         ======================================================== -->
+    <div id="post-login-dashboard" style="display: none;">
+      <section class="hero-card" id="dash-welcome-hero-card" style="margin-bottom: 24px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+          <div>
+            <div class="hero-eyebrow" id="dash-welcome-eyebrow">🏛️ Welcome to e-Panchayat Automation</div>
+            <h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>
+            <p class="hero-subtitle" id="dash-tagline" style="margin-bottom:6px; font-weight:700; color:#fde68a;">
+              Simplifying Panchayat Administration through Smart Reporting and Automation.
+            </p>
+            <p class="hero-subtitle" id="dash-scope-subtitle" style="margin-bottom:0; font-size:0.9rem;">
+              Access Manual Excel Reports, Automated Departmental Robot Pipelines, and Live House Tax DCB Analytics from your unified dashboard.
+            </p>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+            <span class="badge badge-portal" id="dash-session-badge" style="font-size:0.86rem; padding:6px 14px; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3);">
+              🟢 Choose Reporting Mode
+            </span>
+            <button type="button" id="btn-switch-workspace-mode" onclick="showWorkspaceModeSelector()" class="btn btn-gold btn-sm" style="display:none; font-size:0.78rem; padding:5px 12px;">
+              ⇄ Switch Section (Auto / Manual / Tools)
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-cross-box" id="dash-hero-cross-box" style="display:none;">
+          <div style="min-width:0; flex:1 1 320px;">
+            <strong id="dash-hero-cross-title" style="display:block; font-size:0.96rem; color:#fde68a; margin-bottom:2px;">
+              🤖 Departmental Portal Automation Active
+            </strong>
+            <span id="dash-hero-cross-desc" style="display:block; font-size:0.84rem; color:#d1fae5; line-height:1.45;">
+              Both Manual Reports and Automated Portal Robots are unlocked on your unified dashboard.
+            </span>
+          </div>
+          <a id="dash-hero-cross-link" href="/?site=console" class="btn btn-gold btn-sm" style="flex-shrink:0;">
+            🏛️ Open e-Panchayat Automation Console →
+          </a>
+        </div>
+      </section>
+
+      <!-- POST-LOGIN MODE SELECTOR: Manual Reports vs Automated Reports -->
+      <section id="workspace-mode-selector" style="display:none; margin-bottom:26px;">
+        <div class="modules-section" style="margin-top:0;">
+          <div class="modules-section-title">
+            <span>🧭</span>
+            <span>Select Your Reporting Workspace</span>
+          </div>
+          <div class="modules-section-subtitle">
+            Choose whether you want to upload Excel spreadsheets manually or launch Automated e-Panchayat Portal Robots.
+          </div>
+          <div class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));">
+            <div class="module-card featured" id="card-choose-manual" style="border-color:#059669; box-shadow:0 6px 20px rgba(5,150,105,0.12);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#ecfdf5; color:#047857;">📊</div>
+                </div>
+                <h3>Manual Reports</h3>
+                <p>
+                  Upload GM-R 1.2.7 Daily or Multi-Day PS Attendance &amp; DSR Excel files to generate instant Landscape District &amp; Mandal PDFs plus Live House Tax DCB Analytics — zero portal login required.
+                </p>
+                <div style="font-size:0.78rem; color:#065f46; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:8px 10px; margin-bottom:14px; font-weight:600;">
+                  ✓ Daily PS Attendance &amp; DSR • ✓ Live House Tax DCB • 📅 Multi-Day DSR (Upcoming)
+                </div>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" id="btn-choose-manual" class="btn btn-gold" style="width:100%; text-align:center;" onclick="selectWorkspaceMode('manual')">
+                  📂 Open Manual Reports →
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card featured" id="card-choose-automated" style="border-color:#0c3829; box-shadow:0 6px 20px rgba(12,56,41,0.14);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef3c7; color:#b45309;">⚡</div>
+                  <span class="badge-pill-live" id="badge-automated-mode-access" style="display:none;"></span>
+                </div>
+                <h3>Automated Reports (Portal Console)</h3>
+                <p>
+                  Run live background e-Panchayat robots with single-session Captcha &amp; SMS OTP verification across PS Attendance &amp; DSR, Thursday GP Balance, MAS 18-Indicator Report, and DCB.
+                </p>
+                <div id="automated-subscription-note" style="display:none; font-size:0.78rem; color:#991b1b; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:8px 10px; margin-bottom:14px; font-weight:600;"></div>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" id="btn-choose-automated" class="btn btn-primary" style="width:100%; text-align:center;" onclick="selectWorkspaceMode('automated')">
+                  ⚡ Open Automated Reports →
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card featured" id="card-choose-tools" style="border-color:#6366f1; box-shadow:0 6px 20px rgba(99,102,241,0.12);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#eef2ff; color:#4f46e5;">🧰</div>
+                  <span class="badge-pill-live" id="badge-tools-mode">● 85+ Live Tools</span>
+                </div>
+                <h3>Tools</h3>
+                <p>
+                  Self-hosted office document suites integrating <strong>Excel &amp; Data Studio</strong> (70+ spreadsheet converters, cleaners, banking &amp; interactive grid editor) and <strong>All-in-One PDF Studio</strong> (14 PDF merge, split, compress, OCR &amp; conversion tools).
+                </p>
+                <div style="font-size:0.78rem; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px 10px; margin-bottom:14px; font-weight:600;">
+                  📊 Excel &amp; Data Studio (70+ Tools) &bull; 📄 All-in-One PDF Studio (14 Tools)
+                </div>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" id="btn-choose-tools" class="btn btn-primary" style="width:100%; text-align:center; background:linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);" onclick="selectWorkspaceMode('tools')">
+                  🧰 Open Tools →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Background Service Status Strip (Console Stage 2 Only) -->
+      <div id="dash-officer-banner" style="display: none;">
+        <div class="bg-service-strip" style="background:#092e21; border:1px solid #167451; border-radius:12px; padding:16px 20px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; box-shadow:0 4px 14px rgba(0,0,0,0.12);">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="position:relative; width:14px; height:14px; flex-shrink:0;">
+              <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:#10b981; opacity:0.75; animation:livePing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
+              <span style="position:relative; display:inline-block; width:14px; height:14px; border-radius:50%; background:#10b981;"></span>
+            </div>
+            <div>
+              <div style="font-size:1rem; font-weight:700; color:white; display:flex; align-items:center; gap:8px;">
+                <span>Background Robot Service:</span>
+                <span style="background:#10b981; color:#064e3b; font-size:0.75rem; font-weight:800; padding:2px 8px; border-radius:6px; letter-spacing:0.5px;">ACTIVE &amp; RUNNING IN BACKGROUND</span>
+              </div>
+              <div style="font-size:0.84rem; color:#a7f3d0; margin-top:3px;">
+                e-Panchayat Automation browser session active for Officer <strong id="dash-officer-id" style="color:#fbbf24;">Officer</strong>. Session is continuously running in the background for zero-wait automated reports.
+              </div>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span id="dash-timer-chip" style="background:rgba(0,0,0,0.35); border:1px solid #10b981; border-radius:8px; padding:6px 12px; color:#d1fae5; font-size:0.82rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+              🛡️ Session: <span style="font-family:monospace; font-size:0.92rem; color:#34d399;">Persistent</span>
+            </span>
+            <span class="badge" style="background:rgba(255,255,255,0.1); color:#e2e8f0; border:1px solid rgba(255,255,255,0.2); font-size:0.8rem; padding:6px 12px;">
+              🤖 Robot Engine: Connected
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLATFORM 1: Free Reporting & Analytics Dashboard Modules -->
+      <div id="portal-modules-section" style="display:none;">
+        <div class="modules-section" style="margin-top:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+            <div>
+              <div class="modules-section-title">
+                <span>📊</span>
+                <span>Manual Reports (No Portal Login Required)</span>
+              </div>
+              <div class="modules-section-subtitle" style="margin-bottom:0;">
+                Upload GM-R 1.2.7 Attendance &amp; DSR spreadsheets along with optional Presentees &amp; Absentees directories to generate official District and Mandal PDF reports.
+              </div>
+            </div>
+            <a class="btn btn-gold btn-sm" id="btn-open-studio-workspace" href="/reports/ps-attendance#reports">
+              📂 Open Manual Reports →
+            </a>
+          </div>
+
+          <div class="modules-grid">
+            <div class="module-card featured" id="card-policy-module_dsr_excel">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef3c7; color:#b45309;">⚡</div>
+                  <span class="badge-pill-soon" id="badge-policy-module_dsr_excel" style="display:none;"></span>
+                </div>
+                <h3>Daily PS Attendance &amp; DSR Reports</h3>
+                <p>
+                  Upload GM-R 1.2.7 DSR spreadsheet along with optional Presentees &amp; Absentees directories to generate 6-Section Landscape District or 2-Page Mandal PDF reports.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <a class="btn btn-gold" id="btn-launch-free-dsr" href="/reports/ps-attendance#reports" style="width:100%; text-align:center;">
+                  ⚡ Upload Excel &amp; Generate DSR PDF →
+                </a>
+              </div>
+            </div>
+
+            <div class="module-card" id="card-policy-module_dsr_multiday">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef3c7; color:#b45309;">📅</div>
+                  <span class="badge-pill-soon" id="badge-policy-module_dsr_multiday">Upcoming</span>
+                </div>
+                <h3>Multiple Days DSR &amp; Attendance Reports</h3>
+                <p>
+                  Upload multiple daily GM-R 1.2.7 spreadsheets across a custom date range to compile a consolidated Multi-Day Abstract PDF &amp; Multi-Sheet Excel tracking punctuality and recurring defaulters.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-outline" id="btn-launch-multiday-dsr" style="width:100%; text-align:center; color:var(--text); border-color:var(--border);" onclick="showUpcomingModal('Multiple Days DSR & Attendance Reports', '📅', 'Multi-Day Attendance & DSR consolidation across custom date ranges is marked as Upcoming. Daily PS Attendance & DSR PDF generation remains active and ready.')">
+                  📅 View Module Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUTOMATED REPORTS: Departmental Portal Robot Pipelines -->
+      <div id="console-modules-section" style="display:none; margin-top:28px;">
+        <!-- Compact Animated Automation Workflow Bar -->
+        <div id="automation-live-stage" class="automation-live-stage">
+          <div class="auto-stage-compact-row">
+            <div class="auto-stage-lead">
+              <div class="auto-bot-reactor" aria-hidden="true">
+                <div class="auto-sonar-ring"></div>
+                <div class="auto-sonar-ring delay"></div>
+                <svg class="auto-orbit-svg" viewBox="0 0 100 100" width="64" height="64">
+                  <circle class="auto-orbit-outer" cx="50" cy="50" r="44" fill="none" stroke="rgba(56,189,248,0.75)" stroke-width="2.2" stroke-dasharray="10 6" />
+                  <circle class="auto-orbit-inner" cx="50" cy="50" r="33" fill="none" stroke="rgba(192,132,252,0.9)" stroke-width="2.2" stroke-dasharray="6 5" />
+                </svg>
+                <div class="auto-bot-core">🤖</div>
+              </div>
+              <div>
+                <div class="auto-stage-pill" style="margin-bottom:4px;">
+                  <span class="auto-radar-dot"></span>
+                  <span>LIVE ROBOT PIPELINE</span>
+                  <span class="auto-wave-bars" aria-hidden="true">
+                    <span class="auto-wave-bar"></span>
+                    <span class="auto-wave-bar"></span>
+                    <span class="auto-wave-bar"></span>
+                    <span class="auto-wave-bar"></span>
+                    <span class="auto-wave-bar"></span>
+                  </span>
+                </div>
+                <div class="auto-stage-mini-desc">AI Captcha + OTP Sync + Auto Compilation</div>
+              </div>
+            </div>
+
+            <!-- Animated 4-Stage Pipeline Flow -->
+            <div class="auto-pipeline-flow" aria-label="Automated reporting workflow">
+              <div class="auto-pipe-node step-1">
+                <span class="auto-pipe-icon">🔐</span>
+                <span class="auto-pipe-label">1. EPTS Auth</span>
+              </div>
+              <div class="auto-pipe-track"><span class="auto-packet"></span></div>
+              <div class="auto-pipe-node step-2">
+                <span class="auto-pipe-icon">🧠</span>
+                <span class="auto-pipe-label">2. AI Captcha</span>
+              </div>
+              <div class="auto-pipe-track"><span class="auto-packet delay-1"></span></div>
+              <div class="auto-pipe-node step-3">
+                <span class="auto-pipe-icon">🌐</span>
+                <span class="auto-pipe-label">3. Robot Fetch</span>
+              </div>
+              <div class="auto-pipe-track"><span class="auto-packet delay-2"></span></div>
+              <div class="auto-pipe-node step-4">
+                <span class="auto-pipe-icon">📄</span>
+                <span class="auto-pipe-label">4. PDF &amp; Excel</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modules-section" style="margin-top:0;">
+          <div class="modules-section-title">
+            <span>⚡</span>
+            <span>Automated Reports (Portal Robot Pipelines)</span>
+          </div>
+          <div class="modules-section-subtitle">
+            Stage 2 Departmental Portal integration with AI Captcha solving, 6-digit SMS OTP verification, and automatic PDF/Excel compilation.
+          </div>
+          <div class="modules-grid">
+            <div class="module-card featured auto-robot-card" id="card-policy-module_dsr_automation">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef3c7; color:#b45309;">⚡</div>
+                  <span class="badge-pill-live auto-live-pill" id="badge-policy-module_dsr_automation"><span class="auto-pill-dot"></span> Active Robot</span>
+                </div>
+                <h3>PS Attendance and DSR Report</h3>
+                <p>
+                  Automatic downloading of GM-R 1.2.7 DSR raw data, 1.2.11 Presentees, and 1.2.10 Absentees reports with matched secretary details and official combined Landscape District PDF compilation.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="closeMobileNav(); openDsrRobot();">
+                  ⚡ Open PS Attendance &amp; DSR Station →
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card featured auto-robot-card" id="card-policy-module_gp_balance_automation" style="border-color:#10b981;">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#ecfdf5; color:#047857;">🏦</div>
+                  <span class="badge-pill-live auto-live-pill" id="badge-policy-module_gp_balance_automation"><span class="auto-pill-dot"></span> Active Robot</span>
+                </div>
+                <h3>GP Balance Entry Report</h3>
+                <p>
+                  Automated Thursday bank balance entry tracking (GM-R 14.2), calculating % Data Entered, account-wise pending tracking, and drill-down actionable list.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-gold" style="width:100%; text-align:center;" onclick="openBalanceRobot()">
+                  🏦 Open Balance Robot Station →
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card featured auto-robot-card" id="card-policy-module_mas_automation" style="border-color:#0c3829;">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#dcfce7; color:#15803d;">📑</div>
+                  <span class="badge-pill-live auto-live-pill" id="badge-policy-module_mas_automation"><span class="auto-pill-dot"></span> Live</span>
+                </div>
+                <h3>Monthly Activity Statement (MAS)</h3>
+                <p>
+                  Official 18-Indicator Executive Matrix (GM-R 5.24 &amp; GM-R 5.23 Births Register) with Legal Landscape PDF and 5-Sheet Styled Excel export via single active EPTS session.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <a href="/reports/mas" id="console-mas-link" class="btn btn-gold" style="width:100%; text-align:center;" onclick="return openMasRobot(event);">
+                  📊 Open MAS Report Workspace →
+                </a>
+              </div>
+            </div>
+
+            <div class="module-card" id="card-console-gp-inspections">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔍</div>
+                  <span class="badge-pill-soon">Upcoming</span>
+                </div>
+                <h3>Gram Panchayat Inspections</h3>
+                <p>
+                  Compliance monitoring of Gram Panchayat field inspections conducted by DPO, DLPO, and MPO tiers with Mandal filters, GP drill-down, and CSV export.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:var(--text); border-color:var(--border);" onclick="showUpcomingModal('Gram Panchayat Inspections', '🔍', 'Compliance monitoring of Gram Panchayat field inspections conducted by DPO, DLPO, and MPO tiers with Mandal filters, GP drill-down, and automated portal synchronization.')">
+                  🔍 View Module Details
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#ecfdf5; color:#047857;">👥</div>
+                  <span class="badge-pill-soon">Upcoming</span>
+                </div>
+                <h3>Citizen Services</h3>
+                <p>
+                  Real-time monitoring of citizen application delivery, birth/death certificates, and NOC timelines across Mandals.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:var(--text); border-color:var(--border);" onclick="showUpcomingModal('Citizen Services', '👥', 'Automated tracking of citizen applications, service delivery SLAs, and certificates issuance from the Telangana e-Panchayat portal.')">
+                  👥 View Module Details
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef3c7; color:#92400e;">🏷️</div>
+                  <span class="badge-pill-soon">Upcoming</span>
+                </div>
+                <h3>Trade Licences</h3>
+                <p>
+                  Gram Panchayat business and trade licence issuance tracking, fee collection, and expiry renewal automation.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:var(--text); border-color:var(--border);" onclick="showUpcomingModal('Trade Licences', '🏷️', 'Automated trade licence renewal tracking, fees reconciliation, and business register monitoring.')">
+                  🏷️ View Module Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live State & Revenue Analytics (House Tax DCB) -->
+      <div id="live-dcb-analytics-section" style="display:none; margin-top:28px;">
+        <div class="modules-section" style="margin-top:0;">
+          <div class="modules-section-title">
+            <span>🏛️</span>
+            <span>Live State Data &amp; Revenue Analytics</span>
+          </div>
+          <div class="modules-section-subtitle">
+            Explore real-time House Tax Demand, Collection &amp; Balance analytics across Telangana districts.
+          </div>
+          <div class="modules-grid">
+            <div class="module-card featured" id="card-policy-module_dcb_live" style="border-color:#167451;">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#eaf5ef; color:#167451;">💰</div>
+                  <span class="badge-pill-live" id="badge-policy-module_dcb_live">● Live Analytics</span>
+                </div>
+                <h3>Live House Tax Collection (DCB) Station</h3>
+                <p>
+                  Real-time statewide Demand, Collection, and Balance (DCB) analytics across 31+ Districts and Mandals with interactive KPIs, PDF, Power BI Visual PDF &amp; Excel exports.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-primary" style="width:100%; text-align:center;" onclick="openTaxDcbStation()">
+                  📈 Open Live House Tax DCB Station →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLATFORM TOOLS WORKSPACE (Live Excel & PDF Studios) -->
+      <div id="tools-modules-section" style="display:none; margin-top:20px;">
+        <div class="modules-section" style="margin-top:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+            <div>
+              <div class="modules-section-title">
+                <span>🧰</span>
+                <span>Tools &amp; Utility Studios</span>
+              </div>
+              <div class="modules-section-subtitle" style="margin-bottom:0;">
+                Launch self-hosted Excel &amp; spreadsheet manipulation tools or the All-in-One PDF Studio directly inside e-Panchayat Automation.
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="color:var(--text); border-color:var(--border);" onclick="showWorkspaceModeSelector()">
+              ← Back to Reporting Workspace
+            </button>
+          </div>
+          <div class="modules-grid">
+            <div class="module-card featured" id="card-tool-excel" style="border-color:#2563eb; box-shadow:0 6px 20px rgba(37,99,235,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#eff6ff; color:#2563eb;">📊</div>
+                  <span class="badge-pill-live">● 70+ Live Tools</span>
+                </div>
+                <h3>Excel &amp; Data Studio</h3>
+                <p>
+                  Convert to/from Excel (PDF, Word, CSV, TSV, HTML, JSON, XML, Markdown, SQLite, ODS), merge &amp; compare workbooks, remove duplicates, normalize dates, export Bank/QuickBooks IIF/OFX/QBO, and edit spreadsheets live in-browser.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <a href="/tools/excel" id="btn-open-tool-excel" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);">
+                  📊 Open Excel &amp; Data Studio →
+                </a>
+              </div>
+            </div>
+
+            <div class="module-card featured" id="card-tool-pdf" style="border-color:#dc2626; box-shadow:0 6px 20px rgba(220,38,38,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef2f2; color:#dc2626;">📄</div>
+                  <span class="badge-pill-live">● 14 Live PDF Tools</span>
+                </div>
+                <h3>All-in-One PDF Studio</h3>
+                <p>
+                  Merge, split, compress, rotate, organize pages, convert PDF to Word / Markdown / Images or Images to PDF, add watermarks &amp; page numbers, password-protect/unlock, and run searchable RapidOCR.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <a href="/tools/pdf" id="btn-open-tool-pdf" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+                  📄 Open All-in-One PDF Studio →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================
+         ADMINISTRATOR GOVERNANCE DASHBOARD
+         ======================================================== -->
+    <section class="automation-station" id="admin-dashboard-station" style="display:none; margin-bottom:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:#fef3c7; color:#b45309; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">🛡️</div>
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Administrator Governance Dashboard</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">e-Panchayat Automation &middot; Officer Access Control, Module Availability Policies &amp; Cloud Firestore Analytics</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
+          ← Back to Dashboard
+        </button>
+      </div>
+
+      <div id="admin-alert" class="gov-portal-alert"></div>
+
+      <div class="admin-tabs">
+        <button type="button" class="admin-tab-btn active" id="admin-tab-overview" onclick="switchAdminTab('overview')">📊 Overview</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-users" onclick="switchAdminTab('users')">👥 Users &amp; Permissions</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-policy" onclick="switchAdminTab('policy')">🎛️ Access Policy</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-feedback" onclick="switchAdminTab('feedback')">💬 Feedback Inbox</button>
+      </div>
+
+      <!-- Tab 1: Overview -->
+      <div id="admin-pane-overview">
+        <div class="metrics-grid">
+          <div class="metric-card accent">
+            <div class="metric-label">Total Officers</div>
+            <div class="metric-value" id="adm-kpi-users">—</div>
+            <div class="metric-sub">Centralized Identity DB</div>
+          </div>
+          <div class="metric-card success">
+            <div class="metric-label">Active Accounts</div>
+            <div class="metric-value" id="adm-kpi-active">—</div>
+            <div class="metric-sub">Permitted Access</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-label">Profiles Completed</div>
+            <div class="metric-value" id="adm-kpi-completed">—</div>
+            <div class="metric-sub">Registered Designations</div>
+          </div>
+          <div class="metric-card warning">
+            <div class="metric-label">30-Day Activity Events</div>
+            <div class="metric-value" id="adm-kpi-events">—</div>
+            <div class="metric-sub" id="adm-kpi-feedback">Feedback Count: —</div>
+          </div>
+        </div>
+        <div id="admin-breakdown-grid" class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));"></div>
+      </div>
+
+      <!-- Tab 2: Users -->
+      <div id="admin-pane-users" style="display:none;">
+        <div class="admin-section-card">
+          <div class="admin-form-grid">
+            <div class="form-group">
+              <label for="admin-user-search">Search Name / Gmail / Mobile</label>
+              <input type="text" id="admin-user-search" placeholder="Search officer..." onkeyup="if(event.key==='Enter') loadAdminUsers();">
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-desig">Designation</label>
+              <select id="admin-filter-desig" onchange="loadAdminUsers()">
+                <option value="">All Designations</option>
+                <option value="DPO">DPO</option>
+                <option value="DPM">DPM</option>
+                <option value="DLPO">DLPO</option>
+                <option value="MPDO">MPDO</option>
+                <option value="MPO">MPO</option>
+                <option value="PS">PS</option>
+                <option value="DEO">DEO</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-role">Role Level</label>
+              <select id="admin-filter-role" onchange="loadAdminUsers()">
+                <option value="">All Roles</option>
+                <option value="Mandal Level">Mandal Level</option>
+                <option value="Division Level">Division Level</option>
+                <option value="District Level">District Level</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="admin-filter-status">Account Status</label>
+              <select id="admin-filter-status" onchange="loadAdminUsers()">
+                <option value="">All Statuses</option>
+                <option value="Active">Active</option>
+                <option value="Disabled">Disabled</option>
+              </select>
+            </div>
+            <div>
+              <button type="button" class="btn btn-primary btn-sm" onclick="loadAdminUsers()">🔍 Filter / Refresh</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">Registered Officers (<span id="admin-users-count">0</span>)</div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Officer Name &amp; Gmail</th>
+                  <th>Mobile</th>
+                  <th>Designation</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th class="text-center">Portal</th>
+                  <th class="text-center">Console</th>
+                  <th class="text-center">Admin</th>
+                  <th class="text-center">Save</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Access Policy -->
+      <div id="admin-pane-policy" style="display:none;">
+        <div class="admin-section-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <strong style="color:#064e3b;">Platform &amp; Module Availability Policy</strong>
+            <div style="font-size:0.84rem; color:#475569;">All 11 modules operate under open free access by default. Toggle switches below to enable or pause specific platforms or modules.</div>
+          </div>
+          <button type="button" class="btn btn-gold btn-sm" onclick="saveAdminPolicyUpdates()">💾 Apply All Policy Changes</button>
+        </div>
+        <div id="admin-policy-grid" class="policy-grid"></div>
+      </div>
+
+      <!-- Tab 4: Feedback Inbox -->
+      <div id="admin-pane-feedback" style="display:none;">
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">Officer Feedback Submissions (<span id="admin-feedback-count">0</span>)</div>
+            <button type="button" class="btn btn-white btn-sm" onclick="loadAdminFeedback()">🔄 Refresh Inbox</button>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Officer</th>
+                  <th>Designation &amp; Role</th>
+                  <th>Category</th>
+                  <th>Message</th>
+                </tr>
+              </thead>
+              <tbody id="admin-feedback-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         AUTOMATION WORKFLOW STATION CARD (DSR Console Pipeline)
+         ======================================================== -->
+    <section class="automation-card" id="automation-station" style="display: none;">
+      <div id="btn-back-home-wrap" style="display:block; margin-bottom:14px;">
+        <button type="button" class="btn btn-outline btn-sm" onclick="handleHomeNavigation()" style="color:var(--text); border-color:var(--border); display:inline-flex; align-items:center; gap:6px;">
+          ← Back to Portal Overview
+        </button>
+      </div>
+      <div id="btn-back-dashboard-wrap" style="display:none; margin-bottom:14px;">
+        <button type="button" class="btn btn-outline btn-sm" onclick="showDashboard()" style="color:var(--text); border-color:var(--border); display:inline-flex; align-items:center; gap:6px;">
+          ← Back to Report Modules Dashboard
+        </button>
+      </div>
+
+      <div class="automation-header">
+        <div class="automation-title">
+          <span class="pulse-icon">🏛️</span>
+          <span>Departmental Login &bull; e-Panchayat Automation</span>
+        </div>
+        <span class="badge badge-portal" id="session-badge">Session: Ready</span>
+      </div>
+
+      <div class="stepper">
+        <div class="step active" id="step-nav-1" onclick="onStepperNavClick(1)">
+          <div class="step-circle" id="circle-1">1</div>
+          <div class="step-text">Login</div>
+        </div>
+        <div class="step-line" id="line-1"></div>
+        <div class="step" id="step-nav-2" onclick="onStepperNavClick(2)">
+          <div class="step-circle" id="circle-2">2</div>
+          <div class="step-text">Enter OTP</div>
+        </div>
+        <div class="step-line" id="line-2"></div>
+        <div class="step" id="step-nav-3" onclick="onStepperNavClick(3)">
+          <div class="step-circle" id="circle-3">3</div>
+          <div class="step-text">Module &amp; Date</div>
+        </div>
+        <div class="step-line" id="line-3"></div>
+        <div class="step" id="step-nav-4" style="cursor:default;">
+          <div class="step-circle" id="circle-4">4</div>
+          <div class="step-text">Auto-Generate</div>
+        </div>
+      </div>
+
+      <!-- STEP 1: EPTS Login -->
+      <div class="step-pane active" id="pane-step-1">
+        <p class="step-instruction">
+          Enter your official <strong>e-Panchayat Departmental Credentials</strong> (epanchayat.telangana.gov.in). Our background robot connects directly to the government portal, solves the captcha with AI OCR, and triggers your 6-digit login OTP.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="auto-user">e-Panchayat User ID</label>
+            <input type="text" id="auto-user" placeholder="Enter e-Panchayat User ID" autocomplete="username" oninput="updateOfficerBadge(this.value)" required>
+          </div>
+          <div class="form-group">
+            <label for="auto-pwd">e-Panchayat Password</label>
+            <div class="password-wrapper">
+              <input type="password" id="auto-pwd" placeholder="Enter Password" autocomplete="current-password" required>
+              <button type="button" class="btn-toggle-pwd" onclick="togglePasswordVisibility()" title="Toggle visibility">👁️</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-gold" id="btn-login" onclick="startDepartmentLogin()">
+            🔐 Connect to e-Panchayat &amp; Generate OTP
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 2: OTP Verification -->
+      <div class="step-pane" id="pane-step-2">
+        <div class="otp-box">
+          <div class="otp-header">
+            <span class="otp-icon">📱</span>
+            <div>
+              <strong>6-Digit OTP Sent to Your Registered Mobile</strong>
+              <div style="font-size:0.85rem; color:var(--text-muted); margin-top:3px;">
+                Enter the OTP received from e-Panchayat Telangana to authenticate session.
+              </div>
+            </div>
+          </div>
+
+          <div id="otp-dynamic-notice" style="margin: 16px auto 20px auto; max-width: 580px; padding: 14px 18px; background: #fff5f5; border: 1.5px solid #fca5a5; border-radius: 8px; color: #dc2626; font-size: 1.02rem; font-weight: 700; text-align: center; line-height: 1.5; letter-spacing: 0.1px; box-shadow: 0 2px 8px rgba(220,38,38,0.08);">
+            A 6 digit OTP has been sent to your registered mobile number <span id="otp-mobile-span" style="text-decoration: underline; font-weight: 800;">xxxxxx5586</span>. Enter OTP to continue.
+          </div>
+
+          <div class="otp-input-wrap">
+            <input type="text" id="auto-otp" maxlength="6" inputmode="numeric" placeholder="••••••" autocomplete="one-time-code">
+          </div>
+          <div class="form-actions" style="margin-top:20px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-gold" id="btn-validate-otp" onclick="validateOTP()">
+              ✅ Validate OTP &amp; Proceed to Report Selection
+            </button>
+            <button type="button" class="btn btn-outline" style="color:var(--text); border-color:var(--border);" onclick="goToStep(1)">
+              ↩ Back to Login
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: Module & Date Selection -->
+      <div class="step-pane" id="pane-step-3">
+        <p class="step-instruction">
+          Automated multi-report pipeline: The robot downloads <strong>GM-R 1.2.7 DSR Raw Data</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.11 Presentees Report</strong>, re-selects <strong>GP Monitoring</strong> to download <strong>GM-R 1.2.10 Absentees Report</strong>, and compiles the official 6-section District PDF with matched secretary details.
+        </p>
+        <div class="form-row">
+          <div class="form-group" style="flex:2;">
+            <label for="auto-module">Reporting Workflow</label>
+            <select id="auto-module">
+              <option value="dsr_full" selected>⚡ PS Attendance and DSR Module (Combined Landscape District PDF)</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label for="auto-date">Select Date</label>
+            <input type="date" id="auto-date" value="2026-11-02">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px;">
+          <div class="form-group" style="flex:1; min-width:180px;">
+            <label for="auto-cutoff-time" style="display:flex; align-items:center; gap:6px;">
+              <span>⏰</span> Attendance Cutoff Time (Default: 9 AM)
+            </label>
+            <input type="time" id="auto-cutoff-time" value="09:00" onchange="updateCutoffLabelInUi(this.value)">
+            <small style="color:var(--text-muted); font-size:0.78rem; display:block; margin-top:4px;">
+              Evaluates PS punctuality submitted before this cutoff time.
+            </small>
+          </div>
+          <div class="form-group" style="flex:2; min-width:260px;">
+            <label for="auto-sort-by" style="display:flex; align-items:center; gap:6px;">
+              <span>📊</span> PDF Report Sorting Order
+            </label>
+            <select id="auto-sort-by">
+              <option value="before_9" selected id="opt-sort-cutoff">1. Sort based on before 9 AM or entered time (Punctuality %)</option>
+              <option value="overall_att_pct">2. Sort based on overall attendance percentage</option>
+              <option value="dsr_pct">3. Sort based on DSR percentage</option>
+              <option value="att_pending">4. Based on no. of GPs Attendance pending (Highest first)</option>
+              <option value="dsr_pending">5. Based on no. of GPs DSR Pending (Highest first)</option>
+            </select>
+            <small style="color:var(--text-muted); font-size:0.78rem; display:block; margin-top:4px;">
+              Orders Mandal table rows in both the compiled PDF and live dashboard view.
+            </small>
+          </div>
+        </div>
+
+        <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-gold" id="btn-generate" onclick="runAutomatedGeneration()">
+            ⚡ Generate PS Attendance and DSR Report
+          </button>
+          <button type="button" class="btn btn-outline" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
+            ← Back to Dashboard
+          </button>
+        </div>
+      </div>
+
+      <!-- STEP 4: Live Execution & Progress -->
+      <div class="step-pane" id="pane-step-4">
+        <div class="live-progress-card">
+          <div class="spinner-wrap">
+            <div class="circle-progress-box">
+              <div class="spinner" id="auto-spinner"></div>
+              <span id="spinner-pct-text">0%</span>
+            </div>
+            <div style="flex:1;">
+              <div id="progress-status-title">e-Panchayat Automation · Processing in Background...</div>
+              <div id="progress-status-sub" style="font-size:0.82rem; color:#64748b; margin-top:2px;">e-Panchayat Automation is connecting to e-Panchayat server and downloading reports...</div>
+            </div>
+          </div>
+
+          <div class="progress-time-strip">
+            <div style="display:flex; align-items:center; gap:5px; color:#0f766e;">
+              <span>⏱️</span> Elapsed Time: <span id="val-elapsed-time" style="font-family:monospace; font-size:0.95rem; font-weight:800; color:#047857;">00:00</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:5px; color:#047857;">
+              <span>⏳</span> Expected Time: <span id="val-expected-time" style="font-family:monospace; font-size:0.95rem; font-weight:800; color:#047857;">00:45</span>
+            </div>
+          </div>
+
+          <div class="progress-bar-container">
+            <div class="progress-bar-active" id="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+          <ul class="progress-steps" id="progress-steps-list">
+            <li class="p-step active" id="ps-1">Authenticating with e-Panchayat Session...</li>
+            <li class="p-step" id="ps-2">Step 1: GP Monitoring &rarr; Downloading GM-R 1.2.7 DSR Raw Data...</li>
+            <li class="p-step" id="ps-3">Step 2: Re-select GP Monitoring &rarr; Downloading GM-R 1.2.11 Presentees Report...</li>
+            <li class="p-step" id="ps-4">Step 3: Re-select GP Monitoring &rarr; Downloading GM-R 1.2.10 Absentees Report...</li>
+            <li class="p-step" id="ps-5">Step 4: Compiling 6-section official District Attendance &amp; DSR PDF...</li>
+          </ul>
+          <div id="auto-completion-banner" style="display:none; margin-top:20px; padding:18px; background:#ecfdf5; border:1.5px solid #10b981; border-radius:10px; text-align:center;">
+            <strong style="color:#065f46; font-size:1.15rem; display:block; margin-bottom:6px;">🎉 e-Panchayat Automation · Official DSR Report Generated!</strong>
+            <span style="color:#047857; font-size:0.92rem;">The metrics, mandal statistics, and PDF preview below have been updated in real-time.</span>
+            <div style="margin-top:14px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+              <a class="btn btn-gold btn-sm" id="btn-auto-download-pdf" href="/api/naresh/download" target="_blank">📥 Download PDF</a>
+              <button type="button" class="btn btn-white btn-sm" onclick="loadAndScrollToViewer()">👁️ View in PDF Reader</button>
+              <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="goToStep(3)">🔄 Generate Another Date</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="automation-status-bar" id="status-bar">
+        <span class="status-indicator" id="status-dot"></span>
+        <span id="status-msg">Status: Ready to connect to e-Panchayat Telangana portal</span>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         GP BALANCE ENTRY ROBOT STATION (GM-R 14.2)
+         ======================================================== -->
+    <section class="automation-station" id="balance-station" style="display: none; margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:#ecfdf5; color:#047857; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">🏦</div>
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">GM-R 14.2 GP Bank Balance Entry Robot Station</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">e-Panchayat Automation · Status Report on Data Entered GPs · Thursday Balance Entry</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
+          ← Back to Dashboard
+        </button>
+      </div>
+
+      <div id="bal-unauth-banner" style="display:none; background:#fef2f2; border:1.5px solid #fca5a5; border-radius:10px; padding:12px 18px; margin-bottom:16px; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+        <div style="display:flex; align-items:center; gap:10px; color:#991b1b; font-weight:700; font-size:0.9rem;">
+          <span style="font-size:1.4rem;">🔒</span>
+          <span><b>e-Panchayat Login Required:</b> You must login with your Department User ID &amp; OTP to run the live Balance Robot.</span>
+        </div>
+        <button type="button" class="btn btn-gold btn-sm" onclick="showLoginStation('balance')" style="font-weight:800;">
+          🔐 Go to Login &rarr;
+        </button>
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <label for="balance-date-select" style="font-weight:700; font-size:0.9rem; color:var(--text);">Select Balance Updated Date :*</label>
+          <select id="balance-date-select" onchange="onBalanceDateChanged()" style="padding:10px 14px; border-radius:8px; border:1.5px solid var(--border); font-size:0.92rem; font-weight:700; background:white; color:var(--text); outline:none; min-width:240px;">
+            <option value="">e-Panchayat Automation: Fetching live Thursday dates...</option>
+          </select>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-refresh-balance-dates" onclick="fetchPortalBalanceDates(true)" title="Fetch live Thursday dates from e-Panchayat portal" style="padding:8px 12px; font-weight:700; border-color:var(--border); color:var(--text);">
+            🔄 Refresh Portal Dates
+          </button>
+          <label for="chk-balance-include-pmagy" id="lbl-balance-include-pmagy" style="display:inline-flex; align-items:center; gap:7px; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border); background:#ffffff; cursor:pointer; font-size:0.86rem; font-weight:700; color:var(--text); user-select:none;" title="Toggle whether Pradhan Mantri Adarsh Gram Yojana (PMAGY) is included or excluded in GP Balance calculations">
+            <input type="checkbox" id="chk-balance-include-pmagy" onchange="onBalancePmagyChanged()" style="width:16px; height:16px; accent-color:#059669; cursor:pointer;">
+            <span>Include PMAGY</span>
+          </label>
+          <button type="button" class="btn btn-gold btn-sm" id="btn-run-balance-robot" onclick="triggerBalancePipeline()" style="padding:9px 18px; font-weight:800;">
+            ⚡ Run Balance Robot
+          </button>
+        </div>
+        <div style="display:none; gap:10px; flex-wrap:wrap;" id="balance-actions-wrap">
+          <a class="btn btn-white btn-sm" id="btn-balance-excel" href="javascript:void(0)" target="_blank" style="border:1.5px solid #10b981; color:#065f46; font-weight:700;">
+            📥 Download Consolidated Excel
+          </a>
+          <a class="btn btn-white btn-sm" id="btn-balance-pdf" href="javascript:void(0)" target="_blank" style="border:1.5px solid #0c3829; color:#0c3829; font-weight:700;">
+            📄 View Executive PDF
+          </a>
+          <a class="btn btn-white btn-sm" id="btn-balance-pdf-dl" href="javascript:void(0)" download style="border:1.5px solid #047857; color:#047857; font-weight:700;">
+            📥 Download PDF
+          </a>
+        </div>
+      </div>
+
+      <div style="background:#f0fdf4; border:1px solid #a7f3d0; border-radius:8px; padding:10px 16px; margin-bottom:20px; font-size:0.84rem; color:#065f46; display:flex; align-items:center; gap:8px;">
+        <span style="font-size:1.1rem;">💡</span>
+        <span><b>Rule:</b> % Data Entered = (No. of GPs Entered Data / Total No. of GPs) × 100. Account-wise Pending = Total GPs − Updated GPs. <span id="balance-pmagy-rule-note"><b>PMAGY account is excluded</b> (Check "Include PMAGY" above to include it).</span></span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;" id="balance-kpis">
+        <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Mandals</div>
+          <div style="font-size:1.6rem; font-weight:800; color:var(--text);" id="bal-kpi-mandals">—</div>
+        </div>
+        <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total GPs</div>
+          <div style="font-size:1.6rem; font-weight:800; color:var(--text);" id="bal-kpi-total-gps">—</div>
+        </div>
+        <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Data Entered</div>
+          <div style="font-size:1.6rem; font-weight:800; color:#059669;" id="bal-kpi-entered">—</div>
+        </div>
+        <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Pending GPs</div>
+          <div style="font-size:1.6rem; font-weight:800; color:#dc2626;" id="bal-kpi-pending">—</div>
+        </div>
+        <div style="background:white; border:1px solid var(--border); border-radius:10px; padding:14px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Compliance %</div>
+          <div style="font-size:1.6rem; font-weight:800; color:#0c3829;" id="bal-kpi-pct">—</div>
+        </div>
+      </div>
+
+      <div class="table-card" style="margin-bottom:20px;">
+        <div class="table-header">
+          <div class="table-title">Mandal-wise Balance Entry Abstract (GM-R 14.2)</div>
+          <input type="text" class="search-input" id="balance-search-input" placeholder="Search Mandal..." onkeyup="filterBalanceTable()">
+        </div>
+        <div class="table-responsive">
+          <table id="balance-mandal-table">
+            <thead id="balance-mandal-thead">
+              <tr style="background:#0c3829 !important; color:#ffffff !important;">
+                <th class="text-center" style="width:45px;">S.No</th>
+                <th>Mandal Name</th>
+                <th class="text-right">Total GPs</th>
+                <th class="text-right">GPs Entered</th>
+                <th class="text-right">GPs Not Entered</th>
+                <th class="text-right th-pct">% Data Entered</th>
+                <th class="text-center">GP PD (Upd/Pnd)</th>
+                <th class="text-center">TG-bPASS (Upd/Pnd)</th>
+                <th class="text-center">15th FC Tied</th>
+                <th class="text-center">15th FC Untied</th>
+                <th class="text-center">VWSC (SBM)</th>
+                <th class="text-center">MGNREGS</th>
+                <th class="text-center" style="width:80px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="balance-table-tbody">
+              <tr>
+                <td colspan="13" style="text-align:center; padding:38px 20px; color:var(--text-muted); font-size:0.95rem;">
+                  <div style="font-size:1.8rem; margin-bottom:8px;">🏦</div>
+                  <strong style="color:var(--text); font-size:1.05rem;">No Balance Report Processed Yet</strong>
+                  <div style="font-size:0.86rem; color:var(--text-muted); margin-top:6px;">
+                    e-Panchayat Automation is ready — select a Thursday date above and click <b style="color:#b45309;">⚡ Run Balance Robot</b> to fetch live portal data.
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-card" id="balance-pending-gps-card" style="display:none; border-color:#fca5a5;">
+        <div class="table-header" style="background:#fee2e2;">
+          <div class="table-title" style="color:#991b1b;">List of Pending Gram Panchayats</div>
+          <span style="font-size:0.85rem; font-weight:700; color:#b91c1c;" id="pending-count-badge">0 Pending GPs</span>
+        </div>
+        <div class="table-responsive">
+          <table id="balance-pending-table">
+            <thead>
+              <tr>
+                <th class="text-center" style="width:45px;">S.No</th>
+                <th>Mandal Name</th>
+                <th>Gram Panchayat</th>
+                <th>Missing Account(s)</th>
+                <th class="text-center" style="width:95px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="balance-pending-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         HOUSE TAX COLLECTION (DCB) LIVE STATION
+         ======================================================== -->
+    <section class="automation-station" id="tax-dcb-station" style="display: none; margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:#ecfdf5; color:#047857; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">💰</div>
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">House Tax Collection (DCB) Station</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">e-Panchayat Automation · Consolidated Demand, Collection &amp; Balance (DCB)</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="tax-btn-back" style="color:var(--text); border-color:var(--border);" onclick="handleTaxBack()">
+          ← Back to Dashboard
+        </button>
+      </div>
+
+      <div class="control-panel" style="background:#ffffff; border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:flex-end;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="tax-district-select" style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px; display:block;">Select District :*</label>
+            <select id="tax-district-select" style="width:100%; height:40px; border-radius:8px; border:1.5px solid var(--border); padding:0 12px; font-size:0.92rem; font-weight:600;" onchange="onTaxDistrictChanged()">
+              <option value="" selected>-- Select District --</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="tax-mandal-select" style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px; display:block;">Filter by Mandal :</label>
+            <select id="tax-mandal-select" style="width:100%; height:40px; border-radius:8px; border:1.5px solid var(--border); padding:0 12px; font-size:0.92rem; font-weight:600;" onchange="onTaxMandalChanged()" disabled>
+              <option value="">-- Select District First --</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="tax-search-input" style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px; display:block;">Search GP / Mandal :</label>
+            <input type="text" id="tax-search-input" placeholder="Type Panchayat or Mandal name..." style="width:100%; height:40px; border-radius:8px; border:1.5px solid var(--border); padding:0 12px; font-size:0.92rem;" onkeyup="filterTaxTables()">
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-gold" id="btn-tax-generate" onclick="generateTaxReport()" title="Compile House Tax DCB Report for selected District &amp; Mandal" style="height:40px; padding:0 20px; font-weight:800; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              ⚡ Generate DCB Report
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-tax-refresh" onclick="refreshTaxDataLive()" title="Download fresh live DCB data directly from e-Panchayat portal" style="height:40px; padding:0 16px; font-weight:700; background:#0c3829; color:#fff; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              🔄 Refresh Live Data
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-tax-reset" onclick="resetTaxStatistics()" title="Reset all filters and clear statistics" style="height:40px; padding:0 14px; font-weight:700; color:#1f2937; border:1.5px solid #d1d5db; background:#f9fafb; display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+              ⟲ Reset Statistics
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; padding-top:14px; border-top:1px dashed var(--border);" id="tax-actions-wrap">
+          <button type="button" class="btn btn-gold btn-sm" onclick="downloadTaxExcel()" style="display:inline-flex; align-items:center; gap:6px;">
+            📊 Download Consolidated Excel
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="downloadTaxPdf()" style="display:inline-flex; align-items:center; gap:6px; background:#167451; color:#fff;">
+            📄 Download PDF
+          </button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="downloadTaxPbiPdf()" style="display:inline-flex; align-items:center; gap:6px; color:var(--text); border-color:var(--border);">
+            📈 Download PowerBI Visual PDF
+          </button>
+        </div>
+      </div>
+
+      <div class="metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 22px;">
+        <div class="metric-card">
+          <div class="metric-label">TOTAL MANDALS</div>
+          <div class="metric-value" id="tax-kpi-mandals">—</div>
+          <div class="metric-sub" id="tax-kpi-mandals-sub">District Total</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">TOTAL GPs</div>
+          <div class="metric-value" id="tax-kpi-gps">—</div>
+          <div class="metric-sub" id="tax-kpi-assessments">Assessments: —</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">TOTAL DEMAND</div>
+          <div class="metric-value" id="tax-kpi-demand">—</div>
+          <div class="metric-sub" id="tax-kpi-demand-sub">Arrear: — | Current: —</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">TOTAL COLLECTION</div>
+          <div class="metric-value" id="tax-kpi-collection">—</div>
+          <div class="metric-sub" id="tax-kpi-coll-sub">Arrear: — | Current: —</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">TOTAL BALANCE</div>
+          <div class="metric-value" id="tax-kpi-balance">—</div>
+          <div class="metric-sub" id="tax-kpi-bal-sub">Arrear: — | Current: —</div>
+        </div>
+        <div class="metric-card accent">
+          <div class="metric-label">COLLECTION %</div>
+          <div class="metric-value" id="tax-kpi-pct">—%</div>
+          <div class="metric-sub">Performance Ratio</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:6px; margin-bottom:14px; border-bottom:2px solid #e5e7eb; padding-bottom:2px;">
+        <button type="button" class="tab-btn active" id="tax-tab-btn-abstract" onclick="switchTaxTab('abstract')" style="padding:10px 18px; font-weight:700; font-size:0.9rem; border:none; background:#0c3829; color:white; border-radius:8px 8px 0 0; cursor:pointer;">
+          🏛️ Mandal Abstract Table
+        </button>
+        <button type="button" class="tab-btn" id="tax-tab-btn-detail" onclick="switchTaxTab('detail')" style="padding:10px 18px; font-weight:700; font-size:0.9rem; border:none; background:#e5e7eb; color:#374151; border-radius:8px 8px 0 0; cursor:pointer;">
+          🏡 GP Detailed Table
+        </button>
+        <button type="button" class="tab-btn" id="tax-tab-btn-pdf" onclick="switchTaxTab('pdf')" style="padding:10px 18px; font-weight:700; font-size:0.9rem; border:none; background:#e5e7eb; color:#374151; border-radius:8px 8px 0 0; cursor:pointer;">
+          📄 Live PDF Viewer
+        </button>
+      </div>
+
+      <div id="tax-pane-abstract" class="table-card" style="margin-bottom:24px;">
+        <div class="table-header" style="background:#f8fafc;">
+          <div class="table-title">Mandal-wise DCB Abstract (<span id="tax-abstract-dist-label">Select District</span>)</div>
+          <span style="font-size:0.84rem; font-weight:700; color:#167451;" id="tax-abstract-count">-- Mandals</span>
+        </div>
+        <div class="table-responsive">
+          <table id="tax-mandal-table">
+            <thead>
+              <tr>
+                <th style="width:45px; text-align:center;">S.No</th>
+                <th>Mandal Name</th>
+                <th style="text-align:right;">GPs</th>
+                <th style="text-align:right;">Assessments</th>
+                <th style="text-align:right;">Arrear Dem (₹)</th>
+                <th style="text-align:right;">Current Dem (₹)</th>
+                <th style="text-align:right;">Total Dem (₹)</th>
+                <th style="text-align:right;">Arrear Coll (₹)</th>
+                <th style="text-align:right;">Current Coll (₹)</th>
+                <th style="text-align:right;">Total Coll (₹)</th>
+                <th style="text-align:right;">Balance (₹)</th>
+                <th style="text-align:right; width:80px; color:#fef08a !important;">Coll %</th>
+              </tr>
+            </thead>
+            <tbody id="tax-mandal-tbody">
+              <tr>
+                <td colspan="12" style="text-align:center; padding:35px 20px; color:var(--text-muted); font-size:0.95rem;">
+                  e-Panchayat Automation is ready — select District &amp; Mandal above and click <strong>⚡ Generate DCB Report</strong> to compile House Tax statistics.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tax-pane-detail" class="table-card" style="display:none; margin-bottom:24px;">
+        <div class="table-header" style="background:#f8fafc;">
+          <div class="table-title">Gram Panchayat Wise DCB Status</div>
+          <span style="font-size:0.84rem; font-weight:700; color:#167451;" id="tax-detail-count">-- GPs</span>
+        </div>
+        <div class="table-responsive">
+          <table id="tax-gp-table">
+            <thead>
+              <tr>
+                <th style="width:45px; text-align:center;">S.No</th>
+                <th>Mandal Name</th>
+                <th>Gram Panchayat</th>
+                <th style="text-align:right;">Assessments</th>
+                <th style="text-align:right;">Arrear Dem (₹)</th>
+                <th style="text-align:right;">Current Dem (₹)</th>
+                <th style="text-align:right;">Total Dem (₹)</th>
+                <th style="text-align:right;">Arrear Coll (₹)</th>
+                <th style="text-align:right;">Current Coll (₹)</th>
+                <th style="text-align:right;">Total Coll (₹)</th>
+                <th style="text-align:right;">Balance (₹)</th>
+                <th style="text-align:right; width:80px; color:#fef08a !important;">Coll %</th>
+              </tr>
+            </thead>
+            <tbody id="tax-gp-tbody">
+              <tr>
+                <td colspan="12" style="text-align:center; padding:35px 20px; color:var(--text-muted); font-size:0.95rem;">
+                  e-Panchayat Automation: No Gram Panchayats found yet — select District &amp; Mandal above and click <strong>⚡ Generate DCB Report</strong>.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tax-pane-pdf" class="viewer-card" style="display:none; margin-bottom:24px;">
+        <div class="viewer-header">
+          <div class="viewer-title">
+            <span>📄</span>
+            <span>e-Panchayat Automation · House Tax DCB Official Departmental Landscape PDF</span>
+          </div>
+          <div class="viewer-actions">
+            <a class="btn btn-gold btn-sm" id="tax-pdf-fullscreen-btn" href="javascript:void(0)" target="_blank" rel="noopener noreferrer" onclick="return openTaxFullscreenPdf(event);">
+              ↗ Fullscreen PDF
+            </a>
+          </div>
+        </div>
+        <iframe id="tax-pdf-iframe" class="pdf-frame" src="about:blank" style="width:100%; height:620px; border:none;"></iframe>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         DSR CONSOLE RESULTS SECTION
+         ======================================================== -->
+    <div id="results-section" style="display: none;">
+      <section class="metrics-grid" id="metrics-container">
+        <div class="metric-card accent">
+          <div class="metric-label">Total Gram Panchayats</div>
+          <div class="metric-value" id="val-total-gps">—</div>
+          <div class="metric-sub" id="sub-total-gps">District Total</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">Attendance Submitted</div>
+          <div class="metric-value" id="val-att-submitted">—</div>
+          <div class="metric-sub" id="sub-att-pct">—</div>
+        </div>
+        <div class="metric-card info">
+          <div class="metric-label">DSR Entered</div>
+          <div class="metric-value" id="val-dsr-entered">—</div>
+          <div class="metric-sub" id="sub-dsr-pct">—</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">Present Before 9 AM</div>
+          <div class="metric-value" id="val-before-9">—</div>
+          <div class="metric-sub" id="sub-before-9">Timely PS Attendance</div>
+        </div>
+        <div class="metric-card warning">
+          <div class="metric-label">On Leave / Training</div>
+          <div class="metric-value" id="val-on-leave">—</div>
+          <div class="metric-sub" id="sub-on-leave">Leave &amp; Meeting</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Attendance Pending</div>
+          <div class="metric-value" id="val-pending">—</div>
+          <div class="metric-sub" id="sub-pending">Requires Follow-up</div>
+        </div>
+      </section>
+
+      <section class="viewer-card" id="viewer-section">
+        <div class="viewer-header">
+          <div class="viewer-title">
+            <span>📄</span>
+            <span>e-Panchayat Automation · Official 6-Section District Attendance &amp; DSR Monitoring PDF</span>
+          </div>
+          <div class="viewer-actions">
+            <a class="btn btn-gold btn-sm" id="btn-viewer-download-pdf" href="/api/naresh/download" target="_blank">
+              📥 Download PDF
+            </a>
+            <button type="button" class="btn btn-white btn-sm" onclick="refreshViewer()">
+              🔄 Reload Preview
+            </button>
+          </div>
+        </div>
+        <iframe id="pdf-frame" class="pdf-frame" src="about:blank"></iframe>
+      </section>
+
+      <section class="table-card">
+        <div class="table-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div class="table-title">Mandal-wise Attendance &amp; DSR Performance (<span id="mandals-count-label">20 Mandals</span>)</div>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <label for="online-sort-selector" style="font-size:0.82rem; font-weight:700; color:var(--text-muted); margin:0;">Sort:</label>
+              <select id="online-sort-selector" onchange="sortOnlineMandalsTable(this.value)" style="padding:6px 12px; font-size:0.84rem; border:1px solid var(--border); border-radius:6px; background:white; color:var(--text); font-weight:600; cursor:pointer;">
+                <option value="before_9">1. Before Cutoff Time % (Punctuality %)</option>
+                <option value="overall_att_pct">2. Overall Attendance %</option>
+                <option value="dsr_pct">3. DSR Percentage</option>
+                <option value="att_pending">4. GPs Attendance Pending (Highest first)</option>
+                <option value="dsr_pending">5. GPs DSR Pending (Highest first)</option>
+                <option value="mandal">Mandal Name (A-Z)</option>
+              </select>
+            </div>
+            <input type="text" id="mandal-search" class="search-input" placeholder="Search Mandal..." onkeyup="filterMandals()">
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table id="mandals-table">
+            <thead>
+              <tr>
+                <th style="cursor:pointer;" onclick="sortOnlineMandalsTable('serial')" title="Sort by S.No"># ⇕</th>
+                <th style="cursor:pointer;" onclick="sortOnlineMandalsTable('mandal')" title="Sort by Mandal Name">Mandal Name ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('total_gps')" title="Sort by Total GPs">Total GPs ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('submitted')" title="Sort by Submitted">Submitted ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('overall_att_pct')" title="Sort by Attendance %">Attendance % ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('before_9')" title="Sort by Before Cutoff Time"><span id="th-cutoff-header">Before 9 AM</span> ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('on_leave')" title="Sort by On Leave">On Leave / Meet ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('att_pending')" title="Sort by Pending Attendance">Pending ⇕</th>
+                <th class="text-center" style="cursor:pointer;" onclick="sortOnlineMandalsTable('dsr_entered')" title="Sort by DSR Entered">DSR Entered ⇕</th>
+              </tr>
+            </thead>
+            <tbody id="mandals-tbody">
+              <tr><td colspan="9" class="text-center" style="padding: 24px;">e-Panchayat Automation is loading live mandal performance data...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================================
+         GRAM PANCHAYAT INSPECTIONS STATION
+         ======================================================== -->
+    <section class="automation-station" id="inspections-station" style="display: none; margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">🔍</div>
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Gram Panchayat Inspections Monitoring Station</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Official Compliance Tracking for DPO, DLPO &amp; MPO Gram Panchayat Inspections</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
+          ← Back to Dashboard
+        </button>
+      </div>
+
+      <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; align-items:flex-end;">
+          <div>
+            <label for="insp-level-filter" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Inspection Level</label>
+            <select id="insp-level-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
+              <option value="ALL">All Inspection Tiers</option>
+              <option value="DPO">District Panchayat Officer (DPO)</option>
+              <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
+              <option value="MPO">Mandal Panchayat Officer (MPO)</option>
+            </select>
+          </div>
+          <div>
+            <label for="insp-mandal-filter" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Select Mandal</label>
+            <select id="insp-mandal-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
+              <option value="ALL">All Mandals (21 Mandals)</option>
+            </select>
+          </div>
+          <div>
+            <label for="insp-status-filter" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Inspection Status</label>
+            <select id="insp-status-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
+              <option value="ALL">All Statuses</option>
+              <option value="COMPLETED">✅ Inspected (Completed)</option>
+              <option value="PENDING">⚠️ Pending Inspection</option>
+            </select>
+          </div>
+          <div>
+            <label for="insp-search-input" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Search Mandal / GP</label>
+            <input type="text" id="insp-search-input" placeholder="Type name..." style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onkeyup="filterInspectionsTable()">
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid #f1f5f9;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-sm" style="background:#0284c7; color:#ffffff; font-weight:700; padding:8px 16px; border-radius:8px; border:none; cursor:pointer;" onclick="initInspectionsData()">
+              🔄 Refresh Data
+            </button>
+            <button type="button" class="btn btn-sm btn-outline" style="font-weight:700; padding:8px 16px; border-radius:8px; cursor:pointer; color:var(--text); border-color:var(--border);" onclick="exportInspectionsCsv()">
+              📥 Export CSV
+            </button>
+          </div>
+          <div id="insp-sync-time" style="font-size:0.82rem; color:var(--text-muted); font-weight:600;">
+            Directory: Official Telangana Gram Panchayat Inspection Database
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
+        <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Mandals</div>
+          <div id="insp-kpi-mandals" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">21</div>
+        </div>
+        <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Gram Panchayats</div>
+          <div id="insp-kpi-gps" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">571</div>
+        </div>
+        <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:#166534; text-transform:uppercase;" id="insp-kpi-completed-label">Inspections Conducted</div>
+          <div id="insp-kpi-completed" style="font-size:1.8rem; font-weight:800; color:#15803d; margin-top:4px;">488</div>
+        </div>
+        <div style="background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:#9a3412; text-transform:uppercase;">Pending Inspections</div>
+          <div id="insp-kpi-pending" style="font-size:1.8rem; font-weight:800; color:#c2410c; margin-top:4px;">83</div>
+        </div>
+        <div style="background:#f0f9ff; border:1.5px solid #bae6fd; border-radius:12px; padding:16px; text-align:center;">
+          <div style="font-size:0.82rem; font-weight:700; color:#0369a1; text-transform:uppercase;">Inspection Compliance</div>
+          <div id="insp-kpi-rate" style="font-size:1.8rem; font-weight:800; color:#0284c7; margin-top:4px;">85.5%</div>
+        </div>
+      </div>
+
+      <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,0.04);">
+        <div style="padding:14px 18px; background:#f8fafc; border-bottom:1.5px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:800; font-size:1rem; color:#1e293b;">Mandal-Wise Gram Panchayat Inspection Abstract</span>
+          <span id="insp-table-counter" style="font-size:0.82rem; font-weight:700; color:#64748b;">Showing 21 Mandals</span>
+        </div>
+        <div class="table-responsive">
+          <table style="width:100%; border-collapse:collapse; font-size:0.88rem; text-align:left;">
+            <thead>
+              <tr style="background:#062b1f; color:#ffffff; font-weight:700; border-bottom:2px solid #165b43;">
+                <th style="padding:10px 12px; text-align:center; width:50px;">S.No</th>
+                <th style="padding:10px 12px;">Mandal Name</th>
+                <th style="padding:10px 12px; text-align:center;">Total GPs</th>
+                <th style="padding:10px 12px; text-align:center;">DPO</th>
+                <th style="padding:10px 12px; text-align:center;">DLPO</th>
+                <th style="padding:10px 12px; text-align:center;">MPO</th>
+                <th style="padding:10px 12px; text-align:center;">Total Inspected</th>
+                <th style="padding:10px 12px; text-align:center;">Pending</th>
+                <th style="padding:10px 12px; text-align:center;">Compliance %</th>
+                <th style="padding:10px 12px; text-align:center;">Status</th>
+                <th style="padding:10px 12px; text-align:center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="insp-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modals -->
+    <div id="upcoming-modal" class="modal-overlay">
+      <div style="background:white; border-radius:16px; max-width:480px; width:100%; padding:26px; box-shadow:0 24px 50px rgba(0,0,0,0.3); border:1.5px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.8rem;" id="modal-icon">📑</span>
+            <h3 style="margin:0; font-size:1.25rem; color:var(--text); font-weight:800;" id="modal-title">Module Title</h3>
+          </div>
+          <button type="button" onclick="closeUpcomingModal()" style="background:none; border:none; font-size:1.6rem; cursor:pointer; color:var(--text-muted); line-height:1;">&times;</button>
+        </div>
+        <span class="badge-pill-soon" style="margin-bottom:14px;">Module in Active Development</span>
+        <p style="color:var(--text-muted); font-size:0.92rem; line-height:1.6; margin:14px 0 22px 0;" id="modal-desc">Description</p>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-primary" onclick="closeUpcomingModal()">Got It</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="sessions-modal" class="modal-overlay">
+      <div style="background:white; border-radius:16px; max-width:780px; width:100%; max-height:85vh; display:flex; flex-direction:column; padding:24px; box-shadow:0 24px 60px rgba(0,0,0,0.35); border:1.5px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:1.6rem;">👥</span>
+            <div>
+              <h3 style="margin:0; font-size:1.2rem; color:var(--text); font-weight:800;">Active User Sessions &amp; Robot Engines</h3>
+              <span style="font-size:0.78rem; color:var(--text-muted);" id="sessions-modal-timestamp">Live Host Server Status</span>
+            </div>
+          </div>
+          <button type="button" onclick="closeSessionsModal()" style="background:none; border:none; font-size:1.8rem; cursor:pointer; color:var(--text-muted); line-height:1;">&times;</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:16px;">
+          <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px; text-align:center;">
+            <div style="font-size:0.72rem; font-weight:700; color:#166534;">TOTAL SESSIONS</div>
+            <div style="font-size:1.3rem; font-weight:800; color:#15803d;" id="modal-stat-total">0</div>
+          </div>
+          <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:10px; text-align:center;">
+            <div style="font-size:0.72rem; font-weight:700; color:#065f46;">AUTHENTICATED</div>
+            <div style="font-size:1.3rem; font-weight:800; color:#059669;" id="modal-stat-auth">0</div>
+          </div>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px; text-align:center;">
+            <div style="font-size:0.72rem; font-weight:700; color:#475569;">MY SESSION</div>
+            <div style="font-size:0.88rem; font-weight:800; color:#0f172a;" id="modal-stat-mysid">—</div>
+          </div>
+        </div>
+
+        <div style="overflow-y:auto; flex:1; border:1px solid var(--border); border-radius:8px; margin-bottom:16px;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.82rem; text-align:left;">
+            <thead>
+              <tr style="background:#f8fafc; border-bottom:1px solid var(--border); font-size:0.75rem; color:#475569;">
+                <th style="padding:8px 10px;">District</th>
+                <th style="padding:8px 10px;">Office</th>
+                <th style="padding:8px 10px;">Officer / User</th>
+                <th style="padding:8px 10px;">Status</th>
+                <th style="padding:8px 10px;">Session Mode</th>
+                <th style="padding:8px 10px;">Active For</th>
+                <th style="padding:8px 10px;">Idle</th>
+                <th style="padding:8px 10px;">Session ID</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-table-body">
+              <tr>
+                <td colspan="8" style="text-align:center; padding:20px; color:var(--text-muted);">Loading active e-Panchayat Automation sessions...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div style="font-size:0.75rem; color:#64748b; display:flex; align-items:center; gap:8px;">
+            <span id="sessions-git-version">🚀 Server Background Workers Active</span>
+            <button type="button" onclick="triggerServerSync(this)" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; border-radius:4px; padding:2px 8px; font-size:0.72rem; cursor:pointer; font-weight:600;" title="Pull latest code from GitHub main">🔄 Sync Code Now</button>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-white btn-sm" onclick="fetchAndRenderSessionsModal()">🔄 Refresh Status</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="closeSessionsModal()">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="insp-detail-modal" class="modal-overlay">
+      <div style="background:#ffffff; border-radius:14px; max-width:850px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:0 12px 36px rgba(0,0,0,0.3); padding:22px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
+          <div>
+            <h3 id="insp-modal-title" style="margin:0; font-size:1.2rem; font-weight:800; color:#0f172a;">Mandal GP Inspections Drill-Down</h3>
+            <div id="insp-modal-subtitle" style="font-size:0.85rem; color:#64748b; margin-top:2px;">Gram Panchayat Inspection Details &amp; Verification Observations</div>
+          </div>
+          <button type="button" onclick="closeInspModal()" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+        </div>
+        <div id="insp-modal-content"></div>
+        <div style="margin-top:18px; text-align:right;">
+          <button type="button" class="btn btn-white btn-sm" onclick="closeInspModal()">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Custom Non-Blocking Confirmation Modal -->
+    <div id="portal-confirm-modal" class="modal-overlay">
+      <div class="modal-dialog confirm-modal-card">
+        <h3 id="confirm-modal-title" style="margin:0 0 8px; font-size:1.15rem; font-weight:800; color:#0f172a;">Confirm Action</h3>
+        <p id="confirm-modal-message" style="margin:0 0 18px; font-size:0.9rem; color:#475569; line-height:1.5;"></p>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-white btn-sm" id="confirm-modal-cancel">Cancel</button>
+          <button type="button" class="btn btn-gold btn-sm" id="confirm-modal-ok">Confirm</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div style="max-width:1200px; margin:0 auto; padding:6px 10px; text-align:center; line-height:1.55;">
+      <strong style="display:block; font-size:0.95rem; font-weight:800;">e-Panchayat Automation</strong>
+      <div style="font-size:0.84rem; margin-top:2px;">Simplifying Panchayat Administration through Smart Reporting and Automation.</div>
+    </div>
+  </footer>
+
+  <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
+  <script src="/static/js/dept_session.js?v=3"></script>
+  <script src="/static/js/auth.js?v=17"></script>
+  <script src="/static/js/console.js?v=14"></script>
+  <script src="/static/js/admin.js?v=6"></script>
+</body>
+</html>

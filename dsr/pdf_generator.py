@@ -532,6 +532,10 @@ def _parse_timestamp(value: Any) -> Any:
         # Also accept Excel serial dates found in CSV exports.
         if 10000 <= float(value) <= 100000:
             return pd.to_datetime(value, unit="D", origin="1899-12-30", errors="coerce")
+    if isinstance(value, str) and re.match(r"^\s*\d{4}[-/]\d{1,2}[-/]\d{1,2}\b", value):
+        parsed_iso = pd.to_datetime(value, errors="coerce")
+        if not pd.isna(parsed_iso):
+            return parsed_iso
     return pd.to_datetime(value, errors="coerce", dayfirst=True)
 
 
@@ -981,13 +985,25 @@ class PercentBar(Flowable):
 
     def draw(self) -> None:
         self.canv.saveState()
-        font_size = 6.0 if self.height <= 16 else 6.5
+        if self.height >= 17.5:
+            font_size = 7.0
+            text_offset = 8.8
+            bar_h = 4.2
+            bar_y = 2.6
+        elif self.height > 16:
+            font_size = 6.5
+            text_offset = 8.0
+            bar_h = 4.0
+            bar_y = 2.4
+        else:
+            font_size = 6.0
+            text_offset = 7.0
+            bar_h = 3.5
+            bar_y = 1.5
         self.canv.setFont("Helvetica-Bold", font_size)
         self.canv.setFillColor(HexColor("#1F2937"))
-        text_y = self.height - (7 if self.height <= 16 else 8)
+        text_y = self.height - text_offset
         self.canv.drawCentredString(self.width / 2, text_y, f"{self.percent:.2f}%")
-        bar_h = 3.5 if self.height <= 16 else 4
-        bar_y = 1.5 if self.height <= 16 else 3
         self.canv.setFillColor(HexColor("#E8EDF3"))
         self.canv.roundRect(0, bar_y, self.width, bar_h, 1.5, fill=1, stroke=0)
         fill_width = min(self.width, self.width * self.percent / 100)
@@ -1017,14 +1033,13 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     available_land_width = land_w - 2 * margin_land
     available_width = port_w - 2 * margin_port
 
-    # Dynamically compute Landscape Page 1 height based on mandal count
-    # Guarantees the combined abstract table NEVER breaks across pages!
+    # Dynamically compute Landscape Page 1 height & row distribution based on mandal count
+    # Guarantees the combined abstract table NEVER breaks across pages and fills A4 cleanly!
     num_mandals = len(report.mandal_rows)
-    table_rows_count = num_mandals + 3  # 2 header rows + mandal data rows + 1 total row
-    estimated_table_height = 15 * mm + (num_mandals * 5.6 * mm) + 6.0 * mm
+    min_estimated_table_h = 15 * mm + (num_mandals * 5.6 * mm) + 6.0 * mm
     if report.duplicate_lgd_rows or report.missing_lgd_rows:
-        estimated_table_height += 12 * mm
-    required_land_h = estimated_table_height + 53 * mm
+        min_estimated_table_h += 12 * mm
+    required_land_h = min_estimated_table_h + 53 * mm
     dynamic_land_h = max(default_land_h, required_land_h)
 
     styles = getSampleStyleSheet()
@@ -1141,7 +1156,7 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(HexColor("#555555"))
         foot_time = f" {report.generated_time_str}" if getattr(report, "generated_time_str", "") else ""
-        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}{foot_time}")
+        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}{foot_time} | e-Panchayat Automation")
         canvas.drawRightString(w - foot_margin, 4.5 * mm, f"Page {document.page}")
         canvas.restoreState()
 
@@ -1150,16 +1165,31 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     # ========================================================
     # PAGE 1 (LANDSCAPE): COMBINED ATTENDANCE & DSR ABSTRACT
     # ========================================================
-    story.append(Paragraph(
+    p_comb_title = Paragraph(
         f"1. {report.district_name.upper()} DISTRICT - MANDAL-WISE ATTENDANCE &amp; DSR ABSTRACT REPORT",
         styles["CombinedTitle"],
-    ))
+    )
     dsr_tot = report.dsr_district_total
     gen_time_part = f" | Generated Time: {report.generated_time_str}" if getattr(report, "generated_time_str", "") else ""
-    story.append(Paragraph(
+    p_comb_sub = Paragraph(
         f"Report Date: {report.report_date:%d-%m-%Y}{gen_time_part} | Total GPs: {report.unique_gp_count:,} | PS Present: {dsr_tot['present_ps']:,} | Total DSR Entered: {dsr_tot['dsr_entered']:,}",
         styles["CombinedSubtitle"],
-    ))
+    )
+    story.append(p_comb_title)
+    story.append(p_comb_sub)
+
+    validation_notes: list[Any] = []
+    if report.duplicate_lgd_rows:
+        validation_notes.append(Spacer(1, 2))
+        validation_notes.append(Paragraph(
+            f"Validation: Excluded {report.duplicate_lgd_rows} duplicate LGD row(s).", styles["Note"],
+        ))
+    if report.missing_lgd_rows:
+        validation_notes.append(Spacer(1, 1))
+        validation_notes.append(Paragraph(
+            f"Validation: Excluded {report.missing_lgd_rows} source row(s) without a Panchayat LGD code.",
+            styles["Note"],
+        ))
 
     # 14 column widths scaled to available landscape width (Includes Total PS Submitted before Overall Att. %)
     raw_widths = [9 * mm, 32 * mm, 12 * mm, 16 * mm, 21 * mm, 15 * mm, 21 * mm, 12 * mm, 13 * mm, 15 * mm, 14 * mm, 15 * mm, 15 * mm, 22 * mm]
@@ -1191,71 +1221,6 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         Paragraph("% DSR<br/>Submitted", styles["HSub"]),
     ]
 
-    dsr_by_mandal = {
-        item["mandal"].strip().casefold(): item for item in report.dsr_mandal_rows
-    }
-
-    comb_table_rows: list[list[Any]] = [comb_headers_row0, comb_headers_row1]
-    for idx, item in enumerate(report.mandal_rows, start=1):
-        m_name = item["mandal"]
-        dsr_item = dsr_by_mandal.get(m_name.strip().casefold(), {})
-
-        att_submitted = item.get("attendance_submitted", 0)
-        att_pending = item["pending"]
-        att_pending_str = f'<font color="#C00000"><b>{att_pending}</b></font>' if att_pending > 0 else str(att_pending)
-
-        dsr_present = dsr_item.get("present_ps", 0)
-        dsr_entered = dsr_item.get("dsr_entered", 0)
-        dsr_pending = dsr_item.get("dsr_pending", 0)
-        dsr_pct = dsr_item.get("dsr_pct", 0.0)
-        dsr_pending_str = f'<font color="#C00000"><b>{dsr_pending}</b></font>' if dsr_pending > 0 else str(dsr_pending)
-
-        row = [
-            Paragraph(str(idx), styles["CombCellCenter"]),
-            Paragraph(safe(m_name), styles["CombCellLeft"]),
-            Paragraph(str(item["total_gps"]), styles["CombCellCenter"]),
-            Paragraph(str(item["before_9"]), styles["CombCellCenter"]),
-            PercentBar(item["before_9_pct"], comb_widths[4] - 4, height=13),
-            Paragraph(str(att_submitted), styles["CombCellCenter"]),
-            PercentBar(item["attendance_pct"], comb_widths[6] - 4, height=13),
-            Paragraph(str(item["on_leave"]), styles["CombCellCenter"]),
-            Paragraph(str(item["meeting_training"]), styles["CombCellCenter"]),
-            Paragraph(att_pending_str, styles["CombCellCenter"]),
-            Paragraph(str(dsr_present), styles["CombCellCenter"]),
-            Paragraph(str(dsr_entered), styles["CombCellCenter"]),
-            Paragraph(dsr_pending_str, styles["CombCellCenter"]),
-            PercentBar(dsr_pct, comb_widths[13] - 4, height=13),
-        ]
-        comb_table_rows.append(row)
-
-    total = report.district_total
-    dsr_total = report.dsr_district_total
-
-    tot_att_submitted = total.get("attendance_submitted", 0)
-    tot_att_pending = total["pending"]
-    tot_att_pending_str = f'<font color="#C00000"><b>{tot_att_pending}</b></font>' if tot_att_pending > 0 else f'<b>{tot_att_pending}</b>'
-
-    tot_dsr_pending = dsr_total["dsr_pending"]
-    tot_dsr_pending_str = f'<font color="#C00000"><b>{tot_dsr_pending}</b></font>' if tot_dsr_pending > 0 else f'<b>{tot_dsr_pending}</b>'
-
-    comb_total_row = [
-        "",
-        Paragraph("<b>DISTRICT TOTAL</b>", styles["CombCellLeft"]),
-        Paragraph(f"<b>{total['total_gps']}</b>", styles["CombCellCenter"]),
-        Paragraph(f"<b>{total['before_9']}</b>", styles["CombCellCenter"]),
-        PercentBar(total["before_9_pct"], comb_widths[4] - 4, height=13),
-        Paragraph(f"<b>{tot_att_submitted}</b>", styles["CombCellCenter"]),
-        PercentBar(total["attendance_pct"], comb_widths[6] - 4, height=13),
-        Paragraph(f"<b>{total['on_leave']}</b>", styles["CombCellCenter"]),
-        Paragraph(f"<b>{total['meeting_training']}</b>", styles["CombCellCenter"]),
-        Paragraph(tot_att_pending_str, styles["CombCellCenter"]),
-        Paragraph(f"<b>{dsr_total['present_ps']}</b>", styles["CombCellCenter"]),
-        Paragraph(f"<b>{dsr_total['dsr_entered']}</b>", styles["CombCellCenter"]),
-        Paragraph(tot_dsr_pending_str, styles["CombCellCenter"]),
-        PercentBar(dsr_total["dsr_pct"], comb_widths[13] - 4, height=13),
-    ]
-    comb_table_rows.append(comb_total_row)
-
     comb_table_style = TableStyle([
         # Spans for Common columns
         ("SPAN", (0, 0), (0, 1)),
@@ -1284,21 +1249,123 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
         ("LINEABOVE", (0, -1), (-1, -1), 0.8, HexColor("#17365D")),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
     ])
-    comb_table = Table(comb_table_rows, colWidths=comb_widths, repeatRows=2, splitByRow=1)
+
+    # Measure exact top overhead, validation notes, and table header row heights so row heights
+    # fill the remaining Page 1 height automatically without wasting page space or spilling to Page 2.
+    _, title_h = p_comb_title.wrap(available_land_width, 500)
+    _, sub_h = p_comb_sub.wrap(available_land_width, 500)
+    non_table_h = title_h + p_comb_title.getSpaceAfter() + sub_h + p_comb_sub.getSpaceAfter()
+    for flow in validation_notes:
+        _, fh = flow.wrap(available_land_width, 500)
+        non_table_h += fh + (flow.getSpaceAfter() if hasattr(flow, "getSpaceAfter") else 0)
+
+    probe_hdr_table = Table([comb_headers_row0, comb_headers_row1], colWidths=comb_widths)
+    probe_hdr_table.setStyle(comb_table_style)
+    probe_hdr_table.wrap(available_land_width, 500)
+    hdr_heights = list(probe_hdr_table._rowHeights)
+    hdr_total_h = sum(hdr_heights)
+
+    body_row_count = num_mandals + 1  # mandal data rows + DISTRICT TOTAL row
+    actual_land_frame_h = dynamic_land_h - 18 * mm
+    avail_for_body = max(body_row_count * 15.5, actual_land_frame_h - non_table_h - hdr_total_h - 6.0)
+    target_row_h = min(32.0, avail_for_body / max(1, body_row_count))
+
+    # Scale body typography & PercentBar height proportionally to row height
+    if target_row_h >= 20.5:
+        comb_font_size, comb_leading = 7.4, 8.8
+    elif target_row_h >= 17.5:
+        comb_font_size, comb_leading = 7.0, 8.2
+    else:
+        comb_font_size, comb_leading = 6.6, 7.8
+
+    styles["CombCellCenter"].fontSize = comb_font_size
+    styles["CombCellCenter"].leading = comb_leading
+    styles["CombCellLeft"].fontSize = comb_font_size
+    styles["CombCellLeft"].leading = comb_leading
+    pbar_height = max(13.0, min(20.0, target_row_h - 3.6))
+
+    dsr_by_mandal = {
+        item["mandal"].strip().casefold(): item for item in report.dsr_mandal_rows
+    }
+
+    comb_table_rows: list[list[Any]] = [comb_headers_row0, comb_headers_row1]
+    body_natural_heights: list[float] = []
+    for idx, item in enumerate(report.mandal_rows, start=1):
+        m_name = item["mandal"]
+        dsr_item = dsr_by_mandal.get(m_name.strip().casefold(), {})
+
+        att_submitted = item.get("attendance_submitted", 0)
+        att_pending = item["pending"]
+        att_pending_str = f'<font color="#C00000"><b>{att_pending}</b></font>' if att_pending > 0 else str(att_pending)
+
+        dsr_present = dsr_item.get("present_ps", 0)
+        dsr_entered = dsr_item.get("dsr_entered", 0)
+        dsr_pending = dsr_item.get("dsr_pending", 0)
+        dsr_pct = dsr_item.get("dsr_pct", 0.0)
+        dsr_pending_str = f'<font color="#C00000"><b>{dsr_pending}</b></font>' if dsr_pending > 0 else str(dsr_pending)
+
+        p_mandal = Paragraph(safe(m_name), styles["CombCellLeft"])
+        _, mh = p_mandal.wrap(max(10.0, comb_widths[1] - 2.4), 200)
+        body_natural_heights.append(max(pbar_height + 2.8, mh + 2.8))
+
+        row = [
+            Paragraph(str(idx), styles["CombCellCenter"]),
+            p_mandal,
+            Paragraph(str(item["total_gps"]), styles["CombCellCenter"]),
+            Paragraph(str(item["before_9"]), styles["CombCellCenter"]),
+            PercentBar(item["before_9_pct"], comb_widths[4] - 4, height=pbar_height),
+            Paragraph(str(att_submitted), styles["CombCellCenter"]),
+            PercentBar(item["attendance_pct"], comb_widths[6] - 4, height=pbar_height),
+            Paragraph(str(item["on_leave"]), styles["CombCellCenter"]),
+            Paragraph(str(item["meeting_training"]), styles["CombCellCenter"]),
+            Paragraph(att_pending_str, styles["CombCellCenter"]),
+            Paragraph(str(dsr_present), styles["CombCellCenter"]),
+            Paragraph(str(dsr_entered), styles["CombCellCenter"]),
+            Paragraph(dsr_pending_str, styles["CombCellCenter"]),
+            PercentBar(dsr_pct, comb_widths[13] - 4, height=pbar_height),
+        ]
+        comb_table_rows.append(row)
+
+    total = report.district_total
+    dsr_total = report.dsr_district_total
+
+    tot_att_submitted = total.get("attendance_submitted", 0)
+    tot_att_pending = total["pending"]
+    tot_att_pending_str = f'<font color="#C00000"><b>{tot_att_pending}</b></font>' if tot_att_pending > 0 else f'<b>{tot_att_pending}</b>'
+
+    tot_dsr_pending = dsr_total["dsr_pending"]
+    tot_dsr_pending_str = f'<font color="#C00000"><b>{tot_dsr_pending}</b></font>' if tot_dsr_pending > 0 else f'<b>{tot_dsr_pending}</b>'
+
+    body_natural_heights.append(pbar_height + 3.2)
+    comb_total_row = [
+        "",
+        Paragraph("<b>DISTRICT TOTAL</b>", styles["CombCellLeft"]),
+        Paragraph(f"<b>{total['total_gps']}</b>", styles["CombCellCenter"]),
+        Paragraph(f"<b>{total['before_9']}</b>", styles["CombCellCenter"]),
+        PercentBar(total["before_9_pct"], comb_widths[4] - 4, height=pbar_height),
+        Paragraph(f"<b>{tot_att_submitted}</b>", styles["CombCellCenter"]),
+        PercentBar(total["attendance_pct"], comb_widths[6] - 4, height=pbar_height),
+        Paragraph(f"<b>{total['on_leave']}</b>", styles["CombCellCenter"]),
+        Paragraph(f"<b>{total['meeting_training']}</b>", styles["CombCellCenter"]),
+        Paragraph(tot_att_pending_str, styles["CombCellCenter"]),
+        Paragraph(f"<b>{dsr_total['present_ps']}</b>", styles["CombCellCenter"]),
+        Paragraph(f"<b>{dsr_total['dsr_entered']}</b>", styles["CombCellCenter"]),
+        Paragraph(tot_dsr_pending_str, styles["CombCellCenter"]),
+        PercentBar(dsr_total["dsr_pct"], comb_widths[13] - 4, height=pbar_height),
+    ]
+    comb_table_rows.append(comb_total_row)
+
+    body_row_heights = [max(target_row_h, nh) for nh in body_natural_heights]
+    total_needed_table_h = hdr_total_h + sum(body_row_heights)
+    if total_needed_table_h + non_table_h + 6.0 > actual_land_frame_h:
+        dynamic_land_h = total_needed_table_h + non_table_h + 6.0 + 18 * mm
+
+    comb_row_heights = hdr_heights + body_row_heights
+    comb_table = Table(comb_table_rows, colWidths=comb_widths, rowHeights=comb_row_heights, repeatRows=2, splitByRow=1)
     comb_table.setStyle(comb_table_style)
     story.append(comb_table)
 
-    if report.duplicate_lgd_rows:
-        story.append(Spacer(1, 2))
-        story.append(Paragraph(
-            f"Validation: Excluded {report.duplicate_lgd_rows} duplicate LGD row(s).", styles["Note"],
-        ))
-    if report.missing_lgd_rows:
-        story.append(Spacer(1, 1))
-        story.append(Paragraph(
-            f"Validation: Excluded {report.missing_lgd_rows} source row(s) without a Panchayat LGD code.",
-            styles["Note"],
-        ))
+    story.extend(validation_notes)
 
     # ========================================================
     # PAGE 2+ (PORTRAIT): DETAIL SECTIONS 2 THROUGH 6
@@ -1597,7 +1664,7 @@ def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name
         canvas.line(margin, 10 * mm, width - margin, 10 * mm)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(HexColor("#555555"))
-        canvas.drawString(margin, 6 * mm, f"{report.district_name.title()} District | {target_mandal.title()} Mandal | {report.report_date:%d-%m-%Y}")
+        canvas.drawString(margin, 6 * mm, f"{report.district_name.title()} District | {target_mandal.title()} Mandal | {report.report_date:%d-%m-%Y} | e-Panchayat Automation")
         canvas.drawRightString(width - margin, 6 * mm, f"Page {document.page}")
         canvas.restoreState()
 
