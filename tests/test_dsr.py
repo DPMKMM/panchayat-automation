@@ -501,9 +501,10 @@ def test_dsr_page_layout_individual_default_and_continuous(tmp_path):
     assert '<option value="individual" selected>' in home_html
     assert '<option value="continuous">' in home_html
 
-    console_js = client.get("/static/js/console.js?v=18").text
+    console_js = client.get("/static/js/console.js?v=19").text
     assert "auto-page-layout" in console_js
     assert "formData.append('page_layout', pageLayout)" in console_js
+    assert "formData.append('include_sections', includeSections)" in console_js
 
     manual_html = client.get("/reports/ps-attendance").text
     assert 'id="district-page-layout"' in manual_html
@@ -616,3 +617,121 @@ def test_dsr_page_layout_individual_default_and_continuous(tmp_path):
     assert len(web_reader.pages) == 2
     assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" in web_reader.pages[0].extract_text()
     assert "6. GPs THAT SUBMITTED ATTENDANCE AFTER" in web_reader.pages[1].extract_text()
+
+
+def test_dsr_selective_report_sections_default_all_and_filtered(tmp_path):
+    from datetime import date
+    import io
+    import openpyxl
+    from pypdf import PdfReader
+    from dsr.pdf_generator import ReportData, generate_pdf
+
+    # 1. Automated & Manual UI expose All Reports + all 6 sections, ALL checked by default
+    home_html = client.get("/").text
+    for chk_id in (
+        "auto-sec-all",
+        "auto-sec-abstract",
+        "auto-sec-attendance-pending",
+        "auto-sec-dsr-pending",
+        "auto-sec-leave",
+        "auto-sec-meeting-training",
+        "auto-sec-after-cutoff",
+    ):
+        assert f'id="{chk_id}"' in home_html
+        seg = home_html.split(f'id="{chk_id}"', 1)[1].split(">", 1)[0]
+        assert "checked" in seg
+
+    for label in (
+        "All Reports",
+        "MANDAL-WISE ATTENDANCE &amp; DSR ABSTRACT REPORT",
+        "ATTENDANCE PENDING GPs",
+        "DSR PENDING GPs",
+        "SECRETARIES REPORTED AS LEAVE",
+        "SECRETARIES REPORTED AS TRAINING / MEETING",
+        "GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM",
+    ):
+        assert label in home_html
+
+    manual_html = client.get("/reports/ps-attendance").text
+    assert 'id="dist-sec-all"' in manual_html
+    assert 'id="dist-sec-after9"' in manual_html
+
+    report = ReportData(
+        district_name="KHAMMAM",
+        report_date=date(2026, 11, 12),
+        source_row_count=20,
+        unique_gp_count=20,
+        missing_lgd_rows=0,
+        duplicate_lgd_rows=0,
+        conflicts=[],
+        mandal_rows=[{
+            "serial": 1, "mandal": "BONAKAL", "total_gps": 20, "before_9": 15,
+            "before_9_pct": 75.0, "submitted": 18, "attendance_pct": 90.0,
+            "on_leave": 1, "meeting_training": 1, "pending": 2,
+        }],
+        district_total={
+            "total_gps": 20, "before_9": 15, "before_9_pct": 75.0, "submitted": 18,
+            "attendance_pct": 90.0, "on_leave": 1, "meeting_training": 1, "pending": 2,
+        },
+        dsr_mandal_rows=[{
+            "serial": 1, "mandal": "BONAKAL", "total_gps": 20, "present_ps": 16,
+            "dsr_entered": 15, "dsr_pending": 1, "dsr_pct": 93.75,
+        }],
+        dsr_district_total={
+            "total_gps": 20, "present_ps": 16, "dsr_entered": 15, "dsr_pending": 1, "dsr_pct": 93.75,
+        },
+        pending_rows=[{"mandal": "BONAKAL", "gp": "GP A", "ps_name": "PS A", "nature_of_posting": "Regular", "mobile": "9876543210"}],
+        dsr_pending_rows=[{"mandal": "BONAKAL", "gp": "GP B", "attendance_status": "Present", "timestamp": "08:30:00", "time_only": "08:30 AM"}],
+        leave_rows=[{"mandal": "BONAKAL", "gp": "GP C", "ps_name": "PS C", "nature_of_posting": "Regular", "mobile": "9876543211", "status": "Leave"}],
+        meeting_training_rows=[{"mandal": "BONAKAL", "gp": "GP D", "ps_name": "PS D", "nature_of_posting": "Regular", "mobile": "9876543212", "status": "Meeting"}],
+        after_9_rows=[{"mandal": "BONAKAL", "gp": "GP E", "ps_name": "PS E", "nature_of_posting": "Regular", "mobile": "9876543213", "time_only": "09:15 AM", "status": "Present"}],
+        all_gp_rows=[],
+    )
+
+    # 2. Only Abstract selected -> 1 Landscape page
+    abs_only_pdf = tmp_path / "abstract_only.pdf"
+    generate_pdf(report, abs_only_pdf, include_sections="abstract")
+    r_abs = PdfReader(str(abs_only_pdf))
+    assert len(r_abs.pages) == 1
+    assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" in r_abs.pages[0].extract_text()
+    assert float(r_abs.pages[0].mediabox.width) > float(r_abs.pages[0].mediabox.height)
+
+    # 3. Only Attendance Pending + After 9 AM (no abstract) -> Portrait Page 1 & Page 2, no abstract/DSR pending/leave/meeting
+    sub_pdf = tmp_path / "subset_portrait.pdf"
+    generate_pdf(report, sub_pdf, include_sections="attendance_pending,after_cutoff")
+    r_sub = PdfReader(str(sub_pdf))
+    assert len(r_sub.pages) == 2
+    assert float(r_sub.pages[0].mediabox.height) > float(r_sub.pages[0].mediabox.width)
+    all_txt = "\n".join(p.extract_text() for p in r_sub.pages)
+    assert "2. ATTENDANCE PENDING GPs" in all_txt
+    assert "6. GPs THAT SUBMITTED ATTENDANCE AFTER" in all_txt
+    assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" not in all_txt
+    assert "3. DSR PENDING GPs" not in all_txt
+    assert "4. SECRETARIES REPORTED AS LEAVE" not in all_txt
+    assert "5. SECRETARIES REPORTED AS TRAINING / MEETING" not in all_txt
+
+    # 4. Web endpoint /api/web/reports honors include_sections
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["District Name", "Panchayat LGD", "Mandal Name", "Panchayat Name", "First Attendence Status", "Second Attendence Status", "First Attendence Datetime", "DSR Status"])
+    ws.append(["Khammam", "205101", "Bonakal", "Allinagaram", "Present", "Present", "2026-11-12 08:40:00", "Entered"])
+    ws.append(["Khammam", "205102", "Bonakal", "Govindapuram", "Present", "Present", "2026-11-12 09:20:00", "Not Entered"])
+    xbuf = io.BytesIO()
+    wb.save(xbuf)
+
+    up_res = client.post(
+        "/api/web/reports",
+        files={"file": ("raw_12_Nov.xlsx", xbuf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        data={"report_mode": "district", "page_layout": "continuous", "include_sections": "abstract,dsr_pending"},
+    )
+    assert up_res.status_code == 200
+    jid = up_res.json()["job_id"]
+    dl_res = client.get(f"/api/web/reports/{jid}/download")
+    assert dl_res.status_code == 200
+    w_reader = PdfReader(io.BytesIO(dl_res.content))
+    assert len(w_reader.pages) == 2
+    w_txt = "\n".join(p.extract_text() for p in w_reader.pages)
+    assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" in w_txt
+    assert "3. DSR PENDING GPs" in w_txt
+    assert "2. ATTENDANCE PENDING GPs" not in w_txt
+    assert "4. SECRETARIES REPORTED AS LEAVE" not in w_txt

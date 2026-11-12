@@ -97,6 +97,7 @@ def generate_server_report(
     force_fresh: bool = False,
     include_pmagy: bool = False,
     page_layout: str = "individual",
+    include_sections: Any = None,
 ) -> dict[str, Any]:
     """Generate report for this specific user session in its isolated browser and directory."""
     session = get_or_create_session(session_id)
@@ -112,6 +113,7 @@ def generate_server_report(
             force_fresh,
             include_pmagy,
             page_layout,
+            include_sections,
         )
 
 
@@ -124,6 +126,7 @@ def _generate_server_report_impl(
     force_fresh: bool = False,
     include_pmagy: bool = False,
     page_layout: str = "individual",
+    include_sections: Any = None,
 ) -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
     if not is_auth:
@@ -230,17 +233,21 @@ def _generate_server_report_impl(
     cache_level = "mandal" if is_mandal_level else user_level
 
     try:
-        from dsr.pdf_generator import normalize_dsr_page_layout
+        from dsr.pdf_generator import ALL_DSR_SECTIONS, normalize_dsr_page_layout, normalize_dsr_sections
     except (ImportError, ModuleNotFoundError):
+        ALL_DSR_SECTIONS = ("abstract", "attendance_pending", "dsr_pending", "leave", "meeting_training", "after_cutoff")
         normalize_dsr_page_layout = lambda v: "continuous" if str(v or "").strip().lower() in ("continuous", "continuation", "continue", "compact", "single") else "individual"
+        normalize_dsr_sections = lambda v: ALL_DSR_SECTIONS
     norm_layout = normalize_dsr_page_layout(page_layout)
+    norm_sections = normalize_dsr_sections(include_sections)
+    norm_sections_key = "all" if len(norm_sections) == len(ALL_DSR_SECTIONS) else "+".join(norm_sections)
 
-    cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by, cache_level, target_mandal_norm, norm_layout)
+    cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by, cache_level, target_mandal_norm, norm_layout, norm_sections_key)
     legacy_district_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by)
 
     with _DSR_CACHE_LOCK:
         cached_entry = _DSR_CACHE.get(cache_key)
-        if not cached_entry and cache_level == "district" and not target_mandal_norm and norm_layout == "individual":
+        if not cached_entry and cache_level == "district" and not target_mandal_norm and norm_layout == "individual" and norm_sections_key == "all":
             cached_entry = _DSR_CACHE.get(legacy_district_key)
         if cached_entry:
             age = time.time() - cached_entry["timestamp"]
@@ -362,12 +369,18 @@ def _generate_server_report_impl(
 
         clean_mandal = target_mandal.replace(" ", "_")
         clean_download_name = f"{clean_mandal}_Mandal_GP_Attendance_and_DSR_Report_{portal_date_fmt}_{gen_time_file}.pdf"
-        target_pdf = reports_dir / f"{clean_mandal}_Mandal_DSR_Report_{portal_date_fmt}_{gen_time_file}_{cutoff_time.replace(':', '-')}_{sort_by}_{norm_layout}.pdf"
+        target_pdf = reports_dir / f"{clean_mandal}_Mandal_DSR_Report_{portal_date_fmt}_{gen_time_file}_{cutoff_time.replace(':', '-')}_{sort_by}_{norm_layout}_{norm_sections_key}.pdf"
         try:
             from dsr.pdf_generator import generate_mandal_pdf
         except (ImportError, ModuleNotFoundError):
             from report_generator import generate_mandal_pdf
-        generate_mandal_pdf(report, target_pdf, mandal_name=target_mandal, page_layout=norm_layout)
+        generate_mandal_pdf(
+            report,
+            target_pdf,
+            mandal_name=target_mandal,
+            page_layout=norm_layout,
+            include_sections=norm_sections,
+        )
 
         mandal_gps = [
             r for r in (report.all_gp_rows or [])
@@ -444,8 +457,8 @@ def _generate_server_report_impl(
     else:
         clean_dist = report.district_name.replace(" ", "_")
         clean_download_name = f"{clean_dist}_PS_Attendance_and_DSR_Report_{portal_date_fmt}_{gen_time_file}.pdf"
-        target_pdf = reports_dir / f"{clean_dist}_DSR_Report_{portal_date_fmt}_{gen_time_file}_{cutoff_time.replace(':', '-')}_{sort_by}_{norm_layout}.pdf"
-        generate_pdf(report, target_pdf, page_layout=norm_layout)
+        target_pdf = reports_dir / f"{clean_dist}_DSR_Report_{portal_date_fmt}_{gen_time_file}_{cutoff_time.replace(':', '-')}_{sort_by}_{norm_layout}_{norm_sections_key}.pdf"
+        generate_pdf(report, target_pdf, page_layout=norm_layout, include_sections=norm_sections)
 
         cached_pdf = dl_dir / clean_download_name
         try:

@@ -642,6 +642,7 @@
       merged.cutoff_time = (cutoffEl && cutoffEl.value) || '09:00';
       merged.sort_by = (sortEl && sortEl.value) || 'before_9';
       merged.page_layout = (layoutEl && layoutEl.value) || 'individual';
+      merged.include_sections = getSelectedDsrSectionsValue();
       merged.force_fresh = Boolean(freshEl && freshEl.checked);
     } else if (mod === 'balance') {
       var balEl = document.getElementById('balance-date-select');
@@ -682,6 +683,7 @@
     }
     if (sortEl && params.sort_by) sortEl.value = params.sort_by;
     if (layoutEl && params.page_layout) layoutEl.value = params.page_layout;
+    if (params.include_sections) applyDsrSectionsSelection(params.include_sections);
     if (freshEl && params.force_fresh !== undefined) {
       freshEl.checked = params.force_fresh === true || params.force_fresh === 'true' || params.force_fresh === '1';
     }
@@ -1516,7 +1518,49 @@
     if (opt) {
       opt.textContent = '1. Sort based on before ' + formatted + ' or entered time (Punctuality %)';
     }
+    var lblSec = document.getElementById('lbl-sec-after-cutoff');
+    if (lblSec) {
+      lblSec.textContent = 'GPs THAT SUBMITTED ATTENDANCE AFTER ' + formatted;
+    }
   };
+
+  window.toggleAllDsrSections = function (isChecked) {
+    document.querySelectorAll('.auto-sec-chk').forEach(function (chk) {
+      chk.checked = Boolean(isChecked);
+    });
+  };
+
+  window.syncAllDsrSectionsCheckbox = function () {
+    var items = Array.prototype.slice.call(document.querySelectorAll('.auto-sec-chk'));
+    var allChk = document.getElementById('auto-sec-all');
+    if (!allChk || !items.length) return;
+    allChk.checked = items.every(function (chk) { return chk.checked; });
+  };
+
+  function getSelectedDsrSectionsValue() {
+    var items = Array.prototype.slice.call(document.querySelectorAll('.auto-sec-chk'));
+    if (!items.length) return 'all';
+    var checked = items.filter(function (chk) { return chk.checked; }).map(function (chk) { return chk.value; });
+    if (checked.length === items.length) return 'all';
+    if (checked.length === 0) return '';
+    return checked.join(',');
+  }
+
+  function applyDsrSectionsSelection(val) {
+    var items = Array.prototype.slice.call(document.querySelectorAll('.auto-sec-chk'));
+    if (!items.length) return;
+    var raw = String(val || 'all').trim().toLowerCase();
+    if (!raw || raw === 'all') {
+      window.toggleAllDsrSections(true);
+      window.syncAllDsrSectionsCheckbox();
+      return;
+    }
+    var wanted = raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    items.forEach(function (chk) {
+      chk.checked = wanted.indexOf(chk.value) !== -1;
+    });
+    window.syncAllDsrSectionsCheckbox();
+  }
 
   function formatMinSec(totalSec) {
     var s = Math.max(0, Math.floor(totalSec));
@@ -1616,6 +1660,12 @@
     var cutoffTime = (document.getElementById('auto-cutoff-time') && document.getElementById('auto-cutoff-time').value) || '09:00';
     var sortBy = (document.getElementById('auto-sort-by') && document.getElementById('auto-sort-by').value) || 'before_9';
     var pageLayout = (document.getElementById('auto-page-layout') && document.getElementById('auto-page-layout').value) || 'individual';
+    var includeSections = getSelectedDsrSectionsValue();
+
+    if (!includeSections) {
+      showNotice('Please select at least one report section to generate.', 'error');
+      return;
+    }
 
     if (!date) {
       showNotice('Please select a report date before running the DSR Robot.', 'error');
@@ -1644,6 +1694,7 @@
       formData.append('cutoff_time', cutoffTime);
       formData.append('sort_by', sortBy);
       formData.append('page_layout', pageLayout);
+      formData.append('include_sections', includeSections);
       var chkFresh = document.getElementById('chk-force-fresh');
       if (chkFresh && chkFresh.checked) {
         formData.append('force_fresh', 'true');
@@ -1709,6 +1760,7 @@
         cutoff_time: cutoffTime,
         sort_by: sortBy,
         page_layout: pageLayout,
+        include_sections: includeSections,
       })) {
         showNotice('DSR report generation error: ' + err.message, 'error');
       }

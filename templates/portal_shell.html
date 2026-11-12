@@ -1360,6 +1360,47 @@
           </div>
         </div>
 
+        <div id="auto-report-sections-box" style="margin-top:14px; padding:14px 16px; border:1px solid var(--border); border-radius:10px; background:#f8fafc;">
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+            <label style="font-weight:800; font-size:0.9rem; color:var(--text); margin:0; display:flex; align-items:center; gap:6px;">
+              <span>☑️</span> Select Reports to Include in PDF
+            </label>
+            <label for="auto-sec-all" style="display:inline-flex; align-items:center; gap:7px; padding:4px 10px; border-radius:999px; background:#ecfdf5; border:1px solid #6ee7b7; color:#065f46; font-size:0.82rem; font-weight:800; cursor:pointer; user-select:none;">
+              <input type="checkbox" id="auto-sec-all" checked onchange="toggleAllDsrSections(this.checked)" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span>All Reports</span>
+            </label>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:8px;">
+            <label for="auto-sec-abstract" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#ffffff; cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text);">
+              <input type="checkbox" id="auto-sec-abstract" class="auto-sec-chk" value="abstract" checked onchange="syncAllDsrSectionsCheckbox()" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span>MANDAL-WISE ATTENDANCE &amp; DSR ABSTRACT REPORT</span>
+            </label>
+            <label for="auto-sec-attendance-pending" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#ffffff; cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text);">
+              <input type="checkbox" id="auto-sec-attendance-pending" class="auto-sec-chk" value="attendance_pending" checked onchange="syncAllDsrSectionsCheckbox()" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span>ATTENDANCE PENDING GPs</span>
+            </label>
+            <label for="auto-sec-dsr-pending" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#ffffff; cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text);">
+              <input type="checkbox" id="auto-sec-dsr-pending" class="auto-sec-chk" value="dsr_pending" checked onchange="syncAllDsrSectionsCheckbox()" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span>DSR PENDING GPs</span>
+            </label>
+            <label for="auto-sec-leave" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#ffffff; cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text);">
+              <input type="checkbox" id="auto-sec-leave" class="auto-sec-chk" value="leave" checked onchange="syncAllDsrSectionsCheckbox()" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span>SECRETARIES REPORTED AS LEAVE</span>
+            </label>
+            <label for="auto-sec-meeting-training" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#ffffff; cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text);">
+              <input type="checkbox" id="auto-sec-meeting-training" class="auto-sec-chk" value="meeting_training" checked onchange="syncAllDsrSectionsCheckbox()" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span>SECRETARIES REPORTED AS TRAINING / MEETING</span>
+            </label>
+            <label for="auto-sec-after-cutoff" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:#ffffff; cursor:pointer; font-size:0.82rem; font-weight:700; color:var(--text);">
+              <input type="checkbox" id="auto-sec-after-cutoff" class="auto-sec-chk" value="after_cutoff" checked onchange="syncAllDsrSectionsCheckbox()" style="width:15px; height:15px; accent-color:#059669; cursor:pointer;">
+              <span id="lbl-sec-after-cutoff">GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM</span>
+            </label>
+          </div>
+          <small style="color:var(--text-muted); font-size:0.76rem; display:block; margin-top:8px;">
+            By default all reports are selected. Uncheck any sections you do not need before generating the PDF.
+          </small>
+        </div>
+
         <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
           <button type="button" class="btn btn-gold" id="btn-generate" onclick="runAutomatedGeneration()">
             ⚡ Generate PS Attendance and DSR Report
@@ -2087,7 +2128,7 @@
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=5"></script>
   <script src="/static/js/auth.js?v=24"></script>
-  <script src="/static/js/console.js?v=18"></script>
+  <script src="/static/js/console.js?v=19"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>

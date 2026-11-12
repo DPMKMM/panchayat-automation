@@ -201,6 +201,7 @@ def _process_job(
     report_mode: str = "district",
     mandal_name: str | None = None,
     page_layout: str = "individual",
+    include_sections: str = "all",
 ) -> JobRecord:
     active_tracker = _get_tracker()
     active_storage = _get_storage()
@@ -254,7 +255,11 @@ def _process_job(
             with tempfile.TemporaryDirectory(prefix="mandal_attendance_") as directory:
                 output_path = Path(directory) / download_filename
                 report_generator.generate_mandal_pdf(
-                    report, output_path, mandal_name=target_mandal, page_layout=page_layout
+                    report,
+                    output_path,
+                    mandal_name=target_mandal,
+                    page_layout=page_layout,
+                    include_sections=include_sections,
                 )
                 output_reference = active_storage.save_pdf(job_id, output_path)
         else:
@@ -262,7 +267,12 @@ def _process_job(
             download_filename = f"PS_Attendance_Report_{ts}.pdf"
             with tempfile.TemporaryDirectory(prefix="district_attendance_") as directory:
                 output_path = Path(directory) / download_filename
-                report_generator.generate_pdf(report, output_path, page_layout=page_layout)
+                report_generator.generate_pdf(
+                    report,
+                    output_path,
+                    page_layout=page_layout,
+                    include_sections=include_sections,
+                )
                 output_reference = active_storage.save_pdf(job_id, output_path)
 
         completed = active_tracker.update(
@@ -506,6 +516,7 @@ def naresh_generate(
     sort_by: str = Form(default="before_9"),
     force_fresh: str = Form(default="false"),
     page_layout: str = Form(default="individual"),
+    include_sections: str = Form(default="all"),
 ) -> dict[str, Any]:
     console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
@@ -518,6 +529,7 @@ def naresh_generate(
             sort_by=sort_by,
             force_fresh=is_force_fresh,
             page_layout=page_layout,
+            include_sections=include_sections,
         )
         if console_user:
             log_usage(user_id=console_user["user_id"], platform_scope="console", module="dsr_automation", action="generate_report")
@@ -628,6 +640,7 @@ def create_web_report(
     report_mode: str = Form(default="district"),
     mandal_name: str = Form(default=""),
     page_layout: str = Form(default="individual"),
+    include_sections: str = Form(default="all"),
     requested_by: str = Form(default="", alias="RequestedBy"),
 ) -> JSONResponse:
     if not is_module_enabled("module_dsr_excel"):
@@ -670,6 +683,7 @@ def create_web_report(
             report_mode=report_mode,
             mandal_name=mandal_name,
             page_layout=page_layout,
+            include_sections=include_sections,
         )
     except Exception as exc:
         failed = _get_tracker().get(job_id)
@@ -939,6 +953,7 @@ def auto_load_web_report(
     report_mode: str = Form(default="district"),
     mandal_name: str = Form(default=""),
     page_layout: str = Form(default="individual"),
+    include_sections: str = Form(default="all"),
     requested_by: str = Form(default="Automated Portal", alias="RequestedBy"),
 ) -> JSONResponse:
     console_user = enforce_console_api_access(request)
@@ -980,6 +995,7 @@ def auto_load_web_report(
             report_mode=report_mode,
             mandal_name=mandal_name,
             page_layout=page_layout,
+            include_sections=include_sections,
         )
     except Exception as exc:
         failed = _get_tracker().get(job_id)

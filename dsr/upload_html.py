@@ -514,6 +514,43 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
               <div class="hint">Mandal Abstract stays on Page 1. Choose separate pages per section or continuous flow after each table ends.</div>
             </div>
 
+            <div class="field-group" id="district-report-sections-box">
+              <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                <label style="margin:0;">5. Select Reports to Include</label>
+                <label for="dist-sec-all" style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; background:#ecfdf5; border:1px solid #6ee7b7; color:#065f46; font-size:0.82rem; font-weight:700; cursor:pointer; user-select:none; margin:0;">
+                  <input type="checkbox" id="dist-sec-all" checked onchange="toggleDistrictSections(this.checked)" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>All Reports</span>
+                </label>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:8px;">
+                <label for="dist-sec-abstract" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #bfd1c7; border-radius:8px; background:#ffffff; font-size:0.82rem; font-weight:600; cursor:pointer; margin:0;">
+                  <input type="checkbox" id="dist-sec-abstract" class="dist-sec-chk" value="abstract" checked onchange="syncDistrictSectionsAll()" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>MANDAL-WISE ATTENDANCE &amp; DSR ABSTRACT REPORT</span>
+                </label>
+                <label for="dist-sec-att-pending" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #bfd1c7; border-radius:8px; background:#ffffff; font-size:0.82rem; font-weight:600; cursor:pointer; margin:0;">
+                  <input type="checkbox" id="dist-sec-att-pending" class="dist-sec-chk" value="attendance_pending" checked onchange="syncDistrictSectionsAll()" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>ATTENDANCE PENDING GPs</span>
+                </label>
+                <label for="dist-sec-dsr-pending" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #bfd1c7; border-radius:8px; background:#ffffff; font-size:0.82rem; font-weight:600; cursor:pointer; margin:0;">
+                  <input type="checkbox" id="dist-sec-dsr-pending" class="dist-sec-chk" value="dsr_pending" checked onchange="syncDistrictSectionsAll()" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>DSR PENDING GPs</span>
+                </label>
+                <label for="dist-sec-leave" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #bfd1c7; border-radius:8px; background:#ffffff; font-size:0.82rem; font-weight:600; cursor:pointer; margin:0;">
+                  <input type="checkbox" id="dist-sec-leave" class="dist-sec-chk" value="leave" checked onchange="syncDistrictSectionsAll()" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>SECRETARIES REPORTED AS LEAVE</span>
+                </label>
+                <label for="dist-sec-meeting" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #bfd1c7; border-radius:8px; background:#ffffff; font-size:0.82rem; font-weight:600; cursor:pointer; margin:0;">
+                  <input type="checkbox" id="dist-sec-meeting" class="dist-sec-chk" value="meeting_training" checked onchange="syncDistrictSectionsAll()" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>SECRETARIES REPORTED AS TRAINING / MEETING</span>
+                </label>
+                <label for="dist-sec-after9" style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid #bfd1c7; border-radius:8px; background:#ffffff; font-size:0.82rem; font-weight:600; cursor:pointer; margin:0;">
+                  <input type="checkbox" id="dist-sec-after9" class="dist-sec-chk" value="after_cutoff" checked onchange="syncDistrictSectionsAll()" style="width:15px; height:15px; accent-color:#0f766e; margin:0;">
+                  <span>GPs THAT SUBMITTED ATTENDANCE AFTER 9 AM</span>
+                </label>
+              </div>
+              <div class="hint">By default all reports are selected. Uncheck sections to generate only specific reports.</div>
+            </div>
+
             <div class="actions">
               <button id="generate-button" type="submit">Generate and download report</button>
             </div>
@@ -1110,6 +1147,17 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
         }
       }
 
+      window.toggleDistrictSections = (isChecked) => {
+        document.querySelectorAll('.dist-sec-chk').forEach((chk) => { chk.checked = Boolean(isChecked); });
+      };
+      window.syncDistrictSectionsAll = () => {
+        const items = Array.from(document.querySelectorAll('.dist-sec-chk'));
+        const allChk = document.getElementById('dist-sec-all');
+        if (allChk && items.length) {
+          allChk.checked = items.every((c) => c.checked);
+        }
+      };
+
       // District form submission
       document.getElementById('upload-form').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -1123,7 +1171,14 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
         const abs = document.getElementById('absentees-file').files[0];
         if (abs) data.append('absentees_file', abs);
         const layout = (document.getElementById('district-page-layout') && document.getElementById('district-page-layout').value) || 'individual';
+        const secItems = Array.from(document.querySelectorAll('.dist-sec-chk'));
+        const checkedSecs = secItems.filter((c) => c.checked).map((c) => c.value);
+        if (secItems.length && !checkedSecs.length) {
+          showMessage(document.getElementById('report-message'), 'Please select at least one report section to generate.', 'error');
+          return;
+        }
         data.append('page_layout', layout);
+        data.append('include_sections', checkedSecs.length === secItems.length ? 'all' : checkedSecs.join(','));
         runReportJob(data, document.getElementById('generate-button'), document.getElementById('report-message'), 'District_PS_Attendance_Report.pdf');
       });
 
