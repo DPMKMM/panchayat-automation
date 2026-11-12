@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
+import time
 from pathlib import Path
 from typing import Any, List, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
@@ -246,10 +250,131 @@ def get_mas_years(request: Request, year: Optional[int] = None) -> dict[str, Any
     return _get_mas_years_impl(request, year=year)
 
 
+_MAS_JOBS_LOCK = threading.Lock()
+_MAS_JOBS: dict[str, dict[str, Any]] = {}
+
+
+def _start_mas_job_impl(request: Request, req: MasGenerateRequest) -> dict[str, Any]:
+    console_user, sid = enforce_department_api_access(request, always_require=True)
+    session = automation_service.get_or_create_session(sid)
+    job_id = uuid4().hex
+
+    with _MAS_JOBS_LOCK:
+        _MAS_JOBS[job_id] = {
+            "job_id": job_id,
+            "session_id": sid,
+            "status": "running",
+            "started_at": time.time(),
+            "month": req.month,
+            "year": req.year,
+            "result": None,
+            "error": None,
+            "status_code": 200,
+        }
+
+    def _worker():
+        def _run_on_session_thread():
+            active_bot = session.get("bot")
+            if not automation_service._is_bot_alive(active_bot):
+                active_bot = automation_service.ensure_active_bot(session)
+            return mas_service.run_pipeline(
+                bot=active_bot,
+                session=session,
+                session_id=sid,
+                month=req.month,
+                year=req.year,
+                financial_year=req.financial_year,
+                excluded_modules=req.excluded_modules,
+                report_type=req.report_type,
+                district_name=req.district_name,
+                strict_live=True,
+            )
+
+        try:
+            result = automation_service.run_in_session_thread(session, _run_on_session_thread)
+            if console_user:
+                try:
+                    log_usage(
+                        user_id=console_user["user_id"],
+                        platform_scope="console",
+                        module="mas_automation",
+                        action="generate_report",
+                    )
+                except Exception:
+                    pass
+            with _MAS_JOBS_LOCK:
+                if job_id in _MAS_JOBS:
+                    _MAS_JOBS[job_id].update({"status": "completed", "result": result, "status_code": 200})
+        except PermissionError as exc:
+            try:
+                from core.session_manager import mark_session_expired
+                mark_session_expired(sid, str(exc))
+            except Exception:
+                pass
+            with _MAS_JOBS_LOCK:
+                if job_id in _MAS_JOBS:
+                    _MAS_JOBS[job_id].update({"status": "failed", "error": str(exc), "status_code": 401})
+        except ValueError as exc:
+            with _MAS_JOBS_LOCK:
+                if job_id in _MAS_JOBS:
+                    _MAS_JOBS[job_id].update({"status": "failed", "error": str(exc), "status_code": 400})
+        except FileNotFoundError as exc:
+            with _MAS_JOBS_LOCK:
+                if job_id in _MAS_JOBS:
+                    _MAS_JOBS[job_id].update({"status": "failed", "error": str(exc), "status_code": 404})
+        except Exception as exc:
+            logger.exception("Async MAS job failed for sid=%s period=%s-%s: %s", sid, req.month, req.year, exc)
+            with _MAS_JOBS_LOCK:
+                if job_id in _MAS_JOBS:
+                    _MAS_JOBS[job_id].update({"status": "failed", "error": str(exc), "status_code": 502})
+
+    t = threading.Thread(target=_worker, daemon=True, name=f"mas-job-{job_id[:8]}")
+    t.start()
+    return {"success": True, "job_id": job_id, "status": "running"}
+
+
+def _get_mas_job_status_impl(request: Request, job_id: str) -> dict[str, Any]:
+    _, sid = enforce_department_api_access(request, always_require=True)
+    with _MAS_JOBS_LOCK:
+        entry = _MAS_JOBS.get(job_id)
+        snapshot = dict(entry) if entry else None
+
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="MAS report job not found or expired.")
+    if snapshot.get("session_id") != sid:
+        raise HTTPException(status_code=403, detail="Unauthorized access to another session's MAS report job.")
+
+    elapsed = round(max(0.0, time.time() - float(snapshot.get("started_at") or time.time())), 1)
+    if snapshot["status"] == "running":
+        return {"success": True, "job_id": job_id, "status": "running", "elapsed_sec": elapsed}
+    if snapshot["status"] == "completed":
+        res = dict(snapshot["result"] or {})
+        res["job_id"] = job_id
+        res["status"] = "completed"
+        res["elapsed_sec"] = elapsed
+        return res
+
+    sc = int(snapshot.get("status_code") or 502)
+    err_msg = str(snapshot.get("error") or "MAS report extraction failed.")
+    hdrs = {"X-Dept-Auth-Required": "true"} if sc == 401 else None
+    raise HTTPException(status_code=sc, detail=err_msg, headers=hdrs)
+
+
 @router.post("/generate", include_in_schema=False)
 async def generate_mas_consolidated(request: Request) -> dict[str, Any]:
     req = await _parse_generate_payload(request)
-    return _generate_mas_report_impl(request, req)
+    return await run_in_threadpool(_generate_mas_report_impl, request, req)
+
+
+@router.post("/start-job", include_in_schema=False)
+async def start_mas_job(request: Request) -> dict[str, Any]:
+    req = await _parse_generate_payload(request)
+    return await run_in_threadpool(_start_mas_job_impl, request, req)
+
+
+@router.get("/jobs/{job_id}", include_in_schema=False)
+def get_mas_job_status(request: Request, job_id: str) -> dict[str, Any]:
+    return _get_mas_job_status_impl(request, job_id)
 
 
 @router.get("/download/{file_type}", include_in_schema=False)
@@ -271,7 +396,16 @@ for _alias_router in (mas_alias_router, mas_upper_router):
     @_alias_router.post("/generate", include_in_schema=False)
     async def generate_mas_alias(request: Request) -> dict[str, Any]:
         req = await _parse_generate_payload(request)
-        return _generate_mas_report_impl(request, req)
+        return await run_in_threadpool(_generate_mas_report_impl, request, req)
+
+    @_alias_router.post("/start-job", include_in_schema=False)
+    async def start_mas_job_alias(request: Request) -> dict[str, Any]:
+        req = await _parse_generate_payload(request)
+        return await run_in_threadpool(_start_mas_job_impl, request, req)
+
+    @_alias_router.get("/jobs/{job_id}", include_in_schema=False)
+    def get_mas_job_status_alias(request: Request, job_id: str) -> dict[str, Any]:
+        return _get_mas_job_status_impl(request, job_id)
 
     @_alias_router.get("/download/{file_type}", include_in_schema=False)
     def download_mas_alias(request: Request, file_type: str) -> FileResponse:

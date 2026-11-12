@@ -369,6 +369,7 @@
   async function verifyStage1PortalStatus() {
     try {
       var res = await consoleFetch('/api/auth/portal-status?_ts=' + Date.now(), { cache: 'no-store' });
+      if (res.status >= 500) return { authenticated: false, user: null, transientError: true };
       if (!res.ok) return { authenticated: false, user: null };
       var data = await res.json().catch(function () { return {}; });
       if (data && data.epts_session_id) {
@@ -376,7 +377,7 @@
       }
       return data || { authenticated: false, user: null };
     } catch (e) {
-      return { authenticated: false, user: null };
+      return { authenticated: false, user: null, transientError: true };
     }
   }
 

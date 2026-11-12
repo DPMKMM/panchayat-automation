@@ -34,6 +34,18 @@ from mas.xpaths import XPATH_REGISTRY
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(val: Any, default: int = 0) -> int:
+    if val is None:
+        return default
+    cleaned = re.sub(r"[^0-9-]", "", str(val).strip())
+    if not cleaned or cleaned == "-":
+        return default
+    try:
+        return int(cleaned)
+    except ValueError:
+        return default
+
+
 def get_gmr_524_cache_path(month: str, year: int, district_name: str = "Khammam") -> Path:
     return get_reports_dir() / f"{district_slug(district_name)}_MAS_{month.capitalize()}_{year}_Consolidated_Data.json"
 
@@ -433,10 +445,39 @@ def _submit_month_year_and_wait_table(frame, month_num: int, year: int, report_l
     time.sleep(0.4)
     submit_btn = frame.locator(XPATH_REGISTRY["btn_submit"]).first
     submit_btn.wait_for(state="visible", timeout=10000)
-    submit_btn.click()
 
-    table_loc = frame.locator(XPATH_REGISTRY["gridview1"]).first
-    table_loc.wait_for(state="visible", timeout=30000)
+    alert_msgs: list[str] = []
+    dialog_owner = getattr(frame, "page", None) or frame
+
+    def _on_dialog(dlg):
+        try:
+            alert_msgs.append(str(getattr(dlg, "message", "") or ""))
+            dlg.accept()
+        except Exception:
+            pass
+
+    attached_dlg = False
+    if hasattr(dialog_owner, "on") and hasattr(dialog_owner, "remove_listener"):
+        try:
+            dialog_owner.on("dialog", _on_dialog)
+            attached_dlg = True
+        except Exception:
+            attached_dlg = False
+
+    try:
+        submit_btn.click()
+        table_loc = frame.locator(XPATH_REGISTRY["gridview1"]).first
+        table_loc.wait_for(state="visible", timeout=30000)
+    except Exception as exc:
+        if alert_msgs:
+            raise ValueError(f"EPTS Portal Alert ({report_label}): {alert_msgs[0]}") from exc
+        raise
+    finally:
+        if attached_dlg:
+            try:
+                dialog_owner.remove_listener("dialog", _on_dialog)
+            except Exception:
+                pass
     time.sleep(0.8)
 
     try:
@@ -548,11 +589,10 @@ def scrape_pending_gps_data(
         const results = {};
         const parser = new DOMParser();
 
-        for (const m of mandals) {
+        async function fetchOneMandal(m) {
             const formData = new FormData(form);
             formData.set('__EVENTTARGET', `ctl00$ContentPlaceHolder1$GridView1$${m.ctl}$lblLevelNameMandal`);
             formData.set('__EVENTARGUMENT', '');
-
             try {
                 const resp = await fetch(url, { method: 'POST', body: formData });
                 const html = await resp.text();
@@ -560,6 +600,7 @@ def scrape_pending_gps_data(
                 const table = (
                     subDoc.getElementById('ContentPlaceHolder1_GridView2')
                     || subDoc.getElementById('ContentPlaceHolder1_GridView1')
+                    || subDoc.querySelector('table[id*="GridView2"]')
                     || subDoc.querySelector('table')
                 );
                 const rows = table ? Array.from(table.querySelectorAll('tr')) : [];
@@ -585,6 +626,11 @@ def scrape_pending_gps_data(
             } catch (err) {
                 results[m.mandal_name] = [];
             }
+        }
+
+        const BATCH_SIZE = 4;
+        for (let i = 0; i < mandals.length; i += BATCH_SIZE) {
+            await Promise.all(mandals.slice(i, i + BATCH_SIZE).map(fetchOneMandal));
         }
         return results;
     }
@@ -679,7 +725,7 @@ def scrape_mandal_births_523(
             const results = [];
             const parser = new DOMParser();
 
-            for (const m of mandals) {
+            async function fetchBirthMandal(m) {
                 const formData = new FormData(form);
                 formData.set('__EVENTTARGET', `ctl00$ContentPlaceHolder1$GridView1$${m.ctl}$lblLevelNameMandal`);
                 formData.set('__EVENTARGUMENT', '');
@@ -687,8 +733,8 @@ def scrape_mandal_births_523(
                     const resp = await fetch(url, { method: 'POST', body: formData });
                     const html = await resp.text();
                     const subDoc = parser.parseFromString(html, 'text/html');
-                    const table = subDoc.getElementById('ContentPlaceHolder1_GridView2');
-                    if (!table) continue;
+                    const table = subDoc.getElementById('ContentPlaceHolder1_GridView2') || subDoc.querySelector('table[id*="GridView2"]');
+                    if (!table) return;
                     const rows = Array.from(table.querySelectorAll('tr'));
                     for (let i = 1; i < rows.length; i++) {
                         const cells = Array.from(rows[i].querySelectorAll('td')).map(c => c.innerText.trim());
@@ -712,6 +758,11 @@ def scrape_mandal_births_523(
                     }
                 } catch (e) {}
             }
+
+            const BATCH_SIZE = 4;
+            for (let i = 0; i < mandals.length; i += BATCH_SIZE) {
+                await Promise.all(mandals.slice(i, i + BATCH_SIZE).map(fetchBirthMandal));
+            }
             return results;
         }
         """
@@ -722,8 +773,8 @@ def scrape_mandal_births_523(
             if is_summary_row_name(gp_name):
                 continue
             ukey = make_unique_key(m_name, gp_name)
-            bal_gps = int(g.get("balanceGpsDataToEnter") or 0)
-            bal_births = int(g.get("balanceToBeEntered") or 0)
+            bal_gps = _safe_int(g.get("balanceGpsDataToEnter"), 0)
+            bal_births = _safe_int(g.get("balanceToBeEntered"), 0)
             status = "Pending" if bal_gps > 0 else "Entered"
             births_gp_lookup[ukey] = {
                 "mandal_523": m_name,
@@ -1154,24 +1205,21 @@ def get_or_create_monthly_data(
     if page is not None:
         try:
             mandals_524, frame_524 = scrape_mandal_abstract_524(page, month, year)
+
+            if include_gp_data:
+                _, pending_524_mandals = find_mandal_pendency(mandals_524, None, excluded_modules)
+                if pending_524_mandals and frame_524 is not None:
+                    pending_gps_by_mandal = scrape_pending_gps_data(frame_524, pending_524_mandals, month, year)
+                else:
+                    pending_gps_by_mandal = {}
+            else:
+                logger.info("[*] Report type 'abstract_only': skipping GP-wise drill-down.")
+                pending_gps_by_mandal = {}
+
             births_523, births_gp_lookup = scrape_mandal_births_523(
                 page, month, year, include_gp_drilldown=include_gp_data
             )
             full_abstract, pending_mandals = find_mandal_pendency(mandals_524, births_523, excluded_modules)
-
-            if include_gp_data:
-                if pending_mandals:
-                    frame_524 = _open_gmr_report_frame(page, "5.24")
-                    _submit_month_year_and_wait_table(frame_524, get_month_number(month), year, "GM-R 5.24")
-                    pending_gps_by_mandal = scrape_pending_gps_data(frame_524, pending_mandals, month, year)
-                else:
-                    pending_gps_by_mandal = {}
-            else:
-                logger.info(
-                    "[*] Report type 'abstract_only': skipping GP-wise drill-down across %d pending mandal(s).",
-                    len(pending_mandals),
-                )
-                pending_gps_by_mandal = {}
 
             all_gps, pending_action_list = assemble_full_gp_list_and_action_list(
                 full_abstract,

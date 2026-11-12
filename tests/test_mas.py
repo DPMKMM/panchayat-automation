@@ -661,3 +661,51 @@ def test_mas_fetch_portal_years_periods_and_views_js(monkeypatch, tmp_path):
         body = res.json()
         assert body["success"] is True
         assert [y["value"] for y in body["years"]] == ["2026", "2025"]
+
+
+def test_mas_async_job_polling_and_session_isolation(monkeypatch, tmp_path):
+    """Verify background start-job + job polling prevents Cloudflare 100s timeout and isolates sessions."""
+    ts = int(time.time() * 1000)
+    c = TestClient(app)
+    _console_login(c, monkeypatch, f"job_{ts}")
+    sid, automation_service, _ = _install_mock_live_session(monkeypatch, tmp_path, f"job_{ts}")
+    monkeypatch.setattr(automation_service, "_is_bot_alive", lambda b: True)
+    monkeypatch.setattr(automation_service, "run_in_session_thread", lambda s, fn, *a, **kw: fn(*a, **kw))
+
+    hdrs = {"Host": "reports.panchayatautomation.in", "X-Session-ID": sid}
+    start_res = c.post(
+        "/api/reports/mas-consolidated/start-job",
+        headers=hdrs,
+        json={"month": "October", "year": 2026, "report_type": "abstract_and_gp"},
+    )
+    assert start_res.status_code == 200
+    job_id = start_res.json()["job_id"]
+
+    # Another authenticated session cannot poll this job
+    other_sid = f"other_sid_{ts}"
+    other_sess = automation_service.get_or_create_session(other_sid)
+    other_sess["authenticated"] = True
+    other_sess["status"] = "authenticated"
+    other_sess["user_id"] = "DPO999"
+    other_sess["bot"] = _DummyBot()
+    forbidden = c.get(
+        f"/api/reports/mas-consolidated/jobs/{job_id}",
+        headers={"Host": "reports.panchayatautomation.in", "X-Session-ID": other_sid},
+    )
+    assert forbidden.status_code == 403
+
+    # Owning session polls until completed
+    final_body = None
+    for _ in range(40):
+        poll = c.get(f"/api/reports/mas-consolidated/jobs/{job_id}", headers=hdrs)
+        assert poll.status_code == 200
+        data = poll.json()
+        if data.get("status") == "completed":
+            final_body = data
+            break
+        time.sleep(0.05)
+
+    assert final_body is not None and final_body["success"] is True
+    assert final_body["month"] == "October"
+    assert final_body["year"] == 2026
+    assert final_body["total_mandals"] == 2

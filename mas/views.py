@@ -404,7 +404,7 @@ MAS_PAGE_HTML = (
     + _FOOTER_HTML
     + """
 
-  <script src="/static/js/dept_session.js?v=2"></script>
+  <script src="/static/js/dept_session.js?v=6"></script>
   <script>
     const DEFAULT_MAS_MODULES = [
       { id: 'Nursery', label: 'Nursery', default_excluded: false, is_highlighted: false },
@@ -440,6 +440,7 @@ MAS_PAGE_HTML = (
     let isDeptAuthenticated = false;
     let hasFetchedPortalYears = false;
     let isFetchingPortalYears = false;
+    let isGeneratingMas = false;
     let authGateActionMode = 'dept';
 
     function escapeHtml(str) {
@@ -888,6 +889,7 @@ MAS_PAGE_HTML = (
       }
 
       const excluded = getSelectedExcludedModules();
+      isGeneratingMas = true;
       if (btn && !isSilent) {
         btn.disabled = true;
         btn.textContent = reportType === 'abstract_only'
@@ -895,18 +897,70 @@ MAS_PAGE_HTML = (
           : '⏳ Scraping Abstract & GP Data...';
       }
 
+      async function _parseJsonOrText(response) {
+        const raw = await response.text().catch(() => '');
+        if (!raw) return {};
+        try {
+          return JSON.parse(raw);
+        } catch (e) {
+          const cleanSnippet = raw.replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 180);
+          return { detail: `HTTP ${response.status}: ${cleanSnippet || response.statusText || 'Unexpected server response'}` };
+        }
+      }
+
       try {
-        const res = await consoleApiFetch('/api/reports/mas-consolidated/generate', {
+        const payloadBody = JSON.stringify({
+          month: month,
+          year: year,
+          excluded_modules: excluded,
+          report_type: reportType
+        });
+
+        let res = await consoleApiFetch('/api/reports/mas-consolidated/start-job', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            month: month,
-            year: year,
-            excluded_modules: excluded,
-            report_type: reportType
-          })
+          body: payloadBody
         });
-        const data = await res.json().catch(() => ({}));
+        let data = await _parseJsonOrText(res);
+
+        if (res.status === 404) {
+          res = await consoleApiFetch('/api/reports/mas-consolidated/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payloadBody
+          });
+          data = await _parseJsonOrText(res);
+        } else if (res.ok && data && data.job_id && data.status === 'running') {
+          const jobId = data.job_id;
+          while (true) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const pollRes = await consoleApiFetch(`/api/reports/mas-consolidated/jobs/${encodeURIComponent(jobId)}`);
+            const pollData = await _parseJsonOrText(pollRes);
+            if (pollRes.status === 401 || pollRes.status === 403) {
+              res = pollRes;
+              data = pollData;
+              break;
+            }
+            if (!pollRes.ok) {
+              res = pollRes;
+              data = pollData;
+              break;
+            }
+            if (pollData && pollData.status === 'running') {
+              if (btn && !isSilent) {
+                const sec = pollData.elapsed_sec ? Math.round(pollData.elapsed_sec) + 's' : '';
+                btn.textContent = sec
+                  ? `⏳ Extracting GM-R 5.24 & 5.23 (${sec})...`
+                  : '⏳ Extracting GM-R 5.24 & 5.23...';
+              }
+              continue;
+            }
+            res = pollRes;
+            data = pollData;
+            break;
+          }
+        }
+
         if (res.status === 401 || res.status === 403) {
           if (!isSilent) {
             showPortalNotice(data.detail || 'Departmental session expired. Please re-authenticate once on Console.', 'warning');
@@ -927,11 +981,13 @@ MAS_PAGE_HTML = (
             );
           }
         } else if (!isSilent) {
-          showPortalNotice('Error generating MAS report: ' + (data.detail || data.error || 'Unknown error'), 'error');
+          const errDetail = data.detail || data.error || data.message || `HTTP ${res.status || 'Error'} ${res.statusText || ''}`.trim();
+          showPortalNotice('Error generating MAS report: ' + errDetail, 'error');
         }
       } catch (err) {
-        if (!isSilent) showPortalNotice('Failed to generate MAS report: ' + (err.message || 'Network error'), 'error');
+        if (!isSilent) showPortalNotice('Failed to generate MAS report: ' + ((err && err.message) || 'Network error'), 'error');
       } finally {
+        isGeneratingMas = false;
         if (btn) {
           btn.disabled = false;
           btn.textContent = '🚀 Generate Report';
@@ -1205,13 +1261,22 @@ MAS_PAGE_HTML = (
       });
     }
 
-    async function refreshMasAuthStatus() {
+    async function refreshMasAuthStatus(forceCheck) {
+      if (isGeneratingMas && !forceCheck) {
+        return { stage1: { authenticated: isStage1Authenticated }, dept: { authenticated: isDeptAuthenticated } };
+      }
       let stage1 = { authenticated: false };
       let dept = { authenticated: false };
       if (window.DeptSessionManager) {
         stage1 = await window.DeptSessionManager.verifyStage1PortalStatus();
+        if (stage1 && stage1.transientError) {
+          return { stage1: { authenticated: isStage1Authenticated }, dept: { authenticated: isDeptAuthenticated } };
+        }
         if (stage1 && stage1.authenticated) {
           dept = await window.DeptSessionManager.verifyStatus();
+          if (dept && dept.status === 'error') {
+            return { stage1, dept: { authenticated: isDeptAuthenticated } };
+          }
         }
       }
       const prevDept = isDeptAuthenticated;
