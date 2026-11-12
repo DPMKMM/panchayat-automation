@@ -427,7 +427,7 @@ def process_dsr(
         is_tm = int(st_low.startswith("training") or st_low.startswith("meeting"))
         is_rep = int(st_lbl != "")
         if pd.notna(att_dt):
-            exact_str = att_dt.strftime("%I:%M:%S %p")
+            exact_str = att_dt.strftime("%H:%M")
             sec_mid = att_dt.hour * 3600 + att_dt.minute * 60 + att_dt.second
             is_b9 = int(att_dt.time() < nine_am)
             cell_lookup[(lgd, d_lbl)] = (exact_str, sec_mid, is_b9, is_pres, is_leave, is_tm, is_rep)
@@ -471,8 +471,8 @@ def process_dsr(
         if secs_list:
             avg_s = int(round(sum(secs_list) / len(secs_list)))
             hh, rem = divmod(avg_s, 3600)
-            mm, ss = divmod(rem, 60)
-            item["Average Time"] = datetime(2000, 1, 1, hh % 24, mm, ss).strftime("%I:%M:%S %p")
+            mm = rem // 60
+            item["Average Time"] = datetime(2000, 1, 1, hh % 24, mm).strftime("%H:%M")
         else:
             item["Average Time"] = "-"
         item["No. of Days Before 9 AM"] = b9_count

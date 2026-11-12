@@ -644,7 +644,7 @@
                 escapeHtml(Number(val || 0).toFixed(2) + '%') + '</span></td>';
             } else if (activeTab === 'time_matrix' && r._time_styles && r._time_styles[c]) {
               var ts = r._time_styles[c] || {};
-              bodyHtml += '<td><span class="md-pct-pill" style="min-width:86px; font-weight:' + (c === 'Average Time' ? '800' : '600') + '; ' +
+              bodyHtml += '<td><span class="md-pct-pill" style="min-width:52px; font-variant-numeric:tabular-nums; font-weight:' + (c === 'Average Time' ? '800' : '600') + '; ' +
                 escapeHtml(ts.css || '') + '">' + escapeHtml(String(val === undefined || val === null ? '' : val)) + '</span></td>';
             } else if (c === 'After 9 AM %') {
               bodyHtml += '<td>' + escapeHtml(Number(val || 0).toFixed(2) + '%') + '</td>';

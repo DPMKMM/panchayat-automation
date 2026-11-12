@@ -251,7 +251,7 @@ def generate_multiday_dsr_pdf(
             "No. of Days Before 9 AM",
         ]
         date_cols = [c for c in tm_df.columns if c not in fixed_left and c not in summary_right]
-        chunk_size = 6
+        chunk_size = 10
         date_chunks = [date_cols[i : i + chunk_size] for i in range(0, max(1, len(date_cols)), chunk_size)] or [[]]
 
         for slice_idx, d_chunk in enumerate(date_chunks, start=1):
@@ -265,12 +265,12 @@ def generate_multiday_dsr_pdf(
             )
             sub_cols = fixed_left + d_chunk + summary_right
             sub_df = tm_df[sub_cols]
-            w_sno = usable_w * 0.036
-            w_mandal = usable_w * 0.105
-            w_gp = usable_w * 0.12
-            w_cnt = usable_w * 0.055  # x4 = 0.22
-            w_avg = usable_w * 0.078
-            w_b9 = usable_w * 0.068
+            w_sno = usable_w * 0.032
+            w_mandal = usable_w * 0.095
+            w_gp = usable_w * 0.11
+            w_cnt = usable_w * 0.048  # x4 = 0.192
+            w_avg = usable_w * 0.055
+            w_b9 = usable_w * 0.058
             rem_w = usable_w - (w_sno + w_mandal + w_gp + w_cnt * 4 + w_avg + w_b9)
             w_day = rem_w / max(1, len(d_chunk)) if d_chunk else 0
             sub_widths = (

@@ -163,23 +163,23 @@ def test_process_dsr_logic_boundaries_and_color_bands():
         "No. of Days Before 9 AM",
     ]
     tm_j = res.time_matrix[res.time_matrix["Panchayat Name"] == "Julapalli GP"].iloc[0]
-    assert tm_j["10-11-2026"] == "08:45:00 AM"
-    assert tm_j["11-11-2026"] == "08:30:00 AM"
+    assert tm_j["10-11-2026"] == "08:45"
+    assert tm_j["11-11-2026"] == "08:30"
     assert int(tm_j["Present"]) == 1
     assert int(tm_j["On Leave"]) == 0
     assert int(tm_j["Not Marked Attendance"]) == 0
     assert int(tm_j["Training / Meeting"]) == 1
-    assert tm_j["Average Time"] == "08:37:30 AM"
+    assert tm_j["Average Time"] == "08:37"
     assert int(tm_j["No. of Days Before 9 AM"]) == 2
 
     tm_k = res.time_matrix[res.time_matrix["Panchayat Name"] == "Kuchirajpalli"].iloc[0]
-    assert tm_k["10-11-2026"] == "09:00:00 AM"
+    assert tm_k["10-11-2026"] == "09:00"
     assert tm_k["11-11-2026"] == "-"
     assert int(tm_k["Present"]) == 0
     assert int(tm_k["On Leave"]) == 1
     assert int(tm_k["Not Marked Attendance"]) == 1
     assert int(tm_k["Training / Meeting"]) == 0
-    assert tm_k["Average Time"] == "09:00:00 AM"
+    assert tm_k["Average Time"] == "09:00"
     assert int(tm_k["No. of Days Before 9 AM"]) == 0  # 09:00:00 is >= 9 AM
 
     # Color threshold checks from highlight_percentage
@@ -228,7 +228,8 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     assert "Mandal Level" in txt
     assert "Gram Panchayat Level" in txt
     assert "Average Time" in txt
-    assert "08:25:00 AM" in txt
+    assert "08:25" in txt
+    assert "08:25:00 AM" not in txt
     assert "Allinagaram" in txt
 
     xlsx_path = tmp_path / "md.xlsx"
@@ -239,7 +240,7 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     csv_bytes = generate_multiday_dsr_csv(res, "gp")
     assert b"Allinagaram" in csv_bytes
     csv_tm_bytes = generate_multiday_dsr_csv(res, "time_matrix")
-    assert b"Average Time" in csv_tm_bytes and b"08:25:00 AM" in csv_tm_bytes
+    assert b"Average Time" in csv_tm_bytes and b"08:25" in csv_tm_bytes and b"08:25:00 AM" not in csv_tm_bytes
 
     # Live HTTP API & page route tests
     client = TestClient(app)
@@ -276,7 +277,7 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     assert ts_re.search(dl_csv.headers.get("Content-Disposition", ""))
 
     dl_tm_csv = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=time_matrix")
-    assert dl_tm_csv.status_code == 200 and "08:25:00 AM" in dl_tm_csv.text
+    assert dl_tm_csv.status_code == 200 and "08:25" in dl_tm_csv.text and "08:25:00 AM" not in dl_tm_csv.text
     assert ts_re.search(dl_tm_csv.headers.get("Content-Disposition", ""))
 
     # Toggle option off -> time_matrix omitted from Excel & JSON response
