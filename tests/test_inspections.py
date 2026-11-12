@@ -550,3 +550,83 @@ def test_exact_26col_epts_html_banner_and_upload_consolidation(tmp_path):
     assert set(by_div.keys()) == {"Khammam", "Kallur"}
     assert by_div["Khammam"].target == 10 and by_div["Khammam"].completed == 1
     assert by_div["Kallur"].target == 10 and by_div["Kallur"].completed == 1
+
+
+def test_playwright_gmr391_submit_before_excel_download(tmp_path, monkeypatch):
+    """Verify Submit is clicked BEFORE Excel icon so portal never fires 'Sorry ! No Data Found..' before loading data."""
+    from playwright.sync_api import sync_playwright
+    from inspections.automation import download_inspection_weeks
+
+    xls_body = """<html><body><table><tr><th>S.No</th><th>District Name</th><th>Division Name</th><th>Mandal Name</th><th>Panchayat Name</th><th>Final Submit Status</th></tr>
+    <tr><td>1</td><td>Khammam</td><td>KHAMMAM</td><td>Bonakal</td><td>Janakipuram</td><td>Submitted</td></tr></table></body></html>"""
+
+    report_html = """
+    <html><body>
+      <select id="ddlDesig"><option value="MPO" selected>MPO</option></select>
+      <select id="ddlDist"><option value="Khammam" selected>Khammam</option></select>
+      <select id="ddlWeek" onchange="window._submitted = false;">
+        <option value="2026-11-02 to 2026-11-07">2026-11-02 to 2026-11-07</option>
+      </select>
+      <input type="button" value="Submit" onclick="window._submitted = true;" />
+      <input type="image" src="/images/excel.png" title="Export to Excel" onclick="doExport()" />
+      <input type="button" value="CompleteReport" />
+      <script>
+        window._submitted = false;
+        function doExport() {
+          if (!window._submitted) {
+            alert('Sorry ! No Data Found..');
+            return;
+          }
+          window.location.href = 'https://epanchayat.test/download.xls';
+        }
+      </script>
+    </body></html>
+    """
+    menu_html = """<html><body><a href="https://epanchayat.test/gmr391">GM-R 39.1 MPO,DLPO,DPO Inspection Data Entry Report</a></body></html>"""
+    shell_html = """<html><body><a href="https://epanchayat.test/menu" target="my-iframe">GP Monitoring</a><iframe name="my-iframe" id="my-iframe" src="about:blank"></iframe></body></html>"""
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        ctx = browser.new_context(accept_downloads=True)
+        page = ctx.new_page()
+
+        def _h(route):
+            u = route.request.url
+            if u.endswith("/shell"):
+                route.fulfill(status=200, content_type="text/html", body=shell_html)
+            elif u.endswith("/menu"):
+                route.fulfill(status=200, content_type="text/html", body=menu_html)
+            elif u.endswith("/gmr391"):
+                route.fulfill(status=200, content_type="text/html", body=report_html)
+            elif u.endswith("/download.xls"):
+                route.fulfill(
+                    status=200,
+                    headers={"Content-Disposition": 'attachment; filename="GMR391.xls"', "Content-Type": "application/vnd.ms-excel"},
+                    body=xls_body,
+                )
+            else:
+                route.fulfill(status=200, content_type="image/png", body=b"")
+
+        page.route("https://epanchayat.test/**", _h)
+        page.goto("https://epanchayat.test/shell")
+        monkeypatch.setattr(
+            "inspections.automation._click_gp_monitoring_top_menu",
+            lambda b: page.locator("xpath=//a[normalize-space(.)='GP Monitoring']").first.click(),
+        )
+
+        class _Bot:
+            def __init__(self, pg):
+                self.page = pg
+
+        items, labels = download_inspection_weeks(
+            _Bot(page),
+            designation="MPO",
+            from_week="2026-11-02 to 2026-11-07",
+            to_week="2026-11-02 to 2026-11-07",
+            downloads_dir=tmp_path,
+        )
+        assert labels == ["2026-11-02 to 2026-11-07"]
+        assert len(items) == 1
+        assert items[0]["status"] == "downloaded"
+        assert b"Janakipuram" in items[0]["raw_bytes"]
+        browser.close()

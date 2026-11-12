@@ -3136,18 +3136,29 @@
     if (actionsWrap) actionsWrap.style.display = 'flex';
 
     var totals = data.totals || {};
+    var periodTxt = (data.from_week && data.to_week && data.from_week !== data.to_week)
+      ? (data.from_week + ' -> ' + data.to_week)
+      : (data.from_week || '');
     var syncEl = document.getElementById('insp-sync-time');
     if (syncEl) {
+      var logNote = '';
+      if ((totals.raw_row_count || 0) === 0 && Array.isArray(data.week_logs) && data.week_logs.length > 0) {
+        logNote = ' • Portal Week Status: ' + data.week_logs.map(function (wl) {
+          return (wl.week || '') + ' [' + (wl.status || 'unknown') + ']';
+        }).join(', ');
+      }
       syncEl.textContent =
         'Compiled ' + (data.designation || 'MPO') + ' (' + (data.weeks_count || 1) + ' week(s): ' +
-        (data.from_week || '') + ' to ' + (data.to_week || '') + ') • Submitted Considered: ' +
+        periodTxt + ') • Submitted Considered: ' +
         (totals.submitted_row_count || 0) + ' / Raw: ' + (totals.raw_row_count || 0) +
-        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')';
+        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')' + logNote;
     }
 
     el = document.getElementById('insp-table-title');
     if (el) {
-      el.textContent = (data.district_name || 'District') + ' — ' + levelLabel + '-Wise ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
+      var dName = String(data.district_name || 'District').trim();
+      var distHeading = /district/i.test(dName) ? dName : (dName + ' District');
+      el.textContent = distHeading + ' — ' + levelLabel + '-Wise ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
     }
 
     window.filterInspectionsTable();

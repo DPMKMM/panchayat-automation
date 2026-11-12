@@ -32,6 +32,23 @@ def _safe_xml(text: Any) -> str:
     return html.escape("" if text is None else str(text))
 
 
+def _format_district_title(district_name: str) -> str:
+    clean = (district_name or "District").strip()
+    if "district" in clean.lower():
+        return clean
+    return f"{clean} District"
+
+
+def _format_period_label(from_week: str, to_week: str) -> str:
+    f_w = (from_week or "").strip()
+    t_w = (to_week or "").strip()
+    if not f_w:
+        return t_w
+    if not t_w or f_w == t_w:
+        return f_w
+    return f"{f_w}  ->  {t_w}"
+
+
 def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) -> Path:
     """Create executive A4 Landscape PDF strictly matching: Sl No | Mandal/Division/District | Target | Completed | Balance | % Completed."""
     out = Path(output_path)
@@ -149,14 +166,11 @@ def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) 
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
     ]))
 
-    period_str = (
-        f"{report.from_week} to {report.to_week}"
-        if report.from_week != report.to_week
-        else report.from_week
-    )
+    period_str = _format_period_label(report.from_week, report.to_week)
+    dist_heading = _format_district_title(report.district_name)
     story = [
         Paragraph(
-            f"{_safe_xml(report.district_name.upper())} DISTRICT — GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT (GM-R 39.1)",
+            f"{_safe_xml(dist_heading.upper())} — GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT (GM-R 39.1)",
             styles["InspTitle"],
         ),
         Paragraph(
@@ -185,7 +199,7 @@ def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) 
         rightMargin=margin,
         topMargin=margin,
         bottomMargin=14 * mm,
-        title=f"{report.district_name} District {report.designation} GP Inspections Abstract Report",
+        title=f"{dist_heading} {report.designation} GP Inspections Abstract Report",
         author="e-Panchayat Automation",
     )
     doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
@@ -207,16 +221,13 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
     tot_fill = PatternFill("solid", fgColor="D9EAF7")
     alt_fill = PatternFill("solid", fgColor="EAF2F8")
 
+    dist_heading = _format_district_title(report.district_name)
     ws.merge_cells("A1:F1")
-    ws["A1"] = f"{report.district_name.upper()} DISTRICT - GRAM PANCHAYAT INSPECTIONS ABSTRACT (GM-R 39.1)"
+    ws["A1"] = f"{dist_heading.upper()} - GRAM PANCHAYAT INSPECTIONS ABSTRACT (GM-R 39.1)"
     ws["A1"].font = Font(name="Calibri", size=13, bold=True, color="17365D")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
-    period_str = (
-        f"{report.from_week} to {report.to_week}"
-        if report.from_week != report.to_week
-        else report.from_week
-    )
+    period_str = _format_period_label(report.from_week, report.to_week)
     ws.merge_cells("A2:F2")
     ws["A2"] = (
         f"Designation: {report.designation} | {report.target_rule_desc} | "

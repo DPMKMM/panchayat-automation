@@ -104,11 +104,19 @@ def consolidate_inspection_files(
             "excluded_rows": parsed["excluded_non_submitted_count"],
         })
 
+    from inspections.models import extract_week_dates
+
     explicit_weeks = [str(w).strip() for w in (weeks_selected or []) if str(w).strip()]
     if explicit_weeks:
-        effective_weeks = explicit_weeks
+        effective_weeks = sorted(
+            explicit_weeks,
+            key=lambda w: (extract_week_dates(w)[0] or datetime.max.date(), w),
+        )
     elif detected_weeks_all:
-        effective_weeks = sorted(detected_weeks_all)
+        effective_weeks = sorted(
+            detected_weeks_all,
+            key=lambda w: (extract_week_dates(w)[0] or datetime.max.date(), w),
+        )
     else:
         effective_weeks = [
             str(wf.get("week_label") or wf.get("filename") or "Week").strip()

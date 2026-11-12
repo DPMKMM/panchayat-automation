@@ -533,13 +533,12 @@ def _find_excel_icon_locator(iframe):
         "a:has(img[src*='xl' i])",
         "input[type='image'][id*='Export' i]",
         "a[id*='Export' i]",
-        "input[type='image']",
     )
     for sel in excel_selectors:
         vis = _find_visible(iframe, sel)
         if vis is not None:
             return vis
-    # Structural DOM fallback: clickable image/anchor directly adjacent to Submit or CompleteReport button
+    # Structural DOM match: clickable image/anchor immediately adjacent to Submit / CompleteReport
     try:
         idx = iframe.evaluate(
             """() => {
@@ -548,6 +547,19 @@ def _find_excel_icon_locator(iframe):
                     const txt = ((btns[i].value || btns[i].innerText || btns[i].title || '') + '').trim().toLowerCase();
                     if (txt.includes('completereport') || txt.includes('complete report')) {
                         for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+                            const tag = btns[j].tagName.toLowerCase();
+                            const t = (btns[j].type || '').toLowerCase();
+                            if (tag === 'img' || t === 'image' || tag === 'a') {
+                                btns[j].setAttribute('data-epts-excel-icon', '1');
+                                return true;
+                            }
+                        }
+                    }
+                }
+                for (let i = 0; i < btns.length; i++) {
+                    const txt = ((btns[i].value || btns[i].innerText || btns[i].title || '') + '').trim().toLowerCase();
+                    if (txt === 'submit' || txt.includes('submit')) {
+                        for (let j = i + 1; j <= Math.min(btns.length - 1, i + 4); j++) {
                             const tag = btns[j].tagName.toLowerCase();
                             const t = (btns[j].type || '').toLowerCase();
                             if (tag === 'img' || t === 'image' || tag === 'a') {
@@ -566,7 +578,27 @@ def _find_excel_icon_locator(iframe):
                 return cand
     except Exception:
         pass
-    return None
+    return _find_visible(iframe, "input[type='image']")
+
+
+def _ensure_district_selected_if_needed(iframe, infos: list[dict[str, Any]]) -> None:
+    """Log active selects and ensure District dropdown is not accidentally left at '--Select--' if valid options exist."""
+    for info in infos:
+        id_name = f"{info.get('id', '')} {info.get('name', '')}".lower()
+        if "dist" in id_name and "week" not in id_name:
+            cur_val = str(info.get("selectedValue") or "").strip()
+            opts = info.get("options", [])
+            if (not cur_val or cur_val in ("0", "-1")) and len(opts) > 1:
+                for opt in opts:
+                    ov = str(opt.get("value") or "").strip()
+                    ot = str(opt.get("text") or "").strip()
+                    if ov and ov not in ("0", "-1") and "select" not in ot.lower():
+                        try:
+                            _locator_for_select(iframe, info).select_option(value=ov)
+                            time.sleep(0.8)
+                        except Exception:
+                            pass
+                        break
 
 
 def download_inspection_weeks(
@@ -576,7 +608,7 @@ def download_inspection_weeks(
     to_week: str,
     downloads_dir: Path,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Iterate selected weeks in GM-R 39.1, click Submit / Excel icon, and save weekly files."""
+    """Iterate selected weeks in GM-R 39.1, click Submit then Excel icon, and save weekly files."""
     page = bot.page
     spec = get_designation_spec(designation)
     canon_desig = spec["designation"]
@@ -607,8 +639,10 @@ def download_inspection_weeks(
     try:
         iframe = _open_gmr391_frame(bot)
         iframe, infos, desig_info, week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
+        _ensure_district_selected_if_needed(iframe, infos)
 
         if desig_info is not None:
+            logger.info("[*] Selecting Officer Designation = %s in GM-R 39.1...", canon_desig)
             _select_designation(iframe, desig_info, canon_desig)
             wait_end = time.time() + 8.0
             while time.time() < wait_end:
@@ -625,6 +659,7 @@ def download_inspection_weeks(
 
         selected_weeks = resolve_week_slice(available_weeks, from_week=from_week, to_week=to_week)
         week_labels = [w["text"] for w in selected_weeks]
+        logger.info("[*] GM-R 39.1 Selected Weeks (%d): %s", len(selected_weeks), week_labels)
 
         for idx, wk in enumerate(selected_weeks, start=1):
             portal_dialogs.clear()
@@ -632,65 +667,39 @@ def download_inspection_weeks(
             if cur_week_info is None:
                 raise RuntimeError(f"Week dropdown disappeared in GM-R 39.1 on week '{wk['text']}'.")
 
+            logger.info("[*] [%d/%d] Selecting Week '%s' (value=%s)...", idx, len(selected_weeks), wk["text"], wk["value"])
             week_loc = _locator_for_select(iframe, cur_week_info)
             try:
                 week_loc.select_option(value=wk["value"])
             except Exception:
                 week_loc.select_option(label=wk["text"])
-            time.sleep(0.8)
+            time.sleep(1.0)
 
-            iframe = _get_my_iframe(page) or iframe
-            excel_loc = _find_excel_icon_locator(iframe)
+            iframe, _, _, _ = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
 
-            # If Excel icon is already visible on the filter bar (standard GM-R 39.1 layout),
-            # try downloading directly on week selection first; if no download fires, click Submit then Excel.
-            did_download = False
-            if excel_loc is not None:
-                try:
-                    iframe.evaluate("() => { for (const f of document.forms) f.removeAttribute('target'); }")
-                except Exception:
-                    pass
-                try:
-                    with page.expect_download(timeout=12000) as dl_info:
-                        excel_loc.click()
-                    dl = dl_info.value
-                    suggested = dl.suggested_filename or f"GMR39_1_{canon_desig}_week_{idx:02d}.xls"
-                    dest = insp_dir / f"w{idx:02d}_{suggested}"
-                    dl.save_as(str(dest))
-                    raw_bytes = dest.read_bytes()
-                    downloaded_items.append({
-                        "week_label": wk["text"],
-                        "filename": suggested,
-                        "raw_bytes": raw_bytes,
-                        "status": "downloaded" if raw_bytes else "no_data",
-                    })
-                    did_download = True
-                except Exception:
-                    if any("no data" in m.lower() or "no record" in m.lower() for m in portal_dialogs):
-                        downloaded_items.append({
-                            "week_label": wk["text"],
-                            "filename": "",
-                            "raw_bytes": b"",
-                            "status": "no_data",
-                        })
-                        continue
-
-            if did_download:
-                continue
-
-            # Fallback path: click Submit first, then click Excel icon
+            # Always click [Submit] FIRST so EPTS loads/binds the week's inspection dataset before exporting to Excel.
             try:
                 submit_btn = _find_visible(
                     iframe,
-                    "input[value*='Submit' i], button:has-text('Submit'), input[id*='Submit' i], input[id*='btnGet' i]",
+                    "input[value*='Submit' i], button:has-text('Submit'), input[id*='Submit' i], input[id*='btnSubmit' i], input[id*='btnGet' i]",
                 )
                 if submit_btn is not None:
+                    logger.info("[*] [%d/%d] Clicking Submit for week '%s'...", idx, len(selected_weeks), wk["text"])
                     submit_btn.click()
-                    time.sleep(1.8)
+                    time.sleep(2.0)
             except Exception as exc:
-                logger.debug("Submit click note on week %s: %s", wk["text"], exc)
+                logger.info("Submit click notice on week %s: %s", wk["text"], exc)
 
-            iframe = _get_my_iframe(page) or iframe
+            if any("no data" in m.lower() or "no record" in m.lower() for m in portal_dialogs):
+                downloaded_items.append({
+                    "week_label": wk["text"],
+                    "filename": "",
+                    "raw_bytes": b"",
+                    "status": f"no_data ({'; '.join(portal_dialogs)})",
+                })
+                continue
+
+            iframe, _, _, _ = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
             excel_loc = None
             xl_deadline = time.time() + 12.0
             while time.time() < xl_deadline:
@@ -706,16 +715,20 @@ def download_inspection_weeks(
                     "week_label": wk["text"],
                     "filename": "",
                     "raw_bytes": b"",
-                    "status": "no_data",
+                    "status": "no_data (excel icon not visible)" if not portal_dialogs else f"no_data ({'; '.join(portal_dialogs)})",
                 })
                 continue
 
             try:
-                iframe.evaluate("() => { for (const f of document.forms) f.removeAttribute('target'); }")
+                iframe.evaluate(
+                    "() => { for (const f of document.forms) f.removeAttribute('target'); "
+                    "for (const a of document.querySelectorAll('a[target]')) a.removeAttribute('target'); }"
+                )
             except Exception:
                 pass
 
             try:
+                logger.info("[*] [%d/%d] Clicking Excel export icon for week '%s'...", idx, len(selected_weeks), wk["text"])
                 with page.expect_download(timeout=20000) as dl_info:
                     excel_loc.click()
                 dl = dl_info.value
@@ -723,6 +736,7 @@ def download_inspection_weeks(
                 dest = insp_dir / f"w{idx:02d}_{suggested}"
                 dl.save_as(str(dest))
                 raw_bytes = dest.read_bytes()
+                logger.info("[+] [%d/%d] Downloaded '%s' (%d bytes) for week '%s'", idx, len(selected_weeks), suggested, len(raw_bytes), wk["text"])
                 downloaded_items.append({
                     "week_label": wk["text"],
                     "filename": suggested,
@@ -735,7 +749,7 @@ def download_inspection_weeks(
                         "week_label": wk["text"],
                         "filename": "",
                         "raw_bytes": b"",
-                        "status": "no_data",
+                        "status": f"no_data ({'; '.join(portal_dialogs)})",
                     })
                     continue
                 raise RuntimeError(f"Failed downloading Excel for week '{wk['text']}': {exc}") from exc
