@@ -5,6 +5,7 @@ Provides 70+ spreadsheet conversion, cleaning, reshaping, financial, and interac
 
 import os
 import io
+import re
 import sys
 import json
 import uuid
@@ -18,7 +19,7 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Request, B
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 
 from core.branding import PLATFORM_NAME, render_canonical_footer_html
-from tools.excel.converter_web import convert_file_universal, LibreOfficeEngine
+from tools.excel.converter_web import convert_file_universal, LibreOfficeEngine, normalize_to_xlsx
 import tools.excel.engine.converters_to_excel as to_excel
 import tools.excel.engine.converters_from_excel as from_excel
 import tools.excel.engine.formats_converter as formats_conv
@@ -36,6 +37,7 @@ router = APIRouter(tags=["tools-excel"])
 
 def _safe_name(raw: Optional[str], fallback: str = "file") -> str:
     cleaned = Path(str(raw or fallback)).name.strip()
+    cleaned = re.sub(r"[^A-Za-z0-9_.() -]", "_", cleaned).lstrip(".")
     return cleaned if cleaned and cleaned not in {".", ".."} else fallback
 
 # Tool Definitions matching the user specifications (Most Used first, then 8 categories)
@@ -84,10 +86,10 @@ TOOLS = [
     {"id": "excel_to_tsv", "name": "Excel to TSV", "category": "from_excel", "desc": "Export Excel sheets to tab-separated text", "accept": ".xlsx,.xls"},
 
     # Formats & CSV
-    {"id": "xls_to_xlsx", "name": "XLS to XLSX", "category": "formats", "most_used": True, "most_used_rank": 1, "desc": "Fix web-downloaded .xls for Mobile & Sheets", "accept": ".xls"},
+    {"id": "xls_to_xlsx", "name": "XLS to XLSX", "category": "formats", "most_used": True, "most_used_rank": 1, "desc": "Convert legacy/web .xls & .xlsx files cleanly for Mobile & Sheets", "accept": ".xls,.xlsx"},
     {"id": "numbers_to_excel", "name": "Numbers to Excel", "category": "formats", "desc": "Convert Apple Numbers files to .xlsx", "accept": ".numbers"},
     {"id": "xlsb_to_xlsx", "name": "XLSB to XLSX", "category": "formats", "desc": "Convert Excel Binary Workbook (.xlsb) to .xlsx", "accept": ".xlsb"},
-    {"id": "xlsx_to_xls", "name": "XLSX to XLS", "category": "formats", "desc": "Convert modern XLSX to legacy XLS", "accept": ".xlsx"},
+    {"id": "xlsx_to_xls", "name": "XLSX to XLS", "category": "formats", "desc": "Convert between XLSX and legacy/web XLS spreadsheets", "accept": ".xlsx,.xls"},
     {"id": "ods_to_excel", "name": "ODS to Excel", "category": "formats", "desc": "Convert OpenDocument Spreadsheet to .xlsx", "accept": ".ods"},
     {"id": "json_to_csv", "name": "JSON to CSV", "category": "formats", "desc": "Flatten JSON files directly to CSV", "accept": ".json"},
     {"id": "xml_to_csv", "name": "XML to CSV", "category": "formats", "desc": "Convert XML records directly to CSV", "accept": ".xml"},
@@ -106,7 +108,7 @@ TOOLS = [
     {"id": "xlsx_viewer", "name": "XLSX Viewer", "category": "open_edit", "desc": "Instant XLSX reader and previewer", "accept": ".xlsx"},
     {"id": "xlsm_viewer", "name": "XLSM Viewer", "category": "open_edit", "desc": "Preview macro-enabled Excel spreadsheets", "accept": ".xlsm"},
     {"id": "xlsb_viewer", "name": "XLSB Viewer", "category": "open_edit", "desc": "Preview binary Excel spreadsheets in-browser", "accept": ".xlsb"},
-    {"id": "xls_viewer", "name": "XLS Viewer", "category": "open_edit", "desc": "Preview legacy or web-exported .xls files", "accept": ".xls"},
+    {"id": "xls_viewer", "name": "XLS Viewer", "category": "open_edit", "desc": "Preview legacy, web-exported .xls or .xlsx files", "accept": ".xls,.xlsx"},
     {"id": "csv_viewer", "name": "CSV Viewer", "category": "open_edit", "desc": "Fast CSV table preview with column sorting", "accept": ".csv,.tsv"},
     {"id": "csv_editor", "name": "CSV Editor", "category": "open_edit", "desc": "Edit CSV files directly in browser and save", "accept": ".csv,.tsv"},
 
@@ -483,6 +485,7 @@ def index_page():
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
       opacity: 0; cursor: pointer;
+      z-index: 2;
     }}
 
     .btn-action {{
@@ -615,6 +618,7 @@ def index_page():
         <input type="file" id="modalFileInput">
         <div style="font-size: 2.25rem; margin-bottom: 0.5rem;">📂</div>
         <div style="font-weight: 700; color: var(--slate-800);" id="modalDzText">Drop file here or tap to select</div>
+        <div style="font-size: 0.78rem; color: var(--slate-500); margin-top: 0.35rem;" id="modalAcceptHint"></div>
         <div style="font-size: 0.8rem; color: var(--slate-400); margin-top: 0.25rem;" id="modalFileSelected"></div>
       </div>
 
@@ -757,8 +761,16 @@ def index_page():
       document.getElementById('modalResult').style.display = 'none';
       document.getElementById('modalRunBtn').disabled = true;
 
-      modalFileInput.accept = tool.accept || '*/*';
+      const acceptHintEl = document.getElementById('modalAcceptHint');
+      if (acceptHintEl) {{
+        const fmtText = (tool.accept && tool.accept !== 'text') ? tool.accept.replace(/,/g, ', ') : 'Spreadsheet / Data file';
+        acceptHintEl.textContent = 'Supported: ' + fmtText + ' (mobile Downloads, File Manager & web exports)';
+      }}
+
+      // Leave input accept unrestricted so Android Downloads / File Manager never grey out web-downloaded .xls files
+      modalFileInput.removeAttribute('accept');
       modalFileInput.multiple = !!tool.multiple;
+      modalFileInput.value = '';
 
       // Handle specific tool parameters (e.g. Find & Replace)
       const paramsDiv = document.getElementById('modalParams');
@@ -782,6 +794,10 @@ def index_page():
       toolModal.style.display = 'none';
       modalFileInput.value = '';
     }}
+
+    modalFileInput.addEventListener('click', () => {{
+      modalFileInput.value = '';
+    }});
 
     modalFileInput.addEventListener('change', (e) => {{
       if (e.target.files.length > 0) {{
@@ -858,9 +874,10 @@ def index_page():
       try {{
         const resp = await fetch('/api/tools/excel/viewer/load', {{ method: 'POST', body: formData }});
         if (!resp.ok) {{
+          const err = await resp.json().catch(() => ({{ detail: 'Failed to load file into viewer.' }}));
           const resDiv = document.getElementById('modalResult');
           resDiv.style.display = 'block';
-          resDiv.innerHTML = '<div style="color: #ef4444; font-weight: 600;">❌ Failed to load file into viewer.</div>';
+          resDiv.innerHTML = `<div style="color: #ef4444; font-weight: 600;">❌ ${{err.detail || 'Failed to load file into viewer.'}}</div>`;
           return false;
         }}
         const banner = document.getElementById('editorStatusBanner');
@@ -974,6 +991,26 @@ def index_page():
 # UNIVERSAL TOOL DISPATCH ROUTE
 # ==========================================
 
+_XLSX_REQUIRED_TOOLS = {
+    "excel_to_word", "excel_to_pdf", "excel_to_csv", "excel_to_tsv",
+    "excel_to_json", "excel_to_yaml", "excel_to_markdown", "excel_to_html",
+    "excel_to_xml", "excel_to_sql", "excel_to_latex", "excel_to_vcard",
+    "excel_to_ics", "excel_to_image",
+    "merge_excel", "compare_excel", "compare_columns", "splitter",
+    "split_by_column", "combine_columns",
+    "remove_duplicates", "find_duplicates", "remove_blank_rows",
+    "remove_formatting", "text_to_number", "find_replace", "data_cleaner",
+    "sort_filter", "filter_rows", "text_to_columns", "column_extractor",
+    "transpose", "unpivot", "row_shading", "date_converter",
+}
+
+
+def _run_universal(src: str, out_file: Path) -> None:
+    ok, msg = convert_file_universal(src, str(out_file))
+    if not ok:
+        raise ValueError(msg)
+
+
 @router.post("/api/tools/excel/execute")
 async def execute_tool_endpoint(
     tool_id: str = Form(...),
@@ -986,19 +1023,30 @@ async def execute_tool_endpoint(
 
     session_id = str(uuid.uuid4())
     session_dir = STORAGE_DIR / session_id
-    session_dir.mkdir(parents=True, exist_ok=True)
+    input_dir = session_dir / "_input"
+    input_dir.mkdir(parents=True, exist_ok=True)
 
     saved_paths = []
-    for f in files:
-        fpath = session_dir / _safe_name(f.filename, "file")
+    first_safe_name = "file"
+    for idx, f in enumerate(files):
+        safe_fname = _safe_name(f.filename, "file")
+        if idx == 0:
+            first_safe_name = safe_fname
+        fpath = input_dir / f"{idx}_{safe_fname}"
         with open(fpath, "wb") as fp:
             shutil.copyfileobj(f.file, fp)
+        if fpath.stat().st_size == 0:
+            raise HTTPException(status_code=400, detail=f"Uploaded file '{safe_fname}' is empty (0 bytes).")
         saved_paths.append(str(fpath))
 
     src = saved_paths[0]
-    base_name = Path(src).stem
+    base_name = Path(first_safe_name).stem or "file"
 
     try:
+        if tool_id in _XLSX_REQUIRED_TOOLS:
+            saved_paths = [normalize_to_xlsx(p, input_dir, idx) for idx, p in enumerate(saved_paths)]
+            src = saved_paths[0]
+
         # Group 1: TO EXCEL
         if tool_id == "word_to_excel":
             out_file = session_dir / f"{base_name}.xlsx"
@@ -1023,7 +1071,7 @@ async def execute_tool_endpoint(
             to_excel.tsv_to_excel(src, str(out_file))
         elif tool_id == "html_to_excel":
             out_file = session_dir / f"{base_name}.xlsx"
-            convert_file_universal(src, str(out_file))
+            _run_universal(src, out_file)
         elif tool_id == "markdown_to_excel":
             out_file = session_dir / f"{base_name}.xlsx"
             to_excel.markdown_to_excel(src, str(out_file))
@@ -1084,7 +1132,7 @@ async def execute_tool_endpoint(
         # Group 3: FORMATS & CSV
         elif tool_id in ("xls_to_xlsx", "xlsx_to_xls"):
             out_file = session_dir / f"{base_name}.xlsx"
-            convert_file_universal(src, str(out_file))
+            _run_universal(src, out_file)
         elif tool_id == "xlsb_to_xlsx":
             out_file = session_dir / f"{base_name}.xlsx"
             formats_conv.xlsb_to_xlsx(src, str(out_file))
@@ -1193,8 +1241,12 @@ async def execute_tool_endpoint(
             data_tools.date_converter(src, str(out_file), 1)
         else:
             out_file = session_dir / f"{base_name}.xlsx"
-            convert_file_universal(src, str(out_file))
+            _run_universal(src, out_file)
 
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Tool failed: {str(e)}")
 
@@ -1216,12 +1268,20 @@ async def execute_tool_endpoint(
 async def viewer_load_endpoint(file: UploadFile = File(...)):
     session_id = str(uuid.uuid4())
     session_dir = STORAGE_DIR / session_id
-    session_dir.mkdir(parents=True, exist_ok=True)
-    fpath = session_dir / _safe_name(file.filename, "grid_file")
+    input_dir = session_dir / "_input"
+    input_dir.mkdir(parents=True, exist_ok=True)
+    fpath = input_dir / _safe_name(file.filename, "grid_file")
     with open(fpath, "wb") as fp:
         shutil.copyfileobj(file.file, fp)
+    if fpath.stat().st_size == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty (0 bytes).")
 
-    grid_data = viewer_engine.load_file_for_viewer(str(fpath))
+    try:
+        grid_data = viewer_engine.load_file_for_viewer(str(fpath))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load file: {str(e)}")
     grid_data["session_id"] = session_id
     return grid_data
 

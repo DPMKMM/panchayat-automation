@@ -135,6 +135,124 @@ def test_excel_execute_csv_html_viewer_and_download_guard():
     assert bad_dl.status_code in (400, 404)
 
 
+def test_xls_to_xlsx_mobile_picker_and_universal_xls_xlsx_uploads():
+    # 1. Catalog & HTML upload picker must not restrict mobile Downloads / Android File Manager
+    cat_resp = client.get("/api/tools/excel/catalog")
+    assert cat_resp.status_code == 200
+    by_id = {t["id"]: t for t in cat_resp.json()["tools"]}
+    for tid in ("xls_to_xlsx", "xlsx_to_xls", "xls_viewer"):
+        assert ".xls" in by_id[tid]["accept"]
+        assert ".xlsx" in by_id[tid]["accept"]
+
+    excel_html = client.get("/tools/excel").text
+    assert "modalFileInput.removeAttribute('accept')" in excel_html
+    assert "modalFileInput.accept = tool.accept" not in excel_html
+
+    pdf_html = client.get("/tools/pdf").text
+    assert "fileInputEl.removeAttribute('accept')" in pdf_html
+
+    # 2. Web-downloaded HTML .xls with generic Android MIME + uppercase + '#' in filename
+    html_xls = (
+        b"<html><body><table><tr><th>Mandal</th><th>GP</th><th>Done</th></tr>"
+        b"<tr><td>Khammam Rural</td><td>Edulapuram</td><td>42</td></tr></table></body></html>"
+    )
+    resp_html_xls = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("DSR Report #1.XLS", html_xls, "application/octet-stream")},
+    )
+    assert resp_html_xls.status_code == 200, resp_html_xls.text
+    dl_html_xls = client.get(resp_html_xls.json()["download_url"])
+    assert dl_html_xls.status_code == 200
+    wb_html = openpyxl.load_workbook(io.BytesIO(dl_html_xls.content))
+    assert wb_html.active.cell(1, 1).value == "Mandal"
+    assert wb_html.active.cell(2, 2).value == "Edulapuram"
+    assert wb_html.active.cell(2, 3).value == 42
+
+    # 3. SpreadsheetML 2003 XML saved as .xls (web portal download)
+    xml_ss = (
+        '<?xml version="1.0"?>'
+        '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet">'
+        '<Worksheet ss:Name="TaxData" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+        '<Table><Row><Cell><Data ss:Type="String">GP</Data></Cell>'
+        '<Cell><Data ss:Type="Number">12500</Data></Cell></Row></Table>'
+        '</Worksheet></Workbook>'
+    ).encode("utf-8")
+    resp_xml_xls = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("portal_export.xls", xml_ss, "text/xml")},
+    )
+    assert resp_xml_xls.status_code == 200, resp_xml_xls.text
+    wb_xml = openpyxl.load_workbook(io.BytesIO(client.get(resp_xml_xls.json()["download_url"]).content))
+    assert wb_xml["TaxData"].cell(1, 1).value == "GP"
+    assert wb_xml["TaxData"].cell(1, 2).value == 12500
+
+    # 4. UTF-16 TSV portal export disguised as .xls (extensionless Android File Manager pick)
+    tsv_bytes = "District\tMandals\nKhammam\t21\n".encode("utf-16")
+    resp_tsv = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("download", tsv_bytes, "application/octet-stream")},
+    )
+    assert resp_tsv.status_code == 200, resp_tsv.text
+    wb_tsv = openpyxl.load_workbook(io.BytesIO(client.get(resp_tsv.json()["download_url"]).content))
+    assert wb_tsv.active.cell(1, 2).value == "Mandals"
+    assert wb_tsv.active.cell(2, 1).value == "Khammam"
+    assert wb_tsv.active.cell(2, 2).value == 21
+
+    # 5. Modern .xlsx uploaded directly to xls_to_xlsx must not self-corrupt or fail
+    src_wb = openpyxl.Workbook()
+    src_wb.active.title = "Budget"
+    src_wb.active.append(["Item", "Amount"])
+    src_wb.active.append(["Streetlights", 54000])
+    xlsx_buf = io.BytesIO()
+    src_wb.save(xlsx_buf)
+    resp_xlsx = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("modern_budget.xlsx", xlsx_buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert resp_xlsx.status_code == 200, resp_xlsx.text
+    wb_out = openpyxl.load_workbook(io.BytesIO(client.get(resp_xlsx.json()["download_url"]).content))
+    assert wb_out["Budget"].cell(2, 1).value == "Streetlights"
+    assert wb_out["Budget"].cell(2, 2).value == 54000
+
+    # 6. Cross-tool support: HTML .xls works seamlessly in data_cleaner & viewer/load
+    clean_resp = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "data_cleaner"},
+        files={"files": ("dirty_web.xls", html_xls, "text/html")},
+    )
+    assert clean_resp.status_code == 200, clean_resp.text
+    wb_clean = openpyxl.load_workbook(io.BytesIO(client.get(clean_resp.json()["download_url"]).content))
+    assert wb_clean.active.cell(2, 1).value == "Khammam Rural"
+
+    view_resp = client.post(
+        "/api/tools/excel/viewer/load",
+        files={"file": ("portal_data.xls", html_xls, "application/octet-stream")},
+    )
+    assert view_resp.status_code == 200, view_resp.text
+    view_json = view_resp.json()
+    assert view_json["filename"] == "portal_data.xls"
+    assert view_json["sheets"][0]["rows"][1][1] == "Edulapuram"
+
+    # 7. Empty and disguised PDF uploads return clean 400 validation errors
+    empty_resp = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("empty.xls", b"", "application/octet-stream")},
+    )
+    assert empty_resp.status_code == 400
+
+    pdf_disguised = client.post(
+        "/api/tools/excel/execute",
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("fake.xls", _make_pdf_bytes("Not Excel"), "application/vnd.ms-excel")},
+    )
+    assert pdf_disguised.status_code == 400
+
+
 def test_pdf_studio_page_and_all_core_endpoints():
     page_resp = client.get("/tools/pdf")
     assert page_resp.status_code == 200

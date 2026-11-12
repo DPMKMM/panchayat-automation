@@ -20,21 +20,23 @@ except ImportError:
 
 
 def load_file_for_viewer(file_path: str, max_rows: int = 500) -> Dict[str, Any]:
-    """Parses any spreadsheet format and returns interactive grid JSON."""
+    """Parses any spreadsheet format (XLS, XLSX, CSV, TSV, XLSB, ODS, web HTML/XML) into grid JSON."""
+    display_name = os.path.basename(file_path)
     ext = Path(file_path).suffix.lower()
 
     # CSV / TSV
     if ext in ('.csv', '.tsv', '.txt'):
+        from tools.excel.converter_web import _read_text_auto
         delimiter = '\t' if ext == '.tsv' else ','
         rows = []
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            reader = csv.reader(f, delimiter=delimiter)
-            for idx, r in enumerate(reader):
-                if idx >= max_rows:
-                    break
-                rows.append([str(c) for c in r])
+        text = _read_text_auto(file_path)
+        reader = csv.reader(text.splitlines(), delimiter=delimiter)
+        for idx, r in enumerate(reader):
+            if idx >= max_rows:
+                break
+            rows.append([str(c) for c in r])
         return {
-            "filename": os.path.basename(file_path),
+            "filename": display_name,
             "sheets": [{"name": "Data", "rows": rows, "total_rows": len(rows), "total_cols": max(len(r) for r in rows) if rows else 0}]
         }
 
@@ -55,21 +57,13 @@ def load_file_for_viewer(file_path: str, max_rows: int = 500) -> Dict[str, Any]:
                     "total_rows": len(rows),
                     "total_cols": max(len(r) for r in rows) if rows else 0
                 })
-        return {"filename": os.path.basename(file_path), "sheets": sheets_data}
+        return {"filename": display_name, "sheets": sheets_data}
 
-    # For .xls (legacy / web table), if openpyxl fails, use PythonEngine / BeautifulSoup
-    if ext == '.xls':
-        from tools.excel.converter_web import detect_file_format, PythonEngine
-        fmt = detect_file_format(file_path)
-        tmp_xlsx = file_path + ".viewer_tmp.xlsx"
-        try:
-            PythonEngine.convert_file(file_path, tmp_xlsx)
-            file_path = tmp_xlsx
-        except Exception:
-            pass
+    # Normalize .xls, web HTML/XML .xls, .ods, or extensionless mobile uploads to readable .xlsx
+    from tools.excel.converter_web import normalize_to_xlsx
+    load_path = normalize_to_xlsx(file_path, Path(file_path).parent, idx=99)
 
-    # Standard XLSX / XLSM
-    wb = openpyxl.load_workbook(file_path, data_only=True)
+    wb = openpyxl.load_workbook(load_path, data_only=True)
     sheets_data = []
     for ws in wb.worksheets:
         rows = []
@@ -84,13 +78,14 @@ def load_file_for_viewer(file_path: str, max_rows: int = 500) -> Dict[str, Any]:
             "total_cols": max(len(r) for r in rows) if rows else 0
         })
 
-    # Clean up temp xlsx if created
-    if os.path.exists(file_path) and file_path.endswith(".viewer_tmp.xlsx"):
-        try: os.remove(file_path)
-        except Exception: pass
+    if load_path != file_path and os.path.exists(load_path):
+        try:
+            os.remove(load_path)
+        except Exception:
+            pass
 
     return {
-        "filename": os.path.basename(file_path),
+        "filename": display_name,
         "sheets": sheets_data
     }
 

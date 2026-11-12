@@ -1691,11 +1691,16 @@ async def home():
         document.getElementById('modalTitle').innerText = tool.title;
         document.getElementById('submitBtnText').innerText = 'Convert / Process';
       }
+      const fileInputEl = document.getElementById('fileInput');
       document.getElementById('dropzoneText').innerText = tool.multiple ? 'Select or Drop Multiple Files' : 'Select or Drop a File';
-      document.getElementById('selectedFilesInfo').innerText = tool.accept ? 'Images (*.jpg, *.png, *.webp)' : 'PDF documents (*.pdf)';
-      document.getElementById('fileInput').multiple = !!tool.multiple;
-      document.getElementById('fileInput').accept = tool.accept || '.pdf';
-      document.getElementById('fileInput').value = '';
+      document.getElementById('selectedFilesInfo').innerText = tool.accept ? 'Images (*.jpg, *.png, *.webp)' : 'PDF documents (*.pdf — Downloads & Android File Manager supported)';
+      fileInputEl.multiple = !!tool.multiple;
+      if (tool.accept) {
+        fileInputEl.accept = tool.accept;
+      } else {
+        fileInputEl.removeAttribute('accept');
+      }
+      fileInputEl.value = '';
 
       // Populate Specifications Box
       const specsBox = document.getElementById('modalSpecsBox');
