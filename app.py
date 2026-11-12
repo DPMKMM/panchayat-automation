@@ -27,6 +27,7 @@ from dcb.router import router as dcb_router
 from dsr import service as automation_service
 from dsr.router import router as dsr_router
 from gp_balance.router import router as gp_balance_router
+from inspections.router import router as inspections_router
 from mas.router import mas_alias_router, mas_upper_router, router as mas_router, web_router as mas_web_router
 from portal.admin_router import router as admin_router
 from portal.billing_router import router as billing_router
@@ -55,6 +56,8 @@ def _resolve_tracked_tool_event(method: str, path: str) -> tuple[str, str, str] 
         return "console", "gp_balance", p.rsplit("/", 1)[-1]
     if m == "POST" and p in ("/api/reports/mas-consolidated/generate", "/api/mas/generate"):
         return "console", "mas_consolidated", "generate"
+    if m == "POST" and p in ("/api/inspections/generate", "/api/inspections/upload-consolidate"):
+        return "console", "gp_inspections", "generate"
     return None
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -201,6 +204,7 @@ def create_app() -> FastAPI:
     app.include_router(dsr_router)
     app.include_router(dcb_router)
     app.include_router(gp_balance_router)
+    app.include_router(inspections_router)
     app.include_router(mas_web_router)
     app.include_router(mas_router)
     app.include_router(mas_alias_router)

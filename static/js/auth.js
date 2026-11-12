@@ -1652,9 +1652,7 @@
     } else if (target === 'tax-dcb' || target === 'tax' || target === 'tax-station') {
       if (typeof window.openTaxDcbStation === 'function') await window.openTaxDcbStation();
     } else if (target === 'inspections') {
-      if (typeof window.showUpcomingModal === 'function') {
-        window.showUpcomingModal('Gram Panchayat Inspections', '🔍', 'Compliance monitoring of Gram Panchayat field inspections conducted by DPO, DLPO, and MPO tiers with Mandal filters, GP drill-down, and automated portal synchronization.');
-      }
+      if (typeof window.openGpInspectionsStation === 'function') await window.openGpInspectionsStation();
     } else if (target === 'admin' && window.isAdminRouteOrHost() && portalUser && portalUser.is_admin) {
       if (typeof window.openAdminDashboardStation === 'function') window.openAdminDashboardStation();
     } else if (target === 'balance' || target === 'balance-station') {

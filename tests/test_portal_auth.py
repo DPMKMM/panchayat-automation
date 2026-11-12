@@ -126,7 +126,7 @@ def test_section_2_officer_profile_modal_completely_removed():
     res = client.get("/")
     assert res.status_code == 200
     html = res.text
-    auth_js = client.get("/static/js/auth.js?v=24").text
+    auth_js = client.get("/static/js/auth.js?v=25").text
 
     for removed_id in (
         "officer-profile-modal",
@@ -535,7 +535,7 @@ def test_authenticated_module_load_hides_login_card_ssr(monkeypatch):
     assert css_res.status_code == 200
     assert "body.state-auth-resolving #portal-hero-card" in css_res.text
 
-    js_res = client.get("/static/js/auth.js?v=24", headers={"Host": "panchayatautomation.in"})
+    js_res = client.get("/static/js/auth.js?v=25", headers={"Host": "panchayatautomation.in"})
     assert js_res.status_code == 200
     assert "state-auth-resolving" in js_res.text
     assert "cachedToken && cachedUser" in js_res.text

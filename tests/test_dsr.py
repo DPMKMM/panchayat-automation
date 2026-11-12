@@ -501,7 +501,7 @@ def test_dsr_page_layout_individual_default_and_continuous(tmp_path):
     assert '<option value="individual" selected>' in home_html
     assert '<option value="continuous">' in home_html
 
-    console_js = client.get("/static/js/console.js?v=19").text
+    console_js = client.get("/static/js/console.js?v=20").text
     assert "auto-page-layout" in console_js
     assert "formData.append('page_layout', pageLayout)" in console_js
     assert "formData.append('include_sections', includeSections)" in console_js

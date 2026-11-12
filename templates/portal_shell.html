@@ -703,16 +703,16 @@
               <div>
                 <div class="module-card-header">
                   <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔍</div>
-                  <span class="badge-pill-soon">Upcoming</span>
+                  <span class="badge-pill-live">● Live</span>
                 </div>
                 <h3>Gram Panchayat Inspections</h3>
                 <p>
-                  Compliance monitoring of Gram Panchayat field inspections conducted by DPO, DLPO, and MPO tiers with Mandal filters, GP drill-down, and CSV export.
+                  Automated GM-R 39.1 weekly inspection consolidation across MPO, MPDO, DLPO, DPO, CEO &amp; Deputy CEO designations with Submitted-only filtering, Targets, Balance, PDF &amp; Excel reports.
                 </p>
               </div>
               <div style="margin-top:auto;">
-                <button type="button" class="btn btn-outline" style="width:100%; text-align:center; color:var(--text); border-color:var(--border);" onclick="showUpcomingModal('Gram Panchayat Inspections', '🔍', 'Compliance monitoring of Gram Panchayat field inspections conducted by DPO, DLPO, and MPO tiers with Mandal filters, GP drill-down, and automated portal synchronization.')">
-                  🔍 View Module Details
+                <button type="button" class="btn btn-primary" style="width:100%; text-align:center;" onclick="openGpInspectionsStation()">
+                  🔍 Launch Inspections Robot →
                 </button>
               </div>
             </div>
@@ -1895,15 +1895,15 @@
     </div>
 
     <!-- ========================================================
-         GRAM PANCHAYAT INSPECTIONS STATION
+         GRAM PANCHAYAT INSPECTIONS STATION (GM-R 39.1)
          ======================================================== -->
     <section class="automation-station" id="inspections-station" style="display: none; margin-bottom: 24px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
         <div style="display:flex; align-items:center; gap:12px;">
           <div style="width:44px; height:44px; border-radius:10px; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">🔍</div>
           <div>
-            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Gram Panchayat Inspections Monitoring Station</h2>
-            <div style="font-size:0.85rem; color:var(--text-muted);">Official Compliance Tracking for DPO, DLPO &amp; MPO Gram Panchayat Inspections</div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">GM-R 39.1 Gram Panchayat Inspections Robot Station</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Iterate From–To Weeks in GM-R 39.1, download weekly Excel exports, filter Final Submit Status = Submitted, and compile Mandal / Division / District Abstract PDF &amp; Excel</div>
           </div>
         </div>
         <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
@@ -1912,97 +1912,118 @@
       </div>
 
       <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; align-items:flex-end;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:flex-end;">
           <div>
-            <label for="insp-level-filter" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Inspection Level</label>
-            <select id="insp-level-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
-              <option value="ALL">All Inspection Tiers</option>
-              <option value="DPO">District Panchayat Officer (DPO)</option>
-              <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
-              <option value="MPO">Mandal Panchayat Officer (MPO)</option>
+            <label for="insp-designation" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Officer Designation *</label>
+            <select id="insp-designation" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onInspectionDesignationChanged()">
+              <option value="MPO" selected>MPO (Weekly Target: 4 • Mandal-wise)</option>
+              <option value="MPDO">MPDO (Weekly Target: 4 • Mandal-wise)</option>
+              <option value="DLPO">DLPO (Monthly Target: 10 • Division-wise)</option>
+              <option value="DPO">DPO (Monthly Target: 5 • District-wise)</option>
+              <option value="CEO">CEO (Monthly Target: 5 • District-wise)</option>
+              <option value="Deputy CEO">Deputy CEO (Monthly Target: 5 • District-wise)</option>
             </select>
           </div>
           <div>
-            <label for="insp-mandal-filter" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Select Mandal</label>
-            <select id="insp-mandal-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
-              <option value="ALL">All Mandals (21 Mandals)</option>
+            <label for="insp-from-week" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">From Week (Mon–Sat) *</label>
+            <select id="insp-from-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner()">
+              <option value="">Click "Fetch Portal Weeks" to load GM-R 39.1 weeks...</option>
             </select>
           </div>
           <div>
-            <label for="insp-status-filter" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Inspection Status</label>
-            <select id="insp-status-filter" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="filterInspectionsTable()">
-              <option value="ALL">All Statuses</option>
-              <option value="COMPLETED">✅ Inspected (Completed)</option>
-              <option value="PENDING">⚠️ Pending Inspection</option>
+            <label for="insp-to-week" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">To Week (Mon–Sat) *</label>
+            <select id="insp-to-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner()">
+              <option value="">Click "Fetch Portal Weeks" to load GM-R 39.1 weeks...</option>
             </select>
           </div>
           <div>
-            <label for="insp-search-input" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Search Mandal / GP</label>
-            <input type="text" id="insp-search-input" placeholder="Type name..." style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onkeyup="filterInspectionsTable()">
+            <label for="insp-search-input" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Search <span id="insp-search-unit-label">Mandal</span></label>
+            <input type="text" id="insp-search-input" placeholder="Type name to filter..." style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onkeyup="filterInspectionsTable()">
           </div>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:16px; padding-top:14px; border-top:1px solid #f1f5f9;">
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-sm" style="background:#0284c7; color:#ffffff; font-weight:700; padding:8px 16px; border-radius:8px; border:none; cursor:pointer;" onclick="initInspectionsData()">
-              🔄 Refresh Data
+        <div id="insp-target-rule-banner" style="margin-top:12px; padding:10px 14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.84rem; color:#065f46; font-weight:700; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span id="insp-target-rule-text">MPO: Weekly Target 4 per week • Grouping: Mandal-wise • Filter: Final Submit Status = Submitted</span>
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.8rem; color:#064e3b;">
+            <span>Custom Target (Optional):</span>
+            <input type="number" id="insp-target-override" min="1" placeholder="Auto" style="width:82px; padding:4px 8px; border:1px solid #6ee7b7; border-radius:6px; font-size:0.82rem; font-weight:700;">
+          </label>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; padding-top:14px; border-top:1px solid #f1f5f9;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-fetch-insp-weeks" style="font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; color:var(--text); border-color:var(--border);" onclick="fetchInspectionWeeks(true)">
+              🔄 Fetch Portal Weeks
             </button>
-            <button type="button" class="btn btn-sm btn-outline" style="font-weight:700; padding:8px 16px; border-radius:8px; cursor:pointer; color:var(--text); border-color:var(--border);" onclick="exportInspectionsCsv()">
-              📥 Export CSV
+            <button type="button" class="btn btn-gold btn-sm" id="btn-run-inspections-robot" style="font-weight:800; padding:9px 18px; border-radius:8px; cursor:pointer;" onclick="runInspectionsRobot()">
+              ⚡ Run Inspections Robot
+            </button>
+            <label for="insp-upload-files" class="btn btn-sm" style="background:#0284c7; color:#ffffff; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer; margin:0;" title="Or upload already-downloaded GM-R 39.1 weekly Excel files to consolidate">
+              📂 Upload Week Excels
+              <input type="file" id="insp-upload-files" multiple accept=".xls,.xlsx,.csv,.html,.htm" style="display:none;" onchange="uploadConsolidateInspections(this.files)">
+            </label>
+          </div>
+          <div style="display:none; gap:8px; flex-wrap:wrap;" id="insp-actions-wrap">
+            <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #0c3829; color:#0c3829; font-weight:700;" onclick="downloadInspectionsArtifact('pdf')">
+              📥 Download PDF
+            </button>
+            <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #10b981; color:#065f46; font-weight:700;" onclick="downloadInspectionsArtifact('excel')">
+              📊 Download Excel
+            </button>
+            <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #cbd5e1; color:#334155; font-weight:700;" onclick="downloadInspectionsArtifact('csv')">
+              📄 Download CSV
             </button>
           </div>
-          <div id="insp-sync-time" style="font-size:0.82rem; color:var(--text-muted); font-weight:600;">
-            Directory: Official Telangana Gram Panchayat Inspection Database
-          </div>
+        </div>
+        <div id="insp-sync-time" style="font-size:0.82rem; color:var(--text-muted); font-weight:600; margin-top:10px;">
+          Status: Select Officer Designation and click "Fetch Portal Weeks" (or upload GM-R 39.1 weekly Excel files).
         </div>
       </div>
 
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:20px;">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px; margin-bottom:20px;">
         <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Mandals</div>
-          <div id="insp-kpi-mandals" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">21</div>
+          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;" id="insp-kpi-units-label">Total Mandals</div>
+          <div id="insp-kpi-mandals" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">0</div>
         </div>
         <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Gram Panchayats</div>
-          <div id="insp-kpi-gps" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">571</div>
+          <div style="font-size:0.82rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Total Target</div>
+          <div id="insp-kpi-target" style="font-size:1.8rem; font-weight:800; color:#0f172a; margin-top:4px;">0</div>
         </div>
         <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:0.82rem; font-weight:700; color:#166534; text-transform:uppercase;" id="insp-kpi-completed-label">Inspections Conducted</div>
-          <div id="insp-kpi-completed" style="font-size:1.8rem; font-weight:800; color:#15803d; margin-top:4px;">488</div>
+          <div style="font-size:0.82rem; font-weight:700; color:#166534; text-transform:uppercase;" id="insp-kpi-completed-label">Completed (Submitted)</div>
+          <div id="insp-kpi-completed" style="font-size:1.8rem; font-weight:800; color:#15803d; margin-top:4px;">0</div>
         </div>
         <div style="background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:0.82rem; font-weight:700; color:#9a3412; text-transform:uppercase;">Pending Inspections</div>
-          <div id="insp-kpi-pending" style="font-size:1.8rem; font-weight:800; color:#c2410c; margin-top:4px;">83</div>
+          <div style="font-size:0.82rem; font-weight:700; color:#9a3412; text-transform:uppercase;">Balance Pending</div>
+          <div id="insp-kpi-pending" style="font-size:1.8rem; font-weight:800; color:#c2410c; margin-top:4px;">0</div>
         </div>
         <div style="background:#f0f9ff; border:1.5px solid #bae6fd; border-radius:12px; padding:16px; text-align:center;">
-          <div style="font-size:0.82rem; font-weight:700; color:#0369a1; text-transform:uppercase;">Inspection Compliance</div>
-          <div id="insp-kpi-rate" style="font-size:1.8rem; font-weight:800; color:#0284c7; margin-top:4px;">85.5%</div>
+          <div style="font-size:0.82rem; font-weight:700; color:#0369a1; text-transform:uppercase;">% Completed</div>
+          <div id="insp-kpi-rate" style="font-size:1.8rem; font-weight:800; color:#0284c7; margin-top:4px;">0.00%</div>
         </div>
       </div>
 
       <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,0.04);">
-        <div style="padding:14px 18px; background:#f8fafc; border-bottom:1.5px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-          <span style="font-weight:800; font-size:1rem; color:#1e293b;">Mandal-Wise Gram Panchayat Inspection Abstract</span>
-          <span id="insp-table-counter" style="font-size:0.82rem; font-weight:700; color:#64748b;">Showing 21 Mandals</span>
+        <div style="padding:14px 18px; background:#f8fafc; border-bottom:1.5px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span id="insp-table-title" style="font-weight:800; font-size:1rem; color:#1e293b;">GM-R 39.1 Consolidated Abstract (Final Submit Status: Submitted Only)</span>
+          <span id="insp-table-counter" style="font-size:0.82rem; font-weight:700; color:#64748b;">Ready</span>
         </div>
         <div class="table-responsive">
           <table style="width:100%; border-collapse:collapse; font-size:0.88rem; text-align:left;">
             <thead>
               <tr style="background:#062b1f; color:#ffffff; font-weight:700; border-bottom:2px solid #165b43;">
-                <th style="padding:10px 12px; text-align:center; width:50px;">S.No</th>
-                <th style="padding:10px 12px;">Mandal Name</th>
-                <th style="padding:10px 12px; text-align:center;">Total GPs</th>
-                <th style="padding:10px 12px; text-align:center;">DPO</th>
-                <th style="padding:10px 12px; text-align:center;">DLPO</th>
-                <th style="padding:10px 12px; text-align:center;">MPO</th>
-                <th style="padding:10px 12px; text-align:center;">Total Inspected</th>
-                <th style="padding:10px 12px; text-align:center;">Pending</th>
-                <th style="padding:10px 12px; text-align:center;">Compliance %</th>
-                <th style="padding:10px 12px; text-align:center;">Status</th>
-                <th style="padding:10px 12px; text-align:center;">Action</th>
+                <th style="padding:10px 12px; text-align:center; width:70px;">Sl No</th>
+                <th style="padding:10px 12px;" id="insp-col-unit-header">Mandal</th>
+                <th style="padding:10px 12px; text-align:center;">Target</th>
+                <th style="padding:10px 12px; text-align:center;">Completed</th>
+                <th style="padding:10px 12px; text-align:center;">Balance</th>
+                <th style="padding:10px 12px; text-align:center;">% Completed</th>
+                <th style="padding:10px 12px; text-align:center; width:130px;">Details</th>
               </tr>
             </thead>
-            <tbody id="insp-table-body"></tbody>
+            <tbody id="insp-table-body">
+              <tr><td colspan="7" style="text-align:center; padding:28px; color:#64748b;">Select Designation &amp; From–To Weeks above and click <strong>⚡ Run Inspections Robot</strong> (or upload weekly Excel files).</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
@@ -2127,8 +2148,8 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=5"></script>
-  <script src="/static/js/auth.js?v=24"></script>
-  <script src="/static/js/console.js?v=19"></script>
+  <script src="/static/js/auth.js?v=25"></script>
+  <script src="/static/js/console.js?v=20"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>

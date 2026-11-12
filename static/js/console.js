@@ -16,29 +16,8 @@
       .replace(/'/g, '&#39;');
   };
 
-  var KHAMMAM_INSPECTIONS_DATA = [
-    { s_no: 1, mandal: 'Bonakal', total_gps: 21, dpo: 4, dlpo: 6, mpo: 9, inspected: 19, pending: 2, pct: 90.5 },
-    { s_no: 2, mandal: 'Chinthakani', total_gps: 26, dpo: 5, dlpo: 7, mpo: 12, inspected: 24, pending: 2, pct: 92.3 },
-    { s_no: 3, mandal: 'Enkuru', total_gps: 19, dpo: 3, dlpo: 5, mpo: 8, inspected: 16, pending: 3, pct: 84.2 },
-    { s_no: 4, mandal: 'Kalluru', total_gps: 32, dpo: 6, dlpo: 10, mpo: 13, inspected: 29, pending: 3, pct: 90.6 },
-    { s_no: 5, mandal: 'Kamepalle', total_gps: 28, dpo: 4, dlpo: 7, mpo: 13, inspected: 24, pending: 4, pct: 85.7 },
-    { s_no: 6, mandal: 'Khammam (Rural)', total_gps: 35, dpo: 8, dlpo: 12, mpo: 12, inspected: 32, pending: 3, pct: 91.4 },
-    { s_no: 7, mandal: 'Khammam (Urban)', total_gps: 9, dpo: 2, dlpo: 3, mpo: 4, inspected: 9, pending: 0, pct: 100.0 },
-    { s_no: 8, mandal: 'Konijerla', total_gps: 29, dpo: 5, dlpo: 8, mpo: 12, inspected: 25, pending: 4, pct: 86.2 },
-    { s_no: 9, mandal: 'Kusumanchi', total_gps: 37, dpo: 6, dlpo: 10, mpo: 16, inspected: 32, pending: 5, pct: 86.5 },
-    { s_no: 10, mandal: 'Madhira', total_gps: 31, dpo: 5, dlpo: 9, mpo: 13, inspected: 27, pending: 4, pct: 87.1 },
-    { s_no: 11, mandal: 'Mudigonda', total_gps: 25, dpo: 4, dlpo: 6, mpo: 11, inspected: 21, pending: 4, pct: 84.0 },
-    { s_no: 12, mandal: 'Nelakondapalle', total_gps: 34, dpo: 6, dlpo: 9, mpo: 14, inspected: 29, pending: 5, pct: 85.3 },
-    { s_no: 13, mandal: 'Penuballi', total_gps: 29, dpo: 4, dlpo: 8, mpo: 12, inspected: 24, pending: 5, pct: 82.8 },
-    { s_no: 14, mandal: 'Raghunadhapalem', total_gps: 33, dpo: 7, dlpo: 10, mpo: 13, inspected: 30, pending: 3, pct: 90.9 },
-    { s_no: 15, mandal: 'Sathupalli', total_gps: 30, dpo: 5, dlpo: 8, mpo: 12, inspected: 25, pending: 5, pct: 83.3 },
-    { s_no: 16, mandal: 'Singareni', total_gps: 27, dpo: 4, dlpo: 7, mpo: 11, inspected: 22, pending: 5, pct: 81.5 },
-    { s_no: 17, mandal: 'Tallada', total_gps: 26, dpo: 4, dlpo: 7, mpo: 11, inspected: 22, pending: 4, pct: 84.6 },
-    { s_no: 18, mandal: 'Thirumalayapalem', total_gps: 42, dpo: 6, dlpo: 12, mpo: 17, inspected: 35, pending: 7, pct: 83.3 },
-    { s_no: 19, mandal: 'Vemsoor', total_gps: 23, dpo: 4, dlpo: 6, mpo: 10, inspected: 20, pending: 3, pct: 87.0 },
-    { s_no: 20, mandal: 'Wyra', total_gps: 27, dpo: 5, dlpo: 7, mpo: 11, inspected: 23, pending: 4, pct: 85.2 },
-    { s_no: 21, mandal: 'Yerrupalem', total_gps: 28, dpo: 4, dlpo: 7, mpo: 11, inspected: 22, pending: 6, pct: 78.6 },
-  ];
+  var inspCurrentReport = null;
+  var inspWeeksCache = [];
 
   var consolePollTimer = null;
   var genProgressInterval = null;
@@ -654,6 +633,13 @@
       var mEl = document.getElementById('tax-mandal-select');
       if (dEl && dEl.value) merged.district = dEl.value;
       if (mEl && mEl.value) merged.mandal = mEl.value;
+    } else if (mod === 'inspections') {
+      var desEl = document.getElementById('insp-designation');
+      var fwEl = document.getElementById('insp-from-week');
+      var twEl = document.getElementById('insp-to-week');
+      if (desEl && desEl.value) merged.designation = desEl.value;
+      if (fwEl && fwEl.value) merged.from_week = fwEl.value;
+      if (twEl && twEl.value) merged.to_week = twEl.value;
     }
     if (overrideParams && typeof overrideParams === 'object') {
       Object.keys(overrideParams).forEach(function (k) {
@@ -800,6 +786,14 @@
     }
     if (mod === 'mas' || mod === 'mas-consolidated') {
       window.location.href = pending.returnUrl || window.getMasWorkspaceUrl(params, autoGen);
+      return true;
+    }
+    if (mod === 'inspections') {
+      await window.openGpInspectionsStation({
+        skipAuthCheck: true,
+        autoGenerate: autoGen,
+        params: params,
+      });
       return true;
     }
     return false;
@@ -2935,78 +2929,256 @@
   };
 
   // ---------------------------------------------------------------------------
-  // GP Inspections Monitoring Station (#inspections-station)
+  // GP Inspections Monitoring Station (#inspections-station - GM-R 39.1)
   // ---------------------------------------------------------------------------
 
-  window.openGpInspectionsStation = function () {
+  function getInspTargetMeta(desig) {
+    var d = String(desig || 'MPO').trim();
+    if (d === 'MPO' || d === 'MPDO') {
+      return { level: 'Mandal', plural: 'Mandals', rule: d + ': Weekly Target 4 per week • Grouping: Mandal-wise • Filter: Final Submit Status = Submitted' };
+    }
+    if (d === 'DLPO') {
+      return { level: 'Division', plural: 'Divisions', rule: 'DLPO: Monthly Target 10 per month • Grouping: Division-wise • Filter: Final Submit Status = Submitted' };
+    }
+    return { level: 'District', plural: 'Districts', rule: d + ': Monthly Target 5 per month • Grouping: District-wise • Filter: Final Submit Status = Submitted' };
+  }
+
+  window.updateInspectionTargetBanner = function () {
+    var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
+    var meta = getInspTargetMeta(desig);
+    var bannerText = document.getElementById('insp-target-rule-text');
+    var searchLbl = document.getElementById('insp-search-unit-label');
+    var colHdr = document.getElementById('insp-col-unit-header');
+    var unitsLbl = document.getElementById('insp-kpi-units-label');
+    if (bannerText) bannerText.textContent = meta.rule;
+    if (searchLbl) searchLbl.textContent = meta.level;
+    if (colHdr) colHdr.textContent = meta.level;
+    if (unitsLbl && !inspCurrentReport) unitsLbl.textContent = 'Total ' + meta.plural;
+  };
+
+  window.openGpInspectionsStation = async function (options) {
+    var opts = options || {};
+    if (!opts.skipAuthCheck && typeof window.ensureDepartmentSession === 'function') {
+      var ok = await window.ensureDepartmentSession('inspections', {
+        autoGenerate: opts.autoGenerate === true,
+        params: opts.params,
+      });
+      if (!ok) return;
+    }
+
     if (typeof window.hideAllStations === 'function') {
       window.hideAllStations();
     }
     var inspStation = document.getElementById('inspections-station');
     if (inspStation) {
       inspStation.style.display = 'block';
-      window.initInspectionsData();
       inspStation.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    if (opts.params) {
+      var desEl = document.getElementById('insp-designation');
+      if (desEl && opts.params.designation) desEl.value = opts.params.designation;
+    }
+    window.updateInspectionTargetBanner();
+
+    try {
+      var existing = await window.safeFetchJson('/api/inspections/data');
+      if (existing && existing.rows && existing.rows.length > 0) {
+        window.renderInspectionsReport(existing);
+      }
+    } catch (e) {}
+
+    if (inspWeeksCache.length === 0) {
+      await window.fetchInspectionWeeks(false, opts.params);
+    }
+    if (opts.autoGenerate === true) {
+      await window.runInspectionsRobot();
     }
   };
 
-  window.initInspectionsData = function () {
-    var mandalFilter = document.getElementById('insp-mandal-filter');
-    if (mandalFilter && mandalFilter.options.length <= 1) {
-      KHAMMAM_INSPECTIONS_DATA.forEach(function (item) {
-        var opt = document.createElement('option');
-        opt.value = item.mandal;
-        opt.textContent = item.mandal + ' (' + item.total_gps + ' GPs)';
-        mandalFilter.appendChild(opt);
-      });
+  window.onInspectionDesignationChanged = function () {
+    window.updateInspectionTargetBanner();
+    inspWeeksCache = [];
+    if (window.isDeptAuthenticated) {
+      window.fetchInspectionWeeks(false);
     }
+  };
+
+  window.fetchInspectionWeeks = async function (explicitClick, pendingParams) {
+    var syncEl = document.getElementById('insp-sync-time');
+    var desEl = document.getElementById('insp-designation');
+    var fromEl = document.getElementById('insp-from-week');
+    var toEl = document.getElementById('insp-to-week');
+    var btn = document.getElementById('btn-fetch-insp-weeks');
+    var desig = (desEl && desEl.value) || 'MPO';
+
+    if (btn) btn.disabled = true;
+    if (syncEl) syncEl.textContent = 'Connecting to GM-R 39.1 inside shared session to load available From–To weeks...';
+
+    try {
+      var res = await window.safeFetchJson('/api/inspections/weeks?designation=' + encodeURIComponent(desig));
+      var weeks = (res && res.weeks) || [];
+      inspWeeksCache = weeks;
+      if (fromEl && toEl) {
+        if (!weeks.length) {
+          fromEl.innerHTML = '<option value="">No weeks found on portal</option>';
+          toEl.innerHTML = '<option value="">No weeks found on portal</option>';
+        } else {
+          var optsHtml = weeks.map(function (w) {
+            return '<option value="' + esc(w.value) + '">' + esc(w.text) + '</option>';
+          }).join('');
+          fromEl.innerHTML = optsHtml;
+          toEl.innerHTML = optsHtml;
+          if (pendingParams && pendingParams.from_week) fromEl.value = pendingParams.from_week;
+          if (pendingParams && pendingParams.to_week) toEl.value = pendingParams.to_week;
+        }
+      }
+      if (syncEl) {
+        syncEl.textContent = weeks.length
+          ? ('Loaded ' + weeks.length + ' weekly inspection period(s) from GM-R 39.1 for ' + desig + '. Select From–To weeks and click Run.')
+          : ('GM-R 39.1 returned no weekly options for ' + desig + '.');
+      }
+      if (explicitClick) showNotice('Loaded ' + weeks.length + ' weeks from GM-R 39.1 for ' + desig + '.', 'success');
+    } catch (err) {
+      if (handleDepartmentSessionExpiredError(err, 'inspections', { designation: desig })) return;
+      if (syncEl) syncEl.textContent = 'Week load note: ' + (err.message || 'Connect Departmental Login first.');
+      if (explicitClick) showNotice('Could not load GM-R 39.1 weeks: ' + err.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  window.runInspectionsRobot = async function () {
+    var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
+    var fromWeek = (document.getElementById('insp-from-week') && document.getElementById('insp-from-week').value) || '';
+    var toWeek = (document.getElementById('insp-to-week') && document.getElementById('insp-to-week').value) || fromWeek;
+    var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
+    var btn = document.getElementById('btn-run-inspections-robot');
+    var syncEl = document.getElementById('insp-sync-time');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Running GM-R 39.1 Robot...';
+    }
+    if (syncEl) syncEl.textContent = 'Iterating selected weeks in GM-R 39.1, downloading Excel reports, and consolidating Submitted inspections...';
+
+    try {
+      var fd = new FormData();
+      fd.append('designation', desig);
+      if (fromWeek) fd.append('from_week', fromWeek);
+      if (toWeek) fd.append('to_week', toWeek);
+      if (overrideVal && parseInt(overrideVal, 10) > 0) {
+        fd.append('target_override', String(parseInt(overrideVal, 10)));
+      }
+      var data = await window.safeFetchJson('/api/inspections/generate', {
+        method: 'POST',
+        body: fd,
+      });
+      window.renderInspectionsReport(data);
+      showNotice('Compiled GM-R 39.1 ' + data.designation + ' Inspection Abstract (' + (data.weeks_count || 1) + ' week(s)).', 'success');
+    } catch (err) {
+      if (handleDepartmentSessionExpiredError(err, 'inspections', { designation: desig, from_week: fromWeek, to_week: toWeek })) return;
+      if (syncEl) syncEl.textContent = 'Error: ' + err.message;
+      showNotice('Inspections Robot error: ' + err.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '⚡ Run Inspections Robot';
+      }
+    }
+  };
+
+  window.uploadConsolidateInspections = async function (fileList) {
+    if (!fileList || !fileList.length) return;
+    var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
+    var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
+    var syncEl = document.getElementById('insp-sync-time');
+    if (syncEl) syncEl.textContent = 'Consolidating ' + fileList.length + ' uploaded GM-R 39.1 Excel file(s) (Final Submit Status = Submitted only)...';
+
+    try {
+      var fd = new FormData();
+      for (var i = 0; i < fileList.length; i++) {
+        fd.append('files', fileList[i]);
+      }
+      fd.append('designation', desig);
+      if (overrideVal && parseInt(overrideVal, 10) > 0) {
+        fd.append('target_override', String(parseInt(overrideVal, 10)));
+      }
+      var data = await window.safeFetchJson('/api/inspections/upload-consolidate', {
+        method: 'POST',
+        body: fd,
+      });
+      window.renderInspectionsReport(data);
+      showNotice('Consolidated ' + fileList.length + ' weekly Excel file(s) successfully.', 'success');
+    } catch (err) {
+      if (syncEl) syncEl.textContent = 'Consolidation error: ' + err.message;
+      showNotice('Excel consolidation error: ' + err.message, 'error');
+    } finally {
+      var inp = document.getElementById('insp-upload-files');
+      if (inp) inp.value = '';
+    }
+  };
+
+  window.renderInspectionsReport = function (data) {
+    if (!data) return;
+    inspCurrentReport = data;
+    var levelLabel = data.group_label || 'Mandal';
+    var plural = levelLabel === 'Mandal' ? 'Mandals' : (levelLabel === 'Division' ? 'Divisions' : 'Districts');
+
+    var el;
+    el = document.getElementById('insp-kpi-units-label'); if (el) el.textContent = 'Total ' + plural;
+    el = document.getElementById('insp-col-unit-header'); if (el) el.textContent = levelLabel;
+    el = document.getElementById('insp-search-unit-label'); if (el) el.textContent = levelLabel;
+    el = document.getElementById('insp-target-rule-text');
+    if (el) el.textContent = (data.target_rule_desc || '') + ' • Grouping: ' + levelLabel + '-wise • Filter: Final Submit Status = Submitted Only';
+
+    var actionsWrap = document.getElementById('insp-actions-wrap');
+    if (actionsWrap) actionsWrap.style.display = 'flex';
+
+    var totals = data.totals || {};
+    var syncEl = document.getElementById('insp-sync-time');
+    if (syncEl) {
+      syncEl.textContent =
+        'Compiled ' + (data.designation || 'MPO') + ' (' + (data.weeks_count || 1) + ' week(s): ' +
+        (data.from_week || '') + ' to ' + (data.to_week || '') + ') • Submitted Considered: ' +
+        (totals.submitted_row_count || 0) + ' / Raw: ' + (totals.raw_row_count || 0) +
+        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')';
+    }
+
+    el = document.getElementById('insp-table-title');
+    if (el) {
+      el.textContent = (data.district_name || 'District') + ' — ' + levelLabel + '-Wise ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
+    }
+
     window.filterInspectionsTable();
   };
 
   window.filterInspectionsTable = function () {
-    var levelEl = document.getElementById('insp-level-filter');
-    var mandalEl = document.getElementById('insp-mandal-filter');
-    var statusEl = document.getElementById('insp-status-filter');
+    var rows = (inspCurrentReport && inspCurrentReport.rows) ? inspCurrentReport.rows : [];
     var searchEl = document.getElementById('insp-search-input');
-
-    var level = levelEl ? levelEl.value : 'ALL';
-    var selMandal = mandalEl ? mandalEl.value : 'ALL';
-    var status = statusEl ? statusEl.value : 'ALL';
     var q = (searchEl ? searchEl.value : '').toLowerCase().trim();
-
-    var filtered = KHAMMAM_INSPECTIONS_DATA.filter(function (item) {
-      if (selMandal !== 'ALL' && item.mandal !== selMandal) return false;
-      if (status === 'COMPLETED' && item.pending > 0) return false;
-      if (status === 'PENDING' && item.pending === 0) return false;
-      if (q && item.mandal.toLowerCase().indexOf(q) === -1) return false;
-      return true;
+    var filtered = rows.filter(function (r) {
+      if (!q) return true;
+      return String(r.unit_name || '').toLowerCase().indexOf(q) !== -1;
     });
     inspFilteredCache = filtered;
 
-    var totMandals = filtered.length;
-    var totGps = filtered.reduce(function (acc, r) { return acc + r.total_gps; }, 0);
-    var totInspected = filtered.reduce(function (acc, r) {
-      if (level === 'DPO') return acc + r.dpo;
-      if (level === 'DLPO') return acc + r.dlpo;
-      if (level === 'MPO') return acc + r.mpo;
-      return acc + r.inspected;
-    }, 0);
-    var totPending = level === 'ALL'
-      ? filtered.reduce(function (acc, r) { return acc + r.pending; }, 0)
-      : Math.max(0, totGps - totInspected);
-    var avgRate = totGps > 0 ? ((totInspected / totGps) * 100).toFixed(1) : '0.0';
+    var levelLabel = (inspCurrentReport && inspCurrentReport.group_label) || 'Mandal';
+    var plural = levelLabel === 'Mandal' ? 'Mandals' : (levelLabel === 'Division' ? 'Divisions' : 'Districts');
 
-    var kpiLbl = document.getElementById('insp-kpi-completed-label');
-    if (kpiLbl) {
-      kpiLbl.textContent = level === 'ALL' ? 'Inspections Conducted' : (level + ' Inspections Conducted');
-    }
+    var totUnits = filtered.length;
+    var totTarget = filtered.reduce(function (a, r) { return a + Number(r.target || 0); }, 0);
+    var totCompleted = filtered.reduce(function (a, r) { return a + Number(r.completed || 0); }, 0);
+    var totBalance = filtered.reduce(function (a, r) { return a + Number(r.balance || 0); }, 0);
+    var pct = totTarget > 0 ? ((totCompleted / totTarget) * 100).toFixed(2) : '0.00';
+
     var el;
-    el = document.getElementById('insp-kpi-mandals'); if (el) el.textContent = totMandals;
-    el = document.getElementById('insp-kpi-gps'); if (el) el.textContent = totGps;
-    el = document.getElementById('insp-kpi-completed'); if (el) el.textContent = totInspected;
-    el = document.getElementById('insp-kpi-pending'); if (el) el.textContent = totPending;
-    el = document.getElementById('insp-kpi-rate'); if (el) el.textContent = avgRate + '%';
-    el = document.getElementById('insp-table-counter'); if (el) el.textContent = 'Showing ' + totMandals + ' Mandals';
+    el = document.getElementById('insp-kpi-mandals'); if (el) el.textContent = totUnits;
+    el = document.getElementById('insp-kpi-target'); if (el) el.textContent = totTarget;
+    el = document.getElementById('insp-kpi-completed'); if (el) el.textContent = totCompleted;
+    el = document.getElementById('insp-kpi-pending'); if (el) el.textContent = totBalance;
+    el = document.getElementById('insp-kpi-rate'); if (el) el.textContent = pct + '%';
+    el = document.getElementById('insp-table-counter'); if (el) el.textContent = 'Showing ' + totUnits + ' ' + plural;
 
     var tbody = document.getElementById('insp-table-body');
     if (!tbody) return;
@@ -3018,114 +3190,96 @@
         if (!btn) return;
         var rowIdx = parseInt(btn.getAttribute('data-insp-idx'), 10);
         var row = inspFilteredCache[rowIdx];
-        if (row) {
-          window.viewMandalGps(row.mandal, row.total_gps, row.inspected, row.pending);
-        }
+        if (row) window.viewInspectionUnitDetails(row);
       });
     }
 
+    if (!inspCurrentReport) return;
+
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:24px; color:#94a3b8; font-weight:600;">e-Panchayat Automation: No mandals found matching the selected filter criteria.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:24px; color:#64748b; font-weight:600;">No submitted inspection records found for the selected criteria.</td></tr>';
       return;
     }
 
     var rowsHtml = filtered.map(function (r, idx) {
       var rowBg = idx % 2 === 0 ? 'background:#ffffff;' : 'background:#f8fafc;';
-      var isDone = r.pending === 0;
-      var statusBadge = isDone
-        ? '<span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">100% Verified</span>'
-        : '<span style="background:#ffedd5; color:#c2410c; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">' + esc(r.pending) + ' Pending</span>';
-      var pctColor = r.pct >= 90 ? '#15803d' : (r.pct >= 80 ? '#0284c7' : '#d97706');
+      var pctVal = Number(r.pct_completed || 0);
+      var pctColor = pctVal >= 100 ? '#15803d' : (pctVal >= 50 ? '#b45309' : '#dc2626');
+      var balColor = Number(r.balance || 0) > 0 ? '#dc2626' : '#15803d';
       return (
         '<tr style="border-bottom:1px solid #e2e8f0; ' + rowBg + '">' +
           '<td style="padding:10px 12px; text-align:center; font-weight:700; color:#64748b;">' + (idx + 1) + '</td>' +
-          '<td style="padding:10px 12px; font-weight:700; color:#0f172a;">' + esc(r.mandal) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; font-weight:700;">' + esc(r.total_gps) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; color:#0369a1; font-weight:600;">' + esc(r.dpo) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; color:#0284c7; font-weight:600;">' + esc(r.dlpo) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; color:#0f766e; font-weight:600;">' + esc(r.mpo) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; font-weight:800; color:#15803d;">' + esc(r.inspected) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; font-weight:800; color:' + (r.pending > 0 ? '#dc2626' : '#64748b') + ';">' + esc(r.pending) + '</td>' +
-          '<td style="padding:10px 12px; text-align:center; font-weight:800; color:' + pctColor + ';">' + esc(r.pct) + '%</td>' +
-          '<td style="padding:10px 12px; text-align:center;">' + statusBadge + '</td>' +
+          '<td style="padding:10px 12px; font-weight:700; color:#0f172a;">' + esc(r.unit_name) + '</td>' +
+          '<td style="padding:10px 12px; text-align:center; font-weight:700;">' + esc(r.target) + '</td>' +
+          '<td style="padding:10px 12px; text-align:center; font-weight:800; color:#15803d;">' + esc(r.completed) + '</td>' +
+          '<td style="padding:10px 12px; text-align:center; font-weight:800; color:' + balColor + ';">' + esc(r.balance) + '</td>' +
+          '<td style="padding:10px 12px; text-align:center; font-weight:800; color:' + pctColor + ';">' + pctVal.toFixed(2) + '%</td>' +
           '<td style="padding:10px 12px; text-align:center;">' +
-            '<button type="button" class="btn btn-sm" data-insp-idx="' + idx + '" style="padding:4px 10px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#0f172a; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">🔍 View GPs</button>' +
+            '<button type="button" class="btn btn-sm" data-insp-idx="' + idx + '" style="padding:4px 10px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#0f172a; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">🔍 View (' + esc((r.details || []).length) + ')</button>' +
           '</td>' +
         '</tr>'
       );
     }).join('');
 
-    var totDpo = filtered.reduce(function (a, b) { return a + b.dpo; }, 0);
-    var totDlpo = filtered.reduce(function (a, b) { return a + b.dlpo; }, 0);
-    var totMpo = filtered.reduce(function (a, b) { return a + b.mpo; }, 0);
-    var totAllInsp = filtered.reduce(function (a, b) { return a + b.inspected; }, 0);
-    var totAllPend = filtered.reduce(function (a, b) { return a + b.pending; }, 0);
-    var totRate = totGps > 0 ? ((totAllInsp / totGps) * 100).toFixed(1) : '0.0';
-
     rowsHtml +=
       '<tr style="background:#062b1f; color:#ffffff; font-weight:800; border-top:2px solid #165b43;">' +
-        '<td colspan="2" style="padding:12px; text-align:right;">DISTRICT TOTAL:</td>' +
-        '<td style="padding:12px; text-align:center;">' + esc(totGps) + '</td>' +
-        '<td style="padding:12px; text-align:center;">' + esc(totDpo) + '</td>' +
-        '<td style="padding:12px; text-align:center;">' + esc(totDlpo) + '</td>' +
-        '<td style="padding:12px; text-align:center;">' + esc(totMpo) + '</td>' +
-        '<td style="padding:12px; text-align:center; color:#34d399;">' + esc(totAllInsp) + '</td>' +
-        '<td style="padding:12px; text-align:center; color:#f87171;">' + esc(totAllPend) + '</td>' +
-        '<td style="padding:12px; text-align:center; color:#fbbf24;">' + esc(totRate) + '%</td>' +
-        '<td colspan="2" style="padding:12px; text-align:center;">' + (totAllPend === 0 ? '100% Inspected' : esc(totAllPend) + ' GPs Pending') + '</td>' +
+        '<td colspan="2" style="padding:12px; text-align:right;">TOTAL:</td>' +
+        '<td style="padding:12px; text-align:center;">' + esc(totTarget) + '</td>' +
+        '<td style="padding:12px; text-align:center; color:#34d399;">' + esc(totCompleted) + '</td>' +
+        '<td style="padding:12px; text-align:center; color:#f87171;">' + esc(totBalance) + '</td>' +
+        '<td style="padding:12px; text-align:center; color:#fbbf24;">' + esc(pct) + '%</td>' +
+        '<td style="padding:12px; text-align:center;">' + esc(totCompleted) + ' Submitted</td>' +
       '</tr>';
 
     tbody.innerHTML = rowsHtml;
   };
 
-  window.viewMandalGps = function (mandalName, totalGps, inspected, pending) {
+  window.viewInspectionUnitDetails = function (row) {
     var modal = document.getElementById('insp-detail-modal');
     var title = document.getElementById('insp-modal-title');
     var sub = document.getElementById('insp-modal-subtitle');
     var content = document.getElementById('insp-modal-content');
     if (!modal || !content) return;
 
-    if (title) title.textContent = mandalName + ' Mandal - Gram Panchayat Inspection Registry';
-    if (sub) sub.textContent = 'Total: ' + totalGps + ' GPs | Completed: ' + inspected + ' | Pending: ' + pending;
-
-    var rows = [];
-    for (var i = 1; i <= Number(totalGps || 0); i++) {
-      var isComp = i <= Number(inspected || 0);
-      var officerLevel = i % 3 === 0 ? 'DPO' : (i % 2 === 0 ? 'DLPO' : 'MPO');
-      var badge = isComp
-        ? '<span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Completed</span>'
-        : '<span style="background:#fee2e2; color:#dc2626; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Pending Inspection</span>';
-      var inspDate = isComp ? ('2026-11-' + String(Math.min(28, (i % 15) + 1)).padStart(2, '0')) : '—';
-      var observation = isComp ? 'Sanitation, Registers & Asset Verification Verified' : 'Inspection Scheduled / Awaiting Field Verification';
-      rows.push(
-        '<tr style="border-bottom:1px solid #f1f5f9;">' +
-          '<td style="padding:8px 10px; text-align:center; font-weight:700; color:#64748b;">' + i + '</td>' +
-          '<td style="padding:8px 10px; font-weight:700; color:#0f172a;">' + esc(mandalName) + ' GP-' + i + '</td>' +
-          '<td style="padding:8px 10px; text-align:center; font-weight:600; color:#0369a1;">' + (isComp ? officerLevel : '—') + '</td>' +
-          '<td style="padding:8px 10px; text-align:center; font-size:0.82rem; color:#475569;">' + inspDate + '</td>' +
-          '<td style="padding:8px 10px; font-size:0.82rem; color:#334155;">' + observation + '</td>' +
-          '<td style="padding:8px 10px; text-align:center;">' + badge + '</td>' +
-        '</tr>'
-      );
+    var levelLabel = (inspCurrentReport && inspCurrentReport.group_label) || 'Mandal';
+    var details = row.details || [];
+    if (title) title.textContent = row.unit_name + ' ' + levelLabel + ' — Submitted GP Inspections';
+    if (sub) {
+      sub.textContent =
+        'Target: ' + row.target + ' | Completed (Submitted): ' + row.completed +
+        ' | Balance: ' + row.balance + ' | ' + Number(row.pct_completed || 0).toFixed(2) + '%';
     }
 
-    content.innerHTML =
-      '<div style="overflow-x:auto;">' +
-        '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">' +
-          '<thead>' +
-            '<tr style="background:#0f172a; color:#ffffff; font-weight:700;">' +
+    if (!details.length) {
+      content.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-weight:600;">No Final Submit Status = Submitted records found for ' + esc(row.unit_name) + ' in the selected weeks.</div>';
+    } else {
+      var trs = details.map(function (rec, idx) {
+        return (
+          '<tr style="border-bottom:1px solid #f1f5f9;">' +
+            '<td style="padding:8px 10px; text-align:center; font-weight:700; color:#64748b;">' + (idx + 1) + '</td>' +
+            '<td style="padding:8px 10px; font-weight:600; color:#0f172a;">' + esc(rec.week || '—') + '</td>' +
+            '<td style="padding:8px 10px; font-weight:700; color:#0f172a;">' + esc(rec.gp_name || rec.mandal || row.unit_name) + '</td>' +
+            '<td style="padding:8px 10px; color:#334155;">' + esc(rec.officer_name || rec.designation || '—') + '</td>' +
+            '<td style="padding:8px 10px; text-align:center; color:#475569;">' + esc(rec.inspection_date || '—') + '</td>' +
+            '<td style="padding:8px 10px; text-align:center;"><span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Submitted</span></td>' +
+          '</tr>'
+        );
+      }).join('');
+      content.innerHTML =
+        '<div style="overflow-x:auto;">' +
+          '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">' +
+            '<thead><tr style="background:#0f172a; color:#ffffff; font-weight:700;">' +
               '<th style="padding:8px 10px; text-align:center; width:45px;">#</th>' +
+              '<th style="padding:8px 10px;">Week</th>' +
               '<th style="padding:8px 10px;">Gram Panchayat</th>' +
-              '<th style="padding:8px 10px; text-align:center;">Inspecting Officer</th>' +
-              '<th style="padding:8px 10px; text-align:center;">Inspection Date</th>' +
-              '<th style="padding:8px 10px;">Inspection Observations / Remarks</th>' +
+              '<th style="padding:8px 10px;">Officer</th>' +
+              '<th style="padding:8px 10px; text-align:center;">Date</th>' +
               '<th style="padding:8px 10px; text-align:center;">Status</th>' +
-            '</tr>' +
-          '</thead>' +
-          '<tbody>' + rows.join('') + '</tbody>' +
-        '</table>' +
-      '</div>';
-
+            '</tr></thead>' +
+            '<tbody>' + trs + '</tbody>' +
+          '</table>' +
+        '</div>';
+    }
     modal.style.display = 'flex';
   };
 
@@ -3134,27 +3288,12 @@
     if (modal) modal.style.display = 'none';
   };
 
-  function csvCell(val) {
-    return '"' + String(val === null || val === undefined ? '' : val).replace(/"/g, '""') + '"';
-  }
-
-  window.exportInspectionsCsv = function () {
-    var source = inspFilteredCache.length ? inspFilteredCache : KHAMMAM_INSPECTIONS_DATA;
-    var rows = [
-      'S.No,Mandal Name,Total GPs,DPO Inspected,DLPO Inspected,MPO Inspected,Total Inspected,Pending GPs,Compliance Pct',
-    ];
-    source.forEach(function (r) {
-      rows.push([r.s_no, csvCell(r.mandal), r.total_gps, r.dpo, r.dlpo, r.mpo, r.inspected, r.pending, r.pct + '%'].join(','));
-    });
-    var blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'GP_Inspections_Report_' + localDateStr() + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  window.downloadInspectionsArtifact = function (kind) {
+    var url = '/api/inspections/download-' + encodeURIComponent(kind || 'pdf');
+    if (window.DeptSessionManager && typeof window.DeptSessionManager.appendSessionParam === 'function') {
+      url = window.DeptSessionManager.appendSessionParam(url);
+    }
+    window.open(url, '_blank');
   };
 
   // ---------------------------------------------------------------------------
