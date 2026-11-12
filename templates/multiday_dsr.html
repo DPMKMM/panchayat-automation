@@ -345,6 +345,13 @@
 
         <div id="md-file-list" class="md-file-list"></div>
 
+        <div style="margin-top:14px; padding:10px 14px; background:#f8fbf9; border:1px solid #d5e5dc; border-radius:9px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.9rem; font-weight:700; color:#0c3829; margin:0;">
+            <input id="md-opt-time-matrix" name="include_time_matrix" type="checkbox" checked style="width:16px; height:16px; accent-color:#0c3829;">
+            <span>⏰ Include Day-Wise Exact Attendance Time Matrix (Average Time &amp; No. of Days Before 9 AM)</span>
+          </label>
+        </div>
+
         <div class="md-actions">
           <button type="submit" id="md-analyze-btn" class="md-btn md-btn-primary">
             ⚡ Compile Multi-Days DSR Report
@@ -366,7 +373,7 @@
         </div>
         <div style="display:flex; flex-wrap:wrap; gap:8px;">
           <a id="md-dl-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer">📄 Download PDF</a>
-          <a id="md-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">📊 Download Excel (4 Sheets)</a>
+          <a id="md-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">📊 Download Excel (5 Sheets)</a>
           <a id="md-dl-csv" class="md-btn md-btn-csv" href="#" target="_blank" rel="noopener noreferrer">📝 Download Active CSV</a>
         </div>
       </div>
@@ -383,6 +390,9 @@
           </button>
           <button type="button" class="md-tab-btn" data-tab="gp" onclick="switchMdTab('gp')">
             🏘️ GP Level (Period Summary)
+          </button>
+          <button type="button" class="md-tab-btn" id="md-tab-btn-time" data-tab="time_matrix" onclick="switchMdTab('time_matrix')">
+            ⏰ Day-Wise Exact Time &amp; Avg
           </button>
         </div>
 
@@ -495,6 +505,8 @@
         try {
           var fd = new FormData();
           selectedFiles.forEach(function (f) { fd.append('files', f, f.name); });
+          var incTime = document.getElementById('md-opt-time-matrix');
+          fd.append('include_time_matrix', incTime && !incTime.checked ? 'false' : 'true');
           var res = await fetch('/api/multiday-dsr/analyze', { method: 'POST', body: fd });
           var data = await res.json();
           if (!res.ok) {
@@ -524,7 +536,11 @@
           'Period: ' + s.start_date + ' to ' + s.end_date + ' · Report Generated On: ' + s.generated_on;
 
         document.getElementById('md-dl-pdf').href = data.download_urls.pdf;
-        document.getElementById('md-dl-excel').href = data.download_urls.excel;
+        var xlBtn = document.getElementById('md-dl-excel');
+        xlBtn.href = data.download_urls.excel;
+        xlBtn.textContent = data.include_time_matrix ? '📊 Download Excel (5 Sheets)' : '📊 Download Excel (4 Sheets)';
+        var timeTabBtn = document.getElementById('md-tab-btn-time');
+        if (timeTabBtn) timeTabBtn.style.display = data.include_time_matrix ? 'inline-block' : 'none';
 
         var kpis = [
           { label: 'District', val: s.dist_name || '-' },
@@ -564,7 +580,7 @@
         document.querySelectorAll('.md-tab-btn').forEach(function (btn) {
           btn.classList.toggle('active', btn.getAttribute('data-tab') === activeTab);
         });
-        var showFilter = (activeTab === 'mandal' || activeTab === 'gp');
+        var showFilter = (activeTab === 'mandal' || activeTab === 'gp' || activeTab === 'time_matrix');
         document.getElementById('md-mandal-filter').style.display = showFilter ? 'inline-block' : 'none';
         document.getElementById('md-search-input').style.display = showFilter ? 'inline-block' : 'none';
 
@@ -572,6 +588,7 @@
           var csvBtn = document.getElementById('md-dl-csv');
           if (activeTab === 'mandal') csvBtn.href = currentPayload.download_urls.csv_mandal;
           else if (activeTab === 'gp') csvBtn.href = currentPayload.download_urls.csv_gp;
+          else if (activeTab === 'time_matrix') csvBtn.href = currentPayload.download_urls.csv_time_matrix;
           else csvBtn.href = currentPayload.download_urls.csv_district;
         }
         window.renderActiveTable();
@@ -587,6 +604,9 @@
         } else if (activeTab === 'gp') {
           cols = currentPayload.gp_columns || [];
           rows = currentPayload.gp_rows || [];
+        } else if (activeTab === 'time_matrix') {
+          cols = currentPayload.time_matrix_columns || [];
+          rows = currentPayload.time_matrix_rows || [];
         } else {
           cols = currentPayload.district_columns || [];
           rows = currentPayload.district_rows || [];
@@ -622,6 +642,10 @@
               var st = r._before9_style || {};
               bodyHtml += '<td><span class="md-pct-pill" style="' + escapeHtml(st.css || '') + '">' +
                 escapeHtml(Number(val || 0).toFixed(2) + '%') + '</span></td>';
+            } else if (activeTab === 'time_matrix' && r._time_styles && r._time_styles[c]) {
+              var ts = r._time_styles[c] || {};
+              bodyHtml += '<td><span class="md-pct-pill" style="min-width:86px; font-weight:' + (c === 'Average Time' ? '800' : '600') + '; ' +
+                escapeHtml(ts.css || '') + '">' + escapeHtml(String(val === undefined || val === null ? '' : val)) + '</span></td>';
             } else if (c === 'After 9 AM %') {
               bodyHtml += '<td>' + escapeHtml(Number(val || 0).toFixed(2) + '%') + '</td>';
             } else if (leftCols[c]) {

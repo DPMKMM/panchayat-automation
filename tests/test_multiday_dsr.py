@@ -148,6 +148,27 @@ def test_process_dsr_logic_boundaries_and_color_bands():
     assert int(j_gp["No. of Days Reported"]) == 2
     assert float(j_gp["Before 9 AM %"]) == 100.0
 
+    # Day-Wise Exact Attendance Time Matrix + Average Time & No. of Days Before 9 AM
+    assert list(res.time_matrix.columns) == [
+        "S.No",
+        "Mandal Name",
+        "Panchayat Name",
+        "10-11-2026",
+        "11-11-2026",
+        "Average Time",
+        "No. of Days Before 9 AM",
+    ]
+    tm_j = res.time_matrix[res.time_matrix["Panchayat Name"] == "Julapalli GP"].iloc[0]
+    assert tm_j["10-11-2026"] == "08:45:00 AM"
+    assert tm_j["11-11-2026"] == "08:30:00 AM"
+    assert tm_j["Average Time"] == "08:37:30 AM"
+    assert int(tm_j["No. of Days Before 9 AM"]) == 2
+
+    tm_k = res.time_matrix[res.time_matrix["Panchayat Name"] == "Kuchirajpalli"].iloc[0]
+    assert tm_k["10-11-2026"] == "09:00:00 AM"
+    assert tm_k["Average Time"] == "09:00:00 AM"
+    assert int(tm_k["No. of Days Before 9 AM"]) == 0  # 09:00:00 is >= 9 AM
+
     # Color threshold checks from highlight_percentage
     assert highlight_percentage(0)["bg"] == "#f8d7da"
     assert highlight_percentage(25)["bg"] == "#f5c6cb"
@@ -186,37 +207,45 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     pdf_path = tmp_path / "md.pdf"
     generate_multiday_dsr_pdf(res, pdf_path)
     reader = PdfReader(str(pdf_path))
-    assert len(reader.pages) >= 3
+    assert len(reader.pages) >= 4
     first = reader.pages[0]
     assert float(first.mediabox.width) > float(first.mediabox.height)  # Landscape A4
     txt = "\n".join(p.extract_text() for p in reader.pages)
     assert "District Level" in txt
     assert "Mandal Level" in txt
     assert "Gram Panchayat Level" in txt
+    assert "Average Time" in txt
+    assert "08:25:00 AM" in txt
     assert "Allinagaram" in txt
 
     xlsx_path = tmp_path / "md.xlsx"
     generate_multiday_dsr_excel(res, xlsx_path)
     wb = openpyxl.load_workbook(xlsx_path)
-    assert wb.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Master Data"]
+    assert wb.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Day-Wise Exact Time", "Master Data"]
 
     csv_bytes = generate_multiday_dsr_csv(res, "gp")
     assert b"Allinagaram" in csv_bytes
+    csv_tm_bytes = generate_multiday_dsr_csv(res, "time_matrix")
+    assert b"Average Time" in csv_tm_bytes and b"08:25:00 AM" in csv_tm_bytes
 
     # Live HTTP API & page route tests
     client = TestClient(app)
     page = client.get("/reports/multi-day-dsr")
     assert page.status_code == 200
     assert "Multiple Days DSR" in page.text
+    assert 'id="md-opt-time-matrix"' in page.text
 
     resp = client.post(
         "/api/multiday-dsr/analyze",
         files=[("files", ("day1.xls", day1, "application/vnd.ms-excel"))],
+        data={"include_time_matrix": "true"},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert body["success"] is True
     assert body["summary"]["dist_name"] == "Khammam"
+    assert "Average Time" in body["time_matrix_columns"]
+    assert "No. of Days Before 9 AM" in body["time_matrix_columns"]
     job_id = body["job_id"]
 
     ts_re = re.compile(r"_\d{2}-\d{2}-\d{4} \d{2}:\d{2} (?:AM|PM)\.(?:pdf|xlsx|csv)\"")
@@ -232,6 +261,22 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     dl_csv = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=gp")
     assert dl_csv.status_code == 200 and "Allinagaram" in dl_csv.text
     assert ts_re.search(dl_csv.headers.get("Content-Disposition", ""))
+
+    dl_tm_csv = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=time_matrix")
+    assert dl_tm_csv.status_code == 200 and "08:25:00 AM" in dl_tm_csv.text
+    assert ts_re.search(dl_tm_csv.headers.get("Content-Disposition", ""))
+
+    # Toggle option off -> time_matrix omitted from Excel & JSON response
+    resp_no_tm = client.post(
+        "/api/multiday-dsr/analyze",
+        files=[("files", ("day1.xls", day1, "application/vnd.ms-excel"))],
+        data={"include_time_matrix": "false"},
+    )
+    assert resp_no_tm.status_code == 200
+    assert resp_no_tm.json()["time_matrix_columns"] == []
+    dl_xlsx_4 = client.get(f"/api/multiday-dsr/jobs/{resp_no_tm.json()['job_id']}/download-excel")
+    wb4 = openpyxl.load_workbook(io.BytesIO(dl_xlsx_4.content))
+    assert wb4.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Master Data"]
 
     # Different client without job cookie is blocked (403)
     other_client = TestClient(app)

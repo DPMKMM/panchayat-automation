@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from core.access_policy import is_module_enabled
@@ -109,6 +109,7 @@ def multiday_dsr_page() -> HTMLResponse:
 def analyze_multiday_dsr(
     request: Request,
     files: list[UploadFile] = File(...),
+    include_time_matrix: bool = Form(default=True),
 ) -> JSONResponse:
     if not is_module_enabled("module_dsr_multiday"):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
@@ -135,7 +136,11 @@ def analyze_multiday_dsr(
     owner_uid = str(user.get("user_id", "")) if user else ""
 
     try:
-        data: dict[str, Any] = md_service.analyze_uploaded_files(payload_files, owner_user_id=owner_uid)
+        data: dict[str, Any] = md_service.analyze_uploaded_files(
+            payload_files,
+            owner_user_id=owner_uid,
+            include_time_matrix=include_time_matrix,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 

@@ -45,6 +45,7 @@ class MultiDayDsrResult:
     district: pd.DataFrame
     mandal: pd.DataFrame
     gp_summary: pd.DataFrame
+    time_matrix: pd.DataFrame
     start_date: str
     end_date: str
     dist_name: str
@@ -53,6 +54,24 @@ class MultiDayDsrResult:
     total_gps: int
     total_reporting_days: int
     generated_at: datetime
+
+
+def classify_time_style(val: Any, cutoff: time | None = None) -> dict[str, str]:
+    """Return styling metadata for exact attendance timestamps vs 09:00 AM cutoff."""
+    s = str(val or "").strip()
+    if not s or s == "-":
+        return {"bg": "", "fg": "#64748b", "css": "color:#64748b;"}
+    lim = cutoff or time(9, 0, 0)
+    for fmt in ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M"):
+        try:
+            t_val = datetime.strptime(s, fmt).time()
+            if t_val < lim:
+                return {"bg": "#dcfce7", "fg": "#166534", "css": "background-color:#dcfce7; color:#166534;"}
+            return {"bg": "#fee2e2", "fg": "#991b1b", "css": "background-color:#fee2e2; color:#991b1b;"}
+        except ValueError:
+            continue
+    # Non-time status label (e.g., On Leave, Training, Meeting)
+    return {"bg": "#fef3c7", "fg": "#92400e", "css": "background-color:#fef3c7; color:#92400e;"}
 
 
 def highlight_percentage(val: Any) -> dict[str, str]:
@@ -393,11 +412,60 @@ def process_dsr(
     ].sort_values(["Mandal Name", "Panchayat Name"]).copy()
     gp_summary.insert(0, "S.No", range(1, len(gp_summary) + 1))
 
+    # 4. Day-Wise Exact Attendance Time Matrix + Average Time & No. of Days Before 9 AM
+    date_labels = [pd.to_datetime(d).strftime("%d-%m-%Y") for d in dates]
+    cell_lookup: dict[tuple[str, str], tuple[str, int | None, int]] = {}
+    for _, row in df.iterrows():
+        lgd = str(row["Panchayat LGD"]).strip()
+        d_lbl = pd.to_datetime(row["Report Date"]).strftime("%d-%m-%Y")
+        att_dt = row["Attendance DT"]
+        if pd.notna(att_dt):
+            exact_str = att_dt.strftime("%I:%M:%S %p")
+            sec_mid = att_dt.hour * 3600 + att_dt.minute * 60 + att_dt.second
+            is_b9 = int(att_dt.time() < nine_am)
+            cell_lookup[(lgd, d_lbl)] = (exact_str, sec_mid, is_b9)
+        else:
+            st_lbl = str(row["Attendance Status"] or "").strip()
+            cell_lookup[(lgd, d_lbl)] = (st_lbl if st_lbl else "-", None, 0)
+
+    gp_sorted = gp_master.sort_values(["Mandal Name", "Panchayat Name"]).reset_index(drop=True)
+    tm_rows: list[dict[str, Any]] = []
+    for idx, gp_row in enumerate(gp_sorted[["Mandal Name", "Panchayat Name", "Panchayat LGD"]].itertuples(index=False, name=None), start=1):
+        m_name = str(gp_row[0]).strip()
+        gp_name = str(gp_row[1]).strip()
+        lgd = str(gp_row[2]).strip()
+        item: dict[str, Any] = {
+            "S.No": idx,
+            "Mandal Name": m_name,
+            "Panchayat Name": gp_name,
+        }
+        secs_list: list[int] = []
+        b9_count = 0
+        for d_lbl in date_labels:
+            val_str, sec_mid, is_b9 = cell_lookup.get((lgd, d_lbl), ("-", None, 0))
+            item[d_lbl] = val_str
+            if sec_mid is not None:
+                secs_list.append(sec_mid)
+            b9_count += is_b9
+        if secs_list:
+            avg_s = int(round(sum(secs_list) / len(secs_list)))
+            hh, rem = divmod(avg_s, 3600)
+            mm, ss = divmod(rem, 60)
+            item["Average Time"] = datetime(2000, 1, 1, hh % 24, mm, ss).strftime("%I:%M:%S %p")
+        else:
+            item["Average Time"] = "-"
+        item["No. of Days Before 9 AM"] = b9_count
+        tm_rows.append(item)
+
+    tm_cols = ["S.No", "Mandal Name", "Panchayat Name"] + date_labels + ["Average Time", "No. of Days Before 9 AM"]
+    time_matrix = pd.DataFrame(tm_rows, columns=tm_cols)
+
     return MultiDayDsrResult(
         master_data=master_data.reset_index(drop=True),
         district=district.reset_index(drop=True),
         mandal=mandal.reset_index(drop=True),
         gp_summary=gp_summary.reset_index(drop=True),
+        time_matrix=time_matrix.reset_index(drop=True),
         start_date=start_date,
         end_date=end_date,
         dist_name=dist_name,

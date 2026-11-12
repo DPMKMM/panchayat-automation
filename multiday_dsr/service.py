@@ -11,7 +11,7 @@ from uuid import uuid4
 import pandas as pd
 
 from core.config import get_reports_dir
-from multiday_dsr.processor import MultiDayDsrResult, highlight_percentage, process_dsr
+from multiday_dsr.processor import MultiDayDsrResult, classify_time_style, highlight_percentage, process_dsr
 from multiday_dsr.reports import (
     generate_multiday_dsr_csv,
     generate_multiday_dsr_excel,
@@ -22,10 +22,12 @@ _LOCK = threading.Lock()
 _JOBS: dict[str, dict[str, Any]] = {}
 
 
-def _df_to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
+def _df_to_records(df: pd.DataFrame, include_time_styles: bool = False) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    fixed_non_time = {"S.No", "Mandal Name", "Panchayat Name", "No. of Days Before 9 AM"}
     for _, r in df.iterrows():
         item: dict[str, Any] = {}
+        t_styles: dict[str, dict[str, str]] = {}
         for col in df.columns:
             v = r[col]
             if pd.isna(v):
@@ -34,7 +36,11 @@ def _df_to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
                 item[col] = v.item()
             else:
                 item[col] = v
+            if include_time_styles and col not in fixed_non_time:
+                t_styles[col] = classify_time_style(item[col])
         item["_before9_style"] = highlight_percentage(item.get("Before 9 AM %"))
+        if include_time_styles:
+            item["_time_styles"] = t_styles
         rows.append(item)
     return rows
 
@@ -42,6 +48,7 @@ def _df_to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
 def analyze_uploaded_files(
     files_payload: list[tuple[str, bytes]],
     owner_user_id: str = "",
+    include_time_matrix: bool = True,
 ) -> dict[str, Any]:
     """Run process_dsr on uploaded files, persist PDF/Excel/CSVs, and return JSON payload."""
     result: MultiDayDsrResult = process_dsr(files_payload)
@@ -57,16 +64,18 @@ def analyze_uploaded_files(
     csv_district_name = f"{safe_dist}_MultiDays_DSR_District_{ts_download}.csv"
     csv_mandal_name = f"{safe_dist}_MultiDays_DSR_Mandal_{ts_download}.csv"
     csv_gp_name = f"{safe_dist}_MultiDays_DSR_GP_Summary_{ts_download}.csv"
+    csv_time_name = f"{safe_dist}_MultiDays_DSR_DayWise_Time_{ts_download}.csv"
 
     pdf_path = reports_dir / f"{job_id[:10]}_{safe_dist}_MultiDays_DSR_{ts_disk}.pdf"
     excel_path = reports_dir / f"{job_id[:10]}_{safe_dist}_MultiDays_DSR_{ts_disk}.xlsx"
 
-    generate_multiday_dsr_pdf(result, pdf_path)
-    generate_multiday_dsr_excel(result, excel_path)
+    generate_multiday_dsr_pdf(result, pdf_path, include_time_matrix=include_time_matrix)
+    generate_multiday_dsr_excel(result, excel_path, include_time_matrix=include_time_matrix)
 
     dist_rows = _df_to_records(result.district)
     mandal_rows = _df_to_records(result.mandal)
     gp_rows = _df_to_records(result.gp_summary)
+    tm_rows = _df_to_records(result.time_matrix, include_time_styles=True) if include_time_matrix else []
 
     tot_reported = int(result.district["Total Reported"].sum()) if not result.district.empty else 0
     tot_before9 = int(result.district["Before 9 AM"].sum()) if not result.district.empty else 0
@@ -85,12 +94,14 @@ def analyze_uploaded_files(
                 "district": (csv_district_name, generate_multiday_dsr_csv(result, "district")),
                 "mandal": (csv_mandal_name, generate_multiday_dsr_csv(result, "mandal")),
                 "gp": (csv_gp_name, generate_multiday_dsr_csv(result, "gp")),
+                "time_matrix": (csv_time_name, generate_multiday_dsr_csv(result, "time_matrix")),
             },
         }
 
     return {
         "success": True,
         "job_id": job_id,
+        "include_time_matrix": include_time_matrix,
         "summary": {
             "dist_name": result.dist_name,
             "mandal_name": result.mandal_name,
@@ -106,15 +117,18 @@ def analyze_uploaded_files(
         "district_columns": list(result.district.columns),
         "mandal_columns": list(result.mandal.columns),
         "gp_columns": list(result.gp_summary.columns),
+        "time_matrix_columns": list(result.time_matrix.columns) if include_time_matrix else [],
         "district_rows": dist_rows,
         "mandal_rows": mandal_rows,
         "gp_rows": gp_rows,
+        "time_matrix_rows": tm_rows,
         "download_filenames": {
             "pdf": pdf_filename,
             "excel": excel_filename,
             "csv_district": csv_district_name,
             "csv_mandal": csv_mandal_name,
             "csv_gp": csv_gp_name,
+            "csv_time_matrix": csv_time_name,
         },
         "download_urls": {
             "pdf": f"/api/multiday-dsr/jobs/{job_id}/download-pdf",
@@ -122,6 +136,7 @@ def analyze_uploaded_files(
             "csv_district": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=district",
             "csv_mandal": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=mandal",
             "csv_gp": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=gp",
+            "csv_time_matrix": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=time_matrix",
         },
     }
 

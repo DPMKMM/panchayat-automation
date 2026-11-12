@@ -26,7 +26,7 @@ from reportlab.platypus import (
 )
 
 from core.branding import PLATFORM_NAME, TAGLINE, apply_openpyxl_branding
-from multiday_dsr.processor import MultiDayDsrResult, highlight_percentage
+from multiday_dsr.processor import MultiDayDsrResult, classify_time_style, highlight_percentage
 
 _NAVY = HexColor("#0c3829")
 _SLATE = HexColor("#1e293b")
@@ -56,8 +56,10 @@ def _df_to_pdf_table(
     pct_cols: set[str],
     left_cols: set[str],
     styles: dict[str, ParagraphStyle],
+    time_cols: set[str] | None = None,
 ) -> Table:
     cols = list(df.columns)
+    t_cols = time_cols or set()
     hdr_row = [Paragraph(html.escape(c), styles["th"]) for c in cols]
     data: list[list[Any]] = [hdr_row]
     ts_cmds: list[tuple[Any, ...]] = [
@@ -91,6 +93,17 @@ def _df_to_pdf_table(
                     fontName="Helvetica-Bold",
                 )
                 cells.append(Paragraph(txt, p_style))
+            elif col_name in t_cols:
+                st = classify_time_style(val)
+                if st["bg"]:
+                    ts_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), HexColor(st["bg"])))
+                p_style = ParagraphStyle(
+                    f"tm_{r_idx}_{c_idx}",
+                    parent=styles["td_c"],
+                    textColor=HexColor(st["fg"]),
+                    fontName="Helvetica-Bold" if col_name == "Average Time" else "Helvetica",
+                )
+                cells.append(Paragraph(txt, p_style))
             elif col_name in left_cols:
                 cells.append(Paragraph(txt, styles["td_l"]))
             else:
@@ -102,8 +115,12 @@ def _df_to_pdf_table(
     return tbl
 
 
-def generate_multiday_dsr_pdf(result: MultiDayDsrResult, output_path: str | Path) -> Path:
-    """Compile colorful Landscape A4 Multi-Days DSR PDF (no graphs) with all 3 abstract levels."""
+def generate_multiday_dsr_pdf(
+    result: MultiDayDsrResult,
+    output_path: str | Path,
+    include_time_matrix: bool = True,
+) -> Path:
+    """Compile colorful Landscape A4 Multi-Days DSR PDF (no graphs) with abstract + optional exact time matrix."""
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -221,6 +238,45 @@ def generate_multiday_dsr_pdf(result: MultiDayDsrResult, output_path: str | Path
         )
     )
 
+    # 4. Day-Wise Exact Attendance Time + Average Time & No. of Days Before 9 AM
+    if include_time_matrix and not result.time_matrix.empty:
+        tm_df = result.time_matrix
+        fixed_left = ["S.No", "Mandal Name", "Panchayat Name"]
+        summary_right = ["Average Time", "No. of Days Before 9 AM"]
+        date_cols = [c for c in tm_df.columns if c not in fixed_left and c not in summary_right]
+        chunk_size = 8
+        date_chunks = [date_cols[i : i + chunk_size] for i in range(0, max(1, len(date_cols)), chunk_size)] or [[]]
+
+        for slice_idx, d_chunk in enumerate(date_chunks, start=1):
+            story.append(PageBreak())
+            suffix = f" (Part {slice_idx}/{len(date_chunks)})" if len(date_chunks) > 1 else ""
+            story.append(
+                Paragraph(
+                    f"4. Gram Panchayat Day-Wise Exact Attendance Time, Average Time & Before 9 AM Days{suffix}",
+                    styles["sec"],
+                )
+            )
+            sub_cols = fixed_left + d_chunk + summary_right
+            sub_df = tm_df[sub_cols]
+            w_sno = usable_w * 0.04
+            w_mandal = usable_w * 0.115
+            w_gp = usable_w * 0.13
+            w_avg = usable_w * 0.085
+            w_b9 = usable_w * 0.075
+            rem_w = usable_w - (w_sno + w_mandal + w_gp + w_avg + w_b9)
+            w_day = rem_w / max(1, len(d_chunk)) if d_chunk else 0
+            sub_widths = [w_sno, w_mandal, w_gp] + [w_day] * len(d_chunk) + [w_avg, w_b9]
+            story.append(
+                _df_to_pdf_table(
+                    sub_df,
+                    sub_widths,
+                    pct_cols=set(),
+                    left_cols={"Mandal Name", "Panchayat Name"},
+                    styles=styles,
+                    time_cols=set(d_chunk) | {"Average Time"},
+                )
+            )
+
     doc.build(story, onFirstPage=_draw_footer, onLaterPages=_draw_footer)
     return out
 
@@ -232,6 +288,7 @@ def _write_styled_sheet(
     df: pd.DataFrame,
     pct_cols: set[str],
     left_cols: set[str],
+    time_cols: set[str] | None = None,
 ) -> None:
     cols = list(df.columns)
     max_col = max(1, len(cols))
@@ -278,6 +335,12 @@ def _write_styled_sheet(
                 cell.fill = PatternFill(start_color=bg_hex, end_color=bg_hex, fill_type="solid")
                 cell.font = Font(name="Calibri", size=10, bold=True, color=fg_hex)
                 cell.number_format = "0.00"
+            elif col_name in (time_cols or set()):
+                st = classify_time_style(clean_val)
+                bg_hex = st["bg"].lstrip("#") if st["bg"] else row_bg
+                fg_hex = st["fg"].lstrip("#")
+                cell.fill = PatternFill(start_color=bg_hex, end_color=bg_hex, fill_type="solid")
+                cell.font = Font(name="Calibri", size=10, bold=(col_name == "Average Time"), color=fg_hex)
             elif col_name in pct_cols:
                 cell.fill = PatternFill(start_color=row_bg, end_color=row_bg, fill_type="solid")
                 cell.font = Font(name="Calibri", size=10, color="1E293B")
@@ -292,8 +355,12 @@ def _write_styled_sheet(
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max(max_len + 4, 11), 36)
 
 
-def generate_multiday_dsr_excel(result: MultiDayDsrResult, output_path: str | Path) -> Path:
-    """Create 4-sheet Multi-Days DSR Excel workbook with highlight_percentage formatting."""
+def generate_multiday_dsr_excel(
+    result: MultiDayDsrResult,
+    output_path: str | Path,
+    include_time_matrix: bool = True,
+) -> Path:
+    """Create Multi-Days DSR Excel workbook with highlight_percentage & optional Day-Wise Exact Time."""
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -336,6 +403,21 @@ def generate_multiday_dsr_excel(result: MultiDayDsrResult, output_path: str | Pa
         left_cols={"Mandal Name", "Panchayat Name"},
     )
 
+    if include_time_matrix and not result.time_matrix.empty:
+        tm_df = result.time_matrix
+        fixed_cols = {"S.No", "Mandal Name", "Panchayat Name", "No. of Days Before 9 AM"}
+        t_cols = {c for c in tm_df.columns if c not in fixed_cols}
+        ws_tm = wb.create_sheet("Day-Wise Exact Time")
+        _write_styled_sheet(
+            ws_tm,
+            f"Day-Wise Exact Attendance Time, Average Time & Before 9 AM Days ({result.dist_name})",
+            subtitle,
+            tm_df,
+            pct_cols=set(),
+            left_cols={"Mandal Name", "Panchayat Name"},
+            time_cols=t_cols,
+        )
+
     ws_master = wb.create_sheet("Master Data")
     _write_styled_sheet(
         ws_master,
@@ -352,12 +434,14 @@ def generate_multiday_dsr_excel(result: MultiDayDsrResult, output_path: str | Pa
 
 
 def generate_multiday_dsr_csv(result: MultiDayDsrResult, level: str = "district") -> bytes:
-    """Serialize requested Multi-Days DSR table (`district`, `mandal`, `gp`, `master`) as UTF-8 CSV."""
+    """Serialize requested Multi-Days DSR table (`district`, `mandal`, `gp`, `time_matrix`, `master`) as UTF-8 CSV."""
     key = (level or "district").strip().lower()
     if key == "mandal":
         df = result.mandal
     elif key in ("gp", "gp_summary"):
         df = result.gp_summary
+    elif key in ("time_matrix", "exact_time", "time"):
+        df = result.time_matrix
     elif key == "master":
         df = result.master_data
     else:
