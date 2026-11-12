@@ -422,7 +422,7 @@ def test_unified_home_login_and_manual_plus_automated_reports(monkeypatch):
     assert 'id="console-modules-section" style="display:none; margin-top:28px;"' in html
     assert 'id="automation-live-stage"' in html
     assert 'class="auto-pipeline-flow"' in html
-    assert 'class="state-home-login"' in html
+    assert "state-home-login" in html
     assert 'id="live-dcb-analytics-section"' in html
     assert 'id="card-policy-module_dsr_excel"' in html
     assert 'id="card-policy-module_dsr_multiday"' in html
@@ -490,3 +490,46 @@ def test_unified_home_login_and_manual_plus_automated_reports(monkeypatch):
     assert "showOfficerProfileModal(user, { allowClose: false })" not in auth_js
     assert "showOfficerProfileModal(portalUser, { allowClose: false })" not in auth_js
     assert "allowClose: false" not in auth_js
+
+
+def test_authenticated_module_load_hides_login_card_ssr(monkeypatch):
+    client = TestClient(create_app())
+
+    # Unauthenticated visitor should see the Google Sign-In hero card immediately
+    anon_res = client.get("/", headers={"Host": "panchayatautomation.in"})
+    assert anon_res.status_code == 200
+    assert "state-auth-resolving" not in anon_res.text.split("</body")[0].split("<body")[1].split(">")[0]
+    assert 'id="portal-hero-card" style="display:none;' not in anon_res.text
+
+    # Authenticated visitor opening any module/subdomain should NOT flash the Google Sign-In screen
+    ts = int(time.time() * 1000)
+    _firebase_login(
+        client,
+        monkeypatch,
+        firebase_uid=f"fb_ssr_{ts}",
+        gmail=f"ssr_officer_{ts}@gmail.com",
+        name="SSR Officer",
+        host="panchayatautomation.in",
+    )
+
+    for host, path in [
+        ("autoreports.panchayatautomation.in", "/"),
+        ("manualreports.panchayatautomation.in", "/"),
+        ("tools.panchayatautomation.in", "/"),
+        ("panchayatautomation.in", "/autoreports"),
+        ("panchayatautomation.in", "/manualreports"),
+    ]:
+        page = client.get(path, headers={"Host": host})
+        assert page.status_code == 200
+        body_tag = "<body" + page.text.split("<body", 1)[1].split(">", 1)[0] + ">"
+        assert "state-auth-resolving" in body_tag
+        assert '<div id="portal-hero-card" class="gov-login-wrapper" style="display:none; margin-bottom: 24px;">' in page.text
+
+    css_res = client.get("/static/css/common.css?v=13", headers={"Host": "panchayatautomation.in"})
+    assert css_res.status_code == 200
+    assert "body.state-auth-resolving #portal-hero-card" in css_res.text
+
+    js_res = client.get("/static/js/auth.js?v=23", headers={"Host": "panchayatautomation.in"})
+    assert js_res.status_code == 200
+    assert "state-auth-resolving" in js_res.text
+    assert "cachedToken && cachedUser" in js_res.text

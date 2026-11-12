@@ -105,8 +105,19 @@ def _firebase_client_payload() -> dict[str, Any]:
 @router.get("/reports", response_class=HTMLResponse, include_in_schema=False)
 def portal_home_page(request: Request) -> HTMLResponse:
     """Render web shell branded for the active host and upgrade active sessions to SSO cookie."""
-    resp = HTMLResponse(apply_portal_branding(load_portal_shell_html(), request))
+    html = apply_portal_branding(load_portal_shell_html(), request)
     user, tok = resolve_sso_session(request)
+    if user is not None:
+        html = html.replace(
+            '<body class="state-home-login">',
+            '<body class="state-home-login state-auth-resolving">',
+            1,
+        ).replace(
+            '<div id="portal-hero-card" class="gov-login-wrapper" style="margin-bottom: 24px;">',
+            '<div id="portal-hero-card" class="gov-login-wrapper" style="display:none; margin-bottom: 24px;">',
+            1,
+        )
+    resp = HTMLResponse(html)
     sync_sso_cookie_if_needed(request, resp, user, tok)
     return resp
 

@@ -4,9 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="doc-page-title">e-Panchayat Automation</title>
-  <link rel="stylesheet" href="/static/css/common.css?v=12">
+  <link rel="stylesheet" href="/static/css/common.css?v=13">
 </head>
 <body class="state-home-login">
+  <script>
+    (function () {
+      try {
+        var hasCachedAuth = Boolean(
+          sessionStorage.getItem('portal_token') ||
+          sessionStorage.getItem('console_token') ||
+          localStorage.getItem('portal_token') ||
+          localStorage.getItem('console_token')
+        );
+        if (hasCachedAuth && document.body) {
+          document.body.classList.add('state-auth-resolving');
+        }
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- Main Content -->
   <main class="container" style="padding-top: 24px;">
@@ -2136,7 +2151,7 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=5"></script>
-  <script src="/static/js/auth.js?v=22"></script>
+  <script src="/static/js/auth.js?v=23"></script>
   <script src="/static/js/console.js?v=16"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>

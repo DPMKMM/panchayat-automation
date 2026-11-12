@@ -1165,6 +1165,9 @@ body.state-manual-page {
 body.state-tools-page {
   background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%, #f5f3ff 100%);
 }
+body.state-auth-resolving #portal-hero-card {
+  display: none !important;
+}
 body.state-admin-page {
   background: linear-gradient(180deg, #fffbeb 0%, #f8fafc 45%, #f1f5f9 100%);
 }

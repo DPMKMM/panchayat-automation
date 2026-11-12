@@ -1305,6 +1305,9 @@
 
     var profileDone = Boolean(isAuth && user);
 
+    if (document.body) {
+      document.body.classList.remove('state-auth-resolving');
+    }
     if (isAuth) {
       if (heroCard) heroCard.style.display = profileDone ? 'none' : 'flex';
       if (btnHome) btnHome.style.display = profileDone ? 'inline-flex' : 'none';
@@ -1719,9 +1722,19 @@
     var isPortalAuth = false;
     var portalUser = null;
     var scope = window.getPlatformScope();
+    var cachedToken = typeof window.getScopedAuthToken === 'function' ? window.getScopedAuthToken(scope) : '';
+    var cachedUser = typeof window.getScopedUser === 'function' ? window.getScopedUser(scope) : null;
+    if (cachedToken && cachedUser) {
+      isPortalAuth = true;
+      portalUser = cachedUser;
+      window.setPortalUI(true, cachedUser);
+    }
 
     try {
-      var pRes = await fetch('/api/auth/portal-status');
+      var statusUrl = '/api/auth/portal-status?_ts=' + Date.now();
+      var pRes = (window.DeptSessionManager && typeof window.DeptSessionManager.consoleFetch === 'function')
+        ? await window.DeptSessionManager.consoleFetch(statusUrl, { cache: 'no-store' })
+        : await fetch(statusUrl, { cache: 'no-store' });
       if (pRes.ok) {
         var pData = await pRes.json();
         if (pData && pData.epts_session_id && window.DeptSessionManager) {
@@ -1734,44 +1747,61 @@
           window.applyAccessPolicyUi(pData.access_policy);
         }
 
-        if (window.FirebasePortalAuth && pData.firebase_config) {
-          try {
-            window.FirebasePortalAuth.init(pData.firebase_config, pData.auth_emulator_host);
-            if (!pData.authenticated && typeof window.FirebasePortalAuth.consumeRedirectSignIn === 'function') {
-              var redirResult = await window.FirebasePortalAuth.consumeRedirectSignIn();
-              if (redirResult && redirResult.idToken) {
-                var fRes = await fetch('/api/auth/firebase-login', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ id_token: redirResult.idToken }),
-                });
-                if (fRes.ok) {
-                  var fData = await fRes.json();
-                  if (fData && fData.success && fData.user) {
-                    pData.authenticated = true;
-                    pData.user = fData.user;
-                  }
-                }
-              }
-            }
-          } catch (fbErr) {
-            console.warn('Firebase Auth SDK initialization note:', fbErr);
-          }
-        }
-
         if (pData.authenticated && pData.user) {
           isPortalAuth = true;
           portalUser = pData.user;
           window.setScopedUser(portalUser, scope);
+          window.setPortalUI(true, portalUser);
+          if (window.FirebasePortalAuth && pData.firebase_config) {
+            try {
+              window.FirebasePortalAuth.init(pData.firebase_config, pData.auth_emulator_host);
+            } catch (fbErr) {
+              console.warn('Firebase Auth SDK initialization note:', fbErr);
+            }
+          }
         } else {
-          window.setScopedUser(null, scope);
+          if (window.FirebasePortalAuth && pData.firebase_config) {
+            try {
+              window.FirebasePortalAuth.init(pData.firebase_config, pData.auth_emulator_host);
+              if (typeof window.FirebasePortalAuth.consumeRedirectSignIn === 'function') {
+                var redirResult = await window.FirebasePortalAuth.consumeRedirectSignIn();
+                if (redirResult && redirResult.idToken) {
+                  var fRes = await fetch('/api/auth/firebase-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_token: redirResult.idToken }),
+                  });
+                  if (fRes.ok) {
+                    var fData = await fRes.json();
+                    if (fData && fData.success && fData.user) {
+                      pData.authenticated = true;
+                      pData.user = fData.user;
+                    }
+                  }
+                }
+              }
+            } catch (fbErr) {
+              console.warn('Firebase Auth SDK initialization note:', fbErr);
+            }
+          }
+          if (pData.authenticated && pData.user) {
+            isPortalAuth = true;
+            portalUser = pData.user;
+            window.setScopedUser(portalUser, scope);
+          } else {
+            isPortalAuth = false;
+            portalUser = null;
+            window.setScopedUser(null, scope);
+          }
+          window.setPortalUI(isPortalAuth, portalUser);
         }
+      } else {
+        window.setPortalUI(isPortalAuth, portalUser);
       }
     } catch (e) {
       console.warn('Portal auth status check note:', e);
+      window.setPortalUI(isPortalAuth, portalUser);
     }
-
-    window.setPortalUI(isPortalAuth, portalUser);
 
     var urlParams = new URLSearchParams(window.location.search);
     var hashVal = window.location.hash ? window.location.hash.replace('#', '') : '';
