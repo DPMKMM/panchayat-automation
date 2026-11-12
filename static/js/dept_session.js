@@ -269,7 +269,7 @@
         headers.set('X-Console-Token', consoleTok);
       }
       var portalTok = sessionStorage.getItem('portal_token') || '';
-      if (portalTok && !isReportsHost() && !headers.has('X-Portal-Token')) {
+      if (portalTok && !headers.has('X-Portal-Token')) {
         headers.set('X-Portal-Token', portalTok);
       }
     } catch (e) {}

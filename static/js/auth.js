@@ -952,12 +952,17 @@
     var savedMode = '';
     try { savedMode = (sessionStorage.getItem('epts_workspace_mode') || '').trim().toLowerCase(); } catch (e) {}
 
+    var dedSection = typeof window.getDedicatedPageSection === 'function' ? window.getDedicatedPageSection() : '';
     if ((pending && pending.module) || target === 'dsr' || target === 'balance' || target === 'balance-station' || target === 'mas' || reqMode === 'automated' || urlSp.get('dept_login') === '1') {
-      window.selectWorkspaceMode('automated', { skipScroll: true });
+      window.selectWorkspaceMode('automated', { skipScroll: true, fromInit: true });
     } else if (reqMode === 'manual' || target === 'dsr_excel' || target === 'manual-reports' || target === 'multiday') {
-      window.selectWorkspaceMode('manual', { skipScroll: true });
-    } else if (savedMode === 'manual' || savedMode === 'automated') {
-      window.selectWorkspaceMode(savedMode, { skipScroll: true });
+      window.selectWorkspaceMode('manual', { skipScroll: true, fromInit: true });
+    } else if (reqMode === 'tools') {
+      window.selectWorkspaceMode('tools', { skipScroll: true, fromInit: true });
+    } else if (dedSection) {
+      window.selectWorkspaceMode(dedSection, { skipScroll: true, fromInit: true });
+    } else if (savedMode === 'manual' || savedMode === 'automated' || savedMode === 'tools') {
+      window.selectWorkspaceMode(savedMode, { skipScroll: true, fromInit: true });
     } else {
       window.showWorkspaceModeSelector();
     }
@@ -1509,7 +1514,8 @@
     try {
       await fetch('/api/auth/portal-logout', { method: 'POST' });
     } catch (e) {}
-    window.clearScopeSessionStorage(sc);
+    window.clearScopeSessionStorage('portal');
+    window.clearScopeSessionStorage('console');
     window.setPortalUI(false, null);
     var dest = '/';
     if (dedSection) {

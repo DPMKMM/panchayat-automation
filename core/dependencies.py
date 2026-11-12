@@ -14,6 +14,7 @@ from core.firebase_store import SESSION_TTL_SECONDS, get_portal_session
 
 PORTAL_COOKIE_NAME = "portal_token"
 CONSOLE_COOKIE_NAME = "console_token"
+SSO_COOKIE_NAME = "epanchayat_sso"
 
 ScopeType = Literal["portal", "console"]
 
@@ -21,6 +22,21 @@ ScopeType = Literal["portal", "console"]
 def is_https_request(request: Request) -> bool:
     proto = str(request.headers.get("x-forwarded-proto") or "").strip().lower()
     return request.url.scheme == "https" or proto == "https"
+
+
+def auth_cookie_domain(request: Optional[Request]) -> Optional[str]:
+    """Share SSO cookies across *.panchayatautomation.in on live HTTPS requests.
+
+    Keeps host-only cookies on localhost, HTTP dev servers, and default TestClient
+    requests so local sessions and HTTP unit tests retain their cookie jars.
+    """
+    if request is None or not is_https_request(request):
+        return None
+    raw_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip().lower()
+    host = raw_host.split(":")[0]
+    if host == "panchayatautomation.in" or host.endswith(".panchayatautomation.in"):
+        return ".panchayatautomation.in"
+    return None
 
 
 def _referer_implies_console(request: Request) -> Optional[ScopeType]:
@@ -98,8 +114,23 @@ def cookie_name_for_scope(scope: ScopeType) -> str:
     return CONSOLE_COOKIE_NAME if scope == "console" else PORTAL_COOKIE_NAME
 
 
+def set_sso_cookie(response: Response, token: str, request: Request) -> None:
+    """Issue shared HttpOnly SameSite=Lax SSO cookie across .panchayatautomation.in on HTTPS prod."""
+    response.set_cookie(
+        key=SSO_COOKIE_NAME,
+        value=token,
+        max_age=SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=is_https_request(request),
+        samesite="lax",
+        path="/",
+        domain=auth_cookie_domain(request),
+    )
+
+
 def set_auth_cookie(response: Response, token: str, app_scope: ScopeType, request: Request) -> None:
-    """Issue host-only HttpOnly SameSite=Lax cookie scoped exclusively to portal or console."""
+    """Issue scoped cookie and shared SSO cookie so one Firebase login works across subdomains."""
+    cookie_domain = auth_cookie_domain(request)
     response.set_cookie(
         key=cookie_name_for_scope(app_scope),
         value=token,
@@ -108,72 +139,121 @@ def set_auth_cookie(response: Response, token: str, app_scope: ScopeType, reques
         secure=is_https_request(request),
         samesite="lax",
         path="/",
+        domain=cookie_domain,
     )
+    set_sso_cookie(response, token, request)
 
 
-def clear_auth_cookie(response: Response, app_scope: ScopeType) -> None:
-    response.delete_cookie(key=cookie_name_for_scope(app_scope), path="/")
+def clear_auth_cookie(
+    response: Response,
+    app_scope: Optional[ScopeType] = None,
+    request: Optional[Request] = None,
+) -> None:
+    """Clear SSO and scoped cookies across both host-only and parent subdomain scopes."""
+    cookie_domain = auth_cookie_domain(request)
+    for name in (SSO_COOKIE_NAME, PORTAL_COOKIE_NAME, CONSOLE_COOKIE_NAME):
+        response.delete_cookie(key=name, path="/")
+        if cookie_domain:
+            response.delete_cookie(key=name, path="/", domain=cookie_domain)
 
 
-def get_scoped_token(request: Request, app_scope: ScopeType) -> str:
-    """Extract auth token strictly matching app_scope without cross-platform cookie fallback."""
+def _extract_header_token(request: Request, app_scope: ScopeType) -> str:
     auth_header = str(request.headers.get("Authorization") or "").strip()
     if auth_header.lower().startswith("bearer "):
         tok = auth_header[7:].strip()
         if tok:
             return tok
+    primary_hdr = "X-Console-Token" if app_scope == "console" else "X-Portal-Token"
+    fallback_hdr = "X-Portal-Token" if app_scope == "console" else "X-Console-Token"
+    return str(request.headers.get(primary_hdr) or request.headers.get(fallback_hdr) or "").strip()
 
-    if app_scope == "console":
-        hdr = (request.headers.get("X-Console-Token") or request.headers.get("X-Portal-Token") or "").strip()
-        if hdr:
-            return hdr
-        return str(request.cookies.get(CONSOLE_COOKIE_NAME) or "").strip()
 
-    hdr = (request.headers.get("X-Portal-Token") or "").strip()
-    if hdr:
-        return hdr
-    return str(request.cookies.get(PORTAL_COOKIE_NAME) or "").strip()
+def extract_all_auth_tokens(request: Request, app_scope: Optional[ScopeType] = None) -> list[str]:
+    """Return deduplicated non-empty tokens from request headers, SSO cookie, and scoped cookies."""
+    scope = app_scope or resolve_platform_scope(request)
+    primary_cookie = cookie_name_for_scope(scope)
+    secondary_cookie = PORTAL_COOKIE_NAME if primary_cookie == CONSOLE_COOKIE_NAME else CONSOLE_COOKIE_NAME
+    candidates = [
+        _extract_header_token(request, scope),
+        str(request.cookies.get(SSO_COOKIE_NAME) or "").strip(),
+        str(request.cookies.get(primary_cookie) or "").strip(),
+        str(request.cookies.get(secondary_cookie) or "").strip(),
+    ]
+    seen: list[str] = []
+    for tok in candidates:
+        if tok and tok not in seen:
+            seen.append(tok)
+    return seen
+
+
+def get_scoped_token(request: Request, app_scope: ScopeType) -> str:
+    """Extract highest-priority auth token across explicit headers, SSO cookie, and scoped cookies."""
+    tokens = extract_all_auth_tokens(request, app_scope)
+    return tokens[0] if tokens else ""
+
+
+def resolve_sso_session(
+    request: Request,
+    app_scope: Optional[ScopeType] = None,
+) -> tuple[Optional[dict[str, Any]], str]:
+    """Validate active Firebase SSO or scoped session token cleanly across subdomains."""
+    scope = app_scope or resolve_platform_scope(request)
+    tok = get_scoped_token(request, scope)
+    if not tok:
+        return None, ""
+    return get_portal_session(tok, app_scope=None), tok
+
+
+def sync_sso_cookie_if_needed(
+    request: Request,
+    response: Response,
+    user: Optional[dict[str, Any]],
+    token: str,
+) -> None:
+    """Promote an active session to the shared .panchayatautomation.in SSO cookie when missing."""
+    if not user or not token:
+        return
+    current_sso = str(request.cookies.get(SSO_COOKIE_NAME) or "").strip()
+    if current_sso != token:
+        set_sso_cookie(response, token, request)
 
 
 def get_current_user_optional(request: Request, app_scope: Optional[ScopeType] = None) -> Optional[dict[str, Any]]:
-    """Return authenticated user dict for the resolved scope if valid, else None."""
+    """Return authenticated user dict via SSO/scoped session if valid and permitted, else None."""
     scope: ScopeType = app_scope or resolve_platform_scope(request)
-    token = get_scoped_token(request, scope)
-    if not token:
+    user, _ = resolve_sso_session(request, scope)
+    if user is None:
         return None
-    return get_portal_session(token, app_scope=scope)
+    if scope == "portal" and not user.get("can_access_portal", True):
+        return None
+    return user
 
 
 def require_platform_user(request: Request, app_scope: Optional[ScopeType] = None) -> dict[str, Any]:
-    """Require an active authenticated Google user for the given platform scope."""
+    """Require an active authenticated Google SSO user for the given platform scope."""
     scope: ScopeType = app_scope or resolve_platform_scope(request)
-    token = get_scoped_token(request, scope)
-    if not token:
+    user, tok = resolve_sso_session(request, scope)
+    if not tok or user is None:
         raise HTTPException(
             status_code=401,
             detail=f"Google Sign-In required to access {'e-Panchayat Automation Console' if scope == 'console' else 'e-Panchayat Automation'}.",
         )
-    # Check whether caller presented a token belonging to the wrong scope
-    user = get_portal_session(token, app_scope=scope)
-    if user is None:
-        other_scope: ScopeType = "portal" if scope == "console" else "console"
-        if get_portal_session(token, app_scope=other_scope) is not None:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Session belongs to '{other_scope}' platform and cannot access '{scope}'. Please sign in again on this domain.",
-            )
-        raise HTTPException(status_code=401, detail="Session invalid, expired, or account disabled.")
+    if scope == "portal" and not user.get("can_access_portal", True):
+        raise HTTPException(status_code=403, detail="Access to e-Panchayat Automation is restricted for your account.")
+    if scope == "console" and not can_user_access_automated_reports(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Automated Reports access is disabled or requires an active subscription.",
+        )
     return user
 
 
 def require_portal_or_console_user(request: Request) -> dict[str, Any]:
-    """Accept an authenticated user whose token matches the active platform scope."""
+    """Accept an authenticated SSO user permitted on the active platform scope."""
     scope = resolve_platform_scope(request)
     user = get_current_user_optional(request, app_scope=scope)
     if user is not None:
         return user
-    # Allow console user accessing shared utilities only via console token when on console scope,
-    # never allowing cross-cookie fallback blindly.
     raise HTTPException(status_code=401, detail="Authentication required. Please sign in with Google.")
 
 
@@ -200,22 +280,9 @@ def require_admin_user(request: Request) -> dict[str, Any]:
         )
 
     scope = resolve_platform_scope(request)
-    token = get_scoped_token(request, scope)
-    if not token:
-        # Check explicit header tokens on either scope if provided by API admin clients
-        for cand_scope in ("portal", "console"):
-            cand_tok = get_scoped_token(request, cand_scope)  # type: ignore[arg-type]
-            if cand_tok:
-                cand_user = get_portal_session(cand_tok, app_scope=cand_scope)
-                if cand_user:
-                    user = cand_user
-                    break
-        else:
-            raise HTTPException(status_code=401, detail="Administrator sign-in required.")
-    else:
-        user = get_portal_session(token, app_scope=scope)
-        if not user:
-            raise HTTPException(status_code=401, detail="Valid administrator session required.")
+    user, tok = resolve_sso_session(request, scope)
+    if not tok or user is None:
+        raise HTTPException(status_code=401, detail="Administrator sign-in required.")
 
     clean_gmail = str(user.get("gmail") or "").strip().lower()
     is_adm = (
@@ -259,52 +326,20 @@ def _is_reports_subdomain(request: Request) -> bool:
 
 
 def enforce_console_api_access(request: Request) -> Optional[dict[str, Any]]:
-    """Enforce Firebase Google auth on Console/Automation APIs across unified Home & Console.
-
-    Strict host isolation:
-    - On ``reports.*`` subdomains, ONLY ``console_token`` is accepted (a ``portal_token``
-      cookie/token is rejected with 403).
-    - On unified Home hosts (apex domain / localhost), a valid ``console_token`` OR a
-      valid ``portal_token`` (with ``can_access_console`` enabled) is accepted.
-    - Synthetic dev/unit-test calls without explicit Console/Auth headers stay compatible.
-    """
-    is_reports_host = _is_reports_subdomain(request)
-    console_tok = get_scoped_token(request, "console")
-    if console_tok:
-        user = get_portal_session(console_tok, app_scope="console")
-        if user:
-            if not can_user_access_automated_reports(user):
-                raise HTTPException(
-                    status_code=403,
-                    detail="An active subscription is required to access Automated Reports Console.",
-                )
-            return user
-        portal_user = get_portal_session(console_tok, app_scope="portal")
-        if portal_user is not None:
-            if not is_reports_host and can_user_access_automated_reports(portal_user):
-                return portal_user
+    """Enforce Stage-1 Firebase SSO + policy/account permissions on Console/Automation APIs."""
+    user, tok = resolve_sso_session(request, "console")
+    if tok:
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail="Console session expired or invalid. Please sign in with Google.",
+            )
+        if not can_user_access_automated_reports(user):
             raise HTTPException(
                 status_code=403,
-                detail="Platform 1 session cannot access e-Panchayat Automation Console endpoints. Sign in on Console.",
+                detail="An active subscription or Console permission is required to access Automated Reports Console.",
             )
-        raise HTTPException(status_code=401, detail="Console session expired or invalid. Please sign in with Google.")
-
-    # Check Platform 1 portal_token cookie / header
-    portal_tok = get_scoped_token(request, "portal")
-    if portal_tok:
-        portal_user = get_portal_session(portal_tok, app_scope="portal")
-        if portal_user is not None:
-            if is_reports_host:
-                raise HTTPException(
-                    status_code=403,
-                    detail="e-Panchayat Automation Console requires an independent Google Sign-In on Console.",
-                )
-            if not can_user_access_automated_reports(portal_user):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Automated Reports access is disabled or requires an active subscription.",
-                )
-            return portal_user
+        return user
 
     if _is_explicit_console_request(request):
         raise HTTPException(

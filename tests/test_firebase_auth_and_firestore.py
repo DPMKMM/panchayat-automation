@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app import create_app
-from core.dependencies import CONSOLE_COOKIE_NAME, PORTAL_COOKIE_NAME
+from core.dependencies import CONSOLE_COOKIE_NAME, PORTAL_COOKIE_NAME, SSO_COOKIE_NAME
 from core.firebase_app import get_firebase_runtime_status, verify_firebase_id_token
 from core.firebase_store import (
     _db,
@@ -126,7 +126,7 @@ def test_firebase_config_and_scoped_dual_domain_sessions(monkeypatch):
         },
     )
 
-    # 1. Authenticate on Portal domain -> only portal_token cookie issued
+    # 1. Authenticate ONCE on Home (panchayatautomation.in) -> portal_token + shared epanchayat_sso cookie issued
     r_portal = c.post(
         "/api/auth/firebase-login",
         headers={"Host": "panchayatautomation.in"},
@@ -134,6 +134,7 @@ def test_firebase_config_and_scoped_dual_domain_sessions(monkeypatch):
     )
     assert r_portal.status_code == 200
     assert PORTAL_COOKIE_NAME in r_portal.cookies
+    assert SSO_COOKIE_NAME in r_portal.cookies
     assert CONSOLE_COOKIE_NAME not in r_portal.cookies
     portal_token = r_portal.json()["token"]
 
@@ -143,26 +144,64 @@ def test_firebase_config_and_scoped_dual_domain_sessions(monkeypatch):
     assert sess_snap.exists
     assert sess_snap.to_dict()["app_scope"] == "portal"
 
-    # Portal cookie does NOT authenticate Console host
-    st_con = c.get("/api/auth/portal-status", headers={"Host": "reports.panchayatautomation.in"})
-    assert st_con.status_code == 200
-    assert st_con.json()["authenticated"] is False
+    # Single sign-in automatically authenticates autoreports, manualreports, tools, and legacy reports subdomains
+    for sub_host in (
+        "autoreports.panchayatautomation.in",
+        "manualreports.panchayatautomation.in",
+        "tools.panchayatautomation.in",
+        "reports.panchayatautomation.in",
+    ):
+        st_sub = c.get("/api/auth/portal-status", headers={"Host": sub_host})
+        assert st_sub.status_code == 200
+        assert st_sub.json()["authenticated"] is True, f"Expected SSO authenticated=True on {sub_host}"
 
-    # 2. Independent login on Console domain issues console_token cookie
-    r_console = c.post(
-        "/api/auth/firebase-login",
-        headers={"Host": "reports.panchayatautomation.in"},
-        json={"id_token": "mock_console_jwt"},
-    )
-    assert r_console.status_code == 200
-    assert CONSOLE_COOKIE_NAME in r_console.cookies
-    assert r_console.json()["platform_scope"] == "console"
+    # 2. HTTPS production cookie jar shares .panchayatautomation.in SSO cookie seamlessly across subdomains
+    https_c = TestClient(app, base_url="https://panchayatautomation.in")
+    r_https = https_c.post("/api/auth/firebase-login", json={"id_token": "mock_https_sso_jwt"})
+    assert r_https.status_code == 200
+    assert "Domain=.panchayatautomation.in" in r_https.headers.get("set-cookie", "")
+    for sub_url in (
+        "https://autoreports.panchayatautomation.in/api/auth/portal-status",
+        "https://manualreports.panchayatautomation.in/api/auth/portal-status",
+        "https://tools.panchayatautomation.in/api/auth/portal-status",
+        "https://admin.panchayatautomation.in/api/auth/portal-status",
+    ):
+        st_live = https_c.get(sub_url)
+        assert st_live.status_code == 200
+        assert st_live.json()["authenticated"] is True, f"Expected HTTPS .panchayatautomation.in SSO on {sub_url}"
 
-    # 3. Logging out of Console leaves Portal authenticated
-    r_out = c.post("/api/auth/logout", headers={"Host": "reports.panchayatautomation.in"})
+    # 3. Logging out from Console revokes shared SSO and logs out Home & all subdomains cleanly
+    r_out = https_c.post("https://autoreports.panchayatautomation.in/api/auth/logout")
     assert r_out.status_code == 200
-    assert c.get("/api/auth/portal-status", headers={"Host": "reports.panchayatautomation.in"}).json()["authenticated"] is False
-    assert c.get("/api/auth/portal-status", headers={"Host": "panchayatautomation.in"}).json()["authenticated"] is True
+    assert https_c.get("https://autoreports.panchayatautomation.in/api/auth/portal-status").json()["authenticated"] is False
+    assert https_c.get("https://panchayatautomation.in/api/auth/portal-status").json()["authenticated"] is False
+    assert https_c.get("https://manualreports.panchayatautomation.in/api/auth/portal-status").json()["authenticated"] is False
+    assert https_c.get("https://tools.panchayatautomation.in/api/auth/portal-status").json()["authenticated"] is False
+
+    # 4. Signing in on autoreports FIRST also unlocks Home, manualreports, and tools
+    con_c = TestClient(app, base_url="https://autoreports.panchayatautomation.in")
+    r_con = con_c.post("/api/auth/firebase-login", json={"id_token": "mock_console_first_jwt"})
+    assert r_con.status_code == 200
+    assert r_con.json()["platform_scope"] == "console"
+    for dest in (
+        "https://panchayatautomation.in/api/auth/portal-status",
+        "https://manualreports.panchayatautomation.in/api/auth/portal-status",
+        "https://tools.panchayatautomation.in/api/auth/portal-status",
+    ):
+        assert con_c.get(dest).json()["authenticated"] is True
+
+    # 5. Legacy host-only portal_token is auto-promoted onto .panchayatautomation.in on Home visit
+    legacy_c = TestClient(app, base_url="https://panchayatautomation.in")
+    legacy_c.cookies.set(PORTAL_COOKIE_NAME, portal_token, domain="panchayatautomation.in", path="/")
+    up_resp = legacy_c.get("/")
+    assert up_resp.status_code == 200
+    assert f"{SSO_COOKIE_NAME}=" in up_resp.headers.get("set-cookie", "")
+    assert "Domain=.panchayatautomation.in" in up_resp.headers.get("set-cookie", "")
+    assert legacy_c.get("https://autoreports.panchayatautomation.in/api/auth/portal-status").json()["authenticated"] is True
+
+    # 6. Revoked/invalid SSO cookie takes priority and never falls back to stale host-only cookie
+    legacy_c.cookies.set(SSO_COOKIE_NAME, "revoked_or_bogus_sso_tok", domain=".panchayatautomation.in", path="/")
+    assert legacy_c.get("https://panchayatautomation.in/api/auth/portal-status").json()["authenticated"] is False
 
 
 def test_sqlite_migration_dry_run_and_identity_continuity(tmp_path):

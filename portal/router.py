@@ -13,14 +13,15 @@ from core.access_policy import can_user_access_automated_reports, get_access_pol
 from core.branding import WELCOME_MESSAGE, apply_portal_branding, apply_subpage_console_branding
 from core.config import REVOKED_ADMIN_EMAILS, get_firebase_web_config, is_admin_email
 from core.dependencies import (
-    _is_reports_subdomain,
     clear_auth_cookie,
     enforce_console_api_access,
+    extract_all_auth_tokens,
     extract_epts_session_id,
     get_current_user_optional,
-    get_scoped_token,
     resolve_platform_scope,
+    resolve_sso_session,
     set_auth_cookie,
+    sync_sso_cookie_if_needed,
 )
 from core.firebase_app import get_firebase_runtime_status, verify_firebase_id_token
 from core.firebase_store import (
@@ -99,8 +100,11 @@ def _firebase_client_payload() -> dict[str, Any]:
 @router.get("/naresh", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/reports", response_class=HTMLResponse, include_in_schema=False)
 def portal_home_page(request: Request) -> HTMLResponse:
-    """Render dual-domain web shell branded for Platform 1 (Portal) or Platform 2 (Console)."""
-    return HTMLResponse(apply_portal_branding(load_portal_shell_html(), request))
+    """Render web shell branded for the active host and upgrade active sessions to SSO cookie."""
+    resp = HTMLResponse(apply_portal_branding(load_portal_shell_html(), request))
+    user, tok = resolve_sso_session(request)
+    sync_sso_cookie_if_needed(request, resp, user, tok)
+    return resp
 
 
 @router.get("/services", response_class=HTMLResponse, tags=["Services"])
@@ -258,23 +262,21 @@ async def api_firebase_login(request: Request, response: Response):
 @router.get("/api/auth/portal-logout", include_in_schema=False)
 def api_portal_logout(request: Request, response: Response):
     scope = resolve_platform_scope(request)
-    token = get_scoped_token(request, scope)
-    if token:
-        revoke_portal_session(token)
-    clear_auth_cookie(response, scope)
+    for tok in extract_all_auth_tokens(request, scope):
+        revoke_portal_session(tok)
+    clear_auth_cookie(response, scope, request)
     return {"success": True, "platform_scope": scope, "message": "Logged out successfully."}
 
 
 @router.get("/api/auth/portal-status", include_in_schema=False)
 @router.get("/api/auth/me", include_in_schema=False)
-def api_portal_status(request: Request):
+def api_portal_status(request: Request, response: Response):
     scope = resolve_platform_scope(request)
-    token = get_scoped_token(request, scope)
-    user = get_portal_session(token, app_scope=scope) if token else None
-    if user is None and scope == "console" and not _is_reports_subdomain(request):
-        portal_tok = get_scoped_token(request, "portal")
-        if portal_tok:
-            user = get_portal_session(portal_tok, app_scope="portal")
+    user, tok = resolve_sso_session(request, scope)
+    if user is not None and scope == "portal" and not user.get("can_access_portal", True):
+        user = None
+    if user is not None:
+        sync_sso_cookie_if_needed(request, response, user, tok)
     policy = get_access_policy()["flags"]
     epts_sid = str(getattr(request.state, "session_id", "") or "").strip()
     base_payload = {
@@ -317,9 +319,8 @@ def api_department_status(request: Request) -> dict[str, Any]:
 @router.post("/api/auth/complete-profile", include_in_schema=False)
 async def api_register_profile(request: Request, response: Response):
     scope = resolve_platform_scope(request)
-    token = get_scoped_token(request, scope)
-    session_user = get_portal_session(token, app_scope=scope) if token else None
-    if not session_user:
+    session_user, token = resolve_sso_session(request, scope)
+    if not session_user or not token:
         return {"success": False, "message": "Portal authentication is required to complete profile registration."}
 
     data: dict[str, Any] = {}

@@ -300,7 +300,9 @@ def test_mas_api_security_zero_duplicate_login_and_downloads(monkeypatch, tmp_pa
     for ep in ("/api/reports/mas-consolidated/modules", "/api/mas/modules"):
         assert anon.get(ep, headers={"Host": "reports.panchayatautomation.in"}).status_code == 401
 
-    # 2. Portal-only login rejected with 403 on MAS endpoints
+    # 2. Single Firebase SSO on Home authenticates MAS modules when permitted, and enforces 403 when Console permission revoked
+    from core.firebase_store import COL_USERS, _db
+
     portal_only = TestClient(app)
     monkeypatch.setattr(
         "portal.router.verify_firebase_id_token",
@@ -313,7 +315,9 @@ def test_mas_api_security_zero_duplicate_login_and_downloads(monkeypatch, tmp_pa
             "email_verified": True,
         },
     )
-    portal_only.post("/api/auth/firebase-login", headers={"Host": "panchayatautomation.in"}, json={"id_token": f"tok_p_{ts}"})
+    r_p = portal_only.post("/api/auth/firebase-login", headers={"Host": "panchayatautomation.in"}, json={"id_token": f"tok_p_{ts}"})
+    assert portal_only.get("/api/reports/mas-consolidated/modules", headers={"Host": "autoreports.panchayatautomation.in"}).status_code == 200
+    _db().collection(COL_USERS).document(r_p.json()["user"]["user_id"]).update({"can_access_console": False})
     assert portal_only.get("/api/reports/mas-consolidated/modules", headers={"Host": "reports.panchayatautomation.in"}).status_code == 403
     assert portal_only.post("/api/mas/generate", headers={"Host": "reports.panchayatautomation.in"}).status_code == 403
 

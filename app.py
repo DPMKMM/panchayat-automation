@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.branding import CONSOLE_NAME, PLATFORM_NAME, TAGLINE
 from core.config import BASE_DIR, LOG_LEVEL
+from core.dependencies import auth_cookie_domain
 from dcb.router import router as dcb_router
 from dsr import service as automation_service
 from dsr.router import router as dsr_router
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
                 secure=is_https,
                 samesite="lax",
                 path="/",
+                domain=auth_cookie_domain(request),
             )
         return response
 

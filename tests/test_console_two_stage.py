@@ -53,17 +53,29 @@ def test_console_stage1_gating_rejects_unauth_and_portal_token(monkeypatch):
         r = anon.get(ep, headers={"Host": "reports.panchayatautomation.in"})
         assert r.status_code == 401, f"Expected 401 for unauth Console {ep}, got {r.status_code}"
 
-    # 2. Portal-only cookie -> 403 on Console endpoints
-    portal_only = TestClient(app)
-    _firebase_login(
-        portal_only,
+    # 2. Single Firebase sign-in on Home unlocks Console SSO when allowed, while revoked Console access gets 403
+    from core.firebase_store import COL_USERS, _db
+
+    portal_sso = TestClient(app)
+    r_sso = _firebase_login(
+        portal_sso,
         monkeypatch,
-        email=f"portal_only_{ts}@gmail.com",
-        name="Portal Only",
+        email=f"portal_sso_{ts}@gmail.com",
+        name="Portal SSO User",
         host="panchayatautomation.in",
     )
-    for ep in ("/api/naresh/data", "/api/balance/portal-dates"):
-        r = portal_only.get(ep, headers={"Host": "reports.panchayatautomation.in"})
+    assert r_sso.status_code == 200
+    for stage1_ep in ("/api/naresh/session-status", "/api/balance/portal-dates"):
+        assert portal_sso.get(stage1_ep, headers={"Host": "autoreports.panchayatautomation.in"}).status_code == 200
+    r_dept = portal_sso.get("/api/naresh/data", headers={"Host": "autoreports.panchayatautomation.in"})
+    assert r_dept.status_code == 401
+    assert r_dept.headers.get("X-Dept-Auth-Required") == "true"
+
+    # Disabling Console access on the user immediately enforces 403 even with valid SSO cookie
+    uid = r_sso.json()["user"]["user_id"]
+    _db().collection(COL_USERS).document(uid).update({"can_access_console": False})
+    for ep in ("/api/naresh/session-status", "/api/naresh/data", "/api/balance/portal-dates"):
+        r = portal_sso.get(ep, headers={"Host": "autoreports.panchayatautomation.in"})
         assert r.status_code == 403
 
 
