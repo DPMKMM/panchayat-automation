@@ -485,3 +485,8 @@ def test_unified_home_login_and_manual_plus_automated_reports(monkeypatch):
     )
     assert home_client.get("/api/reports/mas-consolidated/modules", headers={"Host": "panchayatautomation.in"}).status_code == 200
     assert home_client.get("/api/auth/department-status", headers={"Host": "panchayatautomation.in"}).status_code == 200
+
+    # Regression guard: Google sign-in does NOT pop up mandatory User Profile Registration modal
+    assert "showOfficerProfileModal(user, { allowClose: false })" not in auth_js
+    assert "showOfficerProfileModal(portalUser, { allowClose: false })" not in auth_js
+    assert "allowClose: false" not in auth_js

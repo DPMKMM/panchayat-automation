@@ -12,7 +12,11 @@ from typing import Any, Optional
 
 import firebase_admin
 from firebase_admin import auth as fb_auth
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials
+try:
+    from firebase_admin import firestore
+except ImportError:
+    firestore = None  # type: ignore[assignment]
 from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
 
@@ -154,6 +158,11 @@ def get_live_firestore_client() -> Optional[Any]:
                 "Cloud Firestore credentials missing in production. Set FIREBASE_SERVICE_ACCOUNT_PATH, "
                 "GOOGLE_APPLICATION_CREDENTIALS, or FIREBASE_SERVICE_ACCOUNT_JSON."
             )
+        return None
+
+    if firestore is None:
+        if IS_PRODUCTION:
+            raise RuntimeError("Cloud Firestore gRPC/firestore dependency failed to load in production.")
         return None
 
     db_id = _active_database_id()

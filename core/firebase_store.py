@@ -15,7 +15,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from google.cloud.firestore_v1.base_query import FieldFilter
+try:
+    from google.cloud.firestore_v1.base_query import FieldFilter
+except ImportError:
+    class FieldFilter:  # type: ignore[no-redef]
+        """Lightweight filter descriptor fallback when google-cloud-firestore gRPC extension is unavailable."""
+
+        def __init__(self, field_path: str, op_string: str, value: Any) -> None:
+            self.field_path = field_path
+            self.op_string = op_string
+            self.value = value
 
 from core.config import IS_PRODUCTION, REVOKED_ADMIN_EMAILS, get_data_dir, is_admin_email
 from core.firebase_app import get_live_firestore_client, is_inmemory_firestore_enabled

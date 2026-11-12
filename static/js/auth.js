@@ -930,12 +930,6 @@
     try { sessionStorage.removeItem('epts_workspace_mode'); } catch (e) {}
     showLoginAlert('');
     window.setPortalUI(true, user);
-
-    var isCompleted = Boolean(user.profile_completed);
-    if (!isCompleted || !user.designation || !user.mobile_number) {
-      window.showOfficerProfileModal(user, { allowClose: false });
-      return;
-    }
     window.proceedAfterPortalAuth();
   };
 
@@ -1013,7 +1007,6 @@
   };
 
   window.closeOfficerProfileModal = function () {
-    if (window._profileModalMode !== 'view') return;
     var modal = document.getElementById('officer-profile-modal');
     if (modal) modal.style.display = 'none';
   };
@@ -1308,13 +1301,7 @@
       dashCrossBox.style.display = 'none';
     }
 
-    var profileDone = Boolean(
-      isAuth &&
-      user &&
-      user.profile_completed &&
-      user.designation &&
-      user.mobile_number
-    );
+    var profileDone = Boolean(isAuth && user);
 
     if (isAuth) {
       if (heroCard) heroCard.style.display = profileDone ? 'none' : 'flex';
@@ -1443,12 +1430,6 @@
       return;
     }
     var u = window.getScopedUser();
-    var profileDone = Boolean(u && u.profile_completed && u.designation && u.mobile_number);
-    if (!profileDone) {
-      window.setPortalUI(true, u);
-      window.showOfficerProfileModal(u || {}, { allowClose: false });
-      return;
-    }
     window.currentWorkspaceMode = null;
     try { sessionStorage.removeItem('epts_workspace_mode'); } catch (e) {}
     window.hideAllStations();
@@ -1530,12 +1511,6 @@
       return;
     }
     var u = window.getScopedUser();
-    var isCompleted = Boolean(u && u.profile_completed && u.designation && u.mobile_number);
-    if (!isCompleted) {
-      window.setPortalUI(true, u);
-      window.showOfficerProfileModal(u || {}, { allowClose: false });
-      return;
-    }
     if (window.isAdminRouteOrHost()) {
       window.selectWorkspaceMode('admin', { fromInit: true });
       return;
@@ -1766,12 +1741,6 @@
     }
 
     if (!isPortalAuth) {
-      return;
-    }
-
-    var isCompleted = Boolean(portalUser && portalUser.profile_completed);
-    if (!isCompleted || !portalUser.designation || !portalUser.mobile_number) {
-      window.showOfficerProfileModal(portalUser, { allowClose: false });
       return;
     }
 
