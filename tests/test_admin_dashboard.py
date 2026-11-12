@@ -209,14 +209,14 @@ def test_subscription_gate_open_now_and_enforced_when_enabled(monkeypatch):
 
 
 def test_revoked_admin_accounts_and_separate_admin_host(monkeypatch):
-    """DPOA3698 & dpmkhammam7/dpmkmm7 have zero admin rights; /api/admin/* requires admin.panchayatautomation.in on prod domains."""
+    """dpmkmm7@gmail.com is registered as Admin; dpmkhammam7 remains revoked; /api/admin/* requires admin host."""
     from core.config import is_admin_email
 
-    # 1. Revoked emails are NEVER admin even if placed in ADMIN_EMAILS
-    monkeypatch.setenv("ADMIN_EMAILS", "admin.epanchayat@gmail.com,dpmkhammam7@gmail.com,dpmkmm7@gmail.com")
+    # 1. dpmkmm7@gmail.com is default Admin; revoked alternate email stays blocked even if in ADMIN_EMAILS
+    monkeypatch.setenv("ADMIN_EMAILS", "admin.epanchayat@gmail.com,dpmkhammam7@gmail.com")
     assert is_admin_email("admin.epanchayat@gmail.com") is True
+    assert is_admin_email("dpmkmm7@gmail.com") is True
     assert is_admin_email("dpmkhammam7@gmail.com") is False
-    assert is_admin_email("dpmkmm7@gmail.com") is False
 
     # 2. Signing in as dpmkhammam7@gmail.com yields is_admin=False & 403 even on admin host
     revoked_client, revoked_body = _login(
@@ -226,12 +226,13 @@ def test_revoked_admin_accounts_and_separate_admin_host(monkeypatch):
     assert revoked_client.get("/api/admin/overview", headers={"Host": "admin.panchayatautomation.in"}).status_code == 403
     assert revoked_client.get("/api/system/sessions", headers={"Host": "admin.panchayatautomation.in"}).status_code == 403
 
-    # 3. Valid admin can manage /api/admin/* ONLY on admin.panchayatautomation.in (blocked with 403 on public/report hosts)
+    # 3. Registered admin dpmkmm7@gmail.com gets full admin access ONLY on admin host
     admin_client, admin_body = _login(
-        monkeypatch, "admin.epanchayat@gmail.com", "State Admin", host="admin.panchayatautomation.in"
+        monkeypatch, "dpmkmm7@gmail.com", "DPMU Khammam Admin", host="admin.panchayatautomation.in"
     )
     assert admin_body["user"]["is_admin"] is True
     assert admin_client.get("/api/admin/overview", headers={"Host": "admin.panchayatautomation.in"}).status_code == 200
+    assert admin_client.get("/api/admin/subscriptions", headers={"Host": "admin.panchayatautomation.in"}).status_code == 200
     assert admin_client.get("/api/system/sessions", headers={"Host": "admin.panchayatautomation.in"}).status_code == 200
     for non_admin_host in ("panchayatautomation.in", "autoreports.panchayatautomation.in", "reports.panchayatautomation.in"):
         assert admin_client.get("/api/admin/overview", headers={"Host": non_admin_host}).status_code == 403

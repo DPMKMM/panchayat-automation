@@ -155,17 +155,24 @@ def is_cloud_sync_fallback_allowed() -> bool:
 
 REVOKED_ADMIN_EMAILS: frozenset[str] = frozenset({
     "dpmkhammam7@gmail.com",
+})
+
+DEFAULT_ADMIN_EMAILS: frozenset[str] = frozenset({
     "dpmkmm7@gmail.com",
 })
 
 
 def get_admin_emails() -> set[str]:
-    """Return configured lowercase administrator email addresses from ADMIN_EMAILS env."""
+    """Return configured lowercase administrator email addresses (default + ADMIN_EMAILS env)."""
     raw = os.getenv("ADMIN_EMAILS", "")
-    return {
+    configured = {
         e.strip().lower()
         for e in raw.split(",")
-        if e.strip() and "@" in e and e.strip().lower() not in REVOKED_ADMIN_EMAILS
+        if e.strip() and "@" in e
+    }
+    return {
+        e for e in (DEFAULT_ADMIN_EMAILS | configured)
+        if e not in REVOKED_ADMIN_EMAILS
     }
 
 

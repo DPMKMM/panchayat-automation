@@ -23,7 +23,7 @@ def pytest_configure(config) -> None:
     os.environ["ALLOW_CLOUD_SYNC_FALLBACK"] = "true"
     os.environ["DATA_DIR"] = str(_PYTEST_TMP_DIR)
     os.environ["ATTENDANCE_JOBS_DB_PATH"] = str(_PYTEST_TMP_DIR / "attendance_jobs.sqlite3")
-    os.environ.setdefault("ADMIN_EMAILS", "admin.epanchayat@gmail.com")
+    os.environ.setdefault("ADMIN_EMAILS", "admin.epanchayat@gmail.com,dpmkmm7@gmail.com")
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:
