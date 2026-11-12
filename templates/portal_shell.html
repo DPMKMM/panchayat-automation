@@ -1346,6 +1346,18 @@
               Orders Mandal table rows in both the compiled PDF and live dashboard view.
             </small>
           </div>
+          <div class="form-group" style="flex:1.6; min-width:240px;">
+            <label for="auto-page-layout" style="display:flex; align-items:center; gap:6px;">
+              <span>📄</span> PDF Page Layout (Sections 2–6)
+            </label>
+            <select id="auto-page-layout">
+              <option value="individual" selected>Individual Pages (Default — Separate Page per Report)</option>
+              <option value="continuous">Continuation Page (Continue After Previous Table Ends)</option>
+            </select>
+            <small style="color:var(--text-muted); font-size:0.78rem; display:block; margin-top:4px;">
+              Mandal Abstract stays on Page 1; choose separate pages or continuous flow after each table.
+            </small>
+          </div>
         </div>
 
         <div class="form-actions" style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -2075,7 +2087,7 @@
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=5"></script>
   <script src="/static/js/auth.js?v=24"></script>
-  <script src="/static/js/console.js?v=17"></script>
+  <script src="/static/js/console.js?v=18"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>

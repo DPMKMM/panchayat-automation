@@ -1022,8 +1022,17 @@ class PercentBar(Flowable):
         self.canv.restoreState()
 
 
-def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
+def normalize_dsr_page_layout(value: str | None) -> str:
+    """Normalize DSR detail-section page layout mode ('individual' default or 'continuous')."""
+    raw = str(value or "").strip().lower()
+    if raw in ("continuous", "continuation", "continue", "compact", "single"):
+        return "continuous"
+    return "individual"
+
+
+def generate_pdf(report: ReportData, output_path: str | Path, page_layout: str = "individual") -> Path:
     """Create a professional, printable A4 report with Landscape Page 1 and Portrait subsequent pages."""
+    is_continuous = normalize_dsr_page_layout(page_layout) == "continuous"
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     land_w, default_land_h = landscape(A4)
@@ -1367,13 +1376,28 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
 
     story.extend(validation_notes)
 
+    def append_section_break() -> None:
+        if is_continuous:
+            story.append(Spacer(1, 10))
+        else:
+            story.append(PageBreak())
+
+    def append_section_heading(title_text: str, subtitle_text: str) -> None:
+        head_flow = [
+            Paragraph(title_text, styles["SectionTitle"]),
+            Paragraph(subtitle_text, styles["ReportSubtitle"]),
+        ]
+        if is_continuous:
+            story.append(KeepTogether(head_flow))
+        else:
+            story.extend(head_flow)
+
     # ========================================================
     # PAGE 2+ (PORTRAIT): DETAIL SECTIONS 2 THROUGH 6
     # ========================================================
     story.append(NextPageTemplate("Portrait"))
     story.append(PageBreak())
-    story.append(Paragraph("2. ATTENDANCE PENDING GPs", styles["SectionTitle"]))
-    story.append(Paragraph(f"Total pending GPs: {len(report.pending_rows):,}", styles["ReportSubtitle"]))
+    append_section_heading("2. ATTENDANCE PENDING GPs", f"Total pending GPs: {len(report.pending_rows):,}")
     pending_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat",
         "Panchayat Secretary Name", "Nature of\nPosting", "Mobile Number",
@@ -1402,12 +1426,8 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     story.append(pending_table)
 
     # 3. DSR PENDING GPs (with Attendance Time and 'DSR not entered' in RED)
-    story.append(PageBreak())
-    story.append(Paragraph("3. DSR PENDING GPs", styles["SectionTitle"]))
-    story.append(Paragraph(
-        f"DSR Pending GPs: {len(report.dsr_pending_rows):,}",
-        styles["ReportSubtitle"],
-    ))
+    append_section_break()
+    append_section_heading("3. DSR PENDING GPs", f"DSR Pending GPs: {len(report.dsr_pending_rows):,}")
     dsr_pending_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat", "Attendance Status", "Attendance Time", "DSR Status",
     ]
@@ -1437,9 +1457,8 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     story.append(dsr_pending_table)
 
     def append_contact_list_section(title: str, total_label: str, rows: list[dict[str, Any]]) -> None:
-        story.append(PageBreak())
-        story.append(Paragraph(title, styles["SectionTitle"]))
-        story.append(Paragraph(f"{total_label}: {len(rows):,}", styles["ReportSubtitle"]))
+        append_section_break()
+        append_section_heading(title, f"{total_label}: {len(rows):,}")
         headers = [
             "Sl. No.", "Mandal", "Gram Panchayat",
             "Panchayat Secretary Name", "Nature of\nPosting", "Mobile Number", "Status",
@@ -1472,9 +1491,11 @@ def generate_pdf(report: ReportData, output_path: str | Path) -> Path:
     )
 
     # 6. GPs THAT SUBMITTED ATTENDANCE AFTER {cutoff} (with PS Name, Nature of Posting, Mobile Number, Time in Red)
-    story.append(PageBreak())
-    story.append(Paragraph(f"6. GPs THAT SUBMITTED ATTENDANCE AFTER {report.cutoff_label.upper()}", styles["SectionTitle"]))
-    story.append(Paragraph(f"Total GPs after {report.cutoff_label}: {len(report.after_9_rows):,}", styles["ReportSubtitle"]))
+    append_section_break()
+    append_section_heading(
+        f"6. GPs THAT SUBMITTED ATTENDANCE AFTER {report.cutoff_label.upper()}",
+        f"Total GPs after {report.cutoff_label}: {len(report.after_9_rows):,}",
+    )
     after_9_headers = [
         "Sl. No.", "Mandal", "Gram Panchayat",
         "Panchayat Secretary Name", "Nature of\nPosting", "Mobile Number",
@@ -1552,8 +1573,14 @@ def detect_file_metadata(filename: str, raw_bytes: bytes) -> dict[str, Any]:
     }
 
 
-def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name: str | None = None) -> Path:
-    """Create a focused 2-page Mandal GP Attendance & DSR report."""
+def generate_mandal_pdf(
+    report: ReportData,
+    output_path: str | Path,
+    mandal_name: str | None = None,
+    page_layout: str = "individual",
+) -> Path:
+    """Create a focused Mandal GP Attendance & DSR report (individual pages by default, or continuous)."""
+    is_continuous = normalize_dsr_page_layout(page_layout) == "continuous"
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     all_gps = report.all_gp_rows or []
@@ -1769,17 +1796,21 @@ def generate_mandal_pdf(report: ReportData, output_path: str | Path, mandal_name
     story.append(after9_tbl)
 
     # PAGE 2: Full GP Attendance and DSR Status
-    story.append(PageBreak())
-    story.extend([
-        Paragraph(f"{report.district_name.upper()} DISTRICT", styles["MandalReportTitle"]),
-        Paragraph(f"{target_mandal.upper()} MANDAL - GP ATTENDANCE &amp; DSR REPORT", styles["MandalReportTitle"]),
-        Paragraph(
-            f"Report Date: {report.report_date:%d-%m-%Y} | Total GPs: {len(mandal_gps)} | "
-            f"Attendance Submitted: {len(submitted_gps)} | Pending: {len(pending_gps)}",
-            styles["MandalReportSubtitle"],
-        ),
-        Paragraph("5. Gram Panchayat Attendance & DSR Status", styles["MandalSectionTitle"]),
-    ])
+    if is_continuous:
+        story.append(Spacer(1, 8))
+        story.append(KeepTogether([Paragraph("5. Gram Panchayat Attendance & DSR Status", styles["MandalSectionTitle"])]))
+    else:
+        story.append(PageBreak())
+        story.extend([
+            Paragraph(f"{report.district_name.upper()} DISTRICT", styles["MandalReportTitle"]),
+            Paragraph(f"{target_mandal.upper()} MANDAL - GP ATTENDANCE &amp; DSR REPORT", styles["MandalReportTitle"]),
+            Paragraph(
+                f"Report Date: {report.report_date:%d-%m-%Y} | Total GPs: {len(mandal_gps)} | "
+                f"Attendance Submitted: {len(submitted_gps)} | Pending: {len(pending_gps)}",
+                styles["MandalReportSubtitle"],
+            ),
+            Paragraph("5. Gram Panchayat Attendance & DSR Status", styles["MandalSectionTitle"]),
+        ])
 
     gp_headers = [
         "Sl. No.", "Gram Panchayat Name", "Attendance Status", "Attendance Time", "DSR Entry Status",

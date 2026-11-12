@@ -486,3 +486,133 @@ def test_multiday_dsr_pdf_excel_and_endpoint():
     assert xlsx_res.status_code == 200
     wb_out = openpyxl.load_workbook(io.BytesIO(xlsx_res.content))
     assert set(wb_out.sheetnames) >= {"Date Trend", "Mandal Consolidated", "Habitual Defaulters", "GP Day Matrix"}
+
+
+def test_dsr_page_layout_individual_default_and_continuous(tmp_path):
+    from datetime import date
+    import io
+    import openpyxl
+    from pypdf import PdfReader
+    from dsr.pdf_generator import ReportData, generate_pdf, generate_mandal_pdf
+
+    # 1. Automated & Manual UI expose the PDF Page Layout selector defaulting to Individual Pages
+    home_html = client.get("/").text
+    assert 'id="auto-page-layout"' in home_html
+    assert '<option value="individual" selected>' in home_html
+    assert '<option value="continuous">' in home_html
+
+    console_js = client.get("/static/js/console.js?v=18").text
+    assert "auto-page-layout" in console_js
+    assert "formData.append('page_layout', pageLayout)" in console_js
+
+    manual_html = client.get("/reports/ps-attendance").text
+    assert 'id="district-page-layout"' in manual_html
+    assert 'id="mandal-page-layout"' in manual_html
+
+    # 2. District PDF: Individual keeps 6 separate pages (Page 1 Mandal Abstract, Pages 2-6 individual);
+    #    Continuous keeps Mandal Abstract on Page 1 and continues Sections 2-6 right after the previous table ends
+    report = ReportData(
+        district_name="KHAMMAM",
+        report_date=date(2026, 11, 12),
+        source_row_count=20,
+        unique_gp_count=20,
+        missing_lgd_rows=0,
+        duplicate_lgd_rows=0,
+        conflicts=[],
+        mandal_rows=[{
+            "serial": 1,
+            "mandal": "BONAKAL",
+            "total_gps": 20,
+            "before_9": 15,
+            "before_9_pct": 75.0,
+            "submitted": 18,
+            "attendance_pct": 90.0,
+            "on_leave": 1,
+            "meeting_training": 1,
+            "pending": 2,
+        }],
+        district_total={
+            "total_gps": 20,
+            "before_9": 15,
+            "before_9_pct": 75.0,
+            "submitted": 18,
+            "attendance_pct": 90.0,
+            "on_leave": 1,
+            "meeting_training": 1,
+            "pending": 2,
+        },
+        dsr_mandal_rows=[{
+            "serial": 1,
+            "mandal": "BONAKAL",
+            "total_gps": 20,
+            "present_ps": 16,
+            "dsr_entered": 15,
+            "dsr_pending": 1,
+            "dsr_pct": 93.75,
+        }],
+        dsr_district_total={
+            "total_gps": 20,
+            "present_ps": 16,
+            "dsr_entered": 15,
+            "dsr_pending": 1,
+            "dsr_pct": 93.75,
+        },
+        pending_rows=[{"mandal": "BONAKAL", "gp": "GP A", "ps_name": "PS A", "nature_of_posting": "Regular", "mobile": "9876543210"}],
+        dsr_pending_rows=[{"mandal": "BONAKAL", "gp": "GP B", "attendance_status": "Present", "timestamp": "08:30:00", "time_only": "08:30 AM"}],
+        leave_rows=[{"mandal": "BONAKAL", "gp": "GP C", "ps_name": "PS C", "nature_of_posting": "Regular", "mobile": "9876543211", "status": "Leave"}],
+        meeting_training_rows=[{"mandal": "BONAKAL", "gp": "GP D", "ps_name": "PS D", "nature_of_posting": "Regular", "mobile": "9876543212", "status": "Meeting"}],
+        after_9_rows=[{"mandal": "BONAKAL", "gp": "GP E", "ps_name": "PS E", "nature_of_posting": "Regular", "mobile": "9876543213", "time_only": "09:15 AM", "status": "Present"}],
+        all_gp_rows=[{"mandal": "BONAKAL", "gp": "GP A", "is_pending": True, "submitted": False, "on_leave": False, "meeting_training": False, "after_9": False, "dsr_eligible": False, "dsr_entered": False, "status": "Pending", "time_only": ""}],
+    )
+
+    indiv_pdf = tmp_path / "district_individual.pdf"
+    cont_pdf = tmp_path / "district_continuous.pdf"
+    generate_pdf(report, indiv_pdf)  # Default is individual
+    generate_pdf(report, cont_pdf, page_layout="continuous")
+
+    indiv_reader = PdfReader(str(indiv_pdf))
+    cont_reader = PdfReader(str(cont_pdf))
+    assert len(indiv_reader.pages) == 6
+    assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" in indiv_reader.pages[0].extract_text()
+    assert len(cont_reader.pages) == 2
+    assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" in cont_reader.pages[0].extract_text()
+    page2_text = cont_reader.pages[1].extract_text()
+    for heading in (
+        "2. ATTENDANCE PENDING GPs",
+        "3. DSR PENDING GPs",
+        "4. SECRETARIES REPORTED AS LEAVE",
+        "5. SECRETARIES REPORTED AS TRAINING / MEETING",
+        "6. GPs THAT SUBMITTED ATTENDANCE AFTER",
+    ):
+        assert heading in page2_text
+
+    # 3. Mandal PDF also respects individual (2 pages) vs continuous (1 page)
+    m_indiv = tmp_path / "mandal_individual.pdf"
+    m_cont = tmp_path / "mandal_continuous.pdf"
+    generate_mandal_pdf(report, m_indiv, mandal_name="BONAKAL")
+    generate_mandal_pdf(report, m_cont, mandal_name="BONAKAL", page_layout="continuous")
+    assert len(PdfReader(str(m_indiv)).pages) == 2
+    assert len(PdfReader(str(m_cont)).pages) == 1
+
+    # 4. Manual web upload endpoint /api/web/reports accepts page_layout=continuous and produces continuous PDF
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["District Name", "Panchayat LGD", "Mandal Name", "Panchayat Name", "First Attendence Status", "Second Attendence Status", "First Attendence Datetime", "DSR Status"])
+    ws.append(["Khammam", "205101", "Bonakal", "Allinagaram", "Present", "Present", "2026-11-12 08:40:00", "Entered"])
+    ws.append(["Khammam", "205102", "Bonakal", "Govindapuram", "Present", "Present", "2026-11-12 09:20:00", "Not Entered"])
+    xbuf = io.BytesIO()
+    wb.save(xbuf)
+
+    up_res = client.post(
+        "/api/web/reports",
+        files={"file": ("raw_12_Nov.xlsx", xbuf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        data={"report_mode": "district", "page_layout": "continuous"},
+    )
+    assert up_res.status_code == 200
+    jid = up_res.json()["job_id"]
+    dl_res = client.get(f"/api/web/reports/{jid}/download")
+    assert dl_res.status_code == 200
+    web_reader = PdfReader(io.BytesIO(dl_res.content))
+    assert len(web_reader.pages) == 2
+    assert "MANDAL-WISE ATTENDANCE & DSR ABSTRACT REPORT" in web_reader.pages[0].extract_text()
+    assert "6. GPs THAT SUBMITTED ATTENDANCE AFTER" in web_reader.pages[1].extract_text()

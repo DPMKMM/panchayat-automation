@@ -635,11 +635,13 @@
       var dateEl = document.getElementById('auto-date');
       var cutoffEl = document.getElementById('auto-cutoff-time');
       var sortEl = document.getElementById('auto-sort-by');
+      var layoutEl = document.getElementById('auto-page-layout');
       var freshEl = document.getElementById('chk-force-fresh');
       merged.auto_module = (modEl && modEl.value) || 'dsr_full';
       merged.auto_date = (dateEl && dateEl.value) || localDateStr();
       merged.cutoff_time = (cutoffEl && cutoffEl.value) || '09:00';
       merged.sort_by = (sortEl && sortEl.value) || 'before_9';
+      merged.page_layout = (layoutEl && layoutEl.value) || 'individual';
       merged.force_fresh = Boolean(freshEl && freshEl.checked);
     } else if (mod === 'balance') {
       var balEl = document.getElementById('balance-date-select');
@@ -668,6 +670,7 @@
     var dateEl = document.getElementById('auto-date');
     var cutoffEl = document.getElementById('auto-cutoff-time');
     var sortEl = document.getElementById('auto-sort-by');
+    var layoutEl = document.getElementById('auto-page-layout');
     var freshEl = document.getElementById('chk-force-fresh');
     if (modEl && params.auto_module) modEl.value = params.auto_module;
     if (dateEl) {
@@ -678,6 +681,7 @@
       window.updateCutoffLabelInUi(params.cutoff_time);
     }
     if (sortEl && params.sort_by) sortEl.value = params.sort_by;
+    if (layoutEl && params.page_layout) layoutEl.value = params.page_layout;
     if (freshEl && params.force_fresh !== undefined) {
       freshEl.checked = params.force_fresh === true || params.force_fresh === 'true' || params.force_fresh === '1';
     }
@@ -1611,6 +1615,7 @@
     var date = (document.getElementById('auto-date') && document.getElementById('auto-date').value) || '';
     var cutoffTime = (document.getElementById('auto-cutoff-time') && document.getElementById('auto-cutoff-time').value) || '09:00';
     var sortBy = (document.getElementById('auto-sort-by') && document.getElementById('auto-sort-by').value) || 'before_9';
+    var pageLayout = (document.getElementById('auto-page-layout') && document.getElementById('auto-page-layout').value) || 'individual';
 
     if (!date) {
       showNotice('Please select a report date before running the DSR Robot.', 'error');
@@ -1638,6 +1643,7 @@
       formData.append('date', date);
       formData.append('cutoff_time', cutoffTime);
       formData.append('sort_by', sortBy);
+      formData.append('page_layout', pageLayout);
       var chkFresh = document.getElementById('chk-force-fresh');
       if (chkFresh && chkFresh.checked) {
         formData.append('force_fresh', 'true');
@@ -1702,6 +1708,7 @@
         auto_date: date,
         cutoff_time: cutoffTime,
         sort_by: sortBy,
+        page_layout: pageLayout,
       })) {
         showNotice('DSR report generation error: ' + err.message, 'error');
       }

@@ -200,6 +200,7 @@ def _process_job(
     absentees: tuple[str, bytes] | None = None,
     report_mode: str = "district",
     mandal_name: str | None = None,
+    page_layout: str = "individual",
 ) -> JobRecord:
     active_tracker = _get_tracker()
     active_storage = _get_storage()
@@ -252,14 +253,16 @@ def _process_job(
             download_filename = f"{clean_dist}_{clean_mandal}_Attendance_Report_{report.report_date:%d-%b-%Y}.pdf"
             with tempfile.TemporaryDirectory(prefix="mandal_attendance_") as directory:
                 output_path = Path(directory) / download_filename
-                report_generator.generate_mandal_pdf(report, output_path, mandal_name=target_mandal)
+                report_generator.generate_mandal_pdf(
+                    report, output_path, mandal_name=target_mandal, page_layout=page_layout
+                )
                 output_reference = active_storage.save_pdf(job_id, output_path)
         else:
             ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             download_filename = f"PS_Attendance_Report_{ts}.pdf"
             with tempfile.TemporaryDirectory(prefix="district_attendance_") as directory:
                 output_path = Path(directory) / download_filename
-                report_generator.generate_pdf(report, output_path)
+                report_generator.generate_pdf(report, output_path, page_layout=page_layout)
                 output_reference = active_storage.save_pdf(job_id, output_path)
 
         completed = active_tracker.update(
@@ -502,6 +505,7 @@ def naresh_generate(
     cutoff_time: str = Form(default="09:00"),
     sort_by: str = Form(default="before_9"),
     force_fresh: str = Form(default="false"),
+    page_layout: str = Form(default="individual"),
 ) -> dict[str, Any]:
     console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
@@ -513,6 +517,7 @@ def naresh_generate(
             cutoff_time=cutoff_time,
             sort_by=sort_by,
             force_fresh=is_force_fresh,
+            page_layout=page_layout,
         )
         if console_user:
             log_usage(user_id=console_user["user_id"], platform_scope="console", module="dsr_automation", action="generate_report")
@@ -622,6 +627,7 @@ def create_web_report(
     absentees_file: UploadFile | None = File(default=None),
     report_mode: str = Form(default="district"),
     mandal_name: str = Form(default=""),
+    page_layout: str = Form(default="individual"),
     requested_by: str = Form(default="", alias="RequestedBy"),
 ) -> JSONResponse:
     if not is_module_enabled("module_dsr_excel"):
@@ -663,6 +669,7 @@ def create_web_report(
             absentees=absentees_data,
             report_mode=report_mode,
             mandal_name=mandal_name,
+            page_layout=page_layout,
         )
     except Exception as exc:
         failed = _get_tracker().get(job_id)
@@ -931,6 +938,7 @@ def auto_load_web_report(
     request: Request,
     report_mode: str = Form(default="district"),
     mandal_name: str = Form(default=""),
+    page_layout: str = Form(default="individual"),
     requested_by: str = Form(default="Automated Portal", alias="RequestedBy"),
 ) -> JSONResponse:
     console_user = enforce_console_api_access(request)
@@ -971,6 +979,7 @@ def auto_load_web_report(
             absentees=absentees_data,
             report_mode=report_mode,
             mandal_name=mandal_name,
+            page_layout=page_layout,
         )
     except Exception as exc:
         failed = _get_tracker().get(job_id)

@@ -505,6 +505,15 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
               <div class="hint">Export of absent secretaries. Not required if all secretaries submitted attendance.</div>
             </div>
 
+            <div class="field-group">
+              <label for="district-page-layout">4. PDF Page Layout (Sections 2–6)</label>
+              <select id="district-page-layout" name="page_layout" style="width:100%; padding:11px 13px; border:1px solid #bfd1c7; border-radius:9px; background:white; color:#15332b; font-size:0.95rem; font-family:inherit;">
+                <option value="individual" selected>Individual Pages (Default — Separate Page per Report)</option>
+                <option value="continuous">Continuation Page (Continue After Previous Table Ends)</option>
+              </select>
+              <div class="hint">Mandal Abstract stays on Page 1. Choose separate pages per section or continuous flow after each table ends.</div>
+            </div>
+
             <div class="actions">
               <button id="generate-button" type="submit">Generate and download report</button>
             </div>
@@ -530,6 +539,15 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
               <input id="mandal-display" type="text" readonly placeholder="Mandal name will appear here automatically after upload..." style="font-weight: 600; color: #167451; background: #fbfdfc;">
               <input type="hidden" id="mandal-select" name="mandal_name">
               <div class="hint" id="mandal-detect-hint">Mandal name detected from the uploaded raw data file.</div>
+            </div>
+
+            <div class="field-group">
+              <label for="mandal-page-layout">3. PDF Page Layout</label>
+              <select id="mandal-page-layout" name="page_layout" style="width:100%; padding:11px 13px; border:1px solid #bfd1c7; border-radius:9px; background:white; color:#15332b; font-size:0.95rem; font-family:inherit;">
+                <option value="individual" selected>Individual Pages (Default — Separate Page per Report)</option>
+                <option value="continuous">Continuation Page (Continue After Previous Table Ends)</option>
+              </select>
+              <div class="hint">Keep Section 5 on a separate page or continue directly after the previous table ends.</div>
             </div>
 
             <div class="actions">
@@ -1104,6 +1122,8 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
         if (pres) data.append('presentees_file', pres);
         const abs = document.getElementById('absentees-file').files[0];
         if (abs) data.append('absentees_file', abs);
+        const layout = (document.getElementById('district-page-layout') && document.getElementById('district-page-layout').value) || 'individual';
+        data.append('page_layout', layout);
         runReportJob(data, document.getElementById('generate-button'), document.getElementById('report-message'), 'District_PS_Attendance_Report.pdf');
       });
 
@@ -1116,6 +1136,8 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
         const data = new FormData();
         data.append('file', file);
         data.append('report_mode', 'mandal');
+        const layout = (document.getElementById('mandal-page-layout') && document.getElementById('mandal-page-layout').value) || 'individual';
+        data.append('page_layout', layout);
         if (mandalName && mandalName !== 'No mandal found' && mandalName !== 'Failed to detect mandal' && mandalName !== 'Detecting Mandal from file…') {
           data.append('mandal_name', mandalName);
         }
