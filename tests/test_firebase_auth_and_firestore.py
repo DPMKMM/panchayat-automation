@@ -258,3 +258,64 @@ def test_sqlite_migration_dry_run_and_identity_continuity(tmp_path):
         assert f"match /{col}/" in rules_text
     assert "match /{document=**}" in rules_text
     assert get_user_by_gmail("nonexistent@gmail.com") is None
+
+
+def test_profile_completion_persists_across_restarts_and_subsequent_logins(tmp_path, monkeypatch):
+    """Completing officer profile once must persist across logins and fallback store restarts."""
+    import core.firebase_store as fstore
+
+    ts = int(time.time() * 1000)
+    uid = f"fb_persist_{ts}"
+    email = f"persist_{ts}@gmail.com"
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(fstore, "get_live_firestore_client", lambda: None)
+    monkeypatch.setattr(fstore, "is_inmemory_firestore_enabled", lambda: False)
+    monkeypatch.setattr(fstore, "_DEV_PERSIST_CLIENT", None)
+    monkeypatch.setattr(fstore, "_DEV_PERSIST_PATH", None)
+
+    monkeypatch.setattr(
+        "portal.router.verify_firebase_id_token",
+        lambda tok: {
+            "firebase_uid": uid,
+            "gmail": email,
+            "name": "Persistent Officer",
+            "profile_picture": "",
+            "sign_in_provider": "google.com",
+            "email_verified": True,
+        },
+    )
+
+    # First login: profile not completed yet
+    c1 = TestClient(app, base_url="https://panchayatautomation.in")
+    r1 = c1.post("/api/auth/firebase-login", json={"id_token": "tok_first"})
+    assert r1.status_code == 200
+    assert r1.json()["profile_completed"] is False
+
+    # Officer submits profile details once
+    r_reg = c1.post(
+        "/api/auth/register-profile",
+        json={
+            "name": "DPM Khammam",
+            "designation": "DPM",
+            "role": "District Level",
+            "mobile_number": "9876543210",
+        },
+    )
+    assert r_reg.status_code == 200
+    assert r_reg.json()["success"] is True
+    assert r_reg.json()["user"]["profile_completed"] is True
+
+    # Simulate server restart / auto-deploy by clearing in-memory cache handle and reloading from disk
+    monkeypatch.setattr(fstore, "_DEV_PERSIST_CLIENT", None)
+    monkeypatch.setattr(fstore, "_DEV_PERSIST_PATH", None)
+
+    c2 = TestClient(app, base_url="https://panchayatautomation.in")
+    r2 = c2.post("/api/auth/firebase-login", json={"id_token": "tok_second_after_restart"})
+    assert r2.status_code == 200
+    body2 = r2.json()
+    assert body2["is_first_time"] is False
+    assert body2["profile_completed"] is True
+    assert body2["user"]["profile_completed"] is True
+    assert body2["user"]["designation"] == "DPM"
+    assert body2["user"]["mobile_number"] == "9876543210"
+    assert (tmp_path / "dev_firestore_store.json").exists()

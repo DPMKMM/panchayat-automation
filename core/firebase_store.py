@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import logging
 import os
 import re
@@ -11,12 +12,13 @@ import secrets
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 from google.cloud.firestore_v1.base_query import FieldFilter
 
-from core.config import IS_PRODUCTION, REVOKED_ADMIN_EMAILS, is_admin_email
-from core.firebase_app import get_live_firestore_client
+from core.config import IS_PRODUCTION, REVOKED_ADMIN_EMAILS, get_data_dir, is_admin_email
+from core.firebase_app import get_live_firestore_client, is_inmemory_firestore_enabled
 
 logger = logging.getLogger("firebase_store")
 
@@ -50,9 +52,15 @@ class _InMemoryDocSnapshot:
 
 
 class _InMemoryDocRef:
-    def __init__(self, store: dict[str, dict[str, Any]], doc_id: str) -> None:
+    def __init__(
+        self,
+        store: dict[str, dict[str, Any]],
+        doc_id: str,
+        on_change: Optional[Callable[[], None]] = None,
+    ) -> None:
         self._store = store
         self.id = doc_id
+        self._on_change = on_change
 
     def get(self) -> _InMemoryDocSnapshot:
         with _MEM_LOCK:
@@ -67,6 +75,8 @@ class _InMemoryDocRef:
                 self._store[self.id] = merged
             else:
                 self._store[self.id] = payload
+            if self._on_change:
+                self._on_change()
 
     def update(self, data: dict[str, Any]) -> None:
         with _MEM_LOCK:
@@ -75,10 +85,14 @@ class _InMemoryDocRef:
             merged = copy.deepcopy(self._store[self.id])
             merged.update(copy.deepcopy(data))
             self._store[self.id] = merged
+            if self._on_change:
+                self._on_change()
 
     def delete(self) -> None:
         with _MEM_LOCK:
             self._store.pop(self.id, None)
+            if self._on_change:
+                self._on_change()
 
 
 class _InMemoryQuery:
@@ -123,12 +137,17 @@ class _InMemoryQuery:
 
 
 class _InMemoryCollection:
-    def __init__(self, store: dict[str, dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        store: dict[str, dict[str, Any]],
+        on_change: Optional[Callable[[], None]] = None,
+    ) -> None:
         self._store = store
+        self._on_change = on_change
 
     def document(self, doc_id: Optional[str] = None) -> _InMemoryDocRef:
         key = doc_id or f"auto_{secrets.token_hex(8)}"
-        return _InMemoryDocRef(self._store, key)
+        return _InMemoryDocRef(self._store, key, on_change=self._on_change)
 
     def where(
         self,
@@ -148,20 +167,51 @@ class _InMemoryCollection:
 
 
 class _InMemoryFirestoreClient:
-    def __init__(self) -> None:
+    def __init__(self, persist_path: Optional[Path] = None) -> None:
         self._collections: dict[str, dict[str, dict[str, Any]]] = {}
+        self._persist_path = persist_path
+        if self._persist_path is not None:
+            self._load_from_disk()
+
+    def _load_from_disk(self) -> None:
+        if self._persist_path is None or not self._persist_path.exists():
+            return
+        try:
+            raw = json.loads(self._persist_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                with _MEM_LOCK:
+                    self._collections = raw
+        except Exception as exc:
+            logger.warning("Could not load fallback store %s: %s", self._persist_path, exc)
+
+    def _save_to_disk(self) -> None:
+        if self._persist_path is None:
+            return
+        try:
+            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self._persist_path.with_suffix(".tmp")
+            payload = json.dumps(self._collections, ensure_ascii=False)
+            tmp_path.write_text(payload, encoding="utf-8")
+            os.replace(tmp_path, self._persist_path)
+        except Exception as exc:
+            logger.warning("Could not persist fallback store %s: %s", self._persist_path, exc)
 
     def collection(self, name: str) -> _InMemoryCollection:
         with _MEM_LOCK:
             bucket = self._collections.setdefault(name, {})
-        return _InMemoryCollection(bucket)
+        on_change = self._save_to_disk if self._persist_path is not None else None
+        return _InMemoryCollection(bucket, on_change=on_change)
 
     def reset(self) -> None:
         with _MEM_LOCK:
             self._collections.clear()
+            if self._persist_path is not None:
+                self._save_to_disk()
 
 
 _INMEM_CLIENT = _InMemoryFirestoreClient()
+_DEV_PERSIST_CLIENT: Optional[_InMemoryFirestoreClient] = None
+_DEV_PERSIST_PATH: Optional[Path] = None
 
 
 def _matches_filters(doc: dict[str, Any], filters: list[tuple[str, str, Any]]) -> bool:
@@ -197,8 +247,8 @@ def reset_inmemory_firestore() -> None:
 
 
 def _db():
-    """Return active Cloud Firestore client, or development/test in-memory backend."""
-    global _MEM_WARNED
+    """Return active Cloud Firestore client, isolated test RAM store, or disk-backed dev store."""
+    global _MEM_WARNED, _DEV_PERSIST_CLIENT, _DEV_PERSIST_PATH
     live = get_live_firestore_client()
     if live is not None:
         return live
@@ -206,13 +256,22 @@ def _db():
     if IS_PRODUCTION:
         raise RuntimeError("Cloud Firestore client unavailable in production.")
 
-    if not _MEM_WARNED:
-        logger.warning(
-            "Cloud Firestore service account credentials not configured; using ephemeral "
-            "development in-memory Firestore store. Set FIREBASE_SERVICE_ACCOUNT_PATH for live persistence."
-        )
-        _MEM_WARNED = True
-    return _INMEM_CLIENT
+    if is_inmemory_firestore_enabled():
+        return _INMEM_CLIENT
+
+    target_path = (get_data_dir() / "dev_firestore_store.json").resolve()
+    with _MEM_LOCK:
+        if _DEV_PERSIST_CLIENT is None or _DEV_PERSIST_PATH != target_path:
+            _DEV_PERSIST_CLIENT = _InMemoryFirestoreClient(persist_path=target_path)
+            _DEV_PERSIST_PATH = target_path
+        if not _MEM_WARNED:
+            logger.warning(
+                "Cloud Firestore service account credentials not configured; persisting local store at %s. "
+                "Add secrets/firebase-service-account.json or set FIREBASE_SERVICE_ACCOUNT_PATH for Cloud Firestore.",
+                target_path,
+            )
+            _MEM_WARNED = True
+        return _DEV_PERSIST_CLIENT
 
 
 def init_db(*args: Any, **kwargs: Any) -> None:
@@ -273,6 +332,20 @@ def designation_to_role(designation: str) -> str:
     return ""
 
 
+def _pick_best_user_doc(snaps: list[Any]) -> Optional[dict[str, Any]]:
+    """Return normalized officer doc from snaps, preferring completed profiles if duplicates exist."""
+    best: Optional[dict[str, Any]] = None
+    for snap in snaps:
+        candidate = _normalize_user_doc(snap.id, snap.to_dict())
+        if candidate is None:
+            continue
+        if best is None:
+            best = candidate
+        if candidate.get("profile_completed") and candidate.get("designation") and candidate.get("mobile_number"):
+            return candidate
+    return best
+
+
 def get_user_by_firebase_uid(firebase_uid: str) -> Optional[dict[str, Any]]:
     """Retrieve officer record by Firebase UID (falling back to legacy google_uid)."""
     clean_uid = str(firebase_uid or "").strip()
@@ -280,9 +353,10 @@ def get_user_by_firebase_uid(firebase_uid: str) -> Optional[dict[str, Any]]:
         return None
     col = _db().collection(COL_USERS)
     for field_name in ("firebase_uid", "google_uid"):
-        snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_uid)).limit(1).stream())
-        if snaps:
-            return _normalize_user_doc(snaps[0].id, snaps[0].to_dict())
+        snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_uid)).stream())
+        picked = _pick_best_user_doc(snaps)
+        if picked is not None:
+            return picked
     return None
 
 
@@ -295,24 +369,33 @@ def get_user_by_gmail(gmail: str) -> Optional[dict[str, Any]]:
     if not clean_email:
         return None
     col = _db().collection(COL_USERS)
-    snaps = list(col.where(filter=FieldFilter("gmail", "==", clean_email)).limit(1).stream())
-    if snaps:
-        return _normalize_user_doc(snaps[0].id, snaps[0].to_dict())
+    for field_name in ("gmail", "email"):
+        snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_email)).stream())
+        picked = _pick_best_user_doc(snaps)
+        if picked is not None:
+            return picked
     return None
+
+
+def _resolve_user_doc_id(col: Any, user_id: str) -> Optional[str]:
+    """Return actual Firestore document ID for user_id across direct keys and migrated docs."""
+    clean_id = str(user_id or "").strip()
+    if not clean_id:
+        return None
+    if col.document(clean_id).get().exists:
+        return clean_id
+    snaps = list(col.where(filter=FieldFilter("user_id", "==", clean_id)).limit(1).stream())
+    return snaps[0].id if snaps else None
 
 
 def get_user_by_id(user_id: str) -> Optional[dict[str, Any]]:
     """Retrieve officer record by internal user_id."""
-    clean_id = str(user_id or "").strip()
-    if not clean_id:
+    col = _db().collection(COL_USERS)
+    doc_id = _resolve_user_doc_id(col, user_id)
+    if not doc_id:
         return None
-    snap = _db().collection(COL_USERS).document(clean_id).get()
-    if snap.exists:
-        return _normalize_user_doc(snap.id, snap.to_dict())
-    snaps = list(_db().collection(COL_USERS).where(filter=FieldFilter("user_id", "==", clean_id)).limit(1).stream())
-    if snaps:
-        return _normalize_user_doc(snaps[0].id, snaps[0].to_dict())
-    return None
+    snap = col.document(doc_id).get()
+    return _normalize_user_doc(snap.id, snap.to_dict()) if snap.exists else None
 
 
 def get_or_create_firebase_user(
@@ -356,8 +439,9 @@ def get_or_create_firebase_user(
                 updates["is_admin"] = False
         elif is_admin_email(clean_email) and not existing.get("is_admin"):
             updates["is_admin"] = True
-        col.document(existing["user_id"]).update(updates)
-        updated = get_user_by_id(existing["user_id"])
+        target_doc_id = _resolve_user_doc_id(col, existing["user_id"]) or existing["user_id"]
+        col.document(target_doc_id).update(updates)
+        updated = _normalize_user_doc(target_doc_id, col.document(target_doc_id).get().to_dict())
         return updated or existing, False
 
     new_user_id = f"usr_{secrets.token_hex(6)}"
@@ -420,8 +504,14 @@ def complete_user_profile(
     else:
         clean_role = designation_to_role(clean_desig)
 
-    _db().collection(COL_USERS).document(clean_uid).update(
+    col = _db().collection(COL_USERS)
+    target_doc_id = _resolve_user_doc_id(col, clean_uid)
+    if not target_doc_id:
+        raise ValueError("Officer account not found.")
+
+    col.document(target_doc_id).update(
         {
+            "user_id": clean_uid,
             "name": clean_name,
             "designation": clean_desig,
             "role": clean_role,
@@ -430,7 +520,7 @@ def complete_user_profile(
             "updated_at": _utc_now_iso(),
         }
     )
-    updated = get_user_by_id(clean_uid)
+    updated = _normalize_user_doc(target_doc_id, col.document(target_doc_id).get().to_dict())
     if updated is None:
         raise RuntimeError("Failed to read updated officer profile from Cloud Firestore.")
     return updated
