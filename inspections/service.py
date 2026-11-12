@@ -12,7 +12,13 @@ from core.config import get_reports_dir
 from core.session_manager import get_or_create_session, run_in_session_thread
 from inspections.aggregator import consolidate_inspection_files
 from inspections.automation import download_inspection_weeks, fetch_inspection_metadata
-from inspections.models import DESIGNATION_SPECS, SUPPORTED_DESIGNATIONS, InspectionReport, get_designation_spec
+from inspections.models import (
+    DESIGNATION_SPECS,
+    SUPPORTED_DESIGNATIONS,
+    InspectionReport,
+    format_month_range_from_weeks,
+    get_designation_spec,
+)
 from inspections.reports import (
     generate_inspections_csv,
     generate_inspections_excel,
@@ -64,6 +70,7 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
         "district_name": report.district_name,
         "from_week": report.from_week,
         "to_week": report.to_week,
+        "month_period": format_month_range_from_weeks(report.from_week, report.to_week),
         "weeks_selected": report.weeks_selected,
         "weeks_count": len(report.weeks_selected),
         "target_per_unit": report.target_per_unit,

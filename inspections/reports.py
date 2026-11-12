@@ -10,13 +10,16 @@ from typing import Any
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from reportlab.graphics.shapes import Drawing, Line, Rect, String as ShapeString
 from reportlab.lib import colors
 from reportlab.lib.colors import HexColor
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
+    Flowable,
+    KeepTogether,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -25,7 +28,7 @@ from reportlab.platypus import (
 )
 
 from core.branding import apply_openpyxl_branding
-from inspections.models import InspectionReport
+from inspections.models import InspectionReport, format_month_range_from_weeks
 
 
 def _safe_xml(text: Any) -> str:
@@ -49,65 +52,259 @@ def _format_period_label(from_week: str, to_week: str) -> str:
     return f"{f_w}  ->  {t_w}"
 
 
+def _tier_hex(pct: float) -> str:
+    if pct >= 100.0:
+        return "#059669"
+    if pct >= 60.0:
+        return "#0284C7"
+    if pct >= 35.0:
+        return "#D97706"
+    return "#DC2626"
+
+
+class _PctBarFlowable(Flowable):
+    """Compact colored horizontal progress bar + bold percentage label inside table cells."""
+
+    def __init__(self, pct: float, width: float = 34 * mm, height: float = 12.0, bold: bool = True):
+        super().__init__()
+        self.pct = float(pct or 0.0)
+        self.width = width
+        self.height = height
+        self.bold = bold
+
+    def draw(self) -> None:
+        c = self.canv
+        c.saveState()
+        bar_w = max(14 * mm, self.width - 14.5 * mm)
+        bar_h = 5.5
+        bar_x = 1.0
+        bar_y = (self.height - bar_h) / 2.0
+
+        # Track
+        c.setFillColor(HexColor("#E2E8F0"))
+        c.setStrokeColor(HexColor("#CBD5E1"))
+        c.setLineWidth(0.35)
+        c.roundRect(bar_x, bar_y, bar_w, bar_h, 2.2, stroke=1, fill=1)
+
+        # Colored fill capped visually at 100%
+        fill_ratio = max(0.0, min(1.0, self.pct / 100.0))
+        fill_w = bar_w * fill_ratio
+        color_hex = _tier_hex(self.pct)
+        if fill_w > 0.6:
+            c.setFillColor(HexColor(color_hex))
+            c.roundRect(bar_x, bar_y, fill_w, bar_h, 2.2, stroke=0, fill=1)
+
+        c.setFont("Helvetica-Bold" if self.bold else "Helvetica", 7.6)
+        c.setFillColor(HexColor(color_hex))
+        c.drawRightString(self.width - 1.0, (self.height - 6.0) / 2.0, f"{self.pct:.2f}%")
+        c.restoreState()
+
+
+def _build_inspections_bar_chart(report: InspectionReport, avail_w: float) -> Drawing:
+    """Render a colorful horizontal achievement bar chart across Mandals/Divisions/Districts for A4 PDF."""
+    rows = list(report.abstract_rows or [])
+    row_h = 13.0
+    top_pad = 22.0
+    bot_pad = 16.0
+    chart_h = top_pad + bot_pad + max(1, len(rows)) * row_h
+
+    d = Drawing(avail_w, chart_h)
+    # Soft card background
+    d.add(Rect(0, 0, avail_w, chart_h, fillColor=HexColor("#F8FAFC"), strokeColor=HexColor("#CBD5E1"), strokeWidth=0.6, rx=4, ry=4))
+
+    label_w = 48 * mm
+    right_lbl_w = 28 * mm
+    plot_x = label_w + 4 * mm
+    plot_w = max(40 * mm, avail_w - plot_x - right_lbl_w - 4 * mm)
+    max_pct = max([100.0] + [float(r.pct_completed or 0.0) for r in rows])
+
+    # Vertical reference gridlines (0%, 25%, 50%, 75%, 100%)
+    for tick in (0, 25, 50, 75, 100):
+        tx = plot_x + plot_w * min(1.0, tick / max_pct)
+        d.add(Line(tx, bot_pad - 2, tx, chart_h - top_pad + 4, strokeColor=HexColor("#E2E8F0"), strokeWidth=0.5))
+        d.add(ShapeString(tx - 5, 5, f"{tick}%", fontName="Helvetica", fontSize=6.8, fillColor=HexColor("#64748B")))
+
+    d.add(
+        ShapeString(
+            6 * mm,
+            chart_h - 14,
+            f"{report.group_label}-Wise Achievement % Bars ({report.designation})",
+            fontName="Helvetica-Bold",
+            fontSize=8.5,
+            fillColor=HexColor("#064E3B"),
+        )
+    )
+
+    for idx, r in enumerate(rows):
+        y_center = chart_h - top_pad - (idx + 0.5) * row_h
+        name_txt = r.unit_name if len(r.unit_name) <= 23 else (r.unit_name[:21] + "..")
+        d.add(ShapeString(5 * mm, y_center - 2.5, name_txt, fontName="Helvetica-Bold", fontSize=7.2, fillColor=HexColor("#1E293B")))
+
+        bar_y = y_center - 3.8
+        bar_h = 7.6
+        d.add(Rect(plot_x, bar_y, plot_w, bar_h, fillColor=HexColor("#E2E8F0"), strokeWidth=0, rx=2, ry=2))
+
+        ratio = max(0.0, min(1.0, float(r.pct_completed or 0.0) / max_pct))
+        bw = plot_w * ratio
+        c_hex = _tier_hex(r.pct_completed)
+        if bw > 0.5:
+            d.add(Rect(plot_x, bar_y, bw, bar_h, fillColor=HexColor(c_hex), strokeWidth=0, rx=2, ry=2))
+
+        stat_lbl = f"{r.completed}/{r.target} ({r.pct_completed:.1f}%)"
+        d.add(ShapeString(plot_x + plot_w + 3 * mm, y_center - 2.5, stat_lbl, fontName="Helvetica-Bold", fontSize=7.0, fillColor=HexColor(c_hex)))
+
+    return d
+
+
 def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) -> Path:
-    """Create executive A4 Landscape PDF strictly matching: Sl No | Mandal/Division/District | Target | Completed | Balance | % Completed."""
+    """Create colorful portrait A4 PDF matching: Sl No | Mandal/Division/District | Target | Completed | Balance | % Completed + visual bars."""
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    page_w, page_h = landscape(A4)
-    margin = 12 * mm
+    page_w, page_h = A4
+    margin = 10 * mm
     avail_w = page_w - 2 * margin
 
     styles = getSampleStyleSheet()
     styles.add(ParagraphStyle(
-        name="InspTitle", parent=styles["Title"], fontName="Helvetica-Bold",
-        fontSize=14, leading=17, alignment=TA_CENTER, textColor=HexColor("#17365D"), spaceAfter=3,
+        name="InspBannerTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=12.5, leading=15, alignment=TA_CENTER, textColor=colors.white, spaceAfter=1,
     ))
     styles.add(ParagraphStyle(
-        name="InspSubtitle", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=8.5, leading=11.5, alignment=TA_CENTER, textColor=HexColor("#334155"), spaceAfter=8,
+        name="InspBannerSub", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=8.2, leading=10.5, alignment=TA_CENTER, textColor=HexColor("#FDE68A"),
+    ))
+    styles.add(ParagraphStyle(
+        name="InspMeta", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8.0, leading=11.5, alignment=TA_CENTER, textColor=HexColor("#0F172A"),
     ))
     styles.add(ParagraphStyle(
         name="InspHdr", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=8.5, leading=10.5, alignment=TA_CENTER, textColor=colors.white,
+        fontSize=8.2, leading=10, alignment=TA_CENTER, textColor=colors.white,
     ))
     styles.add(ParagraphStyle(
         name="InspHdrLeft", parent=styles["InspHdr"], alignment=TA_LEFT,
     ))
     styles.add(ParagraphStyle(
         name="InspCell", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=8.3, leading=10.5, alignment=TA_CENTER, textColor=HexColor("#0f172a"),
+        fontSize=8.0, leading=10, alignment=TA_CENTER, textColor=HexColor("#0F172A"),
     ))
     styles.add(ParagraphStyle(
         name="InspCellLeft", parent=styles["InspCell"], alignment=TA_LEFT,
     ))
     styles.add(ParagraphStyle(
-        name="InspNote", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=7.8, leading=10, textColor=HexColor("#475569"),
+        name="InspKpiLbl", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=6.8, leading=8.5, alignment=TA_CENTER, textColor=HexColor("#475569"),
     ))
+    styles.add(ParagraphStyle(
+        name="InspKpiVal", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=11.5, leading=13.5, alignment=TA_CENTER, textColor=HexColor("#0F172A"),
+    ))
+    styles.add(ParagraphStyle(
+        name="InspNote", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=7.5, leading=10, textColor=HexColor("#475569"),
+    ))
+
+    dist_heading = _format_district_title(report.district_name)
+    period_str = _format_period_label(report.from_week, report.to_week)
+    month_range = format_month_range_from_weeks(report.from_week, report.to_week)
 
     def _footer(canvas: Any, doc_obj: Any) -> None:
         canvas.saveState()
-        canvas.setStrokeColor(HexColor("#B7C9D6"))
+        canvas.setStrokeColor(HexColor("#10B981"))
+        canvas.setLineWidth(0.75)
         canvas.line(margin, 9 * mm, page_w - margin, 9 * mm)
-        canvas.setFont("Helvetica", 7.5)
+        canvas.setFont("Helvetica", 7.3)
         canvas.setFillColor(HexColor("#475569"))
         canvas.drawString(
             margin,
             5 * mm,
-            f"{report.district_name} District | GM-R 39.1 {report.designation} Inspections ({report.group_label}-wise) | {report.generated_time_str} | e-Panchayat Automation",
+            f"{dist_heading} | GM-R 39.1 {report.designation} Inspections | Report Generated On: {report.generated_time_str} | e-Panchayat Automation",
         )
         canvas.drawRightString(page_w - margin, 5 * mm, f"Page {doc_obj.page}")
         canvas.restoreState()
 
+    # Colorful Executive Banner Table
+    banner_tbl = Table(
+        [
+            [Paragraph(f"{_safe_xml(dist_heading.upper())} — GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT", styles["InspBannerTitle"])],
+            [Paragraph(f"GM-R 39.1 { _safe_xml(report.designation_title) }  •  Final Submit Status: Submitted Only", styles["InspBannerSub"])],
+        ],
+        colWidths=[avail_w],
+    )
+    banner_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), HexColor("#064E3B")),
+        ("LINEBELOW", (0, 1), (-1, 1), 2.5, HexColor("#F59E0B")),
+        ("TOPPADDING", (0, 0), (-1, 0), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
+        ("TOPPADDING", (0, 1), (-1, 1), 1),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 6),
+    ]))
+
+    # Metadata Summary Card (No 'Grouping: Mandal-wise', includes From Month to To Month + Report Generated On)
+    month_line = f"Period: <b>{_safe_xml(month_range)}</b> | " if month_range else ""
+    meta_tbl = Table(
+        [[
+            Paragraph(
+                f"{month_line}Weeks: <b>{_safe_xml(period_str)}</b> ({len(report.weeks_selected)} Week(s))<br/>"
+                f"<b>{_safe_xml(report.target_rule_desc)}</b> | "
+                f"Report Generated On: <b>{_safe_xml(report.generated_time_str)}</b>",
+                styles["InspMeta"],
+            )
+        ]],
+        colWidths=[avail_w],
+    )
+    meta_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), HexColor("#ECFDF5")),
+        ("BOX", (0, 0), (-1, -1), 0.75, HexColor("#6EE7B7")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+
+    # Colorful 5-Card KPI Strip
+    plural_lbl = "MANDALS" if report.group_label == "Mandal" else ("DIVISIONS" if report.group_label == "Division" else "DISTRICTS")
+    pct_hex = _tier_hex(report.total_pct_completed)
+    kpi_w = avail_w / 5.0
+    kpi_tbl = Table(
+        [[
+            [Paragraph(f"TOTAL {plural_lbl}", styles["InspKpiLbl"]), Paragraph(f'<font color="#1E3A8A"><b>{len(report.abstract_rows)}</b></font>', styles["InspKpiVal"])],
+            [Paragraph("TOTAL TARGET", styles["InspKpiLbl"]), Paragraph(f'<font color="#0F172A"><b>{report.total_target:,}</b></font>', styles["InspKpiVal"])],
+            [Paragraph("COMPLETED", styles["InspKpiLbl"]), Paragraph(f'<font color="#059669"><b>{report.total_completed:,}</b></font>', styles["InspKpiVal"])],
+            [Paragraph("BALANCE PENDING", styles["InspKpiLbl"]), Paragraph(f'<font color="#DC2626"><b>{report.total_balance:,}</b></font>', styles["InspKpiVal"])],
+            [Paragraph("% COMPLETED", styles["InspKpiLbl"]), Paragraph(f'<font color="{pct_hex}"><b>{report.total_pct_completed:.2f}%</b></font>', styles["InspKpiVal"])],
+        ]],
+        colWidths=[kpi_w] * 5,
+    )
+    kpi_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), HexColor("#EEF2FF")),
+        ("LINEABOVE", (0, 0), (0, 0), 2.2, HexColor("#3B82F6")),
+        ("BACKGROUND", (1, 0), (1, 0), HexColor("#F8FAFC")),
+        ("LINEABOVE", (1, 0), (1, 0), 2.2, HexColor("#64748B")),
+        ("BACKGROUND", (2, 0), (2, 0), HexColor("#ECFDF5")),
+        ("LINEABOVE", (2, 0), (2, 0), 2.2, HexColor("#10B981")),
+        ("BACKGROUND", (3, 0), (3, 0), HexColor("#FEF2F2")),
+        ("LINEABOVE", (3, 0), (3, 0), 2.2, HexColor("#EF4444")),
+        ("BACKGROUND", (4, 0), (4, 0), HexColor("#F0F9FF")),
+        ("LINEABOVE", (4, 0), (4, 0), 2.2, HexColor("#0284C7")),
+        ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#CBD5E1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, HexColor("#CBD5E1")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+
     headers = ["Sl No", report.group_label, "Target", "Completed", "Balance", "% Completed"]
+    # Portrait A4 available width = 190mm
+    bar_col_w = 40 * mm
     col_widths = [
-        18 * mm,
-        avail_w - (18 + 30 + 32 + 30 + 36) * mm,
-        30 * mm,
-        32 * mm,
-        30 * mm,
-        36 * mm,
+        13 * mm,
+        avail_w - (13 + 22 + 24 + 22 + 40) * mm,
+        22 * mm,
+        24 * mm,
+        22 * mm,
+        bar_col_w,
     ]
 
     table_data: list[list[Any]] = [[
@@ -122,83 +319,81 @@ def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) 
             Paragraph("0", styles["InspCell"]),
             Paragraph("0", styles["InspCell"]),
             Paragraph("0", styles["InspCell"]),
-            Paragraph("0.00%", styles["InspCell"]),
+            _PctBarFlowable(0.0, width=bar_col_w - 6),
         ])
     else:
         for row in report.abstract_rows:
             bal_html = (
-                f'<font color="#C00000"><b>{row.balance:,}</b></font>'
+                f'<font color="#DC2626"><b>{row.balance:,}</b></font>'
                 if row.balance > 0
-                else '<font color="#047857"><b>0</b></font>'
+                else '<font color="#059669"><b>0</b></font>'
             )
-            pct_color = "#047857" if row.pct_completed >= 100.0 else ("#B45309" if row.pct_completed >= 50.0 else "#C00000")
             table_data.append([
                 Paragraph(str(row.serial), styles["InspCell"]),
-                Paragraph(_safe_xml(row.unit_name), styles["InspCellLeft"]),
+                Paragraph(f"<b>{_safe_xml(row.unit_name)}</b>", styles["InspCellLeft"]),
                 Paragraph(f"{row.target:,}", styles["InspCell"]),
-                Paragraph(f"<b>{row.completed:,}</b>", styles["InspCell"]),
+                Paragraph(f'<font color="#065F46"><b>{row.completed:,}</b></font>', styles["InspCell"]),
                 Paragraph(bal_html, styles["InspCell"]),
-                Paragraph(f'<font color="{pct_color}"><b>{row.pct_completed:.2f}%</b></font>', styles["InspCell"]),
+                _PctBarFlowable(row.pct_completed, width=bar_col_w - 6),
             ])
 
-    # Total Summary Row
+    # Total Summary Row with total progress bar
     table_data.append([
         Paragraph("", styles["InspCell"]),
         Paragraph("<b>TOTAL</b>", styles["InspCellLeft"]),
         Paragraph(f"<b>{report.total_target:,}</b>", styles["InspCell"]),
-        Paragraph(f"<b>{report.total_completed:,}</b>", styles["InspCell"]),
-        Paragraph(f"<b>{report.total_balance:,}</b>", styles["InspCell"]),
-        Paragraph(f"<b>{report.total_pct_completed:.2f}%</b>", styles["InspCell"]),
+        Paragraph(f'<font color="#065F46"><b>{report.total_completed:,}</b></font>', styles["InspCell"]),
+        Paragraph(f'<font color="#991B1B"><b>{report.total_balance:,}</b></font>', styles["InspCell"]),
+        _PctBarFlowable(report.total_pct_completed, width=bar_col_w - 6, bold=True),
     ])
 
     tbl = Table(table_data, colWidths=col_widths, repeatRows=1, hAlign="LEFT", splitByRow=1)
     tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1F4E78")),
-        ("GRID", (0, 0), (-1, -1), 0.45, HexColor("#94A3B8")),
+        ("BACKGROUND", (0, 0), (-1, 0), HexColor("#0F4C5C")),
+        ("GRID", (0, 0), (-1, -1), 0.45, HexColor("#CBD5E1")),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, HexColor("#EAF2F8")]),
-        ("BACKGROUND", (0, -1), (-1, -1), HexColor("#D9EAF7")),
-        ("LINEABOVE", (0, -1), (-1, -1), 1.0, HexColor("#1F4E78")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, HexColor("#F0F9FF")]),
+        ("BACKGROUND", (0, -1), (-1, -1), HexColor("#D1FAE5")),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.2, HexColor("#064E3B")),
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
     ]))
 
-    period_str = _format_period_label(report.from_week, report.to_week)
-    dist_heading = _format_district_title(report.district_name)
-    story = [
-        Paragraph(
-            f"{_safe_xml(dist_heading.upper())} — GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT (GM-R 39.1)",
-            styles["InspTitle"],
-        ),
-        Paragraph(
-            f"Officer Designation: <b>{_safe_xml(report.designation_title)}</b> | "
-            f"Grouping: <b>{_safe_xml(report.group_label)}-wise</b> | "
-            f"Weeks: <b>{_safe_xml(period_str)}</b> ({len(report.weeks_selected)} Week(s))<br/>"
-            f"Target Rule: <b>{_safe_xml(report.target_rule_desc)}</b> | "
-            f"Filter: <b>Final Submit Status = Submitted Only</b> | Generated: {_safe_xml(report.generated_time_str)}",
-            styles["InspSubtitle"],
-        ),
+    story: list[Any] = [
+        banner_tbl,
+        Spacer(1, 5),
+        meta_tbl,
+        Spacer(1, 6),
+        kpi_tbl,
+        Spacer(1, 7),
         tbl,
-        Spacer(1, 8),
+    ]
+
+    if report.abstract_rows:
+        story.append(Spacer(1, 9))
+        story.append(KeepTogether([_build_inspections_bar_chart(report, avail_w)]))
+
+    story.append(Spacer(1, 7))
+    story.append(
         Paragraph(
             f"Audit Summary: Consolidated {len(report.weeks_selected)} week(s) | "
             f"Raw Records Scanned: {report.raw_row_count:,} | "
             f"Submitted Considered: {report.submitted_row_count:,} | "
             f"Non-Submitted Excluded: {report.excluded_non_submitted_count:,}",
             styles["InspNote"],
-        ),
-    ]
+        )
+    )
 
     doc = SimpleDocTemplate(
         str(out),
-        pagesize=landscape(A4),
+        pagesize=A4,
         leftMargin=margin,
         rightMargin=margin,
         topMargin=margin,
-        bottomMargin=14 * mm,
+        bottomMargin=13 * mm,
         title=f"{dist_heading} {report.designation} GP Inspections Abstract Report",
         author="e-Panchayat Automation",
     )
@@ -228,10 +423,12 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
     period_str = _format_period_label(report.from_week, report.to_week)
+    month_range = format_month_range_from_weeks(report.from_week, report.to_week)
+    month_part = f"Period: {month_range} | " if month_range else ""
     ws.merge_cells("A2:F2")
     ws["A2"] = (
-        f"Designation: {report.designation} | {report.target_rule_desc} | "
-        f"Weeks: {period_str} | Final Submit Status: Submitted Only"
+        f"Designation: {report.designation} | {month_part}{report.target_rule_desc} | "
+        f"Weeks: {period_str} | Final Submit Status: Submitted Only | Report Generated On: {report.generated_time_str}"
     )
     ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="334155")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")

@@ -156,11 +156,21 @@ def test_strict_submitted_filter_consolidation_pdf_excel_and_csv(tmp_path):
     assert by_unit["Wyra"].balance == 6
     assert by_unit["Wyra"].pct_completed == 25.0
 
-    # Verify PDF follows exact format: Sl No, Mandal, Target, Completed, Balance, % Completed
+    from inspections.models import format_month_range_from_weeks
+
+    # Verify PDF follows A4 Portrait colorful format with bars + exact labels
     pdf_path = tmp_path / "inspections_mpo.pdf"
     generate_inspections_pdf(report, pdf_path)
-    pdf_txt = "\n".join(p.extract_text() for p in PdfReader(str(pdf_path)).pages)
-    assert "GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT (GM-R 39.1)" in pdf_txt
+    reader = PdfReader(str(pdf_path))
+    first_page = reader.pages[0]
+    assert float(first_page.mediabox.width) < float(first_page.mediabox.height)  # Portrait A4
+    pdf_txt = "\n".join(p.extract_text() for p in reader.pages)
+    assert "GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT" in pdf_txt
+    assert "MPOs Inspection Target: Weekly 4 x 2 Week(s) = 8" in pdf_txt
+    assert "Report Generated On:" in pdf_txt
+    assert "Grouping:" not in pdf_txt
+    assert "Achievement % Bars" in pdf_txt
+    assert format_month_range_from_weeks("2026-04-06 to 2026-04-11", "2026-11-09 to 2026-11-14") == "Apr 2026 to Nov 2026"
     for hdr in ("Sl No", "Mandal", "Target", "Completed", "Balance", "% Completed"):
         assert hdr in pdf_txt
     assert "Bonakal" in pdf_txt

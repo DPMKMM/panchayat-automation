@@ -2932,15 +2932,76 @@
   // GP Inspections Monitoring Station (#inspections-station - GM-R 39.1)
   // ---------------------------------------------------------------------------
 
+  var inspTimerInterval = null;
+
+  function countSelectedInspWeeks(fromWeek, toWeek) {
+    if (!inspWeeksCache || !inspWeeksCache.length) return 1;
+    var fIdx = -1;
+    var tIdx = -1;
+    for (var i = 0; i < inspWeeksCache.length; i++) {
+      var wv = String(inspWeeksCache[i].value || '').trim();
+      var wt = String(inspWeeksCache[i].text || '').trim();
+      if (fIdx === -1 && (wv === fromWeek || wt === fromWeek)) fIdx = i;
+      if (tIdx === -1 && (wv === toWeek || wt === toWeek)) tIdx = i;
+    }
+    if (fIdx === -1 && tIdx === -1) return 1;
+    if (fIdx === -1 || tIdx === -1) return 1;
+    return Math.abs(fIdx - tIdx) + 1;
+  }
+
+  function startInspProgressTimer(estSeconds) {
+    if (inspTimerInterval) clearInterval(inspTimerInterval);
+    var strip = document.getElementById('insp-progress-strip');
+    var elapEl = document.getElementById('insp-elapsed-time');
+    var estEl = document.getElementById('insp-estimated-time');
+    var pctEl = document.getElementById('insp-progress-pct');
+    var fillEl = document.getElementById('insp-progress-fill');
+    var startMs = Date.now();
+    var targetSec = Math.max(8, estSeconds || 12);
+
+    if (strip) strip.style.display = 'block';
+    if (elapEl) elapEl.textContent = '00:00';
+    if (estEl) estEl.textContent = formatMinSec(targetSec);
+    if (pctEl) pctEl.textContent = '0%';
+    if (fillEl) fillEl.style.width = '0%';
+
+    inspTimerInterval = setInterval(function () {
+      var elapsed = Math.floor((Date.now() - startMs) / 1000);
+      if (elapEl) elapEl.textContent = formatMinSec(elapsed);
+      if (elapsed >= targetSec - 2) targetSec = elapsed + 5;
+      if (estEl) estEl.textContent = formatMinSec(Math.max(0, targetSec - elapsed));
+      var pct = Math.min(96, Math.round((elapsed / Math.max(1, targetSec)) * 96));
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (fillEl) fillEl.style.width = pct + '%';
+    }, 250);
+  }
+
+  function finishInspProgressTimer(success) {
+    if (inspTimerInterval) {
+      clearInterval(inspTimerInterval);
+      inspTimerInterval = null;
+    }
+    var estEl = document.getElementById('insp-estimated-time');
+    var pctEl = document.getElementById('insp-progress-pct');
+    var fillEl = document.getElementById('insp-progress-fill');
+    if (success) {
+      if (estEl) estEl.textContent = '00:00';
+      if (pctEl) pctEl.textContent = '100%';
+      if (fillEl) fillEl.style.width = '100%';
+    } else {
+      if (estEl) estEl.textContent = '--:--';
+    }
+  }
+
   function getInspTargetMeta(desig) {
     var d = String(desig || 'MPO').trim();
     if (d === 'MPO' || d === 'MPDO') {
-      return { level: 'Mandal', plural: 'Mandals', rule: d + ': Weekly Target 4 per week • Grouping: Mandal-wise • Filter: Final Submit Status = Submitted' };
+      return { level: 'Mandal', plural: 'Mandals', rule: d + 's Inspection Target: Weekly 4 • Filter: Final Submit Status = Submitted Only' };
     }
     if (d === 'DLPO') {
-      return { level: 'Division', plural: 'Divisions', rule: 'DLPO: Monthly Target 10 per month • Grouping: Division-wise • Filter: Final Submit Status = Submitted' };
+      return { level: 'Division', plural: 'Divisions', rule: 'DLPOs Inspection Target: Monthly 10 • Filter: Final Submit Status = Submitted Only' };
     }
-    return { level: 'District', plural: 'Districts', rule: d + ': Monthly Target 5 per month • Grouping: District-wise • Filter: Final Submit Status = Submitted' };
+    return { level: 'District', plural: 'Districts', rule: d + 's Inspection Target: Monthly 5 • Filter: Final Submit Status = Submitted Only' };
   }
 
   window.updateInspectionTargetBanner = function () {
@@ -3056,11 +3117,14 @@
     var btn = document.getElementById('btn-run-inspections-robot');
     var syncEl = document.getElementById('insp-sync-time');
 
+    var wkCnt = countSelectedInspWeeks(fromWeek, toWeek);
+    startInspProgressTimer(Math.max(10, wkCnt * 4 + 6));
+
     if (btn) {
       btn.disabled = true;
       btn.innerHTML = '⏳ Running GM-R 39.1 Robot...';
     }
-    if (syncEl) syncEl.textContent = 'Iterating selected weeks in GM-R 39.1, downloading Excel reports, and consolidating Submitted inspections...';
+    if (syncEl) syncEl.textContent = 'Iterating ' + wkCnt + ' week(s) in GM-R 39.1, downloading Excel reports, and consolidating Submitted inspections...';
 
     try {
       var fd = new FormData();
@@ -3074,9 +3138,11 @@
         method: 'POST',
         body: fd,
       });
+      finishInspProgressTimer(true);
       window.renderInspectionsReport(data);
       showNotice('Compiled GM-R 39.1 ' + data.designation + ' Inspection Abstract (' + (data.weeks_count || 1) + ' week(s)).', 'success');
     } catch (err) {
+      finishInspProgressTimer(false);
       if (handleDepartmentSessionExpiredError(err, 'inspections', { designation: desig, from_week: fromWeek, to_week: toWeek })) return;
       if (syncEl) syncEl.textContent = 'Error: ' + err.message;
       showNotice('Inspections Robot error: ' + err.message, 'error');
@@ -3130,7 +3196,7 @@
     el = document.getElementById('insp-col-unit-header'); if (el) el.textContent = levelLabel;
     el = document.getElementById('insp-search-unit-label'); if (el) el.textContent = levelLabel;
     el = document.getElementById('insp-target-rule-text');
-    if (el) el.textContent = (data.target_rule_desc || '') + ' • Grouping: ' + levelLabel + '-wise • Filter: Final Submit Status = Submitted Only';
+    if (el) el.textContent = (data.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only';
 
     var actionsWrap = document.getElementById('insp-actions-wrap');
     if (actionsWrap) actionsWrap.style.display = 'flex';
@@ -3139,6 +3205,8 @@
     var periodTxt = (data.from_week && data.to_week && data.from_week !== data.to_week)
       ? (data.from_week + ' -> ' + data.to_week)
       : (data.from_week || '');
+    var monthPart = data.month_period ? (data.month_period + ' • ') : '';
+    var genPart = data.generated_at ? (' • Report Generated On: ' + data.generated_at) : '';
     var syncEl = document.getElementById('insp-sync-time');
     if (syncEl) {
       var logNote = '';
@@ -3148,17 +3216,17 @@
         }).join(', ');
       }
       syncEl.textContent =
-        'Compiled ' + (data.designation || 'MPO') + ' (' + (data.weeks_count || 1) + ' week(s): ' +
+        'Compiled ' + (data.designation || 'MPO') + ' (' + monthPart + (data.weeks_count || 1) + ' week(s): ' +
         periodTxt + ') • Submitted Considered: ' +
         (totals.submitted_row_count || 0) + ' / Raw: ' + (totals.raw_row_count || 0) +
-        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')' + logNote;
+        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')' + genPart + logNote;
     }
 
     el = document.getElementById('insp-table-title');
     if (el) {
       var dName = String(data.district_name || 'District').trim();
       var distHeading = /district/i.test(dName) ? dName : (dName + ' District');
-      el.textContent = distHeading + ' — ' + levelLabel + '-Wise ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
+      el.textContent = distHeading + ' — ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
     }
 
     window.filterInspectionsTable();

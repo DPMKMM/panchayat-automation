@@ -160,6 +160,21 @@ def count_distinct_week_months(week_labels: list[str] | tuple[str, ...]) -> int:
     return max(1, (len(week_labels) + 3) // 4)
 
 
+def format_month_range_from_weeks(from_week: str, to_week: str = "") -> str:
+    """Derive 'From Month to To Month' (e.g. 'Apr 2026 to Nov 2026') from starting and ending weeks."""
+    s_start, s_end = extract_week_dates(from_week)
+    e_start, e_end = extract_week_dates(to_week or from_week)
+    start_dt = s_start or s_end
+    end_dt = e_start or e_end or start_dt
+    if not start_dt:
+        return ""
+    from_m = start_dt.strftime("%b %Y")
+    to_m = (end_dt or start_dt).strftime("%b %Y")
+    if from_m == to_m:
+        return from_m
+    return f"{from_m} to {to_m}"
+
+
 def compute_designation_target(
     designation: str | None,
     week_labels: list[str] | tuple[str, ...] | None = None,
@@ -171,16 +186,16 @@ def compute_designation_target(
     n_weeks = max(1, int(week_count if week_count is not None else (len(week_labels) if week_labels else 1)))
     if target_override is not None and int(target_override) > 0:
         val = int(target_override)
-        return val, f"Custom Target: {val}"
+        return val, f"{spec['designation']}s Inspection Target: Custom {val}"
 
     per_period = int(spec["target_per_period"])
     if spec["period_type"] == "weekly":
         target = per_period * n_weeks
-        return target, f"{spec['designation']}: Weekly {per_period} x {n_weeks} Week(s) = {target}"
+        return target, f"{spec['designation']}s Inspection Target: Weekly {per_period} x {n_weeks} Week(s) = {target}"
 
     n_months = count_distinct_week_months(list(week_labels or [])) if week_labels else max(1, (n_weeks + 3) // 4)
     target = per_period * n_months
-    return target, f"{spec['designation']}: Monthly {per_period} x {n_months} Month(s) = {target}"
+    return target, f"{spec['designation']}s Inspection Target: Monthly {per_period} x {n_months} Month(s) = {target}"
 
 
 @dataclass

@@ -1916,12 +1916,12 @@
           <div>
             <label for="insp-designation" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Officer Designation *</label>
             <select id="insp-designation" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onInspectionDesignationChanged()">
-              <option value="MPO" selected>MPO (Weekly Target: 4 • Mandal-wise)</option>
-              <option value="MPDO">MPDO (Weekly Target: 4 • Mandal-wise)</option>
-              <option value="DLPO">DLPO (Monthly Target: 10 • Division-wise)</option>
-              <option value="DPO">DPO (Monthly Target: 5 • District-wise)</option>
-              <option value="CEO">CEO (Monthly Target: 5 • District-wise)</option>
-              <option value="Deputy CEO">Deputy CEO (Monthly Target: 5 • District-wise)</option>
+              <option value="MPO" selected>MPO (Weekly Target: 4)</option>
+              <option value="MPDO">MPDO (Weekly Target: 4)</option>
+              <option value="DLPO">DLPO (Monthly Target: 10)</option>
+              <option value="DPO">DPO (Monthly Target: 5)</option>
+              <option value="CEO">CEO (Monthly Target: 5)</option>
+              <option value="Deputy CEO">Deputy CEO (Monthly Target: 5)</option>
             </select>
           </div>
           <div>
@@ -1943,7 +1943,7 @@
         </div>
 
         <div id="insp-target-rule-banner" style="margin-top:12px; padding:10px 14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.84rem; color:#065f46; font-weight:700; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <span id="insp-target-rule-text">MPO: Weekly Target 4 per week • Grouping: Mandal-wise • Filter: Final Submit Status = Submitted</span>
+          <span id="insp-target-rule-text">MPOs Inspection Target: Weekly 4 • Filter: Final Submit Status = Submitted Only</span>
           <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.8rem; color:#064e3b;">
             <span>Custom Target (Optional):</span>
             <input type="number" id="insp-target-override" min="1" placeholder="Auto" style="width:82px; padding:4px 8px; border:1px solid #6ee7b7; border-radius:6px; font-size:0.82rem; font-weight:700;">
@@ -1973,6 +1973,16 @@
             <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #cbd5e1; color:#334155; font-weight:700;" onclick="downloadInspectionsArtifact('csv')">
               📄 Download CSV
             </button>
+          </div>
+        </div>
+        <div id="insp-progress-strip" style="display:none; margin-top:12px; padding:10px 14px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.84rem; font-weight:700; color:#0f172a; margin-bottom:6px;">
+            <span style="color:#0f766e;">⏱️ Elapsed Time: <span id="insp-elapsed-time" style="font-family:monospace; font-size:0.94rem; color:#047857;">00:00</span></span>
+            <span style="color:#0369a1;">⏳ Estimated Time: <span id="insp-estimated-time" style="font-family:monospace; font-size:0.94rem; color:#0284c7;">--:--</span></span>
+            <span id="insp-progress-pct" style="font-family:monospace; color:#065f46;">0%</span>
+          </div>
+          <div style="width:100%; height:7px; background:#e2e8f0; border-radius:999px; overflow:hidden;">
+            <div id="insp-progress-fill" style="width:0%; height:100%; background:linear-gradient(90deg, #059669, #0ea5e9); transition:width 0.3s ease;"></div>
           </div>
         </div>
         <div id="insp-sync-time" style="font-size:0.82rem; color:var(--text-muted); font-weight:600; margin-top:10px;">
@@ -2149,7 +2159,7 @@
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=5"></script>
   <script src="/static/js/auth.js?v=25"></script>
-  <script src="/static/js/console.js?v=21"></script>
+  <script src="/static/js/console.js?v=22"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>
