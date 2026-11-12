@@ -19,16 +19,24 @@ _get_sid = extract_epts_session_id
 @router.get("/api/balance/portal-dates", include_in_schema=False)
 @router.get("/api/balance/dates", include_in_schema=False)
 def get_balance_portal_dates(request: Request) -> dict[str, Any]:
-    """Returns available Thursday dates scraped from e-Panchayat GM-R 14.2."""
+    """Returns available Thursday dates scraped from e-Panchayat GM-R 14.2 on the session Playwright thread."""
     enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
         from dsr import service as automation_service
+        from core.session_manager import run_in_session_thread
+
         session = automation_service.get_or_create_session(sid)
-        bot = session.get("bot") if automation_service.is_authenticated(session_id=sid) else None
+        if automation_service.is_authenticated(session_id=sid):
+            with session["lock"]:
+                def _task():
+                    bot = session.get("bot")
+                    return gp_balance_service.get_portal_dates(bot=bot, session_id=sid)
+
+                return run_in_session_thread(session, _task)
     except Exception:
-        bot = None
-    return gp_balance_service.get_portal_dates(bot=bot, session_id=sid)
+        pass
+    return gp_balance_service.get_portal_dates(bot=None, session_id=sid)
 
 
 @router.get("/api/balance/data", include_in_schema=False)

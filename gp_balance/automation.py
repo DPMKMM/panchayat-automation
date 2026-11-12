@@ -94,7 +94,7 @@ def fetch_available_thursday_dates(bot) -> list[str]:
 
     # Expand GM-R 14
     try:
-        gmr14_header = iframe.locator("text*='Reports on Balances'").first
+        gmr14_header = iframe.locator("xpath=//*[contains(text(), 'Reports on Balances')] | text=Reports on Balances").first
         if gmr14_header.is_visible(timeout=3000):
             gmr14_header.click()
             time.sleep(1.5)
@@ -107,13 +107,16 @@ def fetch_available_thursday_dates(bot) -> list[str]:
     link_14_2.click()
     time.sleep(2.5)
 
-    # Extract select options
+    # Extract select options (scan all selects inside frame for date values)
     dates = iframe.evaluate("""() => {
-        const sel = document.querySelector("select");
-        if (!sel) return [];
-        return Array.from(sel.options)
-            .map(o => o.text.trim())
-            .filter(t => t && t !== '--Select--' && t.match(/\\d{2}-\\d{2}-\\d{4}/));
+        const sels = Array.from(document.querySelectorAll("select"));
+        for (const sel of sels) {
+            const opts = Array.from(sel.options)
+                .map(o => (o.text || '').trim())
+                .filter(t => t && t !== '--Select--' && t.match(/\\d{2}[-/]\\d{2}[-/]\\d{4}/));
+            if (opts.length > 0) return opts;
+        }
+        return [];
     }""")
     return dates
 
@@ -170,7 +173,7 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
 
     # 3. Expand GM-R 14
     try:
-        gmr14_header = iframe.locator("text*='Reports on Balances'").first
+        gmr14_header = iframe.locator("xpath=//*[contains(text(), 'Reports on Balances')] | text=Reports on Balances").first
         if gmr14_header.is_visible(timeout=3000):
             gmr14_header.click()
             time.sleep(1.5)

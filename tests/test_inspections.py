@@ -360,3 +360,111 @@ def test_inspections_api_rbac_session_isolation_live_and_upload(monkeypatch):
     assert gdata["totals"]["target"] == 5
     assert gdata["totals"]["completed"] == 1
     assert gdata["totals"]["balance"] == 4
+
+
+def test_playwright_gmr391_fetch_weeks_real_browser(monkeypatch):
+    from playwright.sync_api import sync_playwright
+    from inspections.automation import _clean_week_options, fetch_inspection_metadata
+
+    # Verify _clean_week_options preserves date strings even when <option value=""> omits explicit value
+    cleaned = _clean_week_options({
+        "options": [
+            {"value": "0", "text": "--Select--"},
+            {"value": "", "text": "2026-11-09 to 2026-11-14"},
+            {"value": "2026-11-02 to 2026-11-07", "text": "2026-11-02 to 2026-11-07"},
+        ]
+    })
+    assert [w["text"] for w in cleaned] == ["2026-11-09 to 2026-11-14", "2026-11-02 to 2026-11-07"]
+
+    report_html = """
+    <html><body>
+      <h2>MPO Inspection Data Entry Report</h2>
+      <label>Inspected by :</label>
+      <select id="ddlDesig" onchange="updateWeeks()">
+        <option value="MPO" selected>MPO</option>
+        <option value="DLPO">DLPO</option>
+        <option value="DPO">DPO</option>
+      </select>
+      <label>District :</label>
+      <select id="ddlDistrict"><option value="Khammam">Khammam</option></select>
+      <label>Select Week:</label>
+      <select id="ddlWeek">
+        <option value="0">--Select--</option>
+        <option value="2026-11-09 to 2026-11-14">2026-11-09 to 2026-11-14</option>
+        <option value="2026-11-02 to 2026-11-07">2026-11-02 to 2026-11-07</option>
+      </select>
+      <script>
+        function updateWeeks() {
+          const d = document.getElementById('ddlDesig').value;
+          const w = document.getElementById('ddlWeek');
+          if (d === 'DLPO') {
+            w.innerHTML = '<option value="0">--Select--</option><option value="2026-11-02 to 2026-11-07">2026-11-02 to 2026-11-07</option>';
+          }
+        }
+      </script>
+    </body></html>
+    """
+    menu_html = """
+    <html><body>
+      <input type="search" id="menuSearch" placeholder="Search" oninput="
+        const q = this.value.toLowerCase();
+        document.getElementById('card39').style.display = 'gm-r 39.'.includes(q) || !q ? 'block' : 'none';
+      " />
+      <div id="card39">
+        <a href="javascript:void(0)" onclick="document.getElementById('layer39').style.display='block'">GM-R 39. MPO,DLPO,DPO Inspection Data Entry Report</a>
+        <div id="layer39" style="display:none">
+          <div>REPORTS LAYER</div>
+          <a href="https://epanchayat.test/gmr391">GM-R 39.1 MPO,DLPO,DPO Inspection Data Entry Report</a>
+        </div>
+      </div>
+    </body></html>
+    """
+    shell_html = """
+    <html><body>
+      <nav>
+        <a href="https://epanchayat.test/menu" target="my-iframe">GP Monitoring</a>
+        <a href="javascript:void(0)">GP Monitoring New</a>
+      </nav>
+      <iframe name="my-iframe" id="my-iframe" src="about:blank"></iframe>
+    </body></html>
+    """
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+
+        def _handle_route(route):
+            u = route.request.url
+            if u.endswith("/shell"):
+                route.fulfill(status=200, content_type="text/html", body=shell_html)
+            elif u.endswith("/menu"):
+                route.fulfill(status=200, content_type="text/html", body=menu_html)
+            elif u.endswith("/gmr391"):
+                route.fulfill(status=200, content_type="text/html", body=report_html)
+            else:
+                route.abort()
+
+        page.route("https://epanchayat.test/**", _handle_route)
+        page.goto("https://epanchayat.test/shell")
+        monkeypatch.setattr(
+            "inspections.automation._click_gp_monitoring_top_menu",
+            lambda b: page.locator("xpath=//a[normalize-space(.)='GP Monitoring']").first.click(),
+        )
+
+        class _Bot:
+            def __init__(self, pg):
+                self.page = pg
+            def select_menu(self, name):
+                self.page.locator(f"xpath=//a[normalize-space(.)='{name}']").first.click()
+
+        bot = _Bot(page)
+        meta_mpo = fetch_inspection_metadata(bot, designation="MPO")
+        assert [w["text"] for w in meta_mpo["weeks"]] == [
+            "2026-11-09 to 2026-11-14",
+            "2026-11-02 to 2026-11-07",
+        ]
+
+        meta_dlpo = fetch_inspection_metadata(bot, designation="DLPO")
+        assert [w["text"] for w in meta_dlpo["weeks"]] == ["2026-11-02 to 2026-11-07"]
+        assert meta_dlpo["selected_designation"] == "DLPO"
+        browser.close()

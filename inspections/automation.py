@@ -34,32 +34,59 @@ def _assert_session_active(page) -> None:
         )
 
 
-def _get_my_iframe(page):
-    """Locate the `my-iframe` frame hosting PSPerformance / DynamicReports inside EPTS dashboard."""
+def _get_all_candidate_frames(page) -> list[Any]:
+    """Return non-main frames ordered with my-iframe / PSPerformance frames first."""
     _assert_session_active(page)
-    for frame in getattr(page, "frames", []) or []:
-        if frame == getattr(page, "main_frame", None):
-            continue
-        f_name = (getattr(frame, "name", "") or "").lower()
-        f_url = (getattr(frame, "url", "") or "").lower()
-        if (
-            f_name == "my-iframe"
-            or "tgprepanchayat" in f_url
-            or "psperformance" in f_url
-            or "dynamicreports" in f_url
-            or "gmr" in f_url
-            or "inspection" in f_url
-        ):
-            return frame
+    main_f = getattr(page, "main_frame", None)
+    preferred: list[Any] = []
+    others: list[Any] = []
+
+    pages_to_scan = [page]
     try:
-        handle = page.locator("iframe[name='my-iframe'], iframe#my-iframe").first.element_handle(timeout=1500)
-        if handle:
-            cf = handle.content_frame()
-            if cf and (getattr(cf, "url", "") or "").lower() != "about:blank":
-                return cf
+        ctx = getattr(page, "context", None)
+        for p in (getattr(ctx, "pages", []) or []):
+            if p not in pages_to_scan and not (hasattr(p, "is_closed") and p.is_closed()):
+                pages_to_scan.append(p)
     except Exception:
         pass
-    return None
+
+    for pg in pages_to_scan:
+        if pg != page:
+            mf = getattr(pg, "main_frame", None)
+            if mf is not None:
+                others.append(mf)
+        for frame in getattr(pg, "frames", []) or []:
+            if frame == main_f:
+                continue
+            f_name = (getattr(frame, "name", "") or "").lower()
+            f_url = (getattr(frame, "url", "") or "").lower()
+            if (
+                f_name == "my-iframe"
+                or "tgprepanchayat" in f_url
+                or "psperformance" in f_url
+                or "dynamicreports" in f_url
+                or "gmr" in f_url
+                or "inspection" in f_url
+            ):
+                preferred.append(frame)
+            else:
+                others.append(frame)
+
+    try:
+        handle = page.locator("iframe[name='my-iframe'], iframe#my-iframe").first.element_handle(timeout=1000)
+        if handle:
+            cf = handle.content_frame()
+            if cf and cf not in preferred and (getattr(cf, "url", "") or "").lower() != "about:blank":
+                preferred.insert(0, cf)
+    except Exception:
+        pass
+    return preferred + others
+
+
+def _get_my_iframe(page):
+    """Locate the `my-iframe` frame hosting PSPerformance / DynamicReports inside EPTS dashboard."""
+    frames = _get_all_candidate_frames(page)
+    return frames[0] if frames else None
 
 
 def _find_visible(scope, selector: str):
@@ -75,27 +102,32 @@ def _find_visible(scope, selector: str):
     return None
 
 
-def _inspect_selects(iframe) -> dict[str, Any]:
-    """Inspect visible <select> elements inside GM-R 39.1 frame and classify Designation vs Week."""
+def _inspect_selects(iframe) -> list[dict[str, Any]]:
+    """Inspect <select> elements inside GM-R 39.1 frame (visible first, falling back to non-hidden if Select2/Chosen used)."""
     return iframe.evaluate(
         """() => {
             const selects = Array.from(document.querySelectorAll('select'));
-            const result = [];
+            const visible = [];
+            const allNonEmpty = [];
             selects.forEach((el, idx) => {
                 const style = window.getComputedStyle(el);
-                if (style && (style.display === 'none' || style.visibility === 'hidden')) return;
                 const opts = Array.from(el.options).map(o => ({
                     value: String(o.value || '').trim(),
                     text: String(o.text || '').trim()
                 }));
-                result.push({
+                const item = {
                     idx: idx,
                     id: el.id || '',
                     name: el.name || '',
+                    selectedValue: String(el.value || '').trim(),
                     options: opts
-                });
+                };
+                if (opts.length > 0) allNonEmpty.push(item);
+                if (style && style.display !== 'none' && style.visibility !== 'hidden') {
+                    visible.push(item);
+                }
             });
-            return result;
+            return visible.length > 0 ? visible : allNonEmpty;
         }"""
     )
 
@@ -146,7 +178,79 @@ def _locator_for_select(iframe, sel_info: dict[str, Any]):
     sel_name = sel_info.get("name")
     if sel_name:
         return iframe.locator(f"select[name='{sel_name}']").first
-    return iframe.locator("select:visible").nth(int(sel_info.get("idx", 0)))
+    return iframe.locator("select").nth(int(sel_info.get("idx", 0)))
+
+
+def _find_frame_with_gmr_menu(page):
+    """Return the child frame currently rendering the DynamicReports GM-R menu."""
+    for f in _get_all_candidate_frames(page):
+        try:
+            if (
+                f.locator("text='Enlarge All'").count() > 0
+                or f.locator("a:has-text('GM-R')").count() > 0
+                or f.locator("xpath=//*[contains(., 'GM-R 39')]").count() > 0
+                or f.locator("a:has-text('39.1')").count() > 0
+            ):
+                return f
+        except Exception:
+            continue
+    return None
+
+
+def _find_frame_with_gmr391_selects(page, fallback_frame=None):
+    """Scan all frames/pages for GM-R 39.1 Designation/Week <select> controls."""
+    candidates = _get_all_candidate_frames(page)
+    if fallback_frame is not None and fallback_frame not in candidates:
+        candidates.append(fallback_frame)
+    for f in candidates:
+        try:
+            infos = _inspect_selects(f)
+            if not infos:
+                continue
+            desig_sel, week_sel = _classify_selects(infos)
+            if desig_sel is not None or week_sel is not None:
+                return f, infos, desig_sel, week_sel
+        except Exception:
+            continue
+    return fallback_frame, [], None, None
+
+
+def _click_gp_monitoring_top_menu(bot) -> None:
+    """Ensure EPTS dashboard is open and click the exact 'GP Monitoring' top menu item."""
+    page = bot.page
+    _assert_session_active(page)
+    cur_url = str(getattr(page, "url", "") or "").lower()
+    if "deptloginverified" not in cur_url:
+        try:
+            page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=25000)
+            time.sleep(1.0)
+            _assert_session_active(page)
+        except PermissionError:
+            raise
+        except Exception:
+            pass
+
+    gp_selectors = (
+        "xpath=//a[normalize-space(.)='GP Monitoring'] | //input[@value='GP Monitoring']",
+        "text='GP Monitoring'",
+        "a:has-text('GP Monitoring')",
+    )
+    gp_loc = None
+    for sel in gp_selectors:
+        gp_loc = _find_visible(page, sel)
+        if gp_loc is not None:
+            break
+
+    if gp_loc is not None:
+        try:
+            gp_loc.hover()
+            time.sleep(0.25)
+        except Exception:
+            pass
+        gp_loc.click()
+        return
+
+    bot.select_menu("GP Monitoring")
 
 
 def _open_gmr391_frame(bot):
@@ -155,16 +259,21 @@ def _open_gmr391_frame(bot):
     _assert_session_active(page)
     logger.info("[*] Navigating GP Monitoring -> GM-R 39 -> GM-R 39.1 inside shared session...")
 
-    bot.select_menu("GP Monitoring")
+    _click_gp_monitoring_top_menu(bot)
     time.sleep(2.0)
 
     iframe = None
-    deadline = time.time() + 20.0
+    deadline = time.time() + 25.0
     while time.time() < deadline:
-        iframe = _get_my_iframe(page)
-        if iframe:
+        iframe = _find_frame_with_gmr_menu(page)
+        if iframe is not None:
+            break
+        # Fallback if a mock/test frame exposes generic links
+        cand = _get_my_iframe(page)
+        if cand is not None:
             try:
-                if iframe.locator("text='Enlarge All'").count() > 0 or iframe.locator("a").count() > 3:
+                if cand.locator("a").count() > 3:
+                    iframe = cand
                     break
             except Exception:
                 pass
@@ -172,59 +281,64 @@ def _open_gmr391_frame(bot):
 
     if not iframe:
         _assert_session_active(page)
-        raise RuntimeError("Could not locate 'my-iframe' after selecting GP Monitoring for GM-R 39.1.")
+        raise RuntimeError("Could not locate 'my-iframe' menu after selecting GP Monitoring for GM-R 39.1.")
 
     try:
         iframe.wait_for_load_state("domcontentloaded", timeout=10000)
     except Exception:
         pass
 
-    # If search input exists inside the menu frame, try searching GM-R 39
-    try:
-        search_box = _find_visible(
-            iframe,
-            "input[type='search'], input[placeholder*='Search' i], input[id*='search' i]",
-        )
-        if search_box is not None:
-            search_box.fill("39.1")
-            time.sleep(0.6)
-    except Exception:
-        pass
-
-    # Look for GM-R 39.1 link directly or after clicking Enlarge All / GM-R 39 header
     target_selectors = (
-        "a:has-text('39.1')",
         "a:has-text('GM-R 39.1')",
-        "a:has-text('MPO,DLPO,DPO Inspection Data Entry')",
-        "a:has-text('MPO, DLPO, DPO Inspection Data Entry')",
+        "a:has-text('39.1')",
+        "xpath=//*[self::a or self::button or self::span or @onclick][contains(text(), '39.1')]",
     )
 
-    def _find_391():
+    def _find_391(scope):
         for sel in target_selectors:
-            vis = _find_visible(iframe, sel)
+            vis = _find_visible(scope, sel)
             if vis is not None:
                 return vis
         return None
 
-    link = _find_391()
+    link = _find_391(iframe)
     if link is None:
         try:
-            enlarge = _find_visible(iframe, "text='Enlarge All'")
+            enlarge = _find_visible(
+                iframe,
+                "text='Enlarge All', a:has-text('Enlarge All'), button:has-text('Enlarge All'), input[value*='Enlarge' i]",
+            )
             if enlarge is not None:
+                try:
+                    enlarge.scroll_into_view_if_needed()
+                except Exception:
+                    pass
                 enlarge.click()
-                time.sleep(1.0)
-                link = _find_391()
+                time.sleep(1.2)
+                link = _find_391(iframe)
         except Exception:
             pass
 
     if link is None:
-        for hdr_sel in ("text*='GM-R 39'", "text*='Inspection Data Entry Report'"):
+        # Valid Playwright leaf-text selectors only (avoid outer container wrappers & unsupported `text*=`)
+        header_selectors = (
+            "a:has-text('GM-R 39.')",
+            "button:has-text('GM-R 39.')",
+            "text=GM-R 39.",
+            "xpath=//*[contains(text(), 'GM-R 39') and not(contains(text(), '39.1'))]",
+            "xpath=//*[contains(text(), 'Inspection Data Entry Report') and not(contains(text(), '39.1'))]",
+        )
+        for hdr_sel in header_selectors:
             try:
                 hdr = _find_visible(iframe, hdr_sel)
                 if hdr is not None:
+                    try:
+                        hdr.scroll_into_view_if_needed()
+                    except Exception:
+                        pass
                     hdr.click()
-                    time.sleep(1.0)
-                    link = _find_391()
+                    time.sleep(1.2)
+                    link = _find_391(iframe)
                     if link is not None:
                         break
             except Exception:
@@ -240,18 +354,13 @@ def _open_gmr391_frame(bot):
         pass
     link.click()
 
-    # Wait for Designation & Week <select> elements to render inside GM-R 39.1 iframe
-    ddl_deadline = time.time() + 20.0
+    # Wait for Designation & Week <select> elements to render inside GM-R 39.1 frame
+    ddl_deadline = time.time() + 25.0
     while time.time() < ddl_deadline:
-        iframe = _get_my_iframe(page) or iframe
-        try:
-            infos = _inspect_selects(iframe)
-            desig_sel, week_sel = _classify_selects(infos)
-            if desig_sel is not None or week_sel is not None:
-                time.sleep(0.4)
-                return iframe
-        except Exception:
-            pass
+        target_frame, _infos, desig_sel, week_sel = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
+        if desig_sel is not None or week_sel is not None:
+            time.sleep(0.4)
+            return target_frame
         time.sleep(0.4)
 
     _assert_session_active(page)
@@ -268,7 +377,7 @@ def _select_designation(iframe, desig_info: dict[str, Any], target_designation: 
     for opt in desig_info.get("options", []):
         txt = opt.get("text", "").strip()
         val = opt.get("value", "").strip()
-        if not val or val == "0" or "select" in txt.lower():
+        if not txt or "select" in txt.lower() or val in ("0", "-1"):
             continue
         if txt.casefold() == canon.casefold() or val.casefold() == canon.casefold():
             chosen_val = val
@@ -277,7 +386,7 @@ def _select_designation(iframe, desig_info: dict[str, Any], target_designation: 
         for opt in desig_info.get("options", []):
             txt = opt.get("text", "").strip()
             val = opt.get("value", "").strip()
-            if not val or val == "0" or "select" in txt.lower():
+            if not txt or "select" in txt.lower() or val in ("0", "-1"):
                 continue
             # Avoid matching 'CEO' against 'Deputy CEO'
             if canon == "CEO" and "deputy" in txt.lower():
@@ -286,7 +395,13 @@ def _select_designation(iframe, desig_info: dict[str, Any], target_designation: 
                 chosen_val = val
                 break
 
+    cur_selected = str(desig_info.get("selectedValue") or "").strip()
+    if chosen_val is not None and cur_selected and cur_selected.casefold() == chosen_val.casefold():
+        return
+
     if chosen_val is None:
+        loc.select_option(label=canon)
+    elif chosen_val == "":
         loc.select_option(label=canon)
     else:
         loc.select_option(value=chosen_val)
@@ -300,7 +415,14 @@ def _clean_week_options(week_info: dict[str, Any] | None) -> list[dict[str, str]
     for opt in week_info.get("options", []):
         val = str(opt.get("value", "")).strip()
         txt = str(opt.get("text", "")).strip()
-        if not txt or val in ("", "0", "-1") or "select" in txt.lower():
+        if not txt or "select" in txt.lower():
+            continue
+        looks_like_date = bool(
+            re.search(r"\d{4}[-/]\d{2}[-/]\d{2}", txt)
+            or re.search(r"\d{2}[-/][A-Za-z0-9]{2,3}[-/]\d{4}", txt)
+            or " to " in txt.lower()
+        )
+        if not looks_like_date and val in ("", "0", "-1"):
             continue
         cleaned.append({"value": val or txt, "text": txt})
     return cleaned
@@ -341,31 +463,49 @@ def resolve_week_slice(
 
 def fetch_inspection_metadata(bot, designation: str | None = None) -> dict[str, Any]:
     """Open GM-R 39.1 inside shared session and extract live Designations & Week options."""
-    iframe = _open_gmr391_frame(bot)
-    infos = _inspect_selects(iframe)
-    desig_info, week_info = _classify_selects(infos)
+    page = bot.page
 
-    if designation and desig_info is not None:
-        _select_designation(iframe, desig_info, designation)
-        iframe = _get_my_iframe(bot.page) or iframe
-        infos = _inspect_selects(iframe)
-        desig_info, week_info = _classify_selects(infos)
+    def _on_dialog(dialog):
+        try:
+            dialog.accept()
+        except Exception:
+            pass
 
-    portal_desigs = []
-    if desig_info:
-        for opt in desig_info.get("options", []):
-            txt = str(opt.get("text", "")).strip()
-            val = str(opt.get("value", "")).strip()
-            if txt and val not in ("", "0") and "select" not in txt.lower():
-                portal_desigs.append({"value": val, "text": txt})
+    page.on("dialog", _on_dialog)
+    try:
+        iframe = _open_gmr391_frame(bot)
+        iframe, infos, desig_info, week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
+        weeks = _clean_week_options(week_info)
 
-    weeks = _clean_week_options(week_info)
-    return {
-        "designations": list(SUPPORTED_DESIGNATIONS),
-        "portal_designations": portal_desigs,
-        "weeks": weeks,
-        "selected_designation": get_designation_spec(designation or "MPO")["designation"],
-    }
+        if (designation or not weeks) and desig_info is not None:
+            _select_designation(iframe, desig_info, designation or "MPO")
+            wait_end = time.time() + 8.0
+            while time.time() < wait_end:
+                iframe, infos, desig_info, week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
+                weeks = _clean_week_options(week_info)
+                if weeks:
+                    break
+                time.sleep(0.4)
+
+        portal_desigs = []
+        if desig_info:
+            for opt in desig_info.get("options", []):
+                txt = str(opt.get("text", "")).strip()
+                val = str(opt.get("value", "")).strip()
+                if txt and val not in ("0", "-1") and "select" not in txt.lower():
+                    portal_desigs.append({"value": val or txt, "text": txt})
+
+        return {
+            "designations": list(SUPPORTED_DESIGNATIONS),
+            "portal_designations": portal_desigs,
+            "weeks": weeks,
+            "selected_designation": get_designation_spec(designation or "MPO")["designation"],
+        }
+    finally:
+        try:
+            page.remove_listener("dialog", _on_dialog)
+        except Exception:
+            pass
 
 
 def _find_excel_icon_locator(iframe):
@@ -466,14 +606,16 @@ def download_inspection_weeks(
 
     try:
         iframe = _open_gmr391_frame(bot)
-        infos = _inspect_selects(iframe)
-        desig_info, week_info = _classify_selects(infos)
+        iframe, infos, desig_info, week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
 
         if desig_info is not None:
             _select_designation(iframe, desig_info, canon_desig)
-            iframe = _get_my_iframe(page) or iframe
-            infos = _inspect_selects(iframe)
-            desig_info, week_info = _classify_selects(infos)
+            wait_end = time.time() + 8.0
+            while time.time() < wait_end:
+                iframe, infos, desig_info, week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
+                if _clean_week_options(week_info):
+                    break
+                time.sleep(0.4)
 
         available_weeks = _clean_week_options(week_info)
         if not available_weeks:
@@ -486,9 +628,7 @@ def download_inspection_weeks(
 
         for idx, wk in enumerate(selected_weeks, start=1):
             portal_dialogs.clear()
-            iframe = _get_my_iframe(page) or iframe
-            infos = _inspect_selects(iframe)
-            _, cur_week_info = _classify_selects(infos)
+            iframe, infos, _, cur_week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
             if cur_week_info is None:
                 raise RuntimeError(f"Week dropdown disappeared in GM-R 39.1 on week '{wk['text']}'.")
 
