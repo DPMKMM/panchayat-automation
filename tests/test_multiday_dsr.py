@@ -148,24 +148,37 @@ def test_process_dsr_logic_boundaries_and_color_bands():
     assert int(j_gp["No. of Days Reported"]) == 2
     assert float(j_gp["Before 9 AM %"]) == 100.0
 
-    # Day-Wise Exact Attendance Time Matrix + Average Time & No. of Days Before 9 AM
+    # Day-Wise Exact Attendance Time Matrix + Status Counts + Average Time & No. of Days Before 9 AM
     assert list(res.time_matrix.columns) == [
         "S.No",
         "Mandal Name",
         "Panchayat Name",
         "10-11-2026",
         "11-11-2026",
+        "Present",
+        "On Leave",
+        "Not Marked Attendance",
+        "Training / Meeting",
         "Average Time",
         "No. of Days Before 9 AM",
     ]
     tm_j = res.time_matrix[res.time_matrix["Panchayat Name"] == "Julapalli GP"].iloc[0]
     assert tm_j["10-11-2026"] == "08:45:00 AM"
     assert tm_j["11-11-2026"] == "08:30:00 AM"
+    assert int(tm_j["Present"]) == 1
+    assert int(tm_j["On Leave"]) == 0
+    assert int(tm_j["Not Marked Attendance"]) == 0
+    assert int(tm_j["Training / Meeting"]) == 1
     assert tm_j["Average Time"] == "08:37:30 AM"
     assert int(tm_j["No. of Days Before 9 AM"]) == 2
 
     tm_k = res.time_matrix[res.time_matrix["Panchayat Name"] == "Kuchirajpalli"].iloc[0]
     assert tm_k["10-11-2026"] == "09:00:00 AM"
+    assert tm_k["11-11-2026"] == "-"
+    assert int(tm_k["Present"]) == 0
+    assert int(tm_k["On Leave"]) == 1
+    assert int(tm_k["Not Marked Attendance"]) == 1
+    assert int(tm_k["Training / Meeting"]) == 0
     assert tm_k["Average Time"] == "09:00:00 AM"
     assert int(tm_k["No. of Days Before 9 AM"]) == 0  # 09:00:00 is >= 9 AM
 

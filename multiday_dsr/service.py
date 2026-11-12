@@ -24,7 +24,16 @@ _JOBS: dict[str, dict[str, Any]] = {}
 
 def _df_to_records(df: pd.DataFrame, include_time_styles: bool = False) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    fixed_non_time = {"S.No", "Mandal Name", "Panchayat Name", "No. of Days Before 9 AM"}
+    fixed_non_time = {
+        "S.No",
+        "Mandal Name",
+        "Panchayat Name",
+        "Present",
+        "On Leave",
+        "Not Marked Attendance",
+        "Training / Meeting",
+        "No. of Days Before 9 AM",
+    }
     for _, r in df.iterrows():
         item: dict[str, Any] = {}
         t_styles: dict[str, dict[str, str]] = {}

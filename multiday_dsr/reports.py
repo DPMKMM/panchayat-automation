@@ -238,13 +238,20 @@ def generate_multiday_dsr_pdf(
         )
     )
 
-    # 4. Day-Wise Exact Attendance Time + Average Time & No. of Days Before 9 AM
+    # 4. Day-Wise Exact Attendance Time + Status Counts + Average Time & No. of Days Before 9 AM
     if include_time_matrix and not result.time_matrix.empty:
         tm_df = result.time_matrix
         fixed_left = ["S.No", "Mandal Name", "Panchayat Name"]
-        summary_right = ["Average Time", "No. of Days Before 9 AM"]
+        summary_right = [
+            "Present",
+            "On Leave",
+            "Not Marked Attendance",
+            "Training / Meeting",
+            "Average Time",
+            "No. of Days Before 9 AM",
+        ]
         date_cols = [c for c in tm_df.columns if c not in fixed_left and c not in summary_right]
-        chunk_size = 8
+        chunk_size = 6
         date_chunks = [date_cols[i : i + chunk_size] for i in range(0, max(1, len(date_cols)), chunk_size)] or [[]]
 
         for slice_idx, d_chunk in enumerate(date_chunks, start=1):
@@ -252,20 +259,25 @@ def generate_multiday_dsr_pdf(
             suffix = f" (Part {slice_idx}/{len(date_chunks)})" if len(date_chunks) > 1 else ""
             story.append(
                 Paragraph(
-                    f"4. Gram Panchayat Day-Wise Exact Attendance Time, Average Time & Before 9 AM Days{suffix}",
+                    f"4. Gram Panchayat Day-Wise Exact Attendance Time, Status Counts, Average Time & Before 9 AM Days{suffix}",
                     styles["sec"],
                 )
             )
             sub_cols = fixed_left + d_chunk + summary_right
             sub_df = tm_df[sub_cols]
-            w_sno = usable_w * 0.04
-            w_mandal = usable_w * 0.115
-            w_gp = usable_w * 0.13
-            w_avg = usable_w * 0.085
-            w_b9 = usable_w * 0.075
-            rem_w = usable_w - (w_sno + w_mandal + w_gp + w_avg + w_b9)
+            w_sno = usable_w * 0.036
+            w_mandal = usable_w * 0.105
+            w_gp = usable_w * 0.12
+            w_cnt = usable_w * 0.055  # x4 = 0.22
+            w_avg = usable_w * 0.078
+            w_b9 = usable_w * 0.068
+            rem_w = usable_w - (w_sno + w_mandal + w_gp + w_cnt * 4 + w_avg + w_b9)
             w_day = rem_w / max(1, len(d_chunk)) if d_chunk else 0
-            sub_widths = [w_sno, w_mandal, w_gp] + [w_day] * len(d_chunk) + [w_avg, w_b9]
+            sub_widths = (
+                [w_sno, w_mandal, w_gp]
+                + [w_day] * len(d_chunk)
+                + [w_cnt, w_cnt, w_cnt, w_cnt, w_avg, w_b9]
+            )
             story.append(
                 _df_to_pdf_table(
                     sub_df,
@@ -405,7 +417,16 @@ def generate_multiday_dsr_excel(
 
     if include_time_matrix and not result.time_matrix.empty:
         tm_df = result.time_matrix
-        fixed_cols = {"S.No", "Mandal Name", "Panchayat Name", "No. of Days Before 9 AM"}
+        fixed_cols = {
+            "S.No",
+            "Mandal Name",
+            "Panchayat Name",
+            "Present",
+            "On Leave",
+            "Not Marked Attendance",
+            "Training / Meeting",
+            "No. of Days Before 9 AM",
+        }
         t_cols = {c for c in tm_df.columns if c not in fixed_cols}
         ws_tm = wb.create_sheet("Day-Wise Exact Time")
         _write_styled_sheet(

@@ -412,21 +412,27 @@ def process_dsr(
     ].sort_values(["Mandal Name", "Panchayat Name"]).copy()
     gp_summary.insert(0, "S.No", range(1, len(gp_summary) + 1))
 
-    # 4. Day-Wise Exact Attendance Time Matrix + Average Time & No. of Days Before 9 AM
+    # 4. Day-Wise Exact Attendance Time Matrix + Status Counts + Average Time & No. of Days Before 9 AM
     date_labels = [pd.to_datetime(d).strftime("%d-%m-%Y") for d in dates]
-    cell_lookup: dict[tuple[str, str], tuple[str, int | None, int]] = {}
+    # Tuple per (lgd, date): (display_str, sec_mid, is_b9, is_present, is_onleave, is_tm, is_reported)
+    cell_lookup: dict[tuple[str, str], tuple[str, int | None, int, int, int, int, int]] = {}
     for _, row in df.iterrows():
         lgd = str(row["Panchayat LGD"]).strip()
         d_lbl = pd.to_datetime(row["Report Date"]).strftime("%d-%m-%Y")
         att_dt = row["Attendance DT"]
+        st_lbl = str(row["Attendance Status"] or "").strip()
+        st_low = st_lbl.lower()
+        is_pres = int(st_low == "present")
+        is_leave = int(st_low in ("on leave", "onleave"))
+        is_tm = int(st_low.startswith("training") or st_low.startswith("meeting"))
+        is_rep = int(st_lbl != "")
         if pd.notna(att_dt):
             exact_str = att_dt.strftime("%I:%M:%S %p")
             sec_mid = att_dt.hour * 3600 + att_dt.minute * 60 + att_dt.second
             is_b9 = int(att_dt.time() < nine_am)
-            cell_lookup[(lgd, d_lbl)] = (exact_str, sec_mid, is_b9)
+            cell_lookup[(lgd, d_lbl)] = (exact_str, sec_mid, is_b9, is_pres, is_leave, is_tm, is_rep)
         else:
-            st_lbl = str(row["Attendance Status"] or "").strip()
-            cell_lookup[(lgd, d_lbl)] = (st_lbl if st_lbl else "-", None, 0)
+            cell_lookup[(lgd, d_lbl)] = (st_lbl if st_lbl else "-", None, 0, is_pres, is_leave, is_tm, is_rep)
 
     gp_sorted = gp_master.sort_values(["Mandal Name", "Panchayat Name"]).reset_index(drop=True)
     tm_rows: list[dict[str, Any]] = []
@@ -441,12 +447,27 @@ def process_dsr(
         }
         secs_list: list[int] = []
         b9_count = 0
+        pres_count = 0
+        leave_count = 0
+        tm_count = 0
+        rep_count = 0
         for d_lbl in date_labels:
-            val_str, sec_mid, is_b9 = cell_lookup.get((lgd, d_lbl), ("-", None, 0))
+            val_str, sec_mid, is_b9, is_pres, is_leave, is_tm, is_rep = cell_lookup.get(
+                (lgd, d_lbl), ("-", None, 0, 0, 0, 0, 0)
+            )
             item[d_lbl] = val_str
             if sec_mid is not None:
                 secs_list.append(sec_mid)
             b9_count += is_b9
+            pres_count += is_pres
+            leave_count += is_leave
+            tm_count += is_tm
+            rep_count += is_rep
+
+        item["Present"] = pres_count
+        item["On Leave"] = leave_count
+        item["Not Marked Attendance"] = max(0, total_reporting_days - rep_count)
+        item["Training / Meeting"] = tm_count
         if secs_list:
             avg_s = int(round(sum(secs_list) / len(secs_list)))
             hh, rem = divmod(avg_s, 3600)
@@ -457,7 +478,15 @@ def process_dsr(
         item["No. of Days Before 9 AM"] = b9_count
         tm_rows.append(item)
 
-    tm_cols = ["S.No", "Mandal Name", "Panchayat Name"] + date_labels + ["Average Time", "No. of Days Before 9 AM"]
+    tm_summary_cols = [
+        "Present",
+        "On Leave",
+        "Not Marked Attendance",
+        "Training / Meeting",
+        "Average Time",
+        "No. of Days Before 9 AM",
+    ]
+    tm_cols = ["S.No", "Mandal Name", "Panchayat Name"] + date_labels + tm_summary_cols
     time_matrix = pd.DataFrame(tm_rows, columns=tm_cols)
 
     return MultiDayDsrResult(
