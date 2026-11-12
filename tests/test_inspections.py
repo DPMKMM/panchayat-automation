@@ -169,7 +169,7 @@ def test_strict_submitted_filter_consolidation_pdf_excel_and_csv(tmp_path):
     assert "MPOs Inspection Target: Weekly 4 x 2 Week(s) = 8" in pdf_txt
     assert "Report Generated On:" in pdf_txt
     assert "Grouping:" not in pdf_txt
-    assert "Achievement % Bars" in pdf_txt
+    assert "Achievement % Bars" not in pdf_txt
     assert format_month_range_from_weeks("2026-04-06 to 2026-04-11", "2026-11-09 to 2026-11-14") == "Apr 2026 to Nov 2026"
     for hdr in ("Sl No", "Mandal", "Target", "Completed", "Balance", "% Completed"):
         assert hdr in pdf_txt
@@ -731,17 +731,21 @@ def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
     sep_bonakal = {r.unit_name: r for r in secs["2026-09"].abstract_rows}["Bonakal"]
     assert sep_bonakal.completed == 1
 
-    # Verify Month-Wise PDF (Portrait A4 + bars), Excel & CSV generation
+    # Verify Month-Wise PDF (Consolidated page + Month-Wise Summary + Month pages, Portrait A4, no bars), Excel & CSV generation
     mw_pdf = tmp_path / "mw.pdf"
     generate_monthwise_inspections_pdf(rep, mw_pdf)
     mw_txt = "\n".join(p.extract_text() for p in PdfReader(str(mw_pdf)).pages)
-    assert "MONTH-WISE GRAM PANCHAYAT INSPECTIONS REPORT" in mw_txt
+    assert "CONSOLIDATED GP INSPECTIONS ABSTRACT REPORT" in mw_txt
+    assert "CONSOLIDATED TOTAL" in mw_txt
+    assert "MONTH-WISE INSPECTIONS SUMMARY" in mw_txt
+    assert "Achievement % Bars" not in mw_txt
     assert "Aug 2026" in mw_txt and "2026-08-31 to 2026-09-05" in mw_txt
 
     mw_xlsx = tmp_path / "mw.xlsx"
     generate_monthwise_inspections_excel(rep, mw_xlsx)
     wb = openpyxl.load_workbook(mw_xlsx)
     assert "Month-Wise Summary" in wb.sheetnames
+    assert "Consolidated Abstract" in wb.sheetnames
     assert "Unit x Month Matrix" in wb.sheetnames
     assert "Aug 2026" in wb.sheetnames
 
