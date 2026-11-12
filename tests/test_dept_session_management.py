@@ -443,14 +443,17 @@ def test_console_selection_prompts_dept_login_once_and_logout_closes_browser(mon
 
     # 1. JS guards: Automated Reports triggers openDepartmentLoginModal() when unauthenticated;
     #    _deptFetch unifies X-Session-ID across login/OTP/modules; logout calls /api/naresh/logout + window.close()
-    auth_js = c.get("/static/js/auth.js?v=22").text
-    console_js = c.get("/static/js/console.js?v=16").text
+    auth_js = c.get("/static/js/auth.js?v=23").text
+    console_js = c.get("/static/js/console.js?v=17").text
     dept_js = c.get("/static/js/dept_session.js?v=5").text
 
     assert "window.currentWorkspaceMode === 'automated' || dedSection === 'automated'" in auth_js
     assert "if (m === 'automated' && isDirectClick)" in auth_js
     assert "/api/naresh/logout" in auth_js
     assert "window.close()" in auth_js
+    assert "_isOnConsoleRouteOrHost()" in console_js
+    assert "window.location.replace(homeUrl);" in console_js
+    assert "window.showWorkspaceModeSelector();" in console_js
     assert "_deptFetch('/api/naresh/login'" in console_js
     assert "_deptFetch('/api/naresh/verify-otp'" in console_js
     assert "appendSessionParam(base)" in console_js

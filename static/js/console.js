@@ -889,7 +889,36 @@
     if (elapsedEl) elapsedEl.textContent = '0s';
   }
 
-  window.closeDepartmentLoginModal = function () {
+  function _isOnConsoleRouteOrHost() {
+    try {
+      if (typeof window.isReportsHost === 'function' && window.isReportsHost()) return true;
+      var path = (window.location.pathname || '').toLowerCase();
+      if (
+        path === '/autoreports' ||
+        path === '/eptauto' ||
+        path === '/naresh' ||
+        path === '/mas' ||
+        path.indexOf('/reports') === 0
+      ) {
+        return true;
+      }
+      var sp = new URLSearchParams(window.location.search || '');
+      var site = (sp.get('site') || '').trim().toLowerCase();
+      var mode = (sp.get('mode') || '').trim().toLowerCase();
+      if (
+        site === 'console' ||
+        site === 'reports' ||
+        mode === 'automated' ||
+        sp.get('dept_login') === '1' ||
+        Boolean(sp.get('pending_module'))
+      ) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  window.closeDepartmentLoginModal = function (options) {
     if (deptAutoCloseTimer) {
       clearTimeout(deptAutoCloseTimer);
       deptAutoCloseTimer = null;
@@ -898,6 +927,43 @@
     resetDeptLoginProgress();
     var modal = document.getElementById('dept-login-modal');
     if (modal) modal.style.display = 'none';
+
+    var allowStay = Boolean(options && options.allowStay === true);
+    var isDeptAuth = window.isDeptAuthenticated === true;
+    try {
+      isDeptAuth = isDeptAuth || sessionStorage.getItem('epts_dept_session') === 'true';
+    } catch (e) {}
+
+    if (allowStay || isDeptAuth) {
+      return;
+    }
+
+    // Never expose or stay inside the Automation Console when Department Login is dismissed unauthenticated
+    window.pendingStation = null;
+    if (window.DeptSessionManager && typeof window.DeptSessionManager.consumePendingAction === 'function') {
+      window.DeptSessionManager.consumePendingAction();
+    }
+    window.currentWorkspaceMode = null;
+    try { sessionStorage.removeItem('epts_workspace_mode'); } catch (e) {}
+
+    var consoleSec = document.getElementById('console-modules-section');
+    var globalBar = document.getElementById('global-browser-status-bar');
+    if (consoleSec) consoleSec.style.display = 'none';
+    if (globalBar) globalBar.style.display = 'none';
+
+    if (_isOnConsoleRouteOrHost()) {
+      var dash = document.getElementById('post-login-dashboard');
+      if (dash) dash.style.display = 'none';
+      var homeUrl = (typeof window.getSectionUrl === 'function')
+        ? window.getSectionUrl('home')
+        : ((typeof window.isProdCustomDomain === 'function' && window.isProdCustomDomain()) ? 'https://panchayatautomation.in/' : '/');
+      window.location.replace(homeUrl);
+      return;
+    }
+
+    if (typeof window.showWorkspaceModeSelector === 'function') {
+      window.showWorkspaceModeSelector();
+    }
   };
 
   window.switchDeptModalStep = function (step) {
