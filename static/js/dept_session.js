@@ -54,7 +54,13 @@
 
   function getSessionId() {
     var sid = '';
-    try { sid = sessionStorage.getItem('epts_session_id') || ''; } catch (e) {}
+    try {
+      var urlSid = new URLSearchParams(window.location.search || '').get('session_id') || '';
+      if (isValidSid(urlSid)) sid = urlSid.trim();
+    } catch (e) {}
+    if (!isValidSid(sid)) {
+      try { sid = sessionStorage.getItem('epts_session_id') || ''; } catch (e) {}
+    }
     if (!isValidSid(sid)) {
       try { sid = localStorage.getItem('epts_session_id') || ''; } catch (e) {}
     }

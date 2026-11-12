@@ -269,7 +269,28 @@ def api_portal_logout(request: Request, response: Response):
     for tok in extract_all_auth_tokens(request, scope):
         revoke_portal_session(tok)
     clear_auth_cookie(response, scope, request)
-    return {"success": True, "platform_scope": scope, "message": "Logged out successfully."}
+
+    browser_closed = False
+    sid = extract_epts_session_id(request)
+    has_console_bot = bool(sid and sid in getattr(automation_service, "_sessions", {}))
+    if scope == "console" or has_console_bot:
+        try:
+            automation_service.logout_server_session(session_id=sid)
+            browser_closed = True
+        except Exception:
+            pass
+        try:
+            from gp_balance import service as gp_balance_service
+            gp_balance_service.reset_balance_data(session_id=sid)
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "platform_scope": scope,
+        "browser_closed": browser_closed,
+        "message": "Logged out and closed Automation Console browser." if browser_closed else "Logged out successfully.",
+    }
 
 
 @router.get("/api/auth/portal-status", include_in_schema=False)

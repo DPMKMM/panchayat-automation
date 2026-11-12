@@ -586,7 +586,7 @@ class EPTSAutomation:
         print(f"[+] Clicked '{menu_name}'. Current URL: {self.page.url}", flush=True)
 
     def close(self):
-        for attr in ("context", "browser", "playwright"):
+        for attr in ("page", "context", "browser", "playwright"):
             obj = getattr(self, attr, None)
             if obj is not None:
                 try:

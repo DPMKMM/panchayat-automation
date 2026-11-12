@@ -431,3 +431,58 @@ def test_keepalive_storage_state_restore_and_missing_bot_401(monkeypatch):
     session_manager._keepalive_ping(sess2)
     assert sess2["status"] == "expired"
     assert not ss_file.exists()
+
+
+def test_console_selection_prompts_dept_login_once_and_logout_closes_browser(monkeypatch):
+    """Entering Automated Reports prompts once for Dept Login; logging out of Console closes browser automatically."""
+    from core import session_manager
+
+    c = TestClient(create_app())
+    sid = "sess_console_autoclose"
+    _console_login(c, monkeypatch, "autoclose")
+
+    # 1. JS guards: Automated Reports triggers openDepartmentLoginModal() when unauthenticated;
+    #    _deptFetch unifies X-Session-ID across login/OTP/modules; logout calls /api/naresh/logout + window.close()
+    auth_js = c.get("/static/js/auth.js?v=22").text
+    console_js = c.get("/static/js/console.js?v=16").text
+    dept_js = c.get("/static/js/dept_session.js?v=5").text
+
+    assert "window.currentWorkspaceMode === 'automated' || dedSection === 'automated'" in auth_js
+    assert "if (m === 'automated' && isDirectClick)" in auth_js
+    assert "/api/naresh/logout" in auth_js
+    assert "window.close()" in auth_js
+    assert "_deptFetch('/api/naresh/login'" in console_js
+    assert "_deptFetch('/api/naresh/verify-otp'" in console_js
+    assert "appendSessionParam(base)" in console_js
+    assert "new URLSearchParams(window.location.search || '').get('session_id')" in dept_js
+
+    # 2. Active Playwright bot on Console session is closed automatically on /api/auth/portal-logout
+    closed_calls = []
+
+    class _FakeClosableBot:
+        def __init__(self):
+            class _Page:
+                def is_closed(self):
+                    return len(closed_calls) > 0
+            self.page = _Page()
+
+        def close(self):
+            closed_calls.append("bot_closed")
+
+    sess = session_manager.get_or_create_session(sid)
+    sess["bot"] = _FakeClosableBot()
+    sess["status"] = "authenticated"
+    sess["mode"] = "live_portal"
+    sess["user_id"] = "DPOA3698"
+
+    logout_res = c.post(
+        "/api/auth/portal-logout",
+        headers={"Host": "autoreports.panchayatautomation.in", "X-Session-ID": sid},
+    )
+    assert logout_res.status_code == 200
+    payload = logout_res.json()
+    assert payload["success"] is True
+    assert payload["browser_closed"] is True
+    assert closed_calls == ["bot_closed"]
+    assert sess["bot"] is None
+    assert sess["status"] == "idle"

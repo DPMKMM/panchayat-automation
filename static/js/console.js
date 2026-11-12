@@ -912,6 +912,19 @@
     showModalAlert('dept-modal-alert-2', '');
   };
 
+  function _deptFetch(url, options) {
+    if (window.DeptSessionManager && typeof window.DeptSessionManager.consoleFetch === 'function') {
+      return window.DeptSessionManager.consoleFetch(url, options);
+    }
+    var opts = options ? Object.assign({}, options) : {};
+    var headers = new Headers(opts.headers || {});
+    var sid = typeof window.getEptsSessionId === 'function' ? window.getEptsSessionId() : '';
+    if (sid && !headers.has('X-Session-ID')) headers.set('X-Session-ID', sid);
+    opts.headers = headers;
+    if (!opts.credentials) opts.credentials = 'same-origin';
+    return fetch(url, opts);
+  }
+
   window.toggleDeptModalPwdVisibility = function () {
     var p = document.getElementById('dept-modal-pwd');
     if (!p) return;
@@ -947,7 +960,7 @@
 
     var progressPoller = setInterval(async function () {
       try {
-        var pResp = await fetch('/api/naresh/login-progress?_ts=' + Date.now(), { cache: 'no-store' });
+        var pResp = await _deptFetch('/api/naresh/login-progress?_ts=' + Date.now(), { cache: 'no-store' });
         if (!pResp.ok) return;
         var pData = await pResp.json().catch(function () { return null; });
         if (pData && Array.isArray(pData.logs) && pData.logs.length) {
@@ -972,7 +985,7 @@
 
       var fetchOpts = { method: 'POST', body: formData };
       if (controller) fetchOpts.signal = controller.signal;
-      var res = await fetch('/api/naresh/login', fetchOpts);
+      var res = await _deptFetch('/api/naresh/login', fetchOpts);
       var rawText = await res.text().catch(function () { return ''; });
       var data = {};
       if (rawText) {
@@ -1044,7 +1057,7 @@
       var formData = new FormData();
       formData.append('otp', otp);
 
-      var res = await fetch('/api/naresh/verify-otp', {
+      var res = await _deptFetch('/api/naresh/verify-otp', {
         method: 'POST',
         body: formData,
       });
@@ -1127,8 +1140,7 @@
     reportData = null;
     deptLoginInProgress = false;
     setAuthenticated(false);
-    showNotice('Disconnected from e-Panchayat departmental session.', 'info');
-    window.openDepartmentLoginModal();
+    showNotice('Disconnected from e-Panchayat departmental session and closed background browser.', 'info');
   };
 
   window.logoutPortalSession = window.disconnectEptsSession;
@@ -1184,6 +1196,9 @@
     var base = (window.DeptSessionManager && typeof window.DeptSessionManager.buildScopedUrl === 'function')
       ? window.DeptSessionManager.buildScopedUrl('/reports/mas')
       : (window.isReportsHost && window.isReportsHost() ? '/reports/mas' : '/reports/mas?site=console');
+    if (window.DeptSessionManager && typeof window.DeptSessionManager.appendSessionParam === 'function') {
+      base = window.DeptSessionManager.appendSessionParam(base);
+    }
     if (!params && !autoGen) return base;
     try {
       var u = new URL(base, window.location.origin);

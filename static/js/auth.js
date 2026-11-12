@@ -985,8 +985,10 @@
       return;
     }
 
-    if (urlSp.get('dept_login') === '1' && !deptAuthed && typeof window.openDepartmentLoginModal === 'function') {
-      window.openDepartmentLoginModal();
+    if (urlSp.get('dept_login') === '1' || window.currentWorkspaceMode === 'automated' || dedSection === 'automated' || reqMode === 'automated') {
+      if (!deptAuthed && typeof window.openDepartmentLoginModal === 'function') {
+        window.openDepartmentLoginModal();
+      }
     }
   };
 
@@ -1502,6 +1504,21 @@
     if (!(options && options.skipScroll)) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    if (m === 'automated' && isDirectClick) {
+      Promise.resolve(
+        typeof window.initConsoleAfterPortalAuth === 'function'
+          ? window.initConsoleAfterPortalAuth()
+          : (window.isDeptAuthenticated === true)
+      ).then(function (deptAuthed) {
+        if (!deptAuthed && typeof window.openDepartmentLoginModal === 'function') {
+          window.openDepartmentLoginModal();
+        }
+      }).catch(function () {
+        if (typeof window.openDepartmentLoginModal === 'function') {
+          window.openDepartmentLoginModal();
+        }
+      });
+    }
     return true;
   };
 
@@ -1540,6 +1557,12 @@
   window.logoutPortalApp = async function () {
     var sc = window.getPlatformScope();
     var dedSection = window.getDedicatedPageSection();
+    var wasConsoleLogout = Boolean(
+      sc === 'console' ||
+      window.currentWorkspaceMode === 'automated' ||
+      dedSection === 'automated' ||
+      sessionStorage.getItem('epts_portal_auth') === 'true'
+    );
     window.currentWorkspaceMode = null;
     try { sessionStorage.removeItem('epts_workspace_mode'); } catch (e) {}
     if (typeof window.stopConsoleSessionPolling === 'function') {
@@ -1550,12 +1573,33 @@
         await window.FirebasePortalAuth.signOut();
       } catch (e) {}
     }
+    if (wasConsoleLogout) {
+      try {
+        if (window.DeptSessionManager && typeof window.DeptSessionManager.consoleFetch === 'function') {
+          await window.DeptSessionManager.consoleFetch('/api/naresh/logout', { method: 'POST' });
+        } else {
+          await fetch('/api/naresh/logout', { method: 'POST' });
+        }
+      } catch (e) {}
+    }
     try {
-      await fetch('/api/auth/portal-logout', { method: 'POST' });
+      if (window.DeptSessionManager && typeof window.DeptSessionManager.consoleFetch === 'function') {
+        await window.DeptSessionManager.consoleFetch('/api/auth/portal-logout', { method: 'POST' });
+      } else {
+        await fetch('/api/auth/portal-logout', { method: 'POST' });
+      }
     } catch (e) {}
+    if (window.DeptSessionManager && typeof window.DeptSessionManager.clearEptsMetadata === 'function') {
+      window.DeptSessionManager.clearEptsMetadata();
+    }
+    window.isDeptAuthenticated = false;
     window.clearScopeSessionStorage('portal');
     window.clearScopeSessionStorage('console');
     window.setPortalUI(false, null);
+    if (wasConsoleLogout) {
+      try { window.open('', '_self'); } catch (e) {}
+      try { window.close(); } catch (e) {}
+    }
     var dest = '/';
     if (dedSection) {
       dest = (window.isAdminHost() || window.isReportsHost() || window.isManualHost() || window.isToolsHost())
