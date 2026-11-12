@@ -79,9 +79,9 @@
   window.getSectionUrl = function (section) {
     var s = String(section || '').trim().toLowerCase();
     if (window.isProdCustomDomain()) {
-      if (s === 'automated') return 'https://www.autoreports.panchayatautomation.in/';
-      if (s === 'manual') return 'https://www.manualreports.panchayatautomation.in/';
-      if (s === 'tools') return 'https://www.tools.panchayatautomation.in/';
+      if (s === 'automated') return 'https://autoreports.panchayatautomation.in/';
+      if (s === 'manual') return 'https://manualreports.panchayatautomation.in/';
+      if (s === 'tools') return 'https://tools.panchayatautomation.in/';
       return 'https://panchayatautomation.in/';
     }
     if (s === 'automated') return '/autoreports?site=console';
@@ -1445,16 +1445,10 @@
 
     var isDirectClick = !(options && options.fromInit);
     if (isDirectClick && window.isProdCustomDomain()) {
-      if (m === 'manual' && !window.isManualHost()) {
-        window.location.href = 'https://www.manualreports.panchayatautomation.in/';
-        return true;
-      }
-      if (m === 'automated' && !window.isReportsHost()) {
-        window.location.href = 'https://www.autoreports.panchayatautomation.in/';
-        return true;
-      }
-      if (m === 'tools' && !window.isToolsHost()) {
-        window.location.href = 'https://www.tools.panchayatautomation.in/';
+      if ((m === 'manual' && !window.isManualHost()) ||
+          (m === 'automated' && !window.isReportsHost()) ||
+          (m === 'tools' && !window.isToolsHost())) {
+        window.location.href = window.getSectionUrl(m);
         return true;
       }
     }

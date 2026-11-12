@@ -377,3 +377,21 @@ def test_apply_openpyxl_branding_helper():
     assert wb.properties.subject == TAGLINE
     assert wb.active.oddFooter.left.text == PLATFORM_NAME
     assert wb.active.oddFooter.center.text == TAGLINE
+
+
+def test_single_level_cloudflare_ssl_section_subdomains():
+    for bare_host in (
+        "autoreports.panchayatautomation.in",
+        "manualreports.panchayatautomation.in",
+        "tools.panchayatautomation.in",
+    ):
+        bare_resp = client.get("/", headers={"Host": bare_host})
+        www_resp = client.get("/", headers={"Host": f"www.{bare_host}"})
+        assert bare_resp.status_code == 200
+        assert www_resp.status_code == 200
+        assert PLATFORM_NAME in bare_resp.text
+        assert bare_resp.text == www_resp.text
+
+    admin_resp = client.get("/health", headers={"Host": "admin.panchayatautomation.in"})
+    assert admin_resp.status_code == 200
+    assert admin_resp.json()["status"] == "ok"

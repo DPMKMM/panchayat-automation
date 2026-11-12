@@ -455,9 +455,9 @@ def test_unified_home_login_and_manual_plus_automated_reports(monkeypatch):
     assert "window.isAdminHost" in auth_js
     assert "window.isManualHost" in auth_js
     assert "window.isToolsHost" in auth_js
-    assert "https://www.manualreports.panchayatautomation.in/" in auth_js
-    assert "https://www.autoreports.panchayatautomation.in/" in auth_js
-    assert "https://www.tools.panchayatautomation.in/" in auth_js
+    assert "https://manualreports.panchayatautomation.in/" in auth_js
+    assert "https://autoreports.panchayatautomation.in/" in auth_js
+    assert "https://tools.panchayatautomation.in/" in auth_js
     assert 'id="login-section-nav"' in html
     assert 'id="login-link-autoreports"' in html
     assert 'id="login-link-manualreports"' in html
