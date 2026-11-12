@@ -355,8 +355,7 @@ def draw_district_page(c: canvas.Canvas, district_name: str, data: dict[str, Any
     c.saveState()
     c.setFont("Helvetica", 6.5)
     c.setFillColor(colors.HexColor("#64748B"))
-    c.drawString(20, 5.5, "e-Panchayat Automation Console — Simplifying Panchayat Administration through Smart Reporting and Automation.")
-    c.drawRightString(822, 5.5, "e-Panchayat Automation")
+    c.drawString(20, 5.5, "Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation")
     c.restoreState()
 
 
@@ -484,8 +483,7 @@ def draw_mandal_page(c: canvas.Canvas, mandal_name: str, m_data: dict[str, Any])
     c.saveState()
     c.setFont("Helvetica", 6.5)
     c.setFillColor(colors.HexColor("#64748B"))
-    c.drawString(20, 5.5, "e-Panchayat Automation Console — Simplifying Panchayat Administration through Smart Reporting and Automation.")
-    c.drawRightString(822, 5.5, "e-Panchayat Automation")
+    c.drawString(20, 5.5, "Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation")
     c.restoreState()
 
 
@@ -542,7 +540,8 @@ def get_or_generate_powerbi_pdf(
     safe_mandal = f"_{mandal_name.strip().replace(' ', '_').title()}" if (is_single_mandal and mandal_name) else ""
 
     india_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
-    date_str = india_now.strftime("%d-%m-%Y")
+    ts_download = india_now.strftime("%d-%m-%Y %I:%M %p")
+    ts_disk = india_now.strftime("%d-%m-%Y_%I-%M_%p")
 
     import sys
     try:
@@ -550,8 +549,8 @@ def get_or_generate_powerbi_pdf(
     except Exception:
         reports_dir = Path(__file__).resolve().parent.parent / "data" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    pdf_filename = f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}.pdf"
-    cache_path = reports_dir / f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{date_str}_v7.pdf"
+    pdf_filename = f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{ts_download}.pdf"
+    cache_path = reports_dir / f"{safe_dist}{safe_mandal}_PowerBI_DCB_Report_{ts_disk}_v7.pdf"
 
     if not force_regenerate and cache_path.exists() and cache_path.stat().st_size > 10_000:
         return pdf_filename, cache_path.read_bytes()

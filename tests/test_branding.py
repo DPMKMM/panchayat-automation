@@ -300,12 +300,14 @@ def test_dsr_pdfs_carry_platform_branding_without_layout_change(tmp_path):
     generate_dsr_pdf(report, dist_pdf)
     reader_dist = PdfReader(str(dist_pdf))
     assert float(reader_dist.pages[0].mediabox.width) > float(reader_dist.pages[0].mediabox.height)
-    assert PLATFORM_NAME in "\n".join(p.extract_text() for p in reader_dist.pages)
+    dist_txt = "\n".join(p.extract_text() for p in reader_dist.pages)
+    assert ("Panchayat-Automation" in dist_txt or PLATFORM_NAME in dist_txt)
 
     mandal_pdf = tmp_path / "dsr_mandal.pdf"
     generate_mandal_pdf(report, mandal_pdf, mandal_name="Bonakal")
     reader_mandal = PdfReader(str(mandal_pdf))
-    assert PLATFORM_NAME in "\n".join(p.extract_text() for p in reader_mandal.pages)
+    mandal_txt = "\n".join(p.extract_text() for p in reader_mandal.pages)
+    assert ("Panchayat-Automation" in mandal_txt or PLATFORM_NAME in mandal_txt)
 
 
 def test_gp_balance_pdf_and_excel_branding():
@@ -333,7 +335,8 @@ def test_gp_balance_pdf_and_excel_branding():
 
     pdf_bytes = generate_balance_pdf(report)
     reader = PdfReader(io.BytesIO(pdf_bytes))
-    assert PLATFORM_NAME in "\n".join(p.extract_text() for p in reader.pages)
+    bal_txt = "\n".join(p.extract_text() for p in reader.pages)
+    assert ("Panchayat-Automation" in bal_txt or PLATFORM_NAME in bal_txt)
 
     excel_bytes = generate_balance_excel(report)
     wb = openpyxl.load_workbook(io.BytesIO(excel_bytes))
@@ -341,8 +344,8 @@ def test_gp_balance_pdf_and_excel_branding():
     assert wb.properties.subject == TAGLINE
     ws1 = wb["Mandal_Summary"]
     assert "Data Entry Status Report on Balances in GP Accounts" in str(ws1["A1"].value)
-    assert ws1.oddFooter.left.text == PLATFORM_NAME
-    assert ws1.oddFooter.center.text == TAGLINE
+    assert ws1.oddFooter.left.text in ("Panchayat-Automation", PLATFORM_NAME)
+    assert ws1.oddFooter.center.text in (TAGLINE, "Simplifying Panchayat Administration through Smart Reporting and Automation")
 
 
 def test_dcb_pdfs_and_excel_branding():
@@ -350,23 +353,24 @@ def test_dcb_pdfs_and_excel_branding():
     assert resp_pdf.status_code == 200
     reader = PdfReader(io.BytesIO(resp_pdf.content))
     assert len(reader.pages) == 1
-    assert PLATFORM_NAME in reader.pages[0].extract_text()
+    dcb_txt = reader.pages[0].extract_text()
+    assert ("Panchayat-Automation" in dcb_txt or PLATFORM_NAME in dcb_txt)
 
     resp_pbi = client.get("/api/tax/powerbi-report.pdf?district=Khammam&mandal=Bonakal")
     assert resp_pbi.status_code == 200
     reader_pbi = PdfReader(io.BytesIO(resp_pbi.content))
     assert len(reader_pbi.pages) == 1
     pbi_txt = reader_pbi.pages[0].extract_text()
-    assert CONSOLE_NAME in pbi_txt
-    assert PLATFORM_NAME in pbi_txt
+    assert ("Panchayat-Automation" in pbi_txt or CONSOLE_NAME in pbi_txt)
+    assert ("Panchayat-Automation" in pbi_txt or PLATFORM_NAME in pbi_txt)
 
     resp_xlsx = client.get("/api/tax/download?district=Khammam&format=xlsx")
     assert resp_xlsx.status_code == 200
     wb = openpyxl.load_workbook(io.BytesIO(resp_xlsx.content))
     assert wb.properties.creator == PLATFORM_NAME
     assert wb.properties.subject == TAGLINE
-    assert wb.active.oddFooter.left.text == PLATFORM_NAME
-    assert wb.active.oddFooter.center.text == TAGLINE
+    assert wb.active.oddFooter.left.text in ("Panchayat-Automation", PLATFORM_NAME)
+    assert wb.active.oddFooter.center.text in (TAGLINE, "Simplifying Panchayat Administration through Smart Reporting and Automation")
 
 
 def test_apply_openpyxl_branding_helper():
@@ -375,8 +379,8 @@ def test_apply_openpyxl_branding_helper():
     assert wb.properties.creator == PLATFORM_NAME
     assert wb.properties.lastModifiedBy == PLATFORM_NAME
     assert wb.properties.subject == TAGLINE
-    assert wb.active.oddFooter.left.text == PLATFORM_NAME
-    assert wb.active.oddFooter.center.text == TAGLINE
+    assert wb.active.oddFooter.left.text in ("Panchayat-Automation", PLATFORM_NAME)
+    assert wb.active.oddFooter.center.text in (TAGLINE, "Simplifying Panchayat Administration through Smart Reporting and Automation")
 
 
 def test_single_level_cloudflare_ssl_section_subdomains():

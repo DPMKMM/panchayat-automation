@@ -1230,7 +1230,7 @@ def generate_pdf(
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(HexColor("#555555"))
         foot_time = f" {report.generated_time_str}" if getattr(report, "generated_time_str", "") else ""
-        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}{foot_time} | e-Panchayat Automation")
+        canvas.drawString(foot_margin, 4.5 * mm, f"{report.district_name.title()} District | PS Attendance & DSR Report | {report.report_date:%d-%m-%Y}{foot_time} | Panchayat-Automation")
         canvas.drawRightString(w - foot_margin, 4.5 * mm, f"Page {document.page}")
         canvas.restoreState()
 
@@ -1783,7 +1783,7 @@ def generate_mandal_pdf(
         canvas.line(margin, 10 * mm, width - margin, 10 * mm)
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(HexColor("#555555"))
-        canvas.drawString(margin, 6 * mm, f"{report.district_name.title()} District | {target_mandal.title()} Mandal | {report.report_date:%d-%m-%Y} | e-Panchayat Automation")
+        canvas.drawString(margin, 6 * mm, f"{report.district_name.title()} District | {target_mandal.title()} Mandal | {report.report_date:%d-%m-%Y} | Panchayat-Automation")
         canvas.drawRightString(width - margin, 6 * mm, f"Page {document.page}")
         canvas.restoreState()
 

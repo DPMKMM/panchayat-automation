@@ -242,25 +242,22 @@ def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) 
         canvas.drawString(
             margin,
             5 * mm,
-            f"{dist_heading} | GM-R 39.1 {report.designation} Inspections | Report Generated On: {report.generated_time_str} | e-Panchayat Automation",
+            f"{dist_heading} | {report.designation} Inspections | Report Generated On: {report.generated_time_str} | Panchayat-Automation",
         )
         canvas.drawRightString(page_w - margin, 5 * mm, f"Page {doc_obj.page}")
         canvas.restoreState()
 
     banner_tbl = Table(
         [
-            [Paragraph(f"{_safe_xml(dist_heading.upper())} — GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT", styles["InspBannerTitle"])],
-            [Paragraph(f"GM-R 39.1 {_safe_xml(report.designation_title)}  •  Final Submit Status: Submitted Only", styles["InspBannerSub"])],
+            [Paragraph(f"{_safe_xml(dist_heading.upper())} — {report.designation}s GRAM PANCHAYAT INSPECTIONS ABSTRACT REPORT", styles["InspBannerTitle"])],
         ],
         colWidths=[avail_w],
     )
     banner_tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), HexColor("#064E3B")),
-        ("LINEBELOW", (0, 1), (-1, 1), 2.5, HexColor("#F59E0B")),
-        ("TOPPADDING", (0, 0), (-1, 0), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
-        ("TOPPADDING", (0, 1), (-1, 1), 1),
-        ("BOTTOMPADDING", (0, 1), (-1, 1), 6),
+        ("LINEBELOW", (0, 0), (-1, 0), 2.5, HexColor("#F59E0B")),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
 
     month_line = f"Period: <b>{_safe_xml(month_range)}</b> | " if month_range else ""
@@ -305,14 +302,6 @@ def generate_inspections_pdf(report: InspectionReport, output_path: str | Path) 
         kpi_tbl,
         Spacer(1, 7),
         tbl,
-        Spacer(1, 7),
-        Paragraph(
-            f"Audit Summary: Consolidated {len(report.weeks_selected)} week(s) | "
-            f"Raw Records Scanned: {report.raw_row_count:,} | "
-            f"Submitted Considered: {report.submitted_row_count:,} | "
-            f"Non-Submitted Excluded: {report.excluded_non_submitted_count:,}",
-            styles["InspNote"],
-        ),
     ]
 
     doc = SimpleDocTemplate(
@@ -346,7 +335,7 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
 
     dist_heading = _format_district_title(report.district_name)
     ws.merge_cells("A1:F1")
-    ws["A1"] = f"{dist_heading.upper()} - GRAM PANCHAYAT INSPECTIONS ABSTRACT (GM-R 39.1)"
+    ws["A1"] = f"{dist_heading.upper()} - {report.designation}s GRAM PANCHAYAT INSPECTIONS ABSTRACT"
     ws["A1"].font = Font(name="Calibri", size=13, bold=True, color="17365D")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
@@ -356,7 +345,7 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
     ws.merge_cells("A2:F2")
     ws["A2"] = (
         f"Designation: {report.designation} | {month_part}{report.target_rule_desc} | "
-        f"Weeks: {period_str} | Final Submit Status: Submitted Only | Report Generated On: {report.generated_time_str}"
+        f"Weeks: {period_str} | Report Generated On: {report.generated_time_str}"
     )
     ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="334155")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
@@ -475,7 +464,7 @@ def generate_monthwise_inspections_pdf(report: InspectionReport, output_path: st
         canvas.drawString(
             margin,
             5 * mm,
-            f"{dist_heading} | GM-R 39.1 {report.designation} Consolidated & Month-Wise Report | Report Generated On: {report.generated_time_str} | e-Panchayat Automation",
+            f"{dist_heading} | {report.designation} Consolidated & Month-Wise Report | Report Generated On: {report.generated_time_str} | Panchayat-Automation",
         )
         canvas.drawRightString(page_w - margin, 5 * mm, f"Page {doc_obj.page}")
         canvas.restoreState()
@@ -483,18 +472,15 @@ def generate_monthwise_inspections_pdf(report: InspectionReport, output_path: st
     # Page 1: Consolidated Abstract Report Page
     cons_banner_tbl = Table(
         [
-            [Paragraph(f"{_safe_xml(dist_heading.upper())} — CONSOLIDATED GP INSPECTIONS ABSTRACT REPORT", styles["InspBannerTitle"])],
-            [Paragraph(f"GM-R 39.1 {_safe_xml(report.designation_title)}  •  Final Submit Status: Submitted Only", styles["InspBannerSub"])],
+            [Paragraph(f"{_safe_xml(dist_heading.upper())} — {report.designation}s CONSOLIDATED GP INSPECTIONS ABSTRACT REPORT", styles["InspBannerTitle"])],
         ],
         colWidths=[avail_w],
     )
     cons_banner_tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), HexColor("#064E3B")),
-        ("LINEBELOW", (0, 1), (-1, 1), 2.5, HexColor("#F59E0B")),
-        ("TOPPADDING", (0, 0), (-1, 0), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
-        ("TOPPADDING", (0, 1), (-1, 1), 1),
-        ("BOTTOMPADDING", (0, 1), (-1, 1), 6),
+        ("LINEBELOW", (0, 0), (-1, 0), 2.5, HexColor("#F59E0B")),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
 
     month_line = f"Period: <b>{_safe_xml(month_range)}</b> | " if month_range else ""
@@ -539,22 +525,14 @@ def generate_monthwise_inspections_pdf(report: InspectionReport, output_path: st
         cons_kpi_tbl,
         Spacer(1, 7),
         cons_unit_tbl,
-        Spacer(1, 6),
-        Paragraph(
-            f"Audit Summary: Consolidated {len(report.weeks_selected)} week(s) | "
-            f"Raw Records Scanned: {report.raw_row_count:,} | "
-            f"Submitted Considered: {report.submitted_row_count:,} | "
-            f"Non-Submitted Excluded: {report.excluded_non_submitted_count:,}",
-            styles["InspNote"],
-        ),
     ]
 
     # Page 2: Month-Wise Summary Page (Monday-Start Week Allocation Rules)
     story.append(PageBreak())
     mw_banner_tbl = Table(
         [
-            [Paragraph(f"{_safe_xml(dist_heading.upper())} — MONTH-WISE INSPECTIONS SUMMARY", styles["InspBannerTitle"])],
-            [Paragraph(f"GM-R 39.1 {_safe_xml(report.designation_title)}  •  Monday-Start Week Allocation", styles["InspBannerSub"])],
+            [Paragraph(f"{_safe_xml(dist_heading.upper())} — {report.designation}s MONTH-WISE INSPECTIONS SUMMARY", styles["InspBannerTitle"])],
+            [Paragraph(f"{_safe_xml(report.designation_title)}  •  Monday-Start Week Allocation", styles["InspBannerSub"])],
         ],
         colWidths=[avail_w],
     )
@@ -735,14 +713,14 @@ def generate_monthwise_inspections_excel(report: InspectionReport, output_path: 
     sections = list(report.monthly_sections or [])
 
     ws.merge_cells("A1:I1")
-    ws["A1"] = f"{dist_heading.upper()} - MONTH-WISE GRAM PANCHAYAT INSPECTIONS ABSTRACT (GM-R 39.1)"
+    ws["A1"] = f"{dist_heading.upper()} - {report.designation}s MONTH-WISE GRAM PANCHAYAT INSPECTIONS ABSTRACT"
     ws["A1"].font = Font(name="Calibri", size=13, bold=True, color="064E3B")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws.merge_cells("A2:I2")
     ws["A2"] = (
         f"Designation: {report.designation} | Period: {month_range or 'Selected'} | "
-        f"Monday-Start Week Allocation | Final Submit Status: Submitted Only | Report Generated On: {report.generated_time_str}"
+        f"Monday-Start Week Allocation | Report Generated On: {report.generated_time_str}"
     )
     ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="334155")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")

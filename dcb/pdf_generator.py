@@ -132,8 +132,7 @@ class NumberedCanvas(canvas.Canvas):
         # Landscape A4 width is 841.89 pt
         self.setFillColor(colors.HexColor("#475569"))
         self.setFont("Helvetica", 7.2)
-        self.drawString(24, 16, "e-Panchayat Automation")
-        self.drawRightString(841.89 - 24, 16, "Simplifying Panchayat Administration through Smart Reporting and Automation.")
+        self.drawString(24, 16, "Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation")
         self.setFillColor(colors.HexColor("#222222"))
         self.setFont("Helvetica", 8)
         self.drawCentredString(841.89 / 2.0, 16, page_str)
@@ -160,9 +159,10 @@ def get_or_generate_dcb_pdf(
         reports_dir = Path(__file__).resolve().parent.parent / "data" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     india_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
-    date_str = india_now.strftime("%d-%m-%Y")
-    pdf_filename = f"{safe_dist}{safe_mandal}_House_Tax_DCB_Report_{date_str}.pdf"
-    pdf_path = reports_dir / pdf_filename
+    ts_download = india_now.strftime("%d-%m-%Y %I:%M %p")
+    ts_disk = india_now.strftime("%d-%m-%Y_%I-%M_%p")
+    pdf_filename = f"{safe_dist}{safe_mandal}_House_Tax_DCB_Report_{ts_download}.pdf"
+    pdf_path = reports_dir / f"{safe_dist}{safe_mandal}_House_Tax_DCB_Report_{ts_disk}.pdf"
 
     if not force_regenerate and pdf_path.exists() and pdf_path.stat().st_size > 1000:
         return pdf_filename, pdf_path.read_bytes()

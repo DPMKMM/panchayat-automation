@@ -12,6 +12,7 @@ import json
 import logging
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 from uuid import uuid4
@@ -224,10 +225,23 @@ def _download_mas_file_impl(request: Request, file_type: str) -> FileResponse:
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(status_code=404, detail=f"Deliverable '{file_type}' is no longer available on disk.")
 
+    dist_name = (session.get("district_name") or "District").strip().replace(" ", "_")
+    ts_download = datetime.now().strftime("%d-%m-%Y %I:%M %p")
+    custom_names = {
+        "pdf": f"{dist_name}_MAS_Mandal_and_GP_Report_{ts_download}.pdf",
+        "abstract_pdf": f"{dist_name}_MAS_Mandal_Abstract_{ts_download}.pdf",
+        "excel": f"{dist_name}_MAS_Consolidated_Master_{ts_download}.xlsx",
+        "pending_csv": f"{dist_name}_MAS_Pending_GPs_Action_List_{ts_download}.csv",
+        "compact_csv": f"{dist_name}_MAS_Compact_Abstract_{ts_download}.csv",
+        "full_csv": f"{dist_name}_MAS_58Cols_Detail_{ts_download}.csv",
+        "joined_csv": f"{dist_name}_MAS_Joined_GP_Records_{ts_download}.csv",
+    }
+    dl_fname = custom_names.get(ft, f"{dist_name}_{default_name[:-4]}_{ts_download}{default_name[-4:]}")
+
     return FileResponse(
         path=str(resolved),
         media_type=media_type,
-        filename=resolved.name or default_name,
+        filename=dl_fname,
     )
 
 

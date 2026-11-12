@@ -144,13 +144,32 @@ def get_balance_filename_prefix(report: DistrictBalanceReport) -> str:
     return clean_dist
 
 
+def _format_balance_download_ts(report: DistrictBalanceReport) -> str:
+    from datetime import datetime
+    raw_gen = getattr(report, "generated_at", "")
+    if raw_gen:
+        for fmt in (
+            "%d-%b-%Y %I:%M %p",
+            "%d-%B-%Y %I:%M %p",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+            "%d-%m-%Y %H:%M",
+            "%Y-%m-%d %H:%M",
+        ):
+            try:
+                return datetime.strptime(raw_gen.strip(), fmt).strftime("%d-%m-%Y %I:%M %p")
+            except Exception:
+                pass
+    return datetime.now().strftime("%d-%m-%Y %I:%M %p")
+
+
 def get_balance_excel_bytes(date_str: str = "", session_id: str = "", include_pmagy: Optional[bool] = None) -> tuple[str, bytes]:
     report = get_latest_balance_report(force_date=date_str, session_id=session_id)
     if report is not None:
         view = _resolve_report_view(report, include_pmagy)
-        clean_date = view.report_date_str.replace("/", "-")
+        ts_download = _format_balance_download_ts(view)
         safe_dist = get_balance_filename_prefix(view)
-        filename = f"{safe_dist}_GP_Balance_Report_{clean_date}.xlsx"
+        filename = f"{safe_dist}_GP_Balance_Report_{ts_download}.xlsx"
         data = generate_balance_excel(view)
         return filename, data
 
@@ -196,15 +215,15 @@ def get_balance_pdf_bytes(date_str: str = "", session_id: str = "", mandal: str 
 
     if report is not None:
         view = _resolve_report_view(report, include_pmagy)
-        clean_date = view.report_date_str.replace("/", "-")
+        ts_download = _format_balance_download_ts(view)
         if mandal_name:
             clean_mandal = mandal_name.replace(" ", "_")
-            filename = f"{clean_mandal}_Mandal_GP_Balance_Report_{clean_date}.pdf"
+            filename = f"{clean_mandal}_Mandal_GP_Balance_Report_{ts_download}.pdf"
             data = generate_balance_pdf(view, mandal_name=mandal_name)
             return filename, data
         else:
             safe_dist = get_balance_filename_prefix(view)
-            filename = f"{safe_dist}_GP_Balance_Report_{clean_date}.pdf"
+            filename = f"{safe_dist}_GP_Balance_Report_{ts_download}.pdf"
             data = generate_balance_pdf(view)
             return filename, data
 

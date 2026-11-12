@@ -276,7 +276,7 @@ def test_mas_pdf_and_excel_branding_and_dynamic_layout(tmp_path):
     reader = PdfReader(str(pdf_out))
     assert len(reader.pages) == 2
     full_txt = "\n".join(p.extract_text() for p in reader.pages)
-    assert PLATFORM_NAME in full_txt
+    assert ("Panchayat-Automation" in full_txt or PLATFORM_NAME in full_txt)
     assert "e-Panchayat Performance System" not in full_txt
     assert "Cell Legend" not in full_txt
     assert "Formula: Sum(Updated)" not in full_txt

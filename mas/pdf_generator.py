@@ -81,7 +81,7 @@ class NumberedCanvas(canvas.Canvas):
         self.drawString(
             18,
             12,
-            f"{PLATFORM_NAME} — {TAGLINE} | GM-R 5.24 + 5.23 Matrix ({ts})",
+            f"Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation. | MAS ({ts})",
         )
         self.drawRightString(width - 18, 12, f"Page {self._pageNumber} of {page_count}")
         self.restoreState()
@@ -245,16 +245,9 @@ def generate_mas_consolidated_pdf(
                     style_title,
                 ),
                 Paragraph(
-                    f"<b>Overall: {overall_pct}%</b><br/><font size='7'>GM-R 5.24 + GM-R 5.23</font>",
-                    ParagraphStyle("BStat", parent=style_sub, alignment=TA_CENTER, fontSize=10, textColor=colors.white),
+                    f"<b>Overall: {overall_pct}%</b>",
+                    ParagraphStyle("BStat", parent=style_sub, alignment=TA_CENTER, fontSize=11, textColor=colors.white),
                 ),
-            ],
-            [
-                Paragraph(
-                    "18-Indicator Executive Matrix (17 MAS Indicators + Birth Details)",
-                    style_sub,
-                ),
-                "",
             ],
         ],
         colWidths=[usable_w - 130, 130],
@@ -263,12 +256,11 @@ def generate_mas_consolidated_pdf(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), CLR_HEADER_DARK),
-                ("SPAN", (1, 0), (1, 1)),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("LEFTPADDING", (0, 0), (-1, -1), 10),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
             ]
         )
     )

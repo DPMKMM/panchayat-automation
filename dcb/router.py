@@ -125,13 +125,16 @@ def download_tax_data(request: Request, district: str = "Khammam", format: str =
     """Dynamically exports live scraped DCB dataset as Excel or CSV."""
     _enforce_dcb_scope_access(request)
     safe_dist = district.strip().replace(" ", "_")
+    from datetime import datetime, timezone, timedelta
+    india_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+    ts_download = india_now.strftime("%d-%m-%Y %I:%M %p")
     if format.lower() == "csv":
         csv_bytes = tax_service.generate_consolidated_csv(district)
         return Response(
             content=csv_bytes,
             media_type="text/csv",
             headers={
-                "Content-Disposition": f'attachment; filename="{safe_dist}_House_Tax_DCB.csv"',
+                "Content-Disposition": f'attachment; filename="{safe_dist}_House_Tax_DCB_{ts_download}.csv"',
                 "Access-Control-Expose-Headers": "Content-Disposition",
             },
         )
@@ -140,7 +143,7 @@ def download_tax_data(request: Request, district: str = "Khammam", format: str =
         content=excel_bytes,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
-            "Content-Disposition": f'attachment; filename="{safe_dist}_House_Tax_DCB.xlsx"',
+            "Content-Disposition": f'attachment; filename="{safe_dist}_House_Tax_DCB_{ts_download}.xlsx"',
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )

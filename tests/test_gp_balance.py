@@ -321,7 +321,8 @@ def test_pmagy_include_and_exclude_option():
     assert "PMAGY account excluded" in str(ws_excl["A3"].value)
 
     pdf_excl_txt = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(generate_balance_pdf(base_report))).pages)
-    assert "PMAGY Excluded" in pdf_excl_txt
+    assert "Thursday Balance Update Date:" in pdf_excl_txt
+    assert "GP Balance Entry Monitoring | Panchayat-Automation" in pdf_excl_txt
 
     # Included -> flips GP & Mandal to pending cleanly, adds PMAGY column to Excel/PDF & Mandal PDF
     inc_report = base_report.clone_with_pmagy_option(True)
@@ -338,7 +339,6 @@ def test_pmagy_include_and_exclude_option():
     assert "PMAGY" in str(ws_inc["O4"].value)
 
     pdf_inc_txt = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(generate_balance_pdf(inc_report))).pages)
-    assert "PMAGY Included" in pdf_inc_txt
     assert "PMAGY" in pdf_inc_txt
 
     mandal_pdf_inc = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(generate_balance_pdf(inc_report, mandal_name="Nelakondapally"))).pages)

@@ -176,7 +176,7 @@ def generate_multiday_dsr_pdf(
         canvas.saveState()
         canvas.setFont("Helvetica", 7.5)
         canvas.setFillColor(_MUTED)
-        canvas.drawString(10 * mm, 6 * mm, f"{PLATFORM_NAME} — {TAGLINE}")
+        canvas.drawString(10 * mm, 6 * mm, "Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation")
         canvas.drawRightString(page_w - 10 * mm, 6 * mm, f"Page {doc.page}")
         canvas.restoreState()
 

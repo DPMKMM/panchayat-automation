@@ -47,7 +47,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFillColor(colors.HexColor("#4B5563"))
         page_text = f"Page {self._pageNumber} of {page_count}"
         self.drawRightString(825, 12, page_text)
-        self.drawString(16, 12, "GP Balance Entry Monitoring (GM-R 14.2) | e-Panchayat Automation")
+        self.drawString(16, 12, "GP Balance Entry Monitoring | Panchayat-Automation")
         self.restoreState()
 
 
@@ -251,17 +251,15 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
     clean_dist = re.sub(r"\bDISTRICT\b", "", clean_dist, flags=re.IGNORECASE).strip()
     clean_dist = re.sub(r"\s+", " ", clean_dist).strip()
 
-    dist_banner = f"<br/>- {clean_dist.upper()} DISTRICT" if clean_dist and clean_dist.lower() != "district" else ""
+    dist_prefix = f"{clean_dist.title()} District - " if clean_dist and clean_dist.lower() != "district" else ""
 
     flowables.append(Paragraph(
-        f"Data Entry Status Report on Balances in GP Accounts as on {gen_time_str}{dist_banner}",
+        f"{dist_prefix}Data Entry Status Report on Balances in GP Accounts as on {gen_time_str}",
         title_style,
     ))
     flowables.append(Spacer(1, 3))
-    include_pmagy = bool(getattr(report, "include_pmagy", False))
-    pmagy_label = "PMAGY Included" if include_pmagy else "PMAGY Excluded (Not maintained in district)"
     flowables.append(Paragraph(
-        f"Thursday Balance Update Date: <b>{report.report_date_str}</b> | Portal GM-R 14.2 | {pmagy_label}",
+        f"Thursday Balance Update Date: <b>{report.report_date_str}</b>",
         meta_style,
     ))
     flowables.append(Spacer(1, 6))
@@ -298,6 +296,7 @@ def generate_balance_pdf(report: DistrictBalanceReport, target: Optional[Union[P
     flowables.append(Spacer(1, 7))
 
     # 3. Mandal Summary Table (Full page width utilization & dynamic account columns)
+    include_pmagy = bool(getattr(report, "include_pmagy", False))
     accounts_pdf = [
         ("GP PD Account", "gp_pd_updated", "gp_pd_pending", "total_gp_pd_pending", (36, 34) if not include_pmagy else (33, 31)),
         ("State Matching<br/>(TG-bPASS)", "tgbpass_updated", "tgbpass_pending", "total_tgbpass_pending", (38, 36) if not include_pmagy else (35, 33)),
@@ -558,7 +557,7 @@ def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[
     flowables = []
     flowables.append(Paragraph("TELANGANA STATE E-PANCHAYAT (ePTS) AUTOMATION PLATFORM", title_style))
     flowables.append(Spacer(1, 2))
-    flowables.append(Paragraph(f"GRAM PANCHAYAT BANK BALANCE ENTRY REPORT (GM-R 14.2) — {m_name.upper()} MANDAL", subtitle_style))
+    flowables.append(Paragraph(f"GRAM PANCHAYAT BANK BALANCE ENTRY REPORT — {m_name.upper()} MANDAL", subtitle_style))
     flowables.append(Spacer(1, 2))
     gen_time = format_display_timestamp(report.generated_at)
     include_pmagy = bool(getattr(report, "include_pmagy", False))

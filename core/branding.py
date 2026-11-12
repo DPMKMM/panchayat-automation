@@ -9,6 +9,7 @@ CONSOLE_NAME = "e-Panchayat Automation Console"
 WELCOME_MESSAGE = "Welcome to e-Panchayat Automation"
 TAGLINE = "Simplifying Panchayat Administration through Smart Reporting and Automation."
 GOV_SUBTITLE = "Independent Panchayat Administration & Reporting Companion"
+REPORT_FOOTER_TAGLINE = "Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation"
 
 
 MANUAL_SECTION_NAME = "e-Panchayat Manual Reports"
@@ -290,9 +291,9 @@ def apply_openpyxl_branding(workbook: Any) -> None:
 
     for ws in getattr(workbook, "worksheets", []):
         try:
-            ws.oddFooter.left.text = PLATFORM_NAME
+            ws.oddFooter.left.text = "Panchayat-Automation"
             ws.oddFooter.left.size = 8
-            ws.oddFooter.center.text = TAGLINE
+            ws.oddFooter.center.text = "Simplifying Panchayat Administration through Smart Reporting and Automation"
             ws.oddFooter.center.size = 8
             ws.oddFooter.right.text = "Page &P of &N"
             ws.oddFooter.right.size = 8
