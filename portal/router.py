@@ -70,6 +70,9 @@ def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
         "can_access_automated": can_user_access_automated_reports(user),
         "has_automated_subscription": bool(user.get("has_automated_subscription", False)),
         "subscription_status": str(user.get("subscription_status") or "free_preview"),
+        "subscription_plan_id": str(user.get("subscription_plan_id") or ""),
+        "subscription_plan_name": str(user.get("subscription_plan_name") or ""),
+        "subscription_expires_at": str(user.get("subscription_expires_at") or ""),
         "username": user.get("user_id"),
         "district": "Khammam",
         "mandal": "",
@@ -93,6 +96,7 @@ def _firebase_client_payload() -> dict[str, Any]:
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/admin", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/autoreports", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/manualreports", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/tools", response_class=HTMLResponse, include_in_schema=False)

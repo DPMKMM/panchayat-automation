@@ -38,6 +38,11 @@
     return host.indexOf('admin.') === 0 || host.indexOf('www.admin.') === 0;
   };
 
+  window.isAdminRouteOrHost = function () {
+    var path = (window.location.pathname || '').toLowerCase();
+    return window.isAdminHost() || path === '/admin';
+  };
+
   window.isProdCustomDomain = function () {
     var host = (window.location.hostname || '').toLowerCase();
     return host === 'panchayatautomation.in' || host === 'www.panchayatautomation.in' || host.slice(-23) === '.panchayatautomation.in';
@@ -64,6 +69,7 @@
   };
 
   window.getDedicatedPageSection = function () {
+    if (window.isAdminRouteOrHost()) return 'admin';
     if (window.isReportsHost()) return 'automated';
     if (window.isManualHost()) return 'manual';
     if (window.isToolsHost()) return 'tools';
@@ -493,6 +499,7 @@
     [
       'portal-hero-card',
       'post-login-dashboard',
+      'admin-nonadmin-gate',
       'admin-dashboard-station',
       'automation-station',
       'balance-station',
@@ -953,7 +960,9 @@
     try { savedMode = (sessionStorage.getItem('epts_workspace_mode') || '').trim().toLowerCase(); } catch (e) {}
 
     var dedSection = typeof window.getDedicatedPageSection === 'function' ? window.getDedicatedPageSection() : '';
-    if ((pending && pending.module) || target === 'dsr' || target === 'balance' || target === 'balance-station' || target === 'mas' || reqMode === 'automated' || urlSp.get('dept_login') === '1') {
+    if (dedSection === 'admin' || target === 'admin' || reqMode === 'admin') {
+      window.selectWorkspaceMode('admin', { skipScroll: true, fromInit: true });
+    } else if ((pending && pending.module) || target === 'dsr' || target === 'balance' || target === 'balance-station' || target === 'mas' || reqMode === 'automated' || urlSp.get('dept_login') === '1') {
       window.selectWorkspaceMode('automated', { skipScroll: true, fromInit: true });
     } else if (reqMode === 'manual' || target === 'dsr_excel' || target === 'manual-reports' || target === 'multiday') {
       window.selectWorkspaceMode('manual', { skipScroll: true, fromInit: true });
@@ -1210,7 +1219,8 @@
       'state-workspace-hub',
       'state-manual-page',
       'state-tools-page',
-      'state-automation-page'
+      'state-automation-page',
+      'state-admin-page'
     );
     var resolved = stateName || 'state-home-login';
     body.classList.add(resolved);
@@ -1224,7 +1234,14 @@
 
     if (subEl) subEl.style.display = (resolved === 'state-automation-page') ? 'none' : 'block';
 
-    if (resolved === 'state-workspace-hub') {
+    if (resolved === 'state-admin-page') {
+      if (eyebrow) eyebrow.textContent = '🛡️ ADMINISTRATOR CONTROL CENTER';
+      if (titleEl) titleEl.textContent = PLATFORM_NAME + ' · Admin Analytics & Subscriptions';
+      if (taglineEl) taglineEl.textContent = 'Live User Telemetry, Tool Usage Tracking & Razorpay Subscription Governance.';
+      if (subEl) subEl.textContent = 'Monitor registered and active officers, tool adoption, paid subscriptions, and platform availability.';
+      if (hubBarTitle) hubBarTitle.textContent = PLATFORM_NAME + ' · Admin Control Center';
+      if (hubBarSub) hubBarSub.textContent = 'Administrator analytics, user management, tool usage & Razorpay database.';
+    } else if (resolved === 'state-workspace-hub') {
       var officerFirst = (user && user.name) ? user.name.trim() : '';
       if (eyebrow) eyebrow.textContent = '🧭 OFFICER WORKSPACE HUB';
       if (titleEl) {
@@ -1307,7 +1324,7 @@
       if (btnServices) btnServices.style.display = 'none';
       if (btnPrivacy) btnPrivacy.style.display = 'none';
       if (btnFeedback) btnFeedback.style.display = 'none';
-      if (btnAdmin) btnAdmin.style.display = (window.isAdminHost() && profileDone && user && user.is_admin) ? 'inline-flex' : 'none';
+      if (btnAdmin) btnAdmin.style.display = (window.isAdminRouteOrHost() && profileDone && user && user.is_admin) ? 'inline-flex' : 'none';
       if (btnStudio) btnStudio.style.display = profileDone ? 'inline-flex' : 'none';
       if (btnConsoleSwitch) btnConsoleSwitch.style.display = 'none';
 
@@ -1329,9 +1346,20 @@
         window.applyScreenVisualState('state-home-login', user);
       } else {
         if (globalBar) globalBar.style.display = 'flex';
-        if (dash) dash.style.display = 'block';
         var activeMode = window.currentWorkspaceMode;
-        if (activeMode === 'manual') {
+        if (activeMode === 'admin' || window.isAdminRouteOrHost()) {
+          if (dash) dash.style.display = 'none';
+          if (modeSel) modeSel.style.display = 'none';
+          if (portalSec) portalSec.style.display = 'none';
+          if (consoleSec) consoleSec.style.display = 'none';
+          if (toolsSec) toolsSec.style.display = 'none';
+          if (dcbSec) dcbSec.style.display = 'none';
+          if (btnSwitchMode) btnSwitchMode.style.display = 'none';
+          if (btnDeptLogin) btnDeptLogin.style.display = 'none';
+          window.applyScreenVisualState('state-admin-page', user);
+        } else {
+          if (dash) dash.style.display = 'block';
+          if (activeMode === 'manual') {
           if (modeSel) modeSel.style.display = 'none';
           if (portalSec) portalSec.style.display = 'block';
           if (consoleSec) consoleSec.style.display = 'none';
@@ -1376,6 +1404,7 @@
           if (btnDeptLogin) btnDeptLogin.style.display = sessionStorage.getItem('epts_portal_auth') === 'true' ? 'inline-flex' : 'none';
           if (dashBadge) dashBadge.textContent = '🟢 Choose Reporting Mode';
           window.applyScreenVisualState('state-workspace-hub', user);
+        }
         }
       }
     } else {
@@ -1427,6 +1456,24 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  window.openAdminNonAdminGate = function (user) {
+    window.hideAllStations();
+    window.setPortalUI(true, user);
+    var gate = document.getElementById('admin-nonadmin-gate');
+    var desc = document.getElementById('admin-nonadmin-desc');
+    var link = document.getElementById('admin-nonadmin-portal-link');
+    if (desc) {
+      var who = user && user.gmail ? (escapeHtml(user.name || 'Officer') + ' (' + escapeHtml(user.gmail) + ')') : 'a standard officer account';
+      desc.innerHTML =
+        'Currently signed in as <strong>' + who + '</strong>, which does not have Administrator privileges. ' +
+        'Sign in with an authorized Administrator Google account or return to the Officer Workspace Portal.';
+    }
+    if (link) {
+      link.href = window.isProdCustomDomain() ? 'https://panchayatautomation.in/' : '/';
+    }
+    if (gate) gate.style.display = 'block';
+  };
+
   window.selectWorkspaceMode = function (mode, options) {
     if (!window.isPortalAuthenticated) {
       window.setPortalUI(false, null);
@@ -1434,6 +1481,15 @@
     }
     var u = window.getScopedUser();
     var rawMode = String(mode || '').trim().toLowerCase();
+    if (rawMode === 'admin') {
+      window.currentWorkspaceMode = 'admin';
+      if (u && u.is_admin && typeof window.openAdminDashboardStation === 'function') {
+        window.openAdminDashboardStation();
+      } else {
+        window.openAdminNonAdminGate(u);
+      }
+      return true;
+    }
     var m = rawMode === 'automated' ? 'automated' : (rawMode === 'tools' ? 'tools' : 'manual');
 
     if (m === 'automated') {
@@ -1474,10 +1530,14 @@
       return;
     }
     var u = window.getScopedUser();
-    var profileDone = Boolean(u && u.profile_completed && u.designation && u.mobile_number);
-    if (!profileDone) {
+    var isCompleted = Boolean(u && u.profile_completed && u.designation && u.mobile_number);
+    if (!isCompleted) {
       window.setPortalUI(true, u);
       window.showOfficerProfileModal(u || {}, { allowClose: false });
+      return;
+    }
+    if (window.isAdminRouteOrHost()) {
+      window.selectWorkspaceMode('admin', { fromInit: true });
       return;
     }
     window.hideAllStations();
@@ -1488,6 +1548,10 @@
   window.handleHomeNavigation = function () {
     if (!window.isPortalAuthenticated) {
       window.setPortalUI(false, null);
+      return;
+    }
+    if (window.isAdminRouteOrHost()) {
+      window.selectWorkspaceMode('admin', { fromInit: true });
       return;
     }
     var dedSection = window.getDedicatedPageSection();
@@ -1519,7 +1583,7 @@
     window.setPortalUI(false, null);
     var dest = '/';
     if (dedSection) {
-      dest = (window.isReportsHost() || window.isManualHost() || window.isToolsHost())
+      dest = (window.isAdminHost() || window.isReportsHost() || window.isManualHost() || window.isToolsHost())
         ? '/'
         : window.getSectionUrl(dedSection);
     } else if (sc === 'console' && !window.isReportsHost()) {
@@ -1715,7 +1779,7 @@
 
     var dedSection = window.getDedicatedPageSection();
     if (dedSection && (!target || !(window.DeptSessionManager && urlParams.get('pending_module')))) {
-      if (dedSection === 'manual' || dedSection === 'tools') {
+      if (dedSection === 'admin' || dedSection === 'manual' || dedSection === 'tools') {
         window.selectWorkspaceMode(dedSection, { skipScroll: true, fromInit: true });
       } else if (dedSection === 'automated' && !urlParams.get('mode') && !target) {
         window.selectWorkspaceMode('automated', { skipScroll: true, fromInit: true });
@@ -1736,7 +1800,7 @@
       if (typeof window.showUpcomingModal === 'function') {
         window.showUpcomingModal('Gram Panchayat Inspections', '🔍', 'Compliance monitoring of Gram Panchayat field inspections conducted by DPO, DLPO, and MPO tiers with Mandal filters, GP drill-down, and automated portal synchronization.');
       }
-    } else if (target === 'admin' && window.isAdminHost() && portalUser && portalUser.is_admin) {
+    } else if (target === 'admin' && window.isAdminRouteOrHost() && portalUser && portalUser.is_admin) {
       if (typeof window.openAdminDashboardStation === 'function') window.openAdminDashboardStation();
     } else if (target === 'balance' || target === 'balance-station') {
       if (typeof window.openBalanceRobot === 'function') await window.openBalanceRobot();

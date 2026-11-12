@@ -236,3 +236,171 @@ def test_revoked_admin_accounts_and_separate_admin_host(monkeypatch):
     for non_admin_host in ("panchayatautomation.in", "autoreports.panchayatautomation.in", "reports.panchayatautomation.in"):
         assert admin_client.get("/api/admin/overview", headers={"Host": non_admin_host}).status_code == 403
         assert admin_client.get("/api/system/sessions", headers={"Host": non_admin_host}).status_code == 403
+
+
+def test_admin_host_branding_tool_telemetry_and_razorpay_database(monkeypatch):
+    """Verify dedicated admin host routing, per-tool usage telemetry, and subscription/Razorpay ledger DB."""
+    import hashlib
+    import hmac
+    import pymupdf
+
+    ts = int(time.time() * 1000)
+    admin_client, _ = _login(
+        monkeypatch, "admin.epanchayat@gmail.com", "State Admin", host="admin.panchayatautomation.in"
+    )
+    officer_email = f"razorpay_officer_{ts}@gmail.com"
+    officer_client, officer_body = _login(
+        monkeypatch, officer_email, "Subscribed Officer", host="panchayatautomation.in"
+    )
+    officer_uid = officer_body["user"]["user_id"]
+
+    # 1. Admin host renders dedicated Admin Control Center branding & tabs (no generic landing trap)
+    adm_html = admin_client.get("/", headers={"Host": "admin.panchayatautomation.in"}).text
+    assert "Admin Control Center" in adm_html
+    assert 'id="admin-tab-tools"' in adm_html
+    assert 'id="admin-tab-subscriptions"' in adm_html
+    assert 'id="admin-nonadmin-gate"' in adm_html
+    assert admin_client.get("/admin").status_code == 200
+
+    auth_js = admin_client.get("/static/js/auth.js?v=20").text
+    assert "window.isAdminRouteOrHost" in auth_js
+    assert "if (dedSection === 'admin'" in auth_js
+
+    # 2. Simulate tool runs (Excel + PDF) and verify real tool usage telemetry in Admin Overview & Tool Analytics
+    ex_resp = officer_client.post(
+        "/api/tools/excel/execute",
+        headers={"Host": "tools.panchayatautomation.in"},
+        data={"tool_id": "xls_to_xlsx"},
+        files={"files": ("demo.xls", b"<html><table><tr><th>A</th></tr><tr><td>1</td></tr></table></html>", "application/vnd.ms-excel")},
+    )
+    assert ex_resp.status_code == 200, ex_resp.text
+
+    def _pdf_bytes(lbl: str) -> bytes:
+        doc = pymupdf.open()
+        doc.new_page().insert_text((50, 50), lbl)
+        out = doc.tobytes()
+        doc.close()
+        return out
+
+    pdf_resp = officer_client.post(
+        "/api/tools/pdf/merge",
+        headers={"Host": "tools.panchayatautomation.in"},
+        files=[
+            ("files", ("one.pdf", _pdf_bytes("One"), "application/pdf")),
+            ("files", ("two.pdf", _pdf_bytes("Two"), "application/pdf")),
+        ],
+    )
+    assert pdf_resp.status_code == 200, pdf_resp.text
+
+    ov = admin_client.get("/api/admin/overview", headers={"Host": "admin.panchayatautomation.in"}).json()
+    stats = ov["stats"]
+    assert stats["total_users"] >= 2
+    assert stats["active_users"] >= 2
+    assert stats["active_users_now"] >= 2
+    assert stats["total_tool_runs"] >= 2
+    tool_ids = {t["tool_id"] for t in stats["tool_usage"]}
+    assert "excel:xls_to_xlsx" in tool_ids
+    assert "pdf:merge" in tool_ids
+
+    tool_analytics = admin_client.get(
+        "/api/admin/tool-usage?days=30", headers={"Host": "admin.panchayatautomation.in"}
+    ).json()
+    assert tool_analytics["unique_tools_used"] >= 2
+    assert any(ev["tool_id"] == "excel:xls_to_xlsx" for ev in tool_analytics["recent_activity"])
+
+    # 3. Billing readiness (unconfigured Razorpay) + Plans + Admin Grant/Revoke
+    plans_res = officer_client.get("/api/billing/plans", headers={"Host": "panchayatautomation.in"})
+    assert plans_res.status_code == 200
+    assert plans_res.json()["razorpay"]["configured"] is False
+    assert any(p["plan_id"] == "plan_monthly" for p in plans_res.json()["plans"])
+
+    unconf_order = officer_client.post(
+        "/api/billing/razorpay/create-order",
+        headers={"Host": "panchayatautomation.in"},
+        json={"plan_id": "plan_monthly"},
+    )
+    assert unconf_order.status_code == 503
+
+    plan_save = admin_client.post(
+        "/api/admin/plans",
+        headers={"Host": "admin.panchayatautomation.in"},
+        json={"plan_id": "plan_custom", "name": "Half Yearly Pass", "amount_inr": 499, "duration_days": 180},
+    )
+    assert plan_save.status_code == 200
+    assert plan_save.json()["plan"]["amount_paise"] == 49900
+
+    grant_res = admin_client.post(
+        "/api/admin/subscriptions/grant",
+        headers={"Host": "admin.panchayatautomation.in"},
+        json={"user_id": officer_uid, "plan_id": "plan_monthly", "record_payment": True, "notes": "Pilot grant"},
+    )
+    assert grant_res.status_code == 200, grant_res.text
+
+    try:
+        assert admin_client.post(
+            "/api/admin/policy",
+            headers={"Host": "admin.panchayatautomation.in"},
+            json={"automated_subscription_required": True},
+        ).status_code == 200
+        # Subscribed officer keeps Console access even when gate is enforced
+        st_sub = officer_client.get("/api/auth/portal-status", headers={"Host": "panchayatautomation.in"}).json()
+        assert st_sub["user"]["has_automated_subscription"] is True
+        assert st_sub["user"]["can_access_automated"] is True
+
+        subs_data = admin_client.get("/api/admin/subscriptions", headers={"Host": "admin.panchayatautomation.in"}).json()
+        assert subs_data["summary"]["subscribed_users"] >= 1
+        assert subs_data["summary"]["total_revenue_inr"] >= 99.0
+
+        # Revoke removes Console access when gate is enforced
+        rev_res = admin_client.post(
+            f"/api/admin/subscriptions/{officer_uid}/revoke",
+            headers={"Host": "admin.panchayatautomation.in"},
+        )
+        assert rev_res.status_code == 200
+        st_rev = officer_client.get("/api/auth/portal-status", headers={"Host": "panchayatautomation.in"}).json()
+        assert st_rev["user"]["has_automated_subscription"] is False
+        assert st_rev["user"]["can_access_automated"] is False
+    finally:
+        admin_client.post(
+            "/api/admin/policy",
+            headers={"Host": "admin.panchayatautomation.in"},
+            json={"automated_subscription_required": False},
+        )
+
+    # 4. Simulated Razorpay payment signature verification & activation
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "rzp_test_demo123456")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "secret_test_key_999")
+    rzp_order_id = f"order_demo_{ts}"
+    rzp_pay_id = f"pay_demo_{ts}"
+    bad_verify = officer_client.post(
+        "/api/billing/razorpay/verify",
+        headers={"Host": "panchayatautomation.in"},
+        json={
+            "plan_id": "plan_annual",
+            "razorpay_order_id": rzp_order_id,
+            "razorpay_payment_id": rzp_pay_id,
+            "razorpay_signature": "tampered_sig",
+        },
+    )
+    assert bad_verify.status_code == 400
+
+    valid_sig = hmac.new(
+        b"secret_test_key_999",
+        f"{rzp_order_id}|{rzp_pay_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    good_verify = officer_client.post(
+        "/api/billing/razorpay/verify",
+        headers={"Host": "panchayatautomation.in"},
+        json={
+            "plan_id": "plan_annual",
+            "razorpay_order_id": rzp_order_id,
+            "razorpay_payment_id": rzp_pay_id,
+            "razorpay_signature": valid_sig,
+        },
+    )
+    assert good_verify.status_code == 200, good_verify.text
+    bill_status = officer_client.get("/api/billing/status", headers={"Host": "panchayatautomation.in"}).json()
+    assert bill_status["user"]["has_automated_subscription"] is True
+    assert bill_status["active_subscription"]["plan_id"] == "plan_annual"
+    assert any(p["razorpay_payment_id"] == rzp_pay_id and p["status"] == "captured" for p in bill_status["payments"])

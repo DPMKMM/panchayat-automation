@@ -21,16 +21,41 @@ from fastapi.staticfiles import StaticFiles
 
 from core.branding import CONSOLE_NAME, PLATFORM_NAME, TAGLINE
 from core.config import BASE_DIR, LOG_LEVEL
-from core.dependencies import auth_cookie_domain
+from core.dependencies import auth_cookie_domain, resolve_sso_session
+from core.firebase_store import log_usage
 from dcb.router import router as dcb_router
 from dsr import service as automation_service
 from dsr.router import router as dsr_router
 from gp_balance.router import router as gp_balance_router
 from mas.router import mas_alias_router, mas_upper_router, router as mas_router, web_router as mas_web_router
 from portal.admin_router import router as admin_router
+from portal.billing_router import router as billing_router
 from portal.router import router as portal_router
 from tools.excel.router import router as tools_excel_router
 from tools.pdf.router import router as tools_pdf_router
+
+
+def _resolve_tracked_tool_event(method: str, path: str) -> tuple[str, str, str] | None:
+    """Map successful report/tool API endpoints to structured (scope, module, action) telemetry."""
+    m = method.upper()
+    p = path.lower()
+    if m == "POST" and p.startswith("/api/tools/pdf/"):
+        slug = p[len("/api/tools/pdf/"):].strip("/")
+        if slug and "/" not in slug and slug != "health":
+            return "tools", f"pdf:{slug}", "execute"
+    if m == "POST" and p == "/api/web/reports":
+        return "portal", "dsr_manual", "generate"
+    if m == "POST" and p == "/api/web/multi-day-reports":
+        return "portal", "dsr_multiday", "generate"
+    if p in ("/api/tax/report.pdf", "/api/tax/download-pdf", "/api/tax/powerbi-report.pdf", "/api/tax/download") and m == "GET":
+        return "portal", "dcb_live", p.rsplit("/", 1)[-1]
+    if p == "/api/tax/refresh" and m == "POST":
+        return "portal", "dcb_live", "refresh"
+    if p in ("/api/balance/generate", "/api/balance/download-pdf", "/api/balance/download-excel"):
+        return "console", "gp_balance", p.rsplit("/", 1)[-1]
+    if m == "POST" and p in ("/api/reports/mas-consolidated/generate", "/api/mas/generate"):
+        return "console", "mas_consolidated", "generate"
+    return None
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("epanchayat_app")
@@ -109,6 +134,24 @@ def create_app() -> FastAPI:
         request.state.session_id = sid
         response = await call_next(request)
 
+        if response.status_code < 400:
+            tracked = _resolve_tracked_tool_event(request.method, request.url.path)
+            if tracked:
+                t_scope, t_mod, t_act = tracked
+                try:
+                    t_user, _ = resolve_sso_session(request)
+                except Exception:
+                    t_user = None
+                log_usage(
+                    user_id=str((t_user or {}).get("user_id") or "guest"),
+                    gmail=str((t_user or {}).get("gmail") or ""),
+                    user_name=str((t_user or {}).get("name") or ""),
+                    designation=str((t_user or {}).get("designation") or ""),
+                    platform_scope=t_scope,
+                    module=t_mod,
+                    action=t_act,
+                )
+
         # Security Patch 1: Comprehensive Anti-Clickjacking, Anti-Sniffing & Security Headers
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -154,6 +197,7 @@ def create_app() -> FastAPI:
     # Mount modular application routers
     app.include_router(portal_router)
     app.include_router(admin_router)
+    app.include_router(billing_router)
     app.include_router(dsr_router)
     app.include_router(dcb_router)
     app.include_router(gp_balance_router)

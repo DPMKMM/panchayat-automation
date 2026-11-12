@@ -28,6 +28,13 @@ rules_version = '2';
 //   - is_admin: bool (required, admin/server-only mutable)
 //   - can_access_portal: bool (required, admin/server-only mutable)
 //   - can_access_console: bool (required, admin/server-only mutable)
+//   - has_automated_subscription: bool (optional on legacy records, default false, admin/server-only mutable)
+//   - subscription_status: string (optional on legacy records, "free_preview" | "trial" | "active" | "past_due" | "cancelled" | "expired", admin/server-only mutable)
+//   - subscription_plan_id: string (optional, 0..64 chars, admin/server-only mutable)
+//   - subscription_plan_name: string (optional, 0..120 chars, admin/server-only mutable)
+//   - subscription_expires_at: string (optional "" or ISO 8601 timestamp 19..40 chars, admin/server-only mutable)
+//   - razorpay_customer_id: string (optional, 0..64 chars, admin/server-only mutable)
+//   - razorpay_subscription_id: string (optional, 0..64 chars, admin/server-only mutable)
 //
 // Collection: sessions
 // Document ID: {sessionToken} (opaque session token or SHA-256 token hash)
@@ -83,6 +90,78 @@ rules_version = '2';
 //   - updated_at: string (required ISO 8601 timestamp, 19..40 chars)
 //   - updated_by: string (required, 0..150 chars)
 // Access: Active signed-in users may read; admins may create/update; deletes denied.
+//
+// Collection: subscription_plans
+// Document ID: {planId} (e.g., "plan_monthly", "plan_quarterly", "plan_annual")
+// Fields:
+//   - plan_id: string (required, equals document ID, 1..64 chars, ^[a-z0-9][a-z0-9_]{0,63}$, immutable)
+//   - code: string (required, 1..64 chars)
+//   - name: string (required, 2..120 chars)
+//   - description: string (required, 0..500 chars)
+//   - amount_inr: number (required, 0..1000000)
+//   - amount_paise: int (required, 0..100000000)
+//   - currency: string (required, 3-letter uppercase ISO currency code, e.g., "INR")
+//   - duration_days: int (required, 1..3650)
+//   - razorpay_plan_id: string (required, 0..64 chars)
+//   - features: list<string> (required, <= 15 items, each 1..200 chars)
+//   - is_active: bool (required)
+//   - sort_order: int (required, 0..10000)
+//   - created_at: string (required ISO 8601 timestamp, 19..40 chars, immutable)
+//   - updated_at: string (required ISO 8601 timestamp, 19..40 chars)
+// Access: Active signed-in users may read; admins may create/update (Backend Admin SDK seeds defaults); deletes denied.
+//
+// Collection: subscriptions
+// Document ID: {subscriptionId} (e.g., "sub_<ms>_<hex>")
+// Fields:
+//   - subscription_id: string (required, equals document ID, 3..128 chars)
+//   - user_id: string (required, 3..128 chars)
+//   - gmail: string (required, lowercase email 5..254 chars)
+//   - user_name: string (optional, 0..150 chars)
+//   - plan_id: string (required, 1..64 chars)
+//   - plan_name: string (required, 1..120 chars)
+//   - amount_inr: number (required, >= 0)
+//   - currency: string (required, e.g., "INR")
+//   - duration_days: int (required, >= 1)
+//   - status: string (required, "active" | "superseded" | "cancelled" | "expired" | "trial" | "past_due")
+//   - provider: string (required, "admin_grant" | "razorpay")
+//   - razorpay_subscription_id: string (optional, 0..64 chars)
+//   - razorpay_customer_id: string (optional, 0..64 chars)
+//   - razorpay_order_id: string (optional, 0..64 chars)
+//   - razorpay_payment_id: string (optional, 0..64 chars)
+//   - started_at: string (required ISO 8601 timestamp)
+//   - expires_at: string (required ISO 8601 timestamp)
+//   - created_at: string (required ISO 8601 timestamp)
+//   - updated_at: string (required ISO 8601 timestamp)
+//   - granted_by: string (optional, 0..254 chars)
+//   - cancelled_by: string (optional, 0..254 chars)
+//   - notes: string (optional, 0..255 chars)
+// Access: Owner (active user matching user_id or verified auth email) or admins may read;
+//         all client writes denied (Backend Admin SDK manages Razorpay verification & admin grants).
+//
+// Collection: payments
+// Document ID: {paymentId} (e.g., "pay_<ms>_<hex>")
+// Fields:
+//   - payment_id: string (required, equals document ID, 3..128 chars)
+//   - user_id: string (required, 3..128 chars)
+//   - gmail: string (optional/required, lowercase email or "")
+//   - user_name: string (optional, 0..150 chars)
+//   - subscription_id: string (optional "" or 3..128 chars)
+//   - plan_id: string (required, 1..64 chars)
+//   - plan_name: string (required, 1..120 chars)
+//   - amount_paise: int (required, >= 0)
+//   - amount_inr: number (required, >= 0)
+//   - currency: string (required, e.g., "INR")
+//   - status: string (required, "created" | "captured" | "failed" | "refunded")
+//   - provider: string (required, "razorpay" | "admin_grant")
+//   - razorpay_order_id: string (optional, 0..64 chars)
+//   - razorpay_payment_id: string (optional, 0..64 chars)
+//   - signature_verified: bool (required)
+//   - method: string (optional, 0..64 chars)
+//   - notes: string (optional, 0..255 chars)
+//   - created_at: string (required ISO 8601 timestamp)
+//   - captured_at: string (optional "" or ISO 8601 timestamp)
+// Access: Owner (active user matching user_id or verified auth email) or admins may read;
+//         all client writes denied (Backend Admin SDK manages payment orders & verified captures).
 //
 // ===============================================================
 
@@ -186,6 +265,30 @@ service cloud.firestore {
       );
     }
 
+    // Check if an active authenticated user owns a billing document (subscription or payment)
+    // via user_id (Firebase UID or linked active users/{user_id}) or verified email match.
+    function isBillingDocOwner() {
+      return isActiveAccount() &&
+             resource != null &&
+             (
+               resource.data.user_id == request.auth.uid ||
+               (
+                 'email' in request.auth.token &&
+                 request.auth.token.email is string &&
+                 request.auth.token.email.size() >= 5 &&
+                 request.auth.token.get('email_verified', false) == true &&
+                 resource.data.gmail == request.auth.token.email.lower()
+               ) ||
+               (
+                 resource.data.user_id is string &&
+                 resource.data.user_id.matches('^[^/]{3,128}$') &&
+                 exists(/databases/$(database)/documents/users/$(resource.data.user_id)) &&
+                 get(/databases/$(database)/documents/users/$(resource.data.user_id)).data.firebase_uid == request.auth.uid &&
+                 get(/databases/$(database)/documents/users/$(resource.data.user_id)).data.get('account_status', 'Active') == 'Active'
+               )
+             );
+    }
+
     // ===============================================================
     // Domain Validators
     // ===============================================================
@@ -223,10 +326,18 @@ service cloud.firestore {
         'profile_completed',
         'is_admin',
         'can_access_portal',
-        'can_access_console'
+        'can_access_console',
+        'has_automated_subscription',
+        'subscription_status',
+        'subscription_plan_id',
+        'subscription_plan_name',
+        'subscription_expires_at',
+        'razorpay_customer_id',
+        'razorpay_subscription_id'
       ];
       let validDesignations = ['', 'DPO', 'DPM', 'DLPO', 'MPDO', 'MPO', 'PS', 'DEO'];
       let validRoles = ['', 'Mandal Level', 'Division Level', 'District Level'];
+      let validSubscriptionStatuses = ['free_preview', 'trial', 'active', 'past_due', 'cancelled', 'expired'];
 
       return hasRequiredFields(data, requiredFields) &&
              hasOnlyAllowedFields(data, allowedFields) &&
@@ -239,7 +350,7 @@ service cloud.firestore {
              )) &&
              isValidEmail(data.gmail) &&
              data.gmail == data.gmail.lower() &&
-             (!('email' in resource.data) || 'email' in data) &&
+             (resource == null || !('email' in resource.data) || 'email' in data) &&
              (!('email' in data) || (isValidEmail(data.email) && data.gmail == data.email.lower())) &&
              validStringLength(data.name, 1, 150) &&
              (!('designation' in data) || (data.designation is string && data.designation in validDesignations)) &&
@@ -255,14 +366,34 @@ service cloud.firestore {
              )) &&
              isValidDateString(data.registration_date) &&
              isValidDateString(data.last_login) &&
-             (!('updated_at' in resource.data) || 'updated_at' in data) &&
+             (resource == null || !('updated_at' in resource.data) || 'updated_at' in data) &&
              (!('updated_at' in data) || isValidDateString(data.updated_at)) &&
              data.account_status is string &&
              data.account_status in ['Active', 'Disabled'] &&
              data.profile_completed is bool &&
              data.is_admin is bool &&
              data.can_access_portal is bool &&
-             data.can_access_console is bool;
+             data.can_access_console is bool &&
+             (resource == null || !('has_automated_subscription' in resource.data) || 'has_automated_subscription' in data) &&
+             (!('has_automated_subscription' in data) || data.has_automated_subscription is bool) &&
+             (resource == null || !('subscription_status' in resource.data) || 'subscription_status' in data) &&
+             (!('subscription_status' in data) || (
+               data.subscription_status is string &&
+               data.subscription_status in validSubscriptionStatuses
+             )) &&
+             (resource == null || !('subscription_plan_id' in resource.data) || 'subscription_plan_id' in data) &&
+             (!('subscription_plan_id' in data) || validStringLength(data.subscription_plan_id, 0, 64)) &&
+             (resource == null || !('subscription_plan_name' in resource.data) || 'subscription_plan_name' in data) &&
+             (!('subscription_plan_name' in data) || validStringLength(data.subscription_plan_name, 0, 120)) &&
+             (resource == null || !('subscription_expires_at' in resource.data) || 'subscription_expires_at' in data) &&
+             (!('subscription_expires_at' in data) || (
+               data.subscription_expires_at is string &&
+               (data.subscription_expires_at == '' || isValidDateString(data.subscription_expires_at))
+             )) &&
+             (resource == null || !('razorpay_customer_id' in resource.data) || 'razorpay_customer_id' in data) &&
+             (!('razorpay_customer_id' in data) || validStringLength(data.razorpay_customer_id, 0, 64)) &&
+             (resource == null || !('razorpay_subscription_id' in resource.data) || 'razorpay_subscription_id' in data) &&
+             (!('razorpay_subscription_id' in data) || validStringLength(data.razorpay_subscription_id, 0, 64));
     }
 
     // Administrator update constraints including self-lockout protections
@@ -294,7 +425,14 @@ service cloud.firestore {
                'account_status',
                'is_admin',
                'can_access_portal',
-               'can_access_console'
+               'can_access_console',
+               'has_automated_subscription',
+               'subscription_status',
+               'subscription_plan_id',
+               'subscription_plan_name',
+               'subscription_expires_at',
+               'razorpay_customer_id',
+               'razorpay_subscription_id'
              ]) &&
              (!resource.data.profile_completed || data.profile_completed == true) &&
              validCompletedProfile;
@@ -314,6 +452,74 @@ service cloud.firestore {
              validStringLength(data.updated_by, 0, 150);
     }
 
+    // Deep-inspect bounded list of subscription plan feature strings (max 15 items, 1..200 chars each)
+    function isValidFeaturesList(features) {
+      return features is list &&
+             features.size() <= 15 &&
+             (features.size() <= 0 || validStringLength(features[0], 1, 200)) &&
+             (features.size() <= 1 || validStringLength(features[1], 1, 200)) &&
+             (features.size() <= 2 || validStringLength(features[2], 1, 200)) &&
+             (features.size() <= 3 || validStringLength(features[3], 1, 200)) &&
+             (features.size() <= 4 || validStringLength(features[4], 1, 200)) &&
+             (features.size() <= 5 || validStringLength(features[5], 1, 200)) &&
+             (features.size() <= 6 || validStringLength(features[6], 1, 200)) &&
+             (features.size() <= 7 || validStringLength(features[7], 1, 200)) &&
+             (features.size() <= 8 || validStringLength(features[8], 1, 200)) &&
+             (features.size() <= 9 || validStringLength(features[9], 1, 200)) &&
+             (features.size() <= 10 || validStringLength(features[10], 1, 200)) &&
+             (features.size() <= 11 || validStringLength(features[11], 1, 200)) &&
+             (features.size() <= 12 || validStringLength(features[12], 1, 200)) &&
+             (features.size() <= 13 || validStringLength(features[13], 1, 200)) &&
+             (features.size() <= 14 || validStringLength(features[14], 1, 200));
+    }
+
+    // Full schema and constraint validator for subscription_plans documents
+    function isValidSubscriptionPlan(data, planId) {
+      let fields = [
+        'plan_id',
+        'code',
+        'name',
+        'description',
+        'amount_inr',
+        'amount_paise',
+        'currency',
+        'duration_days',
+        'razorpay_plan_id',
+        'features',
+        'is_active',
+        'sort_order',
+        'created_at',
+        'updated_at'
+      ];
+      return hasRequiredFields(data, fields) &&
+             hasOnlyAllowedFields(data, fields) &&
+             validStringLength(data.plan_id, 1, 64) &&
+             data.plan_id == planId &&
+             data.plan_id.matches("^[a-z0-9][a-z0-9_]{0,63}$") &&
+             validStringLength(data.code, 1, 64) &&
+             validStringLength(data.name, 2, 120) &&
+             validStringLength(data.description, 0, 500) &&
+             data.amount_inr is number &&
+             data.amount_inr >= 0 &&
+             data.amount_inr <= 1000000 &&
+             data.amount_paise is int &&
+             data.amount_paise >= 0 &&
+             data.amount_paise <= 100000000 &&
+             data.currency is string &&
+             data.currency.matches("^[A-Z]{3}$") &&
+             data.duration_days is int &&
+             data.duration_days >= 1 &&
+             data.duration_days <= 3650 &&
+             validStringLength(data.razorpay_plan_id, 0, 64) &&
+             isValidFeaturesList(data.features) &&
+             data.is_active is bool &&
+             data.sort_order is int &&
+             data.sort_order >= 0 &&
+             data.sort_order <= 10000 &&
+             isValidDateString(data.created_at) &&
+             isValidDateString(data.updated_at);
+    }
+
     // ===============================================================
     // Collection Rules
     // ===============================================================
@@ -325,6 +531,8 @@ service cloud.firestore {
         isDocOwner() ||
         isAdmin()
       );
+      // Server Admin SDK creates/deletes users; clients cannot create profiles with paid
+      // subscription/billing values or elevated permissions.
       allow create: if false;
       allow update: if isAuthenticated() &&
                        isValidUser(request.resource.data, userId) &&
@@ -369,6 +577,28 @@ service cloud.firestore {
                        isValidAccessPolicy(request.resource.data, policyKey) &&
                        areImmutableFieldsUnchanged(['key']);
       allow delete: if false;
+    }
+
+    // 6. Subscription plans catalog (Active signed-in users may read; admin/server-only write)
+    match /subscription_plans/{planId} {
+      allow read: if isActiveAccount();
+      allow create: if isAdmin() && isValidSubscriptionPlan(request.resource.data, planId);
+      allow update: if isAdmin() &&
+                       isValidSubscriptionPlan(request.resource.data, planId) &&
+                       areImmutableFieldsUnchanged(['plan_id', 'created_at']);
+      allow delete: if false;
+    }
+
+    // 7. Subscriptions collection (Owner or admin may read; all direct client writes denied)
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAdmin() || isBillingDocOwner();
+      allow write: if false;
+    }
+
+    // 8. Payments ledger collection (Owner or admin may read; all direct client writes denied)
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || isBillingDocOwner();
+      allow write: if false;
     }
 
     // Default deny fallback for all other collections and subcollections

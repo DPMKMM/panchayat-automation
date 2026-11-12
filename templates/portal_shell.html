@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="doc-page-title">e-Panchayat Automation</title>
-  <link rel="stylesheet" href="/static/css/common.css?v=11">
+  <link rel="stylesheet" href="/static/css/common.css?v=12">
 </head>
 <body class="state-home-login">
 
@@ -911,57 +911,147 @@
     <!-- ========================================================
          ADMINISTRATOR GOVERNANCE DASHBOARD
          ======================================================== -->
+    <section class="automation-station" id="admin-nonadmin-gate" style="display:none; margin-bottom:24px;">
+      <div class="admin-section-card" style="text-align:center; padding:32px 24px; border-color:#f59e0b; background:#fffbeb;">
+        <div style="font-size:2.4rem; margin-bottom:10px;">🛡️</div>
+        <h2 style="margin:0 0 8px; font-size:1.35rem; font-weight:800; color:#78350f;">Administrator Account Required</h2>
+        <p id="admin-nonadmin-desc" style="margin:0 auto 18px; max-width:560px; font-size:0.92rem; color:#475569; line-height:1.55;">
+          You are currently signed in with a standard officer account. Administrator analytics, user permissions, and subscription controls require an authorized administrator account on <code>admin.panchayatautomation.in</code>.
+        </p>
+        <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-gold btn-sm" onclick="triggerGoogleSignIn()">🔄 Sign In with Admin Account</button>
+          <a href="https://panchayatautomation.in/" id="admin-nonadmin-portal-link" class="btn btn-primary btn-sm">🏠 Open Officer Workspace Portal →</a>
+        </div>
+      </div>
+    </section>
+
     <section class="automation-station" id="admin-dashboard-station" style="display:none; margin-bottom:24px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
         <div style="display:flex; align-items:center; gap:12px;">
           <div style="width:44px; height:44px; border-radius:10px; background:#fef3c7; color:#b45309; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">🛡️</div>
           <div>
-            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Administrator Governance Dashboard</h2>
-            <div style="font-size:0.85rem; color:var(--text-muted);">e-Panchayat Automation &middot; Officer Access Control, Module Availability Policies &amp; Cloud Firestore Analytics</div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Administrator Control Center</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Users Registered &amp; Active &middot; Live Tool Telemetry &middot; Paid Subscriptions &amp; Razorpay Database</div>
           </div>
         </div>
-        <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
-          ← Back to Dashboard
-        </button>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary btn-sm" onclick="refreshActiveAdminTab()">🔄 Refresh Data</button>
+          <a href="https://panchayatautomation.in/" id="admin-open-user-portal-link" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);">
+            🧭 Officer Hub ↗
+          </a>
+        </div>
       </div>
 
       <div id="admin-alert" class="gov-portal-alert"></div>
 
       <div class="admin-tabs">
         <button type="button" class="admin-tab-btn active" id="admin-tab-overview" onclick="switchAdminTab('overview')">📊 Overview</button>
-        <button type="button" class="admin-tab-btn" id="admin-tab-users" onclick="switchAdminTab('users')">👥 Users &amp; Permissions</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-tools" onclick="switchAdminTab('tools')">🧰 Tool Analytics</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-users" onclick="switchAdminTab('users')">👥 Users (<span id="adm-tab-users-badge">0</span>)</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-subscriptions" onclick="switchAdminTab('subscriptions')">💳 Subscriptions &amp; Razorpay</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-policy" onclick="switchAdminTab('policy')">🎛️ Access Policy</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-feedback" onclick="switchAdminTab('feedback')">💬 Feedback Inbox</button>
       </div>
 
       <!-- Tab 1: Overview -->
       <div id="admin-pane-overview">
-        <div class="metrics-grid">
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit, minmax(185px, 1fr));">
           <div class="metric-card accent">
-            <div class="metric-label">Total Officers</div>
+            <div class="metric-label">Users Registered</div>
             <div class="metric-value" id="adm-kpi-users">—</div>
-            <div class="metric-sub">Centralized Identity DB</div>
+            <div class="metric-sub">Profiles Completed: <strong id="adm-kpi-completed">—</strong></div>
           </div>
           <div class="metric-card success">
-            <div class="metric-label">Active Accounts</div>
+            <div class="metric-label">Active Users</div>
             <div class="metric-value" id="adm-kpi-active">—</div>
-            <div class="metric-sub">Permitted Access</div>
+            <div class="metric-sub" id="adm-kpi-online-sub">Online Now: — &middot; 24h: —</div>
           </div>
           <div class="metric-card info">
-            <div class="metric-label">Profiles Completed</div>
-            <div class="metric-value" id="adm-kpi-completed">—</div>
-            <div class="metric-sub">Registered Designations</div>
+            <div class="metric-label">Tools &amp; Reports Run (30d)</div>
+            <div class="metric-value" id="adm-kpi-events">—</div>
+            <div class="metric-sub" id="adm-kpi-tools-sub">Unique Tools Used: —</div>
           </div>
           <div class="metric-card warning">
-            <div class="metric-label">30-Day Activity Events</div>
-            <div class="metric-value" id="adm-kpi-events">—</div>
+            <div class="metric-label">Subscribed Users</div>
+            <div class="metric-value" id="adm-kpi-subscribed">—</div>
+            <div class="metric-sub" id="adm-kpi-sub-split">Paid Active &middot; Free: —</div>
+          </div>
+          <div class="metric-card" style="border-top:3px solid #7c3aed;">
+            <div class="metric-label">Revenue &amp; Razorpay</div>
+            <div class="metric-value" id="adm-kpi-revenue">₹0</div>
+            <div class="metric-sub" id="adm-kpi-razorpay-sub">Razorpay: Checking...</div>
+          </div>
+          <div class="metric-card" style="border-top:3px solid #64748b;">
+            <div class="metric-label">Feedback &amp; Accounts</div>
+            <div class="metric-value" id="adm-kpi-feedback-num">—</div>
             <div class="metric-sub" id="adm-kpi-feedback">Feedback Count: —</div>
           </div>
         </div>
-        <div id="admin-breakdown-grid" class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(260px, 1fr));"></div>
+        <div id="admin-breakdown-grid" class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(290px, 1fr));"></div>
       </div>
 
-      <!-- Tab 2: Users -->
+      <!-- Tab 2: Tool Analytics -->
+      <div id="admin-pane-tools" style="display:none;">
+        <div class="admin-section-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <strong style="color:#064e3b;">What Tools Officers Are Using</strong>
+            <div style="font-size:0.84rem; color:#475569;">Live telemetry across Excel &amp; Data Studio, All-in-One PDF Studio, Manual Reports, Live DCB, GP Balance &amp; MAS Automation.</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <select id="admin-tools-days" onchange="loadAdminToolUsage()" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.85rem;">
+              <option value="1">Last 24 Hours</option>
+              <option value="7">Last 7 Days</option>
+              <option value="30" selected>Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+            </select>
+            <button type="button" class="btn btn-primary btn-sm" onclick="loadAdminToolUsage()">🔄 Refresh</button>
+          </div>
+        </div>
+
+        <div id="admin-tools-cat-grid" class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); margin-bottom:18px;"></div>
+
+        <div class="table-card" style="margin-bottom:18px;">
+          <div class="table-header">
+            <div class="table-title">Tools &amp; Reports Usage Ranking (<span id="admin-tools-count">0</span>)</div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tool / Module</th>
+                  <th>Category</th>
+                  <th class="text-center">Runs</th>
+                  <th class="text-center">Unique Users</th>
+                  <th>Last Used</th>
+                </tr>
+              </thead>
+              <tbody id="admin-tools-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">Recent Live Activity Stream (<span id="admin-recent-count">0</span>)</div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Tool / Action</th>
+                  <th>Category</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="admin-recent-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Users -->
       <div id="admin-pane-users" style="display:none;">
         <div class="admin-section-card">
           <div class="admin-form-grid">
@@ -999,6 +1089,15 @@
                 <option value="Disabled">Disabled</option>
               </select>
             </div>
+            <div class="form-group">
+              <label for="admin-filter-sub">Subscription</label>
+              <select id="admin-filter-sub" onchange="loadAdminUsers()">
+                <option value="">All Plans</option>
+                <option value="active">Subscribed (Active)</option>
+                <option value="free_preview">Free Access</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
             <div>
               <button type="button" class="btn btn-primary btn-sm" onclick="loadAdminUsers()">🔍 Filter / Refresh</button>
             </div>
@@ -1017,6 +1116,8 @@
                   <th>Mobile</th>
                   <th>Designation</th>
                   <th>Role</th>
+                  <th>Last Active</th>
+                  <th>Subscription</th>
                   <th>Status</th>
                   <th class="text-center">Portal</th>
                   <th class="text-center">Console</th>
@@ -1030,19 +1131,116 @@
         </div>
       </div>
 
-      <!-- Tab 3: Access Policy -->
+      <!-- Tab 4: Subscriptions & Razorpay Database -->
+      <div id="admin-pane-subscriptions" style="display:none;">
+        <div class="admin-section-card" id="admin-razorpay-status-card" style="border-color:#7c3aed; background:#faf5ff;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h4 style="margin:0 0 6px; color:#5b21b6;">💳 Razorpay Payment Gateway &amp; Subscription Database</h4>
+              <div id="admin-razorpay-status-text" style="font-size:0.86rem; color:#475569; line-height:1.5;">
+                Loading Razorpay readiness &amp; Firestore ledger status...
+              </div>
+            </div>
+            <div id="admin-razorpay-badge-wrap"></div>
+          </div>
+        </div>
+
+        <div class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(310px, 1fr)); margin-bottom:18px;">
+          <div class="admin-section-card" style="margin-bottom:0;">
+            <h4 style="margin:0 0 10px; color:#064e3b;">📦 Subscription Plans (Firestore `subscription_plans`)</h4>
+            <div id="admin-plans-list" style="margin-bottom:14px;"></div>
+            <div style="border-top:1px solid var(--border); padding-top:12px;">
+              <div style="font-weight:700; font-size:0.85rem; margin-bottom:8px; color:#0f172a;">Create / Update Plan</div>
+              <div class="admin-form-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
+                <input type="text" id="plan-edit-id" placeholder="plan_id (e.g. plan_monthly)" style="padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                <input type="text" id="plan-edit-name" placeholder="Plan Name" style="padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                <input type="number" id="plan-edit-inr" placeholder="Price INR (e.g. 99)" min="0" step="1" style="padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                <input type="number" id="plan-edit-days" placeholder="Duration Days (e.g. 30)" min="1" step="1" style="padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+                <input type="text" id="plan-edit-rzp" placeholder="Razorpay Plan ID (optional)" style="grid-column:1 / -1; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="saveAdminSubscriptionPlan()">💾 Save Plan to Database</button>
+            </div>
+          </div>
+
+          <div class="admin-section-card" style="margin-bottom:0;">
+            <h4 style="margin:0 0 10px; color:#064e3b;">🎁 Grant / Activate User Subscription</h4>
+            <div style="font-size:0.82rem; color:#64748b; margin-bottom:10px;">
+              Assign a subscription directly in Firestore (works before or alongside Razorpay live checkout).
+            </div>
+            <div style="display:flex; flex-direction:column; gap:9px;">
+              <select id="grant-sub-user" style="padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.84rem;"></select>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <select id="grant-sub-plan" style="padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.84rem;"></select>
+                <input type="number" id="grant-sub-days" placeholder="Days override (optional)" min="1" style="padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.84rem;">
+              </div>
+              <input type="text" id="grant-sub-notes" placeholder="Notes (e.g. Complimentary / UPI Ref)" style="padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.84rem;">
+              <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; color:#334155;">
+                <input type="checkbox" id="grant-sub-record-pay">
+                <span>Also record captured transaction in Payments Ledger</span>
+              </label>
+              <button type="button" class="btn btn-gold btn-sm" onclick="grantAdminSubscription()">✅ Activate Subscription</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom:18px;">
+          <div class="table-header">
+            <div class="table-title">Subscriptions Database (`subscriptions` &middot; <span id="admin-subs-count">0</span>)</div>
+            <button type="button" class="btn btn-white btn-sm" onclick="loadAdminSubscriptions()">🔄 Refresh</button>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Officer</th>
+                  <th>Plan</th>
+                  <th>Amount</th>
+                  <th>Provider</th>
+                  <th>Status</th>
+                  <th>Expires</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-subs-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-header">
+            <div class="table-title">Payments Ledger (`payments` &middot; <span id="admin-payments-count">0</span>)</div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Officer</th>
+                  <th>Plan</th>
+                  <th>Amount (INR)</th>
+                  <th>Razorpay Order / Payment ID</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="admin-payments-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Access Policy -->
       <div id="admin-pane-policy" style="display:none;">
         <div class="admin-section-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
           <div>
             <strong style="color:#064e3b;">Platform &amp; Module Availability Policy</strong>
-            <div style="font-size:0.84rem; color:#475569;">All 11 modules operate under open free access by default. Toggle switches below to enable or pause specific platforms or modules.</div>
+            <div style="font-size:0.84rem; color:#475569;">All 11 modules operate under open free access by default. Toggle switches below (including paid subscription enforcement) when ready.</div>
           </div>
           <button type="button" class="btn btn-gold btn-sm" onclick="saveAdminPolicyUpdates()">💾 Apply All Policy Changes</button>
         </div>
         <div id="admin-policy-grid" class="policy-grid"></div>
       </div>
 
-      <!-- Tab 4: Feedback Inbox -->
+      <!-- Tab 6: Feedback Inbox -->
       <div id="admin-pane-feedback" style="display:none;">
         <div class="table-card">
           <div class="table-header">
@@ -1938,8 +2136,8 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=4"></script>
-  <script src="/static/js/auth.js?v=19"></script>
+  <script src="/static/js/auth.js?v=20"></script>
   <script src="/static/js/console.js?v=15"></script>
-  <script src="/static/js/admin.js?v=6"></script>
+  <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>

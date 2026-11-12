@@ -19,6 +19,8 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Request, B
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 
 from core.branding import PLATFORM_NAME, render_canonical_footer_html
+from core.dependencies import resolve_sso_session
+from core.firebase_store import log_usage
 from tools.excel.converter_web import convert_file_universal, LibreOfficeEngine, normalize_to_xlsx
 import tools.excel.engine.converters_to_excel as to_excel
 import tools.excel.engine.converters_from_excel as from_excel
@@ -1011,8 +1013,26 @@ def _run_universal(src: str, out_file: Path) -> None:
         raise ValueError(msg)
 
 
+def _record_excel_usage(request: Request, module_key: str, action: str, details: str = "") -> None:
+    try:
+        user, _ = resolve_sso_session(request)
+    except Exception:
+        user = None
+    log_usage(
+        user_id=str((user or {}).get("user_id") or "guest"),
+        gmail=str((user or {}).get("gmail") or ""),
+        user_name=str((user or {}).get("name") or ""),
+        designation=str((user or {}).get("designation") or ""),
+        platform_scope="tools",
+        module=module_key,
+        action=action,
+        details=details,
+    )
+
+
 @router.post("/api/tools/excel/execute")
 async def execute_tool_endpoint(
+    request: Request,
     tool_id: str = Form(...),
     files: List[UploadFile] = File(...),
     find_val: Optional[str] = Form(None),
@@ -1253,6 +1273,8 @@ async def execute_tool_endpoint(
     if not out_file.exists():
         raise HTTPException(status_code=500, detail="Output file was not generated.")
 
+    _record_excel_usage(request, f"excel:{tool_id}", "execute", f"file={first_safe_name}")
+
     return {
         "success": True,
         "filename": out_file.name,
@@ -1265,12 +1287,13 @@ async def execute_tool_endpoint(
 # ==========================================
 
 @router.post("/api/tools/excel/viewer/load")
-async def viewer_load_endpoint(file: UploadFile = File(...)):
+async def viewer_load_endpoint(request: Request, file: UploadFile = File(...)):
     session_id = str(uuid.uuid4())
     session_dir = STORAGE_DIR / session_id
     input_dir = session_dir / "_input"
     input_dir.mkdir(parents=True, exist_ok=True)
-    fpath = input_dir / _safe_name(file.filename, "grid_file")
+    safe_fname = _safe_name(file.filename, "grid_file")
+    fpath = input_dir / safe_fname
     with open(fpath, "wb") as fp:
         shutil.copyfileobj(file.file, fp)
     if fpath.stat().st_size == 0:
@@ -1282,6 +1305,7 @@ async def viewer_load_endpoint(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load file: {str(e)}")
+    _record_excel_usage(request, "excel_viewer", "viewer_load", f"file={safe_fname}")
     grid_data["session_id"] = session_id
     return grid_data
 

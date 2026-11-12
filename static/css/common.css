@@ -1043,6 +1043,39 @@ footer {
   color: #991b1b;
   border: 1px solid #fca5a5;
 }
+.admin-bar-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  margin-top: 4px;
+}
+.admin-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #059669 0%, #10b981 100%);
+}
+.badge-sub-active {
+  display: inline-block;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.badge-sub-free {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
 .gov-portal-alert.warning {
   background: #fffbeb;
   color: #92400e;
@@ -1132,10 +1165,14 @@ body.state-manual-page {
 body.state-tools-page {
   background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%, #f5f3ff 100%);
 }
+body.state-admin-page {
+  background: linear-gradient(180deg, #fffbeb 0%, #f8fafc 45%, #f1f5f9 100%);
+}
 
 body.state-workspace-hub #global-browser-status-bar,
 body.state-manual-page #global-browser-status-bar,
-body.state-tools-page #global-browser-status-bar {
+body.state-tools-page #global-browser-status-bar,
+body.state-admin-page #global-browser-status-bar {
   background: #ffffff;
   border-color: #cbd5e1;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
@@ -1143,53 +1180,63 @@ body.state-tools-page #global-browser-status-bar {
 body.state-workspace-hub #telemetry-engine-bar-left,
 body.state-manual-page #telemetry-engine-bar-left,
 body.state-tools-page #telemetry-engine-bar-left,
+body.state-admin-page #telemetry-engine-bar-left,
 body.state-workspace-hub #browser-status-officer,
 body.state-manual-page #browser-status-officer,
-body.state-tools-page #browser-status-officer {
+body.state-tools-page #browser-status-officer,
+body.state-admin-page #browser-status-officer {
   display: none !important;
 }
 body.state-workspace-hub #workspace-hub-brand-left,
 body.state-manual-page #workspace-hub-brand-left,
-body.state-tools-page #workspace-hub-brand-left {
+body.state-tools-page #workspace-hub-brand-left,
+body.state-admin-page #workspace-hub-brand-left {
   display: flex !important;
 }
 body.state-workspace-hub #global-browser-status-bar .nav-link,
 body.state-manual-page #global-browser-status-bar .nav-link,
-body.state-tools-page #global-browser-status-bar .nav-link {
+body.state-tools-page #global-browser-status-bar .nav-link,
+body.state-admin-page #global-browser-status-bar .nav-link {
   color: #334155;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
 }
 body.state-workspace-hub #global-browser-status-bar .nav-link:hover,
 body.state-manual-page #global-browser-status-bar .nav-link:hover,
-body.state-tools-page #global-browser-status-bar .nav-link:hover {
+body.state-tools-page #global-browser-status-bar .nav-link:hover,
+body.state-admin-page #global-browser-status-bar .nav-link:hover {
   background: #e2e8f0;
   color: #0f172a;
 }
 body.state-workspace-hub #nav-officer-profile-bar,
 body.state-manual-page #nav-officer-profile-bar,
-body.state-tools-page #nav-officer-profile-bar {
+body.state-tools-page #nav-officer-profile-bar,
+body.state-admin-page #nav-officer-profile-bar {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
 }
 body.state-workspace-hub #nav-user-name,
 body.state-manual-page #nav-user-name,
-body.state-tools-page #nav-user-name {
+body.state-tools-page #nav-user-name,
+body.state-admin-page #nav-user-name {
   color: #0f172a !important;
 }
 body.state-workspace-hub #nav-user-role,
 body.state-manual-page #nav-user-role,
-body.state-tools-page #nav-user-role {
+body.state-tools-page #nav-user-role,
+body.state-admin-page #nav-user-role {
   color: #0369a1 !important;
 }
 body.state-workspace-hub #nav-user-gmail,
 body.state-manual-page #nav-user-gmail,
-body.state-tools-page #nav-user-gmail {
+body.state-tools-page #nav-user-gmail,
+body.state-admin-page #nav-user-gmail {
   color: #475569 !important;
 }
 body.state-workspace-hub #nav-btn-portal-logout,
 body.state-manual-page #nav-btn-portal-logout,
-body.state-tools-page #nav-btn-portal-logout {
+body.state-tools-page #nav-btn-portal-logout,
+body.state-admin-page #nav-btn-portal-logout {
   color: #b91c1c !important;
   background: #fef2f2 !important;
   border-color: #fecaca !important;

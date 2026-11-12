@@ -13,6 +13,7 @@ GOV_SUBTITLE = "Government of Telangana · Panchayat Raj & Rural Development"
 
 MANUAL_SECTION_NAME = "e-Panchayat Manual Reports"
 TOOLS_SECTION_NAME = "e-Panchayat Tools & Utilities Studio"
+ADMIN_SECTION_NAME = "e-Panchayat Admin Control Center"
 
 
 def _request_host_and_path(request: Any = None) -> tuple[str, str]:
@@ -168,6 +169,45 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                 (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
                     f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{PLATFORM_NAME} · Manual Reporting Workspace</h1>',
+                ),
+            ),
+        )
+
+    if is_admin_host_request(request):
+        return _replace_pairs(
+            html,
+            (
+                (
+                    '<title id="doc-page-title">e-Panchayat Automation</title>',
+                    f'<title id="doc-page-title">Admin Control Center | {PLATFORM_NAME}</title>',
+                ),
+                (
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{ADMIN_SECTION_NAME}</h1>',
+                ),
+                (
+                    '<span id="hero-console-chip" style="display:none;',
+                    '<span id="hero-console-chip" style="display:inline-flex;',
+                ),
+                (
+                    '>e-Panchayat Automation Console</span>',
+                    '>Administrator Command Center</span>',
+                ),
+                (
+                    '<div id="login-console-badge" style="display:none;',
+                    '<div id="login-console-badge" style="display:inline-flex;',
+                ),
+                (
+                    '>e-Panchayat Automation Console</div>',
+                    '>Admin Host</div>',
+                ),
+                (
+                    'id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation<',
+                    f'id="login-panel-subtitle">Sign in with your Administrator Google account to open {ADMIN_SECTION_NAME}<',
+                ),
+                (
+                    '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
+                    f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{ADMIN_SECTION_NAME}</h1>',
                 ),
             ),
         )
