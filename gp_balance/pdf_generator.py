@@ -47,7 +47,7 @@ class NumberedCanvas(canvas.Canvas):
         self.setFillColor(colors.HexColor("#4B5563"))
         page_text = f"Page {self._pageNumber} of {page_count}"
         self.drawRightString(825, 12, page_text)
-        self.drawString(16, 12, "Telangana PR & RD Department — GP Balance Entry Monitoring (GM-R 14.2) | e-Panchayat Automation")
+        self.drawString(16, 12, "GP Balance Entry Monitoring (GM-R 14.2) | e-Panchayat Automation")
         self.restoreState()
 
 

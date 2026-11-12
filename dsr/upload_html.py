@@ -397,7 +397,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           Simplifying Panchayat Administration through Smart Reporting and Automation.
         </p>
         <p class="hero-desc">
-          An integrated Panchayat Raj &amp; Rural Development analytics platform designed to empower District Officers and Mandal Officers with automated performance monitoring, daily morning attendance tracking, compliance management, and real-time administrative status analytics.
+          An independent Panchayat administration and analytics platform designed to empower District Officers and Mandal Officers with automated performance monitoring, daily morning attendance tracking, compliance management, and real-time administrative status analytics.
         </p>
       </section>
 
@@ -463,7 +463,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
       </div>
 
       <section class="report-card">
-        <div class="eyebrow" id="page-eyebrow">e-Panchayat Automation Console &bull; Telangana Panchayat Raj &amp; Rural Development</div>
+        <div class="eyebrow" id="page-eyebrow">e-Panchayat Automation Console &bull; Independent Reporting &amp; Analytics Workspace</div>
         <h1>PS Attendance &amp; DSR Analytics</h1>
         <p class="intro">Generate official Gram Panchayat morning attendance and DSR analytics reports directly from your uploaded portal exports.</p>
         

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from core.branding import CONSOLE_NAME, PLATFORM_NAME, render_canonical_footer_html
+from core.branding import CONSOLE_NAME, GOV_SUBTITLE, PLATFORM_NAME, render_canonical_footer_html
 
 _FOOTER_HTML = render_canonical_footer_html(
     "border-top:1px solid #e2e8f0; background:#ffffff; padding:22px 20px; color:#334155; font-size:0.86rem; margin-top:40px;"
@@ -177,7 +177,7 @@ MAS_PAGE_HTML = (
       <a class="nav-brand" id="mas-brand-home-link" href="/?site=console">
         <span style="font-size:1.6rem; line-height:1;">📊</span>
         <div>
-          <div class="nav-brand-sup">Government of Telangana · Panchayat Raj &amp; Rural Development</div>
+          <div class="nav-brand-sup">""" + GOV_SUBTITLE + """</div>
           <div class="nav-brand-main">
             <span>"""
     + PLATFORM_NAME

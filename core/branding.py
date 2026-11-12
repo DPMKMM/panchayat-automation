@@ -8,7 +8,7 @@ PLATFORM_NAME = "e-Panchayat Automation"
 CONSOLE_NAME = "e-Panchayat Automation Console"
 WELCOME_MESSAGE = "Welcome to e-Panchayat Automation"
 TAGLINE = "Simplifying Panchayat Administration through Smart Reporting and Automation."
-GOV_SUBTITLE = "Government of Telangana · Panchayat Raj & Rural Development"
+GOV_SUBTITLE = "Independent Panchayat Administration & Reporting Companion"
 
 
 MANUAL_SECTION_NAME = "e-Panchayat Manual Reports"

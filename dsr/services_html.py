@@ -444,7 +444,7 @@ def get_services_page_html() -> str:
       <div class="faq-card">
         <div class="faq-question">❓ Are there any service or usage charges?</div>
         <div class="faq-answer">
-          No. This platform is 100% free of cost for all Panchayat Raj, Mandal, and District officers in Telangana. It is built as a departmental public service utility to streamline governance analytics.
+          This platform is an independent productivity and analytics companion built to streamline Panchayat, Mandal, and District reporting workflows.
         </div>
       </div>
 

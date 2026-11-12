@@ -115,9 +115,10 @@ def test_section_1_and_7_login_page_firebase_google_and_no_passwords():
     assert "portal-login-form" not in html
     assert "tab-auth-register" not in html
 
-    assert "Government of Telangana" in html
-    assert "Panchayat Raj" in html
-    assert "Official Departmental Access" in html
+    assert "Government of Telangana" not in html
+    assert "Panchayat Raj & Rural Development" not in html
+    assert "Panchayat Raj &amp; Rural Development" not in html
+    assert "Authorized Officer Access" in html
 
 
 def test_section_2_mandatory_profile_registration_view_fields():
@@ -353,7 +354,12 @@ def test_privacy_legal_pages():
 
     res_leg = client.get("/legal")
     assert res_leg.status_code == 200
-    assert "Panchayat Raj" in res_leg.text
+    assert "e-Panchayat Automation" in res_leg.text
+    for route in ("/", "/privacy-legal", "/legal", "/services", "/mas", "/reports/ps-attendance"):
+        page = client.get(route).text
+        assert "Government of Telangana" not in page
+        assert "Panchayat Raj & Rural Development" not in page
+        assert "Panchayat Raj &amp; Rural Development" not in page
 
 
 def test_login_screen_layout_and_navigation_bar():

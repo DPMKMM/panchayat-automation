@@ -170,12 +170,12 @@ def get_privacy_legal_html() -> str:
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
         <div>
           <div style="font-size:0.78rem; font-weight:800; color:#047857; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">Welcome to e-Panchayat Automation</div>
-          <h1>Departmental Privacy Policy &amp; Terms of Service</h1>
+          <h1>Privacy Policy &amp; Terms of Service</h1>
           <p style="color:#065f46; font-size:0.9rem; font-weight:700; margin-bottom:4px;">
             Simplifying Panchayat Administration through Smart Reporting and Automation.
           </p>
           <p style="color:#64748b; font-size:0.86rem; font-weight:600;">
-            Platform: e-Panchayat Automation • Government of Telangana • Panchayat Raj &amp; Rural Development Department
+            Platform: e-Panchayat Automation • Independent Reporting &amp; Automation Companion
           </p>
         </div>
         <button onclick="window.print()" class="nav-btn" style="background:#0f172a; border-color:#334155; color:white; cursor:pointer;">
@@ -184,7 +184,7 @@ def get_privacy_legal_html() -> str:
       </div>
 
       <div class="callout">
-        <strong>Executive Summary:</strong> e-Panchayat Automation is an administrative companion system designed to streamline report generation, punctuality tracking, and financial analytics for officers of the Panchayat Raj &amp; Rural Development Department, Telangana. We do <strong>not</strong> sell, rent, monetize, or permanently retain portal login passwords or citizen personal data. All automated scraping and report compiling occur in temporary, isolated browser instances with automated memory and scratch file purging.
+        <strong>Executive Summary:</strong> e-Panchayat Automation is an independent administrative companion system (not an official government portal) designed to streamline report generation, punctuality tracking, and financial analytics for Panchayat, Mandal, and District workflows. We do <strong>not</strong> sell, rent, monetize, or permanently retain portal login passwords or citizen personal data. All automated scraping and report compiling occur in temporary, isolated browser instances with automated memory and scratch file purging.
       </div>
 
       <h2>Part 1: Privacy Policy</h2>
@@ -212,7 +212,7 @@ def get_privacy_legal_html() -> str:
       <h2>Part 2: Terms of Service</h2>
 
       <h3>1. Permitted Use &amp; Officer Eligibility</h3>
-      <p>This platform is provided exclusively for authorized personnel of the Panchayat Raj &amp; Rural Development Department, Telangana, including:</p>
+      <p>This independent companion platform is intended for authorized Panchayat, Mandal, and District administrative personnel, including:</p>
       <ul>
         <li>District Panchayat Officers (DPO) and Divisional Panchayat Officers (DLPO).</li>
         <li>Mandal Parishad Development Officers (MPDO) and Mandal Panchayat Officers (MPO).</li>
