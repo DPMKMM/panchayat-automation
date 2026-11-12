@@ -57,57 +57,68 @@ def _df_to_pdf_table(
     left_cols: set[str],
     styles: dict[str, ParagraphStyle],
     time_cols: set[str] | None = None,
+    compact: bool = False,
+    header_aliases: dict[str, str] | None = None,
 ) -> Table:
     cols = list(df.columns)
     t_cols = time_cols or set()
-    hdr_row = [Paragraph(html.escape(c), styles["th"]) for c in cols]
+    aliases = header_aliases or {}
+    th_style = styles.get("th_compact", styles["th"]) if compact else styles["th"]
+    td_c_style = styles.get("td_c_compact", styles["td_c"]) if compact else styles["td_c"]
+    td_l_style = styles.get("td_l_compact", styles["td_l"]) if compact else styles["td_l"]
+    pad_h = 2.0 if compact else 3.5
+    pad_v = 2.5 if compact else 3.5
+
+    hdr_row = [Paragraph(html.escape(aliases.get(c, c)), th_style) for c in cols]
     data: list[list[Any]] = [hdr_row]
     ts_cmds: list[tuple[Any, ...]] = [
         ("BACKGROUND", (0, 0), (-1, 0), _HEADER_FILL),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.4, _BORDER),
-        ("TOPPADDING", (0, 0), (-1, -1), 3.5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3.5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 3.5),
+        ("GRID", (0, 0), (-1, -1), 0.35, _BORDER),
+        ("TOPPADDING", (0, 0), (-1, -1), pad_v),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), pad_v),
+        ("LEFTPADDING", (0, 0), (-1, -1), pad_h),
+        ("RIGHTPADDING", (0, 0), (-1, -1), pad_h),
         ("REPEATROWS", (0, 0), (-1, 0)),
     ]
 
-    for r_idx, (_, row) in enumerate(df.iterrows(), start=1):
+    style_cache: dict[tuple[str, bool, bool], ParagraphStyle] = {}
+
+    def _get_dyn_style(fg: str, bold: bool) -> ParagraphStyle:
+        key = (fg, bold, compact)
+        st_obj = style_cache.get(key)
+        if st_obj is None:
+            st_obj = ParagraphStyle(
+                f"dyn_{fg}_{bold}_{compact}",
+                parent=td_c_style,
+                textColor=HexColor(fg),
+                fontName="Helvetica-Bold" if bold else "Helvetica",
+            )
+            style_cache[key] = st_obj
+        return st_obj
+
+    for r_idx, row_vals in enumerate(df.itertuples(index=False, name=None), start=1):
         bg_row = _ALT_ROW if r_idx % 2 == 0 else colors.white
         ts_cmds.append(("BACKGROUND", (0, r_idx), (-1, r_idx), bg_row))
         cells = []
-        for c_idx, col_name in enumerate(cols):
-            val = row[col_name]
+        for c_idx, (col_name, val) in enumerate(zip(cols, row_vals)):
             is_pct = col_name in pct_cols
             txt = html.escape(_fmt_cell(val, is_pct=is_pct))
             if col_name == "Before 9 AM %":
                 hl = highlight_percentage(val)
                 if hl["bg"]:
                     ts_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), HexColor(hl["bg"])))
-                p_style = ParagraphStyle(
-                    f"pct_{r_idx}_{c_idx}",
-                    parent=styles["td_c"],
-                    textColor=HexColor(hl["fg"]),
-                    fontName="Helvetica-Bold",
-                )
-                cells.append(Paragraph(txt, p_style))
+                cells.append(Paragraph(txt, _get_dyn_style(hl["fg"], True)))
             elif col_name in t_cols:
                 st = classify_time_style(val)
                 if st["bg"]:
                     ts_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), HexColor(st["bg"])))
-                p_style = ParagraphStyle(
-                    f"tm_{r_idx}_{c_idx}",
-                    parent=styles["td_c"],
-                    textColor=HexColor(st["fg"]),
-                    fontName="Helvetica-Bold" if col_name == "Average Time" else "Helvetica",
-                )
-                cells.append(Paragraph(txt, p_style))
+                cells.append(Paragraph(txt, _get_dyn_style(st["fg"], col_name == "Average Time")))
             elif col_name in left_cols:
-                cells.append(Paragraph(txt, styles["td_l"]))
+                cells.append(Paragraph(txt, td_l_style))
             else:
-                cells.append(Paragraph(txt, styles["td_c"]))
+                cells.append(Paragraph(txt, td_c_style))
         data.append(cells)
 
     tbl = Table(data, colWidths=col_widths, repeatRows=1)
@@ -141,6 +152,9 @@ def generate_multiday_dsr_pdf(
         "th": ParagraphStyle("th", fontName="Helvetica-Bold", fontSize=7, leading=8.5, textColor=colors.white, alignment=TA_CENTER),
         "td_c": ParagraphStyle("td_c", fontName="Helvetica", fontSize=7, leading=8.5, textColor=_SLATE, alignment=TA_CENTER),
         "td_l": ParagraphStyle("td_l", fontName="Helvetica", fontSize=7, leading=8.5, textColor=_SLATE, alignment=TA_LEFT),
+        "th_compact": ParagraphStyle("th_compact", fontName="Helvetica-Bold", fontSize=6, leading=7.2, textColor=colors.white, alignment=TA_CENTER),
+        "td_c_compact": ParagraphStyle("td_c_compact", fontName="Helvetica", fontSize=6, leading=7.2, textColor=_SLATE, alignment=TA_CENTER),
+        "td_l_compact": ParagraphStyle("td_l_compact", fontName="Helvetica", fontSize=6, leading=7.2, textColor=_SLATE, alignment=TA_LEFT),
     }
 
     def _draw_footer(canvas: Any, doc: Any) -> None:
@@ -251,8 +265,18 @@ def generate_multiday_dsr_pdf(
             "No. of Days Before 9 AM",
         ]
         date_cols = [c for c in tm_df.columns if c not in fixed_left and c not in summary_right]
-        chunk_size = 10
+        chunk_size = 16
         date_chunks = [date_cols[i : i + chunk_size] for i in range(0, max(1, len(date_cols)), chunk_size)] or [[]]
+        compact_mode = len(date_cols) > 6
+        pdf_aliases = {
+            "Not Marked Attendance": "Not Marked",
+            "Training / Meeting": "Trg / Meet",
+            "Average Time": "Avg Time",
+            "No. of Days Before 9 AM": "< 9 AM Days",
+        }
+        for d_c in date_cols:
+            if len(d_c) == 10 and d_c[2] == "-" and d_c[5] == "-":
+                pdf_aliases[d_c] = d_c[:5]
 
         for slice_idx, d_chunk in enumerate(date_chunks, start=1):
             story.append(PageBreak())
@@ -265,12 +289,12 @@ def generate_multiday_dsr_pdf(
             )
             sub_cols = fixed_left + d_chunk + summary_right
             sub_df = tm_df[sub_cols]
-            w_sno = usable_w * 0.032
-            w_mandal = usable_w * 0.095
-            w_gp = usable_w * 0.11
-            w_cnt = usable_w * 0.048  # x4 = 0.192
-            w_avg = usable_w * 0.055
-            w_b9 = usable_w * 0.058
+            w_sno = usable_w * 0.028
+            w_mandal = usable_w * 0.085
+            w_gp = usable_w * 0.10
+            w_cnt = usable_w * 0.036  # x4 = 0.144
+            w_avg = usable_w * 0.044
+            w_b9 = usable_w * 0.043
             rem_w = usable_w - (w_sno + w_mandal + w_gp + w_cnt * 4 + w_avg + w_b9)
             w_day = rem_w / max(1, len(d_chunk)) if d_chunk else 0
             sub_widths = (
@@ -286,6 +310,8 @@ def generate_multiday_dsr_pdf(
                     left_cols={"Mandal Name", "Panchayat Name"},
                     styles=styles,
                     time_cols=set(d_chunk) | {"Average Time"},
+                    compact=compact_mode,
+                    header_aliases=pdf_aliases if compact_mode else None,
                 )
             )
 

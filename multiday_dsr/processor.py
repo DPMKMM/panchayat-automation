@@ -416,11 +416,12 @@ def process_dsr(
     date_labels = [pd.to_datetime(d).strftime("%d-%m-%Y") for d in dates]
     # Tuple per (lgd, date): (display_str, sec_mid, is_b9, is_present, is_onleave, is_tm, is_reported)
     cell_lookup: dict[tuple[str, str], tuple[str, int | None, int, int, int, int, int]] = {}
-    for _, row in df.iterrows():
-        lgd = str(row["Panchayat LGD"]).strip()
-        d_lbl = pd.to_datetime(row["Report Date"]).strftime("%d-%m-%Y")
-        att_dt = row["Attendance DT"]
-        st_lbl = str(row["Attendance Status"] or "").strip()
+    for lgd_raw, r_dt, att_dt, att_st_raw in df[
+        ["Panchayat LGD", "Report Date", "Attendance DT", "Attendance Status"]
+    ].itertuples(index=False, name=None):
+        lgd = str(lgd_raw).strip()
+        d_lbl = pd.to_datetime(r_dt).strftime("%d-%m-%Y")
+        st_lbl = str(att_st_raw or "").strip()
         st_low = st_lbl.lower()
         is_pres = int(st_low == "present")
         is_leave = int(st_low in ("on leave", "onleave"))

@@ -296,3 +296,38 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     other_client = TestClient(app)
     blocked = other_client.get(f"/api/multiday-dsr/jobs/{job_id}/download-pdf")
     assert blocked.status_code == 403
+
+
+def test_full_31_day_month_compact_layout(tmp_path: Path):
+    """Full-month (31 days) dataset fits in just 2 horizontal PDF slices with HH:MM timestamps."""
+    files = []
+    for d in range(1, 32):
+        dt = f"{d:02d}-10-2026"
+        raw = _make_epts_html_report([
+            {
+                "District Name": "Khammam",
+                "Mandal Name": "Bonakal",
+                "Panchayat Name": "Allinagaram",
+                "Panchayat LGD": "205101",
+                "First Attendence Status": "Present",
+                "First Attendence Datetime": f"{dt} 08:{10 + (d % 40):02d}:15",
+                "DSR Entry Status": "Entered",
+                "DSR Submited Datetime": f"{dt} 11:00:00",
+            },
+        ])
+        files.append((f"day_{d:02d}.xls", raw))
+
+    res = process_dsr(files)
+    assert res.total_reporting_days == 31
+    assert len(res.time_matrix.columns) == 3 + 31 + 6  # S.No, Mandal, GP + 31 dates + 6 summary cols
+
+    pdf_path = tmp_path / "full_month.pdf"
+    generate_multiday_dsr_pdf(res, pdf_path)
+    pdf_txt = "\n".join(p.extract_text() for p in PdfReader(str(pdf_path)).pages)
+    assert "(Part 1/2)" in pdf_txt and "(Part 2/2)" in pdf_txt
+    assert "(Part 3/" not in pdf_txt
+
+    xlsx_path = tmp_path / "full_month.xlsx"
+    generate_multiday_dsr_excel(res, xlsx_path)
+    wb = openpyxl.load_workbook(xlsx_path)
+    assert "Day-Wise Exact Time" in wb.sheetnames
