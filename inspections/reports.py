@@ -267,7 +267,8 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
     ws_data = wb.create_sheet("Submitted Inspections Data")
     data_headers = [
         "Sl No", "Week", "Designation", "District", "Division",
-        "Mandal", "Gram Panchayat", "Inspecting Officer", "Inspection Date", "Final Submit Status",
+        "Mandal", "Gram Panchayat", "Panchayat ID", "Date of Inspection",
+        "Attendance Date-Time", "Checklist Status", "Inspecting Officer / Note", "Final Submit Status",
     ]
     ws_data.append(data_headers)
     for col_idx in range(1, len(data_headers) + 1):
@@ -286,8 +287,11 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
             rec.division_name,
             rec.mandal_name,
             rec.gp_name,
-            rec.officer_name,
+            rec.panchayat_id,
             rec.inspection_date,
+            rec.attendance_datetime,
+            rec.checklist_entered,
+            rec.officer_name,
             rec.final_submit_status,
         ])
     for col in ws_data.columns:

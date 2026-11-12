@@ -41,6 +41,65 @@ def _is_summary_or_blank_unit(val: str) -> bool:
     return False
 
 
+def _table_score(df: pd.DataFrame) -> tuple[int, int, int]:
+    """Score extracted tables so data tables with real headers always beat banner tables (even with 1 row)."""
+    if df is None or df.empty:
+        return (0, 0, 0)
+    header_keywords = (
+        "finalsubmitstatus",
+        "submitstatus",
+        "panchayatname",
+        "mandalname",
+        "divisionname",
+        "districtname",
+        "dateofinspection",
+        "inspectionfromdate",
+        "inspectiontodate",
+        "attendencedatetime",
+        "attendancedatetime",
+        "sno",
+        "slno",
+    )
+    keyword_hits = 0
+    for idx in range(min(8, len(df))):
+        row_norms = [_norm_header(v) for v in df.iloc[idx].tolist()]
+        hits = sum(1 for cell in row_norms if cell and any(kw in cell for kw in header_keywords))
+        if hits > keyword_hits:
+            keyword_hits = hits
+
+    # Count rows that have >= 3 distinct non-empty cell values (ignores colspan banner rows)
+    distinct_data_rows = 0
+    for idx in range(len(df)):
+        vals = {_clean_text(v) for v in df.iloc[idx].tolist() if _clean_text(v)}
+        if len(vals) >= 3:
+            distinct_data_rows += 1
+
+    return (1 if keyword_hits >= 2 else 0, keyword_hits, distinct_data_rows * max(1, df.shape[1]))
+
+
+def _normalize_table_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure tables whose <th> row was promoted into df.columns keep headers as row 0."""
+    clean = df.fillna("")
+    cols = list(clean.columns)
+    has_string_headers = not isinstance(clean.columns, pd.RangeIndex) and any(
+        isinstance(c, str) and not c.startswith("Unnamed:") and _clean_text(c)
+        for c in cols
+    )
+    if has_string_headers:
+        hdr_row = pd.DataFrame([[_clean_text(c) for c in cols]])
+        body = clean.copy()
+        body.columns = list(range(len(cols)))
+        return pd.concat([hdr_row, body], ignore_index=True).fillna("")
+    return clean.set_axis(list(range(clean.shape[1])), axis=1)
+
+
+def _pick_best_table(tables: list[pd.DataFrame]) -> pd.DataFrame:
+    cleaned = [_normalize_table_df(t) for t in tables if t is not None and not t.empty]
+    if not cleaned:
+        return pd.DataFrame()
+    return max(cleaned, key=_table_score)
+
+
 def _read_raw_tables(filename: str, raw_bytes: bytes) -> pd.DataFrame:
     """Read raw portal Excel (.xls HTML-table, BIFF .xls, .xlsx, XML, or CSV) into a DataFrame."""
     if not raw_bytes:
@@ -50,12 +109,12 @@ def _read_raw_tables(filename: str, raw_bytes: bytes) -> pd.DataFrame:
     fname_low = (filename or "").lower()
 
     # 1. HTML-backed .xls exports (standard EPTS ASP.NET Excel export format)
-    if "<table" in head_low or "<html" in head_low or fname_low.endswith((".html", ".htm")):
+    if "<table" in head_low or "<html" in head_low or "<div" in head_low or fname_low.endswith((".html", ".htm")):
         html_text = raw_bytes.decode("utf-8", errors="ignore")
         try:
             tables = pd.read_html(io.StringIO(html_text), header=None)
             if tables:
-                return max(tables, key=lambda df: df.shape[0] * max(1, df.shape[1])).fillna("")
+                return _pick_best_table(tables)
         except Exception:
             pass
 
@@ -76,7 +135,7 @@ def _read_raw_tables(filename: str, raw_bytes: bytes) -> pd.DataFrame:
             try:
                 tables = pd.read_html(io.StringIO(raw_bytes.decode("utf-8", errors="ignore")), header=None)
                 if tables:
-                    return max(tables, key=lambda df: df.shape[0] * max(1, df.shape[1])).fillna("")
+                    return _pick_best_table(tables)
             except Exception:
                 pass
 
@@ -168,6 +227,7 @@ def parse_inspection_file(
             "submitted_records": [],
             "observed_units": set(),
             "district_names": set(),
+            "detected_weeks": [],
             "raw_row_count": 0,
             "submitted_row_count": 0,
             "excluded_non_submitted_count": 0,
@@ -188,25 +248,32 @@ def parse_inspection_file(
         ),
     )
     col_mandal = _find_col(headers, ("Mandal Name", "Mandal", "Name of Mandal"))
+    col_mandal_lgd = _find_col(headers, ("Mandal LGD Code", "LGD Code", "Mandal Code"))
     col_division = _find_col(
         headers,
         ("Division Name", "Division", "Sub Division", "DLPO Division", "Revenue Division"),
     )
     col_district = _find_col(headers, ("District Name", "District", "Dist Name"))
-    col_gp = _find_col(headers, ("Gram Panchayat", "Gram Panchayat Name", "Panchayat Name", "GP Name", "Panchayat"))
+    col_gp = _find_col(headers, ("Panchayat Name", "Gram Panchayat Name", "Gram Panchayat", "GP Name", "Panchayat"))
+    col_gp_id = _find_col(headers, ("Panchayat Id", "GP Id", "Panchayat Code"))
+    col_attendance = _find_col(headers, ("Attendence Date-Time", "Attendance Date-Time", "Attendance DateTime"))
+    col_from_date = _find_col(headers, ("Inspection From Date", "From Date", "Week From"))
+    col_to_date = _find_col(headers, ("Inspection To Date", "To Date", "Week To"))
     col_officer = _find_col(
         headers,
         ("Officer Name", "Inspecting Officer", "Name of the Officer", "Employee Name", "Officer", "Emp Name"),
     )
     col_date = _find_col(
         headers,
-        ("Inspection Date", "Date of Inspection", "Visited Date", "Entry Date", "Submitted Date"),
+        ("Date of Inspection", "Inspection Date", "Visited Date", "Entry Date", "Submitted Date"),
     )
     col_desig = _find_col(headers, ("Designation", "Officer Designation"))
 
     submitted_records: list[InspectionRecord] = []
     observed_units: set[str] = set()
     district_names: set[str] = set()
+    detected_weeks: list[str] = []
+    seen_weeks: set[str] = set()
     raw_row_count = 0
     excluded_non_submitted = 0
 
@@ -218,7 +285,12 @@ def parse_inspection_file(
         dist_val = cells[col_district] if col_district is not None and col_district < len(cells) else ""
         div_val = cells[col_division] if col_division is not None and col_division < len(cells) else ""
         mandal_val = cells[col_mandal] if col_mandal is not None and col_mandal < len(cells) else ""
+        mandal_lgd_val = cells[col_mandal_lgd] if col_mandal_lgd is not None and col_mandal_lgd < len(cells) else ""
         gp_val = cells[col_gp] if col_gp is not None and col_gp < len(cells) else ""
+        gp_id_val = cells[col_gp_id] if col_gp_id is not None and col_gp_id < len(cells) else ""
+        att_val = cells[col_attendance] if col_attendance is not None and col_attendance < len(cells) else ""
+        from_dt_val = cells[col_from_date] if col_from_date is not None and col_from_date < len(cells) else ""
+        to_dt_val = cells[col_to_date] if col_to_date is not None and col_to_date < len(cells) else ""
         officer_val = cells[col_officer] if col_officer is not None and col_officer < len(cells) else ""
         date_val = cells[col_date] if col_date is not None and col_date < len(cells) else ""
         status_val = cells[col_status] if col_status is not None and col_status < len(cells) else ""
@@ -244,6 +316,16 @@ def parse_inspection_file(
         if _is_summary_or_blank_unit(unit_name):
             continue
 
+        # Derive week range from Inspection From Date / Inspection To Date when present
+        row_week = ""
+        if from_dt_val and to_dt_val:
+            row_week = f"{from_dt_val} to {to_dt_val}"
+        elif from_dt_val:
+            row_week = from_dt_val
+        if row_week and row_week not in seen_weeks:
+            seen_weeks.add(row_week)
+            detected_weeks.append(row_week)
+
         # Normalize casing for display consistency
         unit_clean = _clean_text(unit_name).title() if unit_name.isupper() else _clean_text(unit_name)
         dist_clean = _clean_text(dist_val).title() if dist_val.isupper() else _clean_text(dist_val)
@@ -260,18 +342,41 @@ def parse_inspection_file(
             excluded_non_submitted += 1
             continue
 
+        # Count Entered / Not Entered parameter columns if present
+        entered_cnt = 0
+        param_total = 0
+        for c_idx, cell_txt in enumerate(cells):
+            if c_idx == col_status:
+                continue
+            low_cell = cell_txt.strip().lower()
+            if low_cell == "entered":
+                entered_cnt += 1
+                param_total += 1
+            elif low_cell == "not entered":
+                param_total += 1
+        checklist_str = f"{entered_cnt}/{param_total} Entered" if param_total > 0 else ""
+
+        effective_week = (week_label or "").strip() or row_week or filename
+        effective_officer = officer_val or (f"Attendance: {att_val}" if att_val else canon_desig)
+
         submitted_records.append(
             InspectionRecord(
-                week_label=week_label or filename,
+                week_label=effective_week,
                 designation=row_desig or canon_desig,
                 district_name=dist_clean,
                 division_name=div_clean,
                 mandal_name=mandal_clean,
                 gp_name=gp_val,
-                officer_name=officer_val,
+                officer_name=effective_officer,
                 inspection_date=date_val,
                 final_submit_status="Submitted",
                 unit_name=unit_clean,
+                mandal_lgd_code=mandal_lgd_val,
+                panchayat_id=gp_id_val,
+                attendance_datetime=att_val,
+                inspection_from_date=from_dt_val,
+                inspection_to_date=to_dt_val,
+                checklist_entered=checklist_str,
             )
         )
 
@@ -279,6 +384,7 @@ def parse_inspection_file(
         "submitted_records": submitted_records,
         "observed_units": observed_units,
         "district_names": district_names,
+        "detected_weeks": detected_weeks,
         "raw_row_count": raw_row_count,
         "submitted_row_count": len(submitted_records),
         "excluded_non_submitted_count": excluded_non_submitted,

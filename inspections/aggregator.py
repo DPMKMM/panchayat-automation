@@ -33,20 +33,13 @@ def consolidate_inspection_files(
     """
     spec = get_designation_spec(designation)
     canon_desig = spec["designation"]
-    effective_weeks = list(weeks_selected or [wf.get("week_label") or wf.get("filename") or "Week" for wf in week_files])
-    if not effective_weeks:
-        effective_weeks = ["Selected Period"]
-
-    target_per_unit, target_rule_desc = compute_designation_target(
-        canon_desig,
-        week_labels=effective_weeks,
-        week_count=len(effective_weeks),
-        target_override=target_override,
-    )
 
     all_submitted: list[InspectionRecord] = []
+    seen_record_keys: set[tuple[str, str, str, str, str, str]] = set()
     observed_units: dict[str, str] = {}
     observed_districts: set[str] = set()
+    detected_weeks_all: list[str] = []
+    seen_detected_weeks: set[str] = set()
     raw_total = 0
     excluded_total = 0
     week_logs: list[dict[str, Any]] = []
@@ -78,21 +71,56 @@ def consolidate_inspection_files(
             designation=canon_desig,
             week_label=w_label,
         )
+        for dw in parsed.get("detected_weeks", []):
+            if dw not in seen_detected_weeks:
+                seen_detected_weeks.add(dw)
+                detected_weeks_all.append(dw)
+
+        for rec in parsed["submitted_records"]:
+            rec_key = (
+                rec.district_name.casefold(),
+                rec.mandal_name.casefold(),
+                rec.panchayat_id or rec.gp_name.casefold(),
+                rec.week_label.casefold(),
+                rec.inspection_date.casefold(),
+                rec.attendance_datetime.casefold(),
+            )
+            if rec_key not in seen_record_keys:
+                seen_record_keys.add(rec_key)
+                all_submitted.append(rec)
+
         raw_total += parsed["raw_row_count"]
         excluded_total += parsed["excluded_non_submitted_count"]
-        all_submitted.extend(parsed["submitted_records"])
         for u in parsed["observed_units"]:
             observed_units.setdefault(u.casefold(), u)
         observed_districts.update(parsed["district_names"])
 
         week_logs.append({
-            "week": w_label,
+            "week": w_label or (", ".join(parsed.get("detected_weeks", [])) if parsed.get("detected_weeks") else fname),
             "filename": fname,
             "status": "downloaded",
             "raw_rows": parsed["raw_row_count"],
             "submitted_rows": parsed["submitted_row_count"],
             "excluded_rows": parsed["excluded_non_submitted_count"],
         })
+
+    explicit_weeks = [str(w).strip() for w in (weeks_selected or []) if str(w).strip()]
+    if explicit_weeks:
+        effective_weeks = explicit_weeks
+    elif detected_weeks_all:
+        effective_weeks = sorted(detected_weeks_all)
+    else:
+        effective_weeks = [
+            str(wf.get("week_label") or wf.get("filename") or "Week").strip()
+            for wf in week_files
+        ] or ["Selected Period"]
+
+    target_per_unit, target_rule_desc = compute_designation_target(
+        canon_desig,
+        week_labels=effective_weeks,
+        week_count=len(effective_weeks),
+        target_override=target_override,
+    )
 
     resolved_district = (
         district_name.strip()

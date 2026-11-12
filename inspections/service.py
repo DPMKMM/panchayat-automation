@@ -228,14 +228,12 @@ def consolidate_uploaded_inspection_files(
         raise ValueError("Please upload at least one GM-R 39.1 Excel file.")
 
     week_files = []
-    week_labels = []
     for idx, (fname, raw) in enumerate(files_payload, start=1):
-        lbl = fname.rsplit(".", 1)[0] if "." in fname else fname
+        lbl = ""
         if idx == 1 and from_week.strip():
             lbl = from_week.strip()
         elif idx == len(files_payload) and len(files_payload) > 1 and to_week.strip():
             lbl = to_week.strip()
-        week_labels.append(lbl)
         week_files.append({
             "week_label": lbl,
             "filename": fname,
@@ -243,10 +241,11 @@ def consolidate_uploaded_inspection_files(
             "status": "uploaded",
         })
 
+    explicit_weeks = [w for w in (from_week.strip(), to_week.strip()) if w]
     report = consolidate_inspection_files(
         week_files=week_files,
         designation=designation,
-        weeks_selected=week_labels,
+        weeks_selected=explicit_weeks or None,
         district_name=district_name,
         target_override=target_override,
     )

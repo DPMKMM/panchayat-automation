@@ -197,6 +197,12 @@ class InspectionRecord:
     inspection_date: str
     final_submit_status: str
     unit_name: str
+    mandal_lgd_code: str = ""
+    panchayat_id: str = ""
+    attendance_datetime: str = ""
+    inspection_from_date: str = ""
+    inspection_to_date: str = ""
+    checklist_entered: str = ""
 
 
 @dataclass

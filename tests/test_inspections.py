@@ -468,3 +468,85 @@ def test_playwright_gmr391_fetch_weeks_real_browser(monkeypatch):
         assert [w["text"] for w in meta_dlpo["weeks"]] == ["2026-11-02 to 2026-11-07"]
         assert meta_dlpo["selected_designation"] == "DLPO"
         browser.close()
+
+
+def test_exact_26col_epts_html_banner_and_upload_consolidation(tmp_path):
+    """Verify exact 26-column EPTS HTML .xls export (with 2-row colspan=26 banner) parses and consolidates cleanly."""
+    from inspections.aggregator import consolidate_inspection_files
+
+    epts_html_w1 = """<div style='border:1px;width:1000px;'>
+    <table cellspacing='0' border='0px' width='1000px' cellpadding='0'>
+      <tr><td colspan='26' align='center'>Telangana State </td></tr>
+      <tr><td colspan='26' align='center'>Inspection Data Entry Report</td></tr>
+    </table>
+    <table Width='1000px' cellspacing="0" rules="all" border="1">
+      <tr>
+        <th>S.No</th><th>District Name</th><th>Division Name</th><th>Mandal Name</th>
+        <th>Mandal LGD Code</th><th>Panchayat Name</th><th>Panchayat Id</th>
+        <th>Attendence Date-Time</th><th>Inspection From Date</th><th>Inspection To Date</th>
+        <th>Date of Inspection</th><th>Roads</th><th>Drains</th><th>Street Lights</th>
+        <th>House Holds Responses</th><th>Cleanliness of Government Institutions</th>
+        <th>Crematorium</th><th>Segregation</th><th>Nursery</th><th>Plantation</th>
+        <th>Approvals &amp; Transactions</th><th>Financial Transactions</th>
+        <th>Verification of Cheques</th><th>Administration &amp; Records</th>
+        <th>Inspection Report</th><th>Final Submit Status</th>
+      </tr>
+      <tr>
+        <td>1</td><td>Khammam</td><td>KHAMMAM</td><td>Bonakal</td><td>5057</td><td>Allapadu</td><td>202181</td>
+        <td>&nbsp;</td><td>2026-11-02</td><td>2026-11-07</td><td>&nbsp;</td>
+        <td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td>
+        <td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td>
+        <td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Submitted</td>
+      </tr>
+      <tr>
+        <td>2</td><td>Khammam</td><td>KHAMMAM</td><td>Bonakal</td><td>5057</td><td>Janakipuram</td><td>202189</td>
+        <td>05-Nov-2026 15:52</td><td>2026-11-02</td><td>2026-11-07</td><td>2026-11-05</td>
+        <td>Entered</td><td>Entered</td><td>Entered</td><td>Entered</td><td>Entered</td>
+        <td>Entered</td><td>Entered</td><td>Not Entered</td><td>Entered</td><td>Entered</td>
+        <td>Entered</td><td>Entered</td><td>Not Entered</td><td>Entered</td><td>Submitted</td>
+      </tr>
+      <tr>
+        <td>3</td><td>Khammam</td><td>KALLUR</td><td>Enkoor</td><td>5065</td><td>Repallewada</td><td>202329</td>
+        <td>06-Nov-2026 10:07</td><td>2026-11-02</td><td>2026-11-07</td><td>2026-11-06</td>
+        <td>Entered</td><td>Entered</td><td>Entered</td><td>Entered</td><td>Entered</td>
+        <td>Entered</td><td>Entered</td><td>Not Entered</td><td>Entered</td><td>Entered</td>
+        <td>Entered</td><td>Entered</td><td>Not Entered</td><td>Entered</td><td>Submitted</td>
+      </tr>
+      <tr>
+        <td>4</td><td>Khammam</td><td>KHAMMAM</td><td>Kamepally</td><td>5070</td><td>Kamepalli</td><td>202389</td>
+        <td>&nbsp;</td><td>2026-11-02</td><td>2026-11-07</td><td>&nbsp;</td>
+        <td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td>
+        <td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td>
+        <td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Entered</td><td>Not Submitted</td>
+      </tr>
+    </table></div>""".encode("utf-8")
+
+    # Even with ONLY 1 data row in Week 2 (table shape 2x26 tied with banner table 2x26), banner must NOT win!
+    epts_html_w2 = epts_html_w1.replace(b"2026-11-02", b"2026-11-09").replace(b"2026-11-07", b"2026-11-14")
+
+    rep_mpo = consolidate_inspection_files(
+        [
+            {"week_label": "", "filename": "report1.xls", "raw_bytes": epts_html_w1},
+            {"week_label": "", "filename": "report2.xls", "raw_bytes": epts_html_w2},
+        ],
+        designation="MPO",
+    )
+    assert rep_mpo.from_week == "2026-11-02 to 2026-11-07"
+    assert rep_mpo.to_week == "2026-11-09 to 2026-11-14"
+    assert rep_mpo.target_per_unit == 8  # Weekly 4 x 2 weeks
+    by_m = {r.unit_name: r for r in rep_mpo.abstract_rows}
+    assert by_m["Kamepally"].completed == 0 and by_m["Kamepally"].balance == 8
+    assert by_m["Bonakal"].completed == 2 and by_m["Bonakal"].balance == 6
+    assert by_m["Enkoor"].completed == 2 and by_m["Enkoor"].balance == 6
+    assert rep_mpo.submitted_records[0].checklist_entered == "12/14 Entered"
+    assert rep_mpo.submitted_records[0].inspection_date == "2026-11-05"
+
+    # DLPO division grouping (Khammam vs Kallur divisions)
+    rep_dlpo = consolidate_inspection_files(
+        [{"week_label": "", "filename": "report1.xls", "raw_bytes": epts_html_w1}],
+        designation="DLPO",
+    )
+    by_div = {r.unit_name: r for r in rep_dlpo.abstract_rows}
+    assert set(by_div.keys()) == {"Khammam", "Kallur"}
+    assert by_div["Khammam"].target == 10 and by_div["Khammam"].completed == 1
+    assert by_div["Kallur"].target == 10 and by_div["Kallur"].completed == 1
