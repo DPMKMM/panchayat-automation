@@ -75,161 +75,165 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             pass
 
     page.on("dialog", on_dialog)
+    try:
+        print(f"\n[*] Re-selecting 'GP Monitoring' from top menu for report {code}...", flush=True)
+        bot.select_menu("GP Monitoring")
+        time.sleep(2.5)
 
-    print(f"\n[*] Re-selecting 'GP Monitoring' from top menu for report {code}...", flush=True)
-    bot.select_menu("GP Monitoring")
-    time.sleep(2.5)
-
-    iframe = get_my_iframe(page)
-    if not iframe:
-        time.sleep(2)
         iframe = get_my_iframe(page)
-    if not iframe:
-        raise RuntimeError(f"Could not locate 'my-iframe' after selecting GP Monitoring for {code}.")
+        if not iframe:
+            time.sleep(2)
+            iframe = get_my_iframe(page)
+        if not iframe:
+            raise RuntimeError(f"Could not locate 'my-iframe' after selecting GP Monitoring for {code}.")
 
-    try:
-        iframe.wait_for_load_state("domcontentloaded", timeout=10000)
-    except Exception:
-        pass
-
-    # Click 'Enlarge All' to expand all folders
-    print("[*] Clicking 'Enlarge All'...", flush=True)
-    try:
-        enlarge_btn = iframe.locator("text='Enlarge All'").first
-        if enlarge_btn.is_visible(timeout=3000):
-            enlarge_btn.click()
-            time.sleep(1)
-    except Exception as e:
-        print(f"[-] Note on Enlarge All: {e}", flush=True)
-
-    # Expand 'DSR REPORTS' section
-    print("[*] Expanding 'DSR REPORTS'...", flush=True)
-    try:
-        dsr_header = iframe.locator("text='DSR REPORTS'").first
-        if dsr_header.is_visible(timeout=3000):
-            dsr_header.click()
-            time.sleep(1.5)
-    except Exception as e:
-        print(f"[-] Note on DSR REPORTS: {e}", flush=True)
-
-    # Locate report link matching code
-    print(f"[*] Locating link for {code}...", flush=True)
-    selectors = [f"a:has-text('{code}')"]
-    if "1.2.7" in code:
-        selectors.append("a:has-text('Raw Data')")
-    elif "1.2.11" in code:
-        selectors.extend(["a:has-text('Presenties')", "a:has-text('Presentees')"])
-    elif "1.2.10" in code:
-        selectors.append("a:has-text('Absentees')")
-
-    link = None
-    for sel in selectors:
-        cand = iframe.locator(sel).first
         try:
-            if cand.is_visible(timeout=2000):
-                link = cand
-                break
+            iframe.wait_for_load_state("domcontentloaded", timeout=10000)
         except Exception:
             pass
 
-    if not link:
-        link = iframe.locator(selectors[0]).first
-        link.wait_for(state="visible", timeout=12000)
+        # Click 'Enlarge All' to expand all folders
+        print("[*] Clicking 'Enlarge All'...", flush=True)
+        try:
+            enlarge_btn = iframe.locator("text='Enlarge All'").first
+            if enlarge_btn.is_visible(timeout=3000):
+                enlarge_btn.click()
+                time.sleep(1)
+        except Exception as e:
+            print(f"[-] Note on Enlarge All: {e}", flush=True)
 
-    print(f"[+] Found link for {code}. Clicking...", flush=True)
-    link.click()
-    time.sleep(3)
+        # Expand 'DSR REPORTS' section
+        print("[*] Expanding 'DSR REPORTS'...", flush=True)
+        try:
+            dsr_header = iframe.locator("text='DSR REPORTS'").first
+            if dsr_header.is_visible(timeout=3000):
+                dsr_header.click()
+                time.sleep(1.5)
+        except Exception as e:
+            print(f"[-] Note on DSR REPORTS: {e}", flush=True)
 
-    # Screenshot initial view
-    ss_path = DEBUG_DIR / f"page_{code.replace('.', '_')}.png"
-    try:
-        page.screenshot(path=str(ss_path))
-        print(f"[+] Saved view screenshot to {ss_path}", flush=True)
-    except Exception:
-        pass
+        # Locate report link matching code
+        print(f"[*] Locating link for {code}...", flush=True)
+        selectors = [f"a:has-text('{code}')"]
+        if "1.2.7" in code:
+            selectors.append("a:has-text('Raw Data')")
+        elif "1.2.11" in code:
+            selectors.extend(["a:has-text('Presenties')", "a:has-text('Presentees')"])
+        elif "1.2.10" in code:
+            selectors.append("a:has-text('Absentees')")
 
-    # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 02-Nov-2026)
-    print(f"[*] Setting date to {date_formatted} in iframe...", flush=True)
-    iframe.evaluate(f"""() => {{
-        const inputs = document.querySelectorAll("input[type='text'], input[name*='Date' i], input[id*='Date' i]");
-        for (const inp of inputs) {{
-            inp.removeAttribute('readonly');
-            inp.value = '{date_formatted}';
-            inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
-            inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
-            inp.dispatchEvent(new Event('blur', {{ bubbles: true }}));
-        }}
-        // Remove target="_blank" from form so download stays in current page
-        for (const f of document.forms) {{
-            f.removeAttribute('target');
-        }}
-    }}""")
-    time.sleep(0.5)
+        link = None
+        for sel in selectors:
+            cand = iframe.locator(sel).first
+            try:
+                if cand.is_visible(timeout=2000):
+                    link = cand
+                    break
+            except Exception:
+                pass
 
-    # Also fill via Playwright locator to trigger any ASP.NET calendar handlers
-    try:
-        txt_loc = iframe.locator("input[type='text']:visible").first
-        if txt_loc.is_visible(timeout=2000):
-            txt_loc.evaluate("el => el.removeAttribute('readonly')")
-            txt_loc.fill(date_formatted)
-            txt_loc.press("Tab")
-            time.sleep(0.5)
-    except Exception as e:
-        print(f"[-] Note on fill: {e}", flush=True)
+        if not link:
+            link = iframe.locator(selectors[0]).first
+            link.wait_for(state="visible", timeout=12000)
 
-    # Save verification screenshot showing date filled in
-    after_date_ss = DEBUG_DIR / f"after_date_{code.replace('.', '_')}.png"
-    try:
-        page.screenshot(path=str(after_date_ss))
-        print(f"[+] Saved date verification screenshot to {after_date_ss}", flush=True)
-    except Exception:
-        pass
+        print(f"[+] Found link for {code}. Clicking...", flush=True)
+        link.click()
+        time.sleep(3)
 
-    # Locate and click Download button
-    print(f"[*] Waiting for download button for {code}...", flush=True)
-    dl_selectors = [
-        "input[value='Download']",
-        "input[value='Download Excel']",
-        "input[value*='Download' i]",
-        "button:has-text('Download')",
-        "button:has-text('Download Excel')",
-        "input[id*='btnExport' i]",
-        "input[id*='btnDownload' i]",
-    ]
-    dl_btn = iframe.locator(", ".join(dl_selectors)).first
-    dl_btn.wait_for(state="visible", timeout=15000)
+        # Screenshot initial view
+        if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+            ss_path = DEBUG_DIR / f"page_{code.replace('.', '_')}.png"
+            try:
+                page.screenshot(path=str(ss_path))
+                print(f"[+] Saved view screenshot to {ss_path}", flush=True)
+            except Exception:
+                pass
 
-    print(f"[*] Triggering download for {code}...", flush=True)
-    portal_dialog_messages.clear()
+        # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 02-Nov-2026)
+        print(f"[*] Setting date to {date_formatted} in iframe...", flush=True)
+        iframe.evaluate(f"""() => {{
+            const inputs = document.querySelectorAll("input[type='text'], input[name*='Date' i], input[id*='Date' i]");
+            for (const inp of inputs) {{
+                inp.removeAttribute('readonly');
+                inp.value = '{date_formatted}';
+                inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                inp.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+            }}
+            // Remove target="_blank" from form so download stays in current page
+            for (const f of document.forms) {{
+                f.removeAttribute('target');
+            }}
+        }}""")
+        time.sleep(0.5)
 
-    try:
-        with page.expect_download(timeout=15000) as dl_info:
-            dl_btn.click()
-            # If an alert appeared immediately (like 'Sorry! No Data Found..'), check dialog list
-            time.sleep(1)
+        # Also fill via Playwright locator to trigger any ASP.NET calendar handlers
+        try:
+            txt_loc = iframe.locator("input[type='text']:visible").first
+            if txt_loc.is_visible(timeout=2000):
+                txt_loc.evaluate("el => el.removeAttribute('readonly')")
+                txt_loc.fill(date_formatted)
+                txt_loc.press("Tab")
+                time.sleep(0.5)
+        except Exception as e:
+            print(f"[-] Note on fill: {e}", flush=True)
+
+        # Save verification screenshot showing date filled in
+        if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+            after_date_ss = DEBUG_DIR / f"after_date_{code.replace('.', '_')}.png"
+            try:
+                page.screenshot(path=str(after_date_ss))
+                print(f"[+] Saved date verification screenshot to {after_date_ss}", flush=True)
+            except Exception:
+                pass
+
+        # Locate and click Download button
+        print(f"[*] Waiting for download button for {code}...", flush=True)
+        dl_selectors = [
+            "input[value='Download']",
+            "input[value='Download Excel']",
+            "input[value*='Download' i]",
+            "button:has-text('Download')",
+            "button:has-text('Download Excel')",
+            "input[id*='btnExport' i]",
+            "input[id*='btnDownload' i]",
+        ]
+        dl_btn = iframe.locator(", ".join(dl_selectors)).first
+        dl_btn.wait_for(state="visible", timeout=15000)
+
+        print(f"[*] Triggering download for {code}...", flush=True)
+        portal_dialog_messages.clear()
+
+        try:
+            with page.expect_download(timeout=15000) as dl_info:
+                dl_btn.click()
+
+            download = dl_info.value
+            portal_filename = download.suggested_filename
+            target_dir = getattr(bot, "downloads_dir", DOWNLOADS_DIR)
+            dest = target_dir / portal_filename
+            download.save_as(str(dest))
+            print(f"[SUCCESS] Downloaded file as-is from portal: {portal_filename} ({dest.stat().st_size:,} bytes)", flush=True)
+            return dest
+        except Exception as exc:
             for m in portal_dialog_messages:
                 if "no data found" in m.lower():
-                    print(f"[-] Portal dialog: '{m}' for {code}. No records found.", flush=True)
+                    print(f"[-] Portal alert '{m}' received for {code}.", flush=True)
+                    if "1.2.7" in code:
+                        raise FileNotFoundError(
+                            f"e-Panchayat portal returned no DSR attendance records for date '{date_formatted}' ({m})."
+                        ) from exc
                     return None
-
-        download = dl_info.value
-        # USE THE ORIGINAL SUGGESTED FILENAME AS-IS WITHOUT RENAMING
-        portal_filename = download.suggested_filename
-        target_dir = getattr(bot, "downloads_dir", DOWNLOADS_DIR)
-        dest = target_dir / portal_filename
-        download.save_as(str(dest))
-        print(f"[SUCCESS] Downloaded file as-is from portal: {portal_filename} ({dest.stat().st_size:,} bytes)", flush=True)
-        return dest
-    except Exception as exc:
-        for m in portal_dialog_messages:
-            if "no data found" in m.lower():
-                print(f"[-] Portal alert '{m}' received for {code}. No records exist.", flush=True)
+            # For absentees and presentees, lack of a download is normal if 0 records match
+            if "1.2.10" in code or "1.2.11" in code:
+                print(f"[-] Optional report {code} download note: {exc}. Proceeding without it.", flush=True)
                 return None
-        # For absentees and presentees, lack of a download is normal if 0 records match
-        if "1.2.10" in code or "1.2.11" in code:
-            print(f"[-] Optional report {code} download note: {exc}. Proceeding without it.", flush=True)
-            return None
-        raise
+            raise
+    finally:
+        try:
+            page.remove_listener("dialog", on_dialog)
+        except Exception:
+            pass
 
 
 # Backward compatibility alias

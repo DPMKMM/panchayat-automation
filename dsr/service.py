@@ -36,10 +36,12 @@ from core.session_manager import (  # noqa: F401 - compatibility re-exports
     _expire_session_impl,
     _extend_session_impl,
     _get_session_status_impl,
+    _is_bot_alive,
     _keepalive_ping,
     _load_session_state,
     _logout_server_session_impl,
     _sanitize_session_id,
+    _save_bot_storage_state,
     _save_session_state,
     _sessions,
     _sessions_lock,
@@ -47,6 +49,7 @@ from core.session_manager import (  # noqa: F401 - compatibility re-exports
     _verify_server_otp_impl,
     check_epts_reachability,
     determine_user_level,
+    ensure_active_bot,
     ensure_keepalive_running,
     extend_session,
     extract_epanchayat_header_info,
@@ -254,54 +257,53 @@ def _generate_server_report_impl(
 
     downloaded_files: dict[str, Path] = {}
 
-    if (bot is None or getattr(bot, "page", None) is None) and session.get("status") == "authenticated":
+    if not _is_bot_alive(bot):
+        bot = ensure_active_bot(session)
+
+    if not _is_bot_alive(bot):
+        raise PermissionError(
+            "e-Panchayat browser session is not active or has closed. "
+            "Please complete Department Login & OTP again before generating reports."
+        )
+
+    try:
+        logger.info("[%s] Step 1: Downloading GM-R 1.2.7 DSR Raw Data...", sid[:6])
         try:
-            try:
-                from dsr.automation import EPTSAutomation
-            except (ImportError, ModuleNotFoundError):
-                from epts_automation import EPTSAutomation
-            cand_bot = EPTSAutomation(headless=True, profile_dir=session["profile_dir"], downloads_dir=session["downloads_dir"])
-            cand_bot.start_browser()
-            if cand_bot.is_logged_in():
-                bot = cand_bot
-                session["bot"] = cand_bot
-                session["mode"] = "live_portal"
-                logger.info("Re-attached persistent browser automation session for Officer %s (%s)", user_id, sid)
-        except Exception as e:
-            logger.warning("Could not re-attach browser for session %s: %s", sid, e)
-
-    if bot and bot.page and session.get("status") == "authenticated":
-        try:
-            logger.info("[%s] Step 1: Downloading GM-R 1.2.7 DSR Raw Data...", sid[:6])
-            try:
-                p1 = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
-                if p1 and p1.exists() and p1.stat().st_size > 0:
-                    downloaded_files["raw_dsr"] = p1
-            except Exception as e:
-                logger.error("Download GM-R 1.2.7 error: %s", e)
-                raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR Raw Data from e-Panchayat: {e}")
-
-            if module in ("dsr_full", "dsr_presentees"):
-                logger.info("[%s] Step 2: Downloading GM-R 1.2.11 Presentees Report...", sid[:6])
-                try:
-                    p2 = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
-                    if p2 and p2.exists() and p2.stat().st_size > 0:
-                        downloaded_files["presentees"] = p2
-                except Exception as e:
-                    logger.warning("Could not download GM-R 1.2.11: %s", e)
-
-            if module in ("dsr_full", "dsr_absentees"):
-                logger.info("[%s] Step 3: Downloading GM-R 1.2.10 Absentees Report...", sid[:6])
-                try:
-                    p3 = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
-                    if p3 and p3.exists() and p3.stat().st_size > 0:
-                        downloaded_files["absentees"] = p3
-                except Exception as e:
-                    logger.warning("Could not download GM-R 1.2.10: %s", e)
-
-        except Exception as exc:
-            logger.error("[%s] Live download pipeline error: %s", sid[:6], exc)
+            p1 = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
+            if p1 and p1.exists() and p1.stat().st_size > 0:
+                downloaded_files["raw_dsr"] = p1
+        except (PermissionError, FileNotFoundError):
             raise
+        except Exception as e:
+            logger.error("Download GM-R 1.2.7 error: %s", e)
+            raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR Raw Data from e-Panchayat: {e}")
+
+        if module in ("dsr_full", "dsr_presentees"):
+            logger.info("[%s] Step 2: Downloading GM-R 1.2.11 Presentees Report...", sid[:6])
+            try:
+                p2 = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
+                if p2 and p2.exists() and p2.stat().st_size > 0:
+                    downloaded_files["presentees"] = p2
+            except PermissionError:
+                raise
+            except Exception as e:
+                logger.warning("Could not download GM-R 1.2.11: %s", e)
+
+        if module in ("dsr_full", "dsr_absentees"):
+            logger.info("[%s] Step 3: Downloading GM-R 1.2.10 Absentees Report...", sid[:6])
+            try:
+                p3 = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
+                if p3 and p3.exists() and p3.stat().st_size > 0:
+                    downloaded_files["absentees"] = p3
+            except PermissionError:
+                raise
+            except Exception as e:
+                logger.warning("Could not download GM-R 1.2.10: %s", e)
+
+        _save_bot_storage_state(session, bot)
+    except Exception as exc:
+        logger.error("[%s] Live download pipeline error: %s", sid[:6], exc)
+        raise
 
     raw_path = downloaded_files.get("raw_dsr")
     if not raw_path or not raw_path.exists():
@@ -309,9 +311,8 @@ def _generate_server_report_impl(
         if recent_files:
             raw_path = recent_files[0]
         else:
-            raise RuntimeError(
-                f"No fresh DSR attendance report was downloaded from e-Panchayat portal for date '{portal_date_fmt}'. "
-                "Please ensure your e-Panchayat session is logged in and active."
+            raise FileNotFoundError(
+                f"No DSR attendance report was returned by e-Panchayat portal for date '{portal_date_fmt}'."
             )
 
     try:

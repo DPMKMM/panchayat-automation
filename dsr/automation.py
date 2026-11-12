@@ -119,10 +119,14 @@ class EPTSAutomation:
             "--disable-blink-features=AutomationControlled",
             "--disable-extensions",
             "--disable-background-networking",
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded-windows",
+            "--renderer-process-limit=1",
             "--disable-sync",
             "--no-first-run",
         ]
-        # Headless mode uses fast ephemeral Chromium launch + isolated context (~1.3s vs ~6.5s persistent profile).
+        # Headless mode uses fast Chromium launch + isolated context restoring saved EPTS storage state if present.
         if self.headless:
             try:
                 self.browser = self.playwright.chromium.launch(
@@ -130,7 +134,15 @@ class EPTSAutomation:
                     downloads_path=str(self.downloads_dir),
                     args=launch_args,
                 )
-                self.context = self.browser.new_context(accept_downloads=True)
+                ctx_kwargs = {"accept_downloads": True}
+                ss_file = self.profile_dir / "storage_state.json"
+                if ss_file.exists() and ss_file.stat().st_size > 10:
+                    try:
+                        json.loads(ss_file.read_text(encoding="utf-8"))
+                        ctx_kwargs["storage_state"] = str(ss_file)
+                    except Exception:
+                        pass
+                self.context = self.browser.new_context(**ctx_kwargs)
                 self.page = self.context.new_page()
                 return
             except Exception as exc:
@@ -455,24 +467,67 @@ class EPTSAutomation:
         self.prompt_and_validate_otp()
         return True
 
+    def save_storage_state(self, path: Path | str | None = None) -> Path | None:
+        """Persist active browser cookies & storage cleanly for background restart recovery."""
+        if not getattr(self, "context", None):
+            return None
+        target = Path(path) if path else (self.profile_dir / "storage_state.json")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            self.context.storage_state(path=str(target))
+            return target
+        except Exception as exc:
+            print(f"[-] Note on saving storage state: {exc}", flush=True)
+            return None
+
+    def _find_visible_menu_item(self, menu_name: str):
+        for sel in (f"text='{menu_name}'", f"a:has-text('{menu_name}')"):
+            loc = self.page.locator(sel).first
+            try:
+                if loc.is_visible(timeout=1500):
+                    return loc
+            except Exception:
+                pass
+        return None
+
+    def _assert_authenticated_portal_page(self) -> None:
+        cur_url = str(getattr(self.page, "url", "") or "").lower()
+        login_visible = False
+        try:
+            login_visible = self.page.locator("a:has-text('Department Login')").first.is_visible(timeout=500)
+        except Exception:
+            login_visible = False
+        if login_visible or ("/cs" in cur_url and "deptloginverified" not in cur_url):
+            raise PermissionError(
+                "e-Panchayat portal session has expired. Please complete Department Login & OTP again."
+            )
+
     def select_menu(self, menu_name):
         print(f"[*] Selecting menu item: '{menu_name}' ...", flush=True)
-        # Check if direct text match exists
-        target = self.page.locator(f"text='{menu_name}'").first
-        if not target.is_visible():
+        self._assert_authenticated_portal_page()
+        target = self._find_visible_menu_item(menu_name)
+        if target is None:
+            print(f"[*] Menu '{menu_name}' not visible on current view; refreshing deptLoginVerified...", flush=True)
+            self.page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=15000)
+            time.sleep(1.0)
+            self._assert_authenticated_portal_page()
+            target = self._find_visible_menu_item(menu_name)
+
+        if target is None:
             target = self.page.locator(f"a:has-text('{menu_name}')").first
-            
-        target.wait_for(state="visible", timeout=10000)
-        
-        # Hover to see if dropdown expands, or click
+            target.wait_for(state="visible", timeout=10000)
+
         target.hover()
         time.sleep(0.5)
         target.click()
         time.sleep(2)
-        
-        self.page.screenshot(path=str(CURRENT_SCREENSHOT))
+
+        if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+            try:
+                self.page.screenshot(path=str(CURRENT_SCREENSHOT))
+            except Exception:
+                pass
         print(f"[+] Clicked '{menu_name}'. Current URL: {self.page.url}", flush=True)
-        print(f"[+] Screenshot saved to {CURRENT_SCREENSHOT}", flush=True)
 
     def close(self):
         for attr in ("context", "browser", "playwright"):

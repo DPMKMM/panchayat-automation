@@ -98,7 +98,16 @@ def generate_balance_report_pipeline(
         )
         report = run_balance_automation(bot, target_date=date_str, include_pmagy=bool(include_pmagy))
     else:
-        raise PermissionError("e-Panchayat browser session is not active. Please log in with your credentials and OTP first.")
+        try:
+            from core.session_manager import ensure_active_bot, get_or_create_session
+            sess = get_or_create_session(clean_sid)
+            restored = ensure_active_bot(sess)
+            if restored and getattr(restored, "page", None):
+                report = run_balance_automation(restored, target_date=date_str, include_pmagy=bool(include_pmagy))
+        except Exception:
+            restored = None
+        if report is None:
+            raise PermissionError("e-Panchayat browser session is not active. Please log in with your credentials and OTP first.")
 
     # Cache report specifically under the requested date and session
     target_key = (date_str or report.report_date_str).strip()

@@ -528,6 +528,8 @@ def naresh_generate(
             detail=str(exc),
             headers={"X-Dept-Auth-Required": "true"},
         ) from None
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
     except HTTPException:
         raise
     except Exception as exc:

@@ -121,9 +121,8 @@ def fetch_available_thursday_dates(bot) -> list[str]:
 def run_balance_automation(bot, target_date: str = "", include_pmagy: bool = False) -> DistrictBalanceReport:
     """Executes the full automated scraping pipeline for GM-R 14.2."""
     page = bot.page
-    district_name = "District"
 
-    # Automatically dismiss alert dialogs
+    # Automatically dismiss alert dialogs without leaking listeners across modules
     def on_dialog(dialog):
         print(f"[!] Balance Alert dialog: {dialog.message} - accepting...", flush=True)
         try:
@@ -132,7 +131,17 @@ def run_balance_automation(bot, target_date: str = "", include_pmagy: bool = Fal
             pass
 
     page.on("dialog", on_dialog)
+    try:
+        return _scrape_balance_report(bot, page, target_date=target_date, include_pmagy=include_pmagy)
+    finally:
+        try:
+            page.remove_listener("dialog", on_dialog)
+        except Exception:
+            pass
 
+
+def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool = False) -> DistrictBalanceReport:
+    district_name = "District"
     # 1. Select GP Monitoring
     print("[*] Navigating to GP Monitoring -> GM-R 14.2...", flush=True)
     bot.select_menu("GP Monitoring")

@@ -326,3 +326,108 @@ def test_no_automatic_report_generation_on_login_or_station_open():
     assert "autoGenerate: true," not in dcb_html
     assert "redirectMasToConsoleLogin('required', true)" not in mas_html
     assert "redirectMasToConsoleLogin('expired', true)" not in mas_html
+
+
+def test_keepalive_storage_state_restore_and_missing_bot_401(monkeypatch):
+    """Verify real EPTS keepalive pings, storage_state re-attach, and 401 expiry when bot is inactive."""
+    from core import session_manager
+    import dsr.automation as dsr_auto
+
+    ts = int(time.time() * 1000)
+    sid = f"sid_keepalive_{ts}"
+    c = TestClient(app)
+    _console_login(c, monkeypatch, f"keepalive_{ts}")
+    console_hdrs = {"Host": "autoreports.panchayatautomation.in", "X-Session-ID": sid}
+
+    # 1. Dead/cloud_sync session on /api/naresh/generate returns 401 + X-Dept-Auth-Required & marks expired
+    monkeypatch.setattr(session_manager, "is_cloud_sync_fallback_allowed", lambda: True)
+    sess = session_manager.get_or_create_session(sid)
+    sess["user_id"] = "DPOA3698"
+    sess["mode"] = "cloud_sync"
+    sess["status"] = "awaiting_otp"
+    c.post("/api/naresh/verify-otp", headers=console_hdrs, data={"otp": "123456"})
+
+    gen_dead = c.post(
+        "/api/naresh/generate",
+        headers=console_hdrs,
+        data={"module": "dsr_full", "date": "2026-11-12"},
+    )
+    assert gen_dead.status_code == 401
+    assert gen_dead.headers.get("X-Dept-Auth-Required") == "true"
+    assert session_manager.get_session_status(sid)["expired"] is True
+
+    # 2. Active live_portal keepalive pings /deptLoginVerified & updates storage_state.json
+    ping_calls = []
+
+    class _FakeResp:
+        ok = True
+        def __init__(self, body_txt: str):
+            self._txt = body_txt
+        def text(self):
+            return self._txt
+
+    class _FakeReq:
+        def __init__(self, body_txt: str):
+            self._txt = body_txt
+        def get(self, url, timeout=15000):
+            ping_calls.append(url)
+            return _FakeResp(self._txt)
+
+    class _FakePage:
+        url = "https://epanchayat.telangana.gov.in/deptLoginVerified"
+        def is_closed(self):
+            return False
+
+    class _FakeContext:
+        def __init__(self, body_txt: str):
+            self.request = _FakeReq(body_txt)
+        def storage_state(self, path: str):
+            Path(path).write_text('{"cookies":[{"name":"JSESSIONID","value":"ok"}]}', encoding="utf-8")
+
+    class _FakeBot:
+        def __init__(self, body_txt: str = "Office ID: 3698"):
+            self.page = _FakePage()
+            self.context = _FakeContext(body_txt)
+        def close(self):
+            pass
+
+    sid2 = f"sid_restore_{ts}"
+    sess2 = session_manager.get_or_create_session(sid2)
+    sess2["status"] = "authenticated"
+    sess2["mode"] = "live_portal"
+    sess2["user_id"] = "DPOA3698"
+    sess2["authenticated_at"] = time.time()
+    sess2["bot"] = _FakeBot()
+    sess2["_last_epts_ping_at"] = 0.0
+
+    session_manager._keepalive_ping(sess2)
+    assert ping_calls == ["https://epanchayat.telangana.gov.in/deptLoginVerified"]
+    ss_file = Path(sess2["profile_dir"]) / "storage_state.json"
+    assert ss_file.exists()
+
+    # 3. Simulated process crash (bot = None) seamlessly restores bot via saved storage_state.json
+    sess2["bot"] = None
+
+    class _RestoredBot(_FakeBot):
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+        def start_browser(self):
+            pass
+        def is_logged_in(self):
+            return True
+
+    monkeypatch.setattr(dsr_auto, "EPTSAutomation", _RestoredBot)
+    st = session_manager.run_in_session_thread(sess2, session_manager._get_session_status_impl, sess2)
+    assert st["authenticated"] is True
+    assert st["bot_alive"] is True
+    assert sess2["bot"] is not None
+
+    # 4. Upstream logout detected after 2 consecutive unauthenticated keepalive responses
+    sess2["bot"].context.request = _FakeReq("<html>Department Login</html>")
+    sess2["_last_epts_ping_at"] = 0.0
+    session_manager._keepalive_ping(sess2)
+    assert sess2["status"] == "authenticated"
+    sess2["_last_epts_ping_at"] = 0.0
+    session_manager._keepalive_ping(sess2)
+    assert sess2["status"] == "expired"
+    assert not ss_file.exists()

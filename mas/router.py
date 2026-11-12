@@ -107,8 +107,11 @@ def _generate_mas_report_impl(request: Request, req: MasGenerateRequest) -> dict
     bot = session.get("bot")
 
     def _run_on_session_thread():
+        active_bot = bot
+        if not automation_service._is_bot_alive(active_bot):
+            active_bot = automation_service.ensure_active_bot(session)
         return mas_service.run_pipeline(
-            bot=bot,
+            bot=active_bot,
             session=session,
             session_id=sid,
             month=req.month,
