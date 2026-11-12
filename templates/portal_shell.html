@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="doc-page-title">e-Panchayat Automation</title>
-  <link rel="stylesheet" href="/static/css/common.css?v=13">
+  <link rel="stylesheet" href="/static/css/common.css?v=14">
 </head>
 <body class="state-home-login">
   <script>
@@ -2091,6 +2091,267 @@
     <!-- ========================================================
          AUTOMATED MULTIPLE DAYS DSR & PS ATTENDANCE ROBOT STATION
          ======================================================== -->
+    <style id="auto-multi-dsr-scoped-styles">
+      :root {
+        --md-emerald: #0c3829;
+        --md-accent: #059669;
+        --md-border: #d5e5dc;
+        --md-muted: #597368;
+      }
+      .md-ico, svg.md-ico {
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px !important;
+        min-height: 16px !important;
+        max-width: 16px !important;
+        max-height: 16px !important;
+        flex-shrink: 0 !important;
+        display: inline-block !important;
+        vertical-align: middle !important;
+      }
+      .md-btn {
+        border: none;
+        border-radius: 9px;
+        padding: 8px 15px;
+        font-size: 0.86rem;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+        transition: transform 0.12s, box-shadow 0.15s, opacity 0.15s;
+        line-height: 1.3;
+      }
+      .md-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+        text-decoration: none !important;
+      }
+      .md-btn:active { transform: translateY(0); }
+      .md-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .md-btn-primary {
+        background: linear-gradient(135deg, #0f5132 0%, #167451 100%) !important;
+        color: #ffffff !important;
+      }
+      .md-btn-pdf {
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+        color: #ffffff !important;
+      }
+      .md-btn-pdf:hover {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+        color: #ffffff !important;
+      }
+      .md-btn-excel {
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+        color: #ffffff !important;
+      }
+      .md-btn-excel:hover {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+        color: #ffffff !important;
+      }
+      .md-btn-subpdf {
+        background: #fff5f5;
+        color: #b91c1c !important;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        box-shadow: none;
+        text-decoration: none !important;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background 0.12s, border-color 0.12s, color 0.12s;
+      }
+      .md-btn-subpdf:hover {
+        background: #fee2e2;
+        border-color: #f87171;
+        color: #991b1b !important;
+        transform: translateY(-1px);
+        text-decoration: none !important;
+      }
+      .md-btn-subpdf.active-pdf {
+        background: #dc2626 !important;
+        color: #ffffff !important;
+        border-color: #b91c1c !important;
+        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
+      }
+      .md-dl-dock {
+        background: #f8fbf9;
+        border: 1px solid var(--md-border, #d5e5dc);
+        border-radius: 12px;
+        padding: 10px 14px;
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .md-dl-group {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .md-dl-label {
+        font-size: 0.75rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--md-muted, #597368);
+        margin-right: 4px;
+      }
+      .md-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .md-kpi {
+        background: #f8fbf9;
+        border: 1.5px solid var(--md-border, #d5e5dc);
+        border-radius: 11px;
+        padding: 12px 14px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        transition: transform 0.12s, box-shadow 0.15s;
+      }
+      .md-kpi:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+      }
+      .md-kpi-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--md-muted, #597368);
+        letter-spacing: 0.03em;
+        margin-bottom: 4px;
+      }
+      .md-kpi-val {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--md-emerald, #0c3829);
+        line-height: 1.25;
+      }
+      .md-tabs-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 14px;
+        border-bottom: 2px solid #e2ece7;
+        padding-bottom: 10px;
+      }
+      .md-tab-group {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .md-tab-btn {
+        background: #eef4f1;
+        color: #26483b;
+        border: 1px solid #cfe0d7;
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 0.86rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: background 0.12s, color 0.12s;
+      }
+      .md-tab-btn:hover {
+        background: #dbebe2;
+        color: #0c3829;
+      }
+      .md-tab-btn.active {
+        background: var(--md-emerald, #0c3829) !important;
+        color: #ffffff !important;
+        border-color: var(--md-emerald, #0c3829) !important;
+      }
+      .md-filters {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .md-input {
+        padding: 8px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 0.86rem;
+        min-width: 170px;
+        background: #ffffff;
+        color: #1e293b;
+      }
+      .md-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--md-border, #d5e5dc);
+        border-radius: 10px;
+        max-height: 620px;
+        background: #ffffff;
+      }
+      table.md-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.83rem;
+        white-space: nowrap;
+      }
+      table.md-table th {
+        position: sticky;
+        top: 0;
+        background: var(--md-emerald, #0c3829);
+        color: #ffffff;
+        padding: 9px 10px;
+        text-align: center;
+        font-weight: 700;
+        z-index: 2;
+        border-right: 1px solid rgba(255, 255, 255, 0.14);
+      }
+      table.md-table td {
+        padding: 7px 10px;
+        border-bottom: 1px solid #e5ece8;
+        border-right: 1px solid #eef3f0;
+        text-align: center;
+        color: #1e293b;
+      }
+      table.md-table td.left {
+        text-align: left;
+        font-weight: 600;
+      }
+      table.md-table tbody tr:nth-child(even) td {
+        background: #fafdfb;
+      }
+      .md-pct-pill {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 6px;
+        font-weight: 800;
+        min-width: 58px;
+        font-size: 0.82rem;
+      }
+      .md-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+        font-size: 0.78rem;
+        color: var(--md-muted, #597368);
+        align-items: center;
+      }
+      .md-leg-box {
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-weight: 700;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+    </style>
     <section class="automation-station" id="auto-multi-dsr-station" style="display: none; margin-bottom: 24px;">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
         <div style="display:flex; align-items:center; gap:12px;">
@@ -2217,41 +2478,41 @@
       <!-- Results Section -->
       <div id="auto-multi-results-section" style="display:none; background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:20px; box-shadow:0 4px 18px rgba(0,0,0,0.06);">
         <!-- Heading & Primary Downloads Row -->
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px; margin-bottom:14px; border-bottom:1.5px solid #e2e8f0; padding-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; margin-bottom:14px; border-bottom:1.5px solid #e2e8f0; padding-bottom:14px;">
           <div>
             <h3 id="auto-multi-res-heading" style="margin:0 0 4px; font-size:1.25rem; font-weight:800; color:#0c3829;">Compiled Multi-Days DSR Results</h3>
             <div id="auto-multi-res-subheading" style="font-size:0.86rem; color:#64748b;"></div>
           </div>
-          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
             <a id="btn-auto-multi-dl-full-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+              <svg class="md-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; min-width:16px; min-height:16px; max-width:16px; max-height:16px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
               <span>Download Full PDF</span>
             </a>
             <a id="btn-auto-multi-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+              <svg class="md-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; min-width:16px; min-height:16px; max-width:16px; max-height:16px; flex-shrink:0; vertical-align:middle; display:inline-block;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
               <span id="btn-auto-multi-dl-excel-label">Download Excel (5 Sheets)</span>
             </a>
           </div>
         </div>
 
         <!-- Report-Wise PDF Downloads Row -->
-        <div style="background:#f8fbf9; border:1px solid #d5e5dc; border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
-            <span style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#047857;">Report-Wise PDF Downloads:</span>
+        <div class="md-dl-dock" style="background:#f8fbf9; border:1px solid #d5e5dc; border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+            <span class="md-dl-label" style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#047857; margin-right:4px;">Report-Wise PDF Downloads:</span>
             <a id="btn-auto-multi-dl-dist-pdf" class="md-btn md-btn-subpdf active-pdf" data-auto-pdf="district" href="#" target="_blank" rel="noopener noreferrer">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
               <span>District Level PDF</span>
             </a>
             <a id="btn-auto-multi-dl-mandal-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="mandal" href="#" target="_blank" rel="noopener noreferrer">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>Mandal Level PDF</span>
             </a>
             <a id="btn-auto-multi-dl-gp-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="gp" href="#" target="_blank" rel="noopener noreferrer">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               <span>GP Summary PDF</span>
             </a>
             <a id="btn-auto-multi-dl-time-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="time_matrix" href="#" target="_blank" rel="noopener noreferrer">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span>Exact Time &amp; Avg PDF</span>
             </a>
           </div>
@@ -2263,20 +2524,20 @@
         <!-- Interactive Tabs Bar -->
         <div class="md-tabs-bar" style="margin-top:14px;">
           <div class="md-tab-group">
-            <button type="button" class="md-tab-btn active" data-auto-tab="district" onclick="switchAutoMultiDsrTab('district')" style="display:inline-flex; align-items:center; gap:6px;">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+            <button type="button" class="md-tab-btn active" data-auto-tab="district" onclick="switchAutoMultiDsrTab('district')">
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
               <span>District Level (Date-Wise)</span>
             </button>
-            <button type="button" class="md-tab-btn" data-auto-tab="mandal" onclick="switchAutoMultiDsrTab('mandal')" style="display:inline-flex; align-items:center; gap:6px;">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <button type="button" class="md-tab-btn" data-auto-tab="mandal" onclick="switchAutoMultiDsrTab('mandal')">
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>Mandal Level (Mandal + Date)</span>
             </button>
-            <button type="button" class="md-tab-btn" data-auto-tab="gp" onclick="switchAutoMultiDsrTab('gp')" style="display:inline-flex; align-items:center; gap:6px;">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <button type="button" class="md-tab-btn" data-auto-tab="gp" onclick="switchAutoMultiDsrTab('gp')">
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               <span>GP Level (Period Summary)</span>
             </button>
-            <button type="button" class="md-tab-btn" id="btn-auto-multi-tab-time" data-auto-tab="time_matrix" onclick="switchAutoMultiDsrTab('time_matrix')" style="display:inline-flex; align-items:center; gap:6px;">
-              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <button type="button" class="md-tab-btn" id="btn-auto-multi-tab-time" data-auto-tab="time_matrix" onclick="switchAutoMultiDsrTab('time_matrix')">
+              <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span>Day-Wise Exact Time &amp; Avg</span>
             </button>
           </div>
