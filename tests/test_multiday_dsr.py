@@ -21,7 +21,6 @@ from pypdf import PdfReader
 from app import app
 from multiday_dsr.processor import highlight_percentage, process_dsr
 from multiday_dsr.reports import (
-    generate_multiday_dsr_csv,
     generate_multiday_dsr_excel,
     generate_multiday_dsr_pdf,
 )
@@ -237,17 +236,24 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     wb = openpyxl.load_workbook(xlsx_path)
     assert wb.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Day-Wise Exact Time", "Master Data"]
 
-    csv_bytes = generate_multiday_dsr_csv(res, "gp")
-    assert b"Allinagaram" in csv_bytes
-    csv_tm_bytes = generate_multiday_dsr_csv(res, "time_matrix")
-    assert b"Average Time" in csv_tm_bytes and b"08:25" in csv_tm_bytes and b"08:25:00 AM" not in csv_tm_bytes
+    # Individual single-level PDFs render only their requested report section
+    gp_pdf_path = tmp_path / "md_gp.pdf"
+    generate_multiday_dsr_pdf(res, gp_pdf_path, level="gp")
+    gp_pdf_txt = "\n".join(p.extract_text() for p in PdfReader(str(gp_pdf_path)).pages)
+    assert "Gram Panchayat Level" in gp_pdf_txt
+    assert "District Level — Date-Wise" not in gp_pdf_txt
 
-    # Live HTTP API & page route tests
+    # Live HTTP API & page route tests (CSV removed, Full + Per-Report PDFs + Excel present)
     client = TestClient(app)
     page = client.get("/reports/multi-day-dsr")
     assert page.status_code == 200
     assert "Multiple Days DSR" in page.text
     assert 'id="md-opt-time-matrix"' in page.text
+    assert 'id="md-dl-pdf-district"' in page.text
+    assert 'id="md-dl-pdf-mandal"' in page.text
+    assert 'id="md-dl-pdf-gp"' in page.text
+    assert 'id="md-dl-pdf-time"' in page.text
+    assert "Download Active CSV" not in page.text
 
     resp = client.post(
         "/api/multiday-dsr/analyze",
@@ -262,23 +268,27 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     assert "No. of Days Before 9 AM" in body["time_matrix_columns"]
     job_id = body["job_id"]
 
-    ts_re = re.compile(r"_\d{2}-\d{2}-\d{4} \d{2}:\d{2} (?:AM|PM)\.(?:pdf|xlsx|csv)\"")
+    ts_re = re.compile(r"_\d{2}-\d{2}-\d{4} \d{2}:\d{2} (?:AM|PM)\.(?:pdf|xlsx)\"")
 
-    dl_pdf = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-pdf")
-    assert dl_pdf.status_code == 200 and dl_pdf.content.startswith(b"%PDF")
-    assert ts_re.search(dl_pdf.headers.get("Content-Disposition", ""))
+    for lvl, expected_txt in (
+        ("all", "District Level"),
+        ("district", "District Level"),
+        ("mandal", "Mandal Level"),
+        ("gp", "Gram Panchayat Level"),
+        ("time_matrix", "Average Time"),
+    ):
+        dl_p = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level={lvl}")
+        assert dl_p.status_code == 200 and dl_p.content.startswith(b"%PDF")
+        assert ts_re.search(dl_p.headers.get("Content-Disposition", ""))
+        lvl_txt = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(dl_p.content)).pages)
+        assert expected_txt in lvl_txt
 
     dl_xlsx = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-excel")
     assert dl_xlsx.status_code == 200 and dl_xlsx.content[:2] == b"PK"
     assert ts_re.search(dl_xlsx.headers.get("Content-Disposition", ""))
 
-    dl_csv = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=gp")
-    assert dl_csv.status_code == 200 and "Allinagaram" in dl_csv.text
-    assert ts_re.search(dl_csv.headers.get("Content-Disposition", ""))
-
-    dl_tm_csv = client.get(f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=time_matrix")
-    assert dl_tm_csv.status_code == 200 and "08:25" in dl_tm_csv.text and "08:25:00 AM" not in dl_tm_csv.text
-    assert ts_re.search(dl_tm_csv.headers.get("Content-Disposition", ""))
+    # Removed CSV endpoint returns 404
+    assert client.get(f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=gp").status_code == 404
 
     # Toggle option off -> time_matrix omitted from Excel & JSON response
     resp_no_tm = client.post(

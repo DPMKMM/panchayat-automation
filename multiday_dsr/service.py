@@ -13,7 +13,6 @@ import pandas as pd
 from core.config import get_reports_dir
 from multiday_dsr.processor import MultiDayDsrResult, classify_time_style, highlight_percentage, process_dsr
 from multiday_dsr.reports import (
-    generate_multiday_dsr_csv,
     generate_multiday_dsr_excel,
     generate_multiday_dsr_pdf,
 )
@@ -59,7 +58,7 @@ def analyze_uploaded_files(
     owner_user_id: str = "",
     include_time_matrix: bool = True,
 ) -> dict[str, Any]:
-    """Run process_dsr on uploaded files, persist PDF/Excel/CSVs, and return JSON payload."""
+    """Run process_dsr on uploaded files, persist PDF & Excel deliverables, and return JSON payload."""
     result: MultiDayDsrResult = process_dsr(files_payload)
     job_id = uuid4().hex
 
@@ -68,17 +67,23 @@ def analyze_uploaded_files(
     ts_download = result.generated_at.strftime("%d-%m-%Y %I:%M %p")
     ts_disk = result.generated_at.strftime("%d-%m-%Y_%I-%M_%p")
 
-    pdf_filename = f"{safe_dist}_MultiDays_DSR_Report_{ts_download}.pdf"
+    pdf_filenames = {
+        "all": f"{safe_dist}_MultiDays_DSR_Full_Report_{ts_download}.pdf",
+        "district": f"{safe_dist}_MultiDays_DSR_District_Level_{ts_download}.pdf",
+        "mandal": f"{safe_dist}_MultiDays_DSR_Mandal_Level_{ts_download}.pdf",
+        "gp": f"{safe_dist}_MultiDays_DSR_GP_Summary_{ts_download}.pdf",
+        "time_matrix": f"{safe_dist}_MultiDays_DSR_Exact_Time_{ts_download}.pdf",
+    }
     excel_filename = f"{safe_dist}_MultiDays_DSR_Report_{ts_download}.xlsx"
-    csv_district_name = f"{safe_dist}_MultiDays_DSR_District_{ts_download}.csv"
-    csv_mandal_name = f"{safe_dist}_MultiDays_DSR_Mandal_{ts_download}.csv"
-    csv_gp_name = f"{safe_dist}_MultiDays_DSR_GP_Summary_{ts_download}.csv"
-    csv_time_name = f"{safe_dist}_MultiDays_DSR_DayWise_Time_{ts_download}.csv"
 
-    pdf_path = reports_dir / f"{job_id[:10]}_{safe_dist}_MultiDays_DSR_{ts_disk}.pdf"
+    pdf_paths = {
+        lvl: reports_dir / f"{job_id[:10]}_{safe_dist}_MultiDays_DSR_{lvl}_{ts_disk}.pdf"
+        for lvl in pdf_filenames
+    }
     excel_path = reports_dir / f"{job_id[:10]}_{safe_dist}_MultiDays_DSR_{ts_disk}.xlsx"
 
-    generate_multiday_dsr_pdf(result, pdf_path, include_time_matrix=include_time_matrix)
+    # Build Full Combined PDF and Excel eagerly; individual level PDFs build eagerly or on-demand
+    generate_multiday_dsr_pdf(result, pdf_paths["all"], include_time_matrix=include_time_matrix, level="all")
     generate_multiday_dsr_excel(result, excel_path, include_time_matrix=include_time_matrix)
 
     dist_rows = _df_to_records(result.district)
@@ -95,16 +100,11 @@ def analyze_uploaded_files(
             "job_id": job_id,
             "owner_user_id": owner_user_id,
             "result": result,
-            "pdf_path": str(pdf_path),
-            "pdf_filename": pdf_filename,
+            "include_time_matrix": include_time_matrix,
+            "pdf_paths": {k: str(v) for k, v in pdf_paths.items()},
+            "pdf_filenames": pdf_filenames,
             "excel_path": str(excel_path),
             "excel_filename": excel_filename,
-            "csv_bytes": {
-                "district": (csv_district_name, generate_multiday_dsr_csv(result, "district")),
-                "mandal": (csv_mandal_name, generate_multiday_dsr_csv(result, "mandal")),
-                "gp": (csv_gp_name, generate_multiday_dsr_csv(result, "gp")),
-                "time_matrix": (csv_time_name, generate_multiday_dsr_csv(result, "time_matrix")),
-            },
         }
 
     return {
@@ -132,20 +132,20 @@ def analyze_uploaded_files(
         "gp_rows": gp_rows,
         "time_matrix_rows": tm_rows,
         "download_filenames": {
-            "pdf": pdf_filename,
+            "pdf": pdf_filenames["all"],
+            "pdf_district": pdf_filenames["district"],
+            "pdf_mandal": pdf_filenames["mandal"],
+            "pdf_gp": pdf_filenames["gp"],
+            "pdf_time_matrix": pdf_filenames["time_matrix"],
             "excel": excel_filename,
-            "csv_district": csv_district_name,
-            "csv_mandal": csv_mandal_name,
-            "csv_gp": csv_gp_name,
-            "csv_time_matrix": csv_time_name,
         },
         "download_urls": {
-            "pdf": f"/api/multiday-dsr/jobs/{job_id}/download-pdf",
+            "pdf": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=all",
+            "pdf_district": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=district",
+            "pdf_mandal": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=mandal",
+            "pdf_gp": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=gp",
+            "pdf_time_matrix": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=time_matrix",
             "excel": f"/api/multiday-dsr/jobs/{job_id}/download-excel",
-            "csv_district": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=district",
-            "csv_mandal": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=mandal",
-            "csv_gp": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=gp",
-            "csv_time_matrix": f"/api/multiday-dsr/jobs/{job_id}/download-csv?level=time_matrix",
         },
     }
 
@@ -155,16 +155,26 @@ def get_job_entry(job_id: str) -> dict[str, Any] | None:
         return _JOBS.get(job_id)
 
 
-def get_job_artifact(job_id: str, kind: str, level: str = "district") -> tuple[str, bytes, str]:
+def get_job_artifact(job_id: str, kind: str, level: str = "all") -> tuple[str, bytes, str]:
     entry = get_job_entry(job_id)
     if not entry:
         raise FileNotFoundError("Multi-Days DSR job not found or expired. Please re-upload files.")
 
     if kind == "pdf":
-        p = Path(entry["pdf_path"])
+        lvl = (level or "all").strip().lower()
+        if lvl in ("exact_time", "time"):
+            lvl = "time_matrix"
+        if lvl not in entry["pdf_paths"]:
+            lvl = "all"
+        p = Path(entry["pdf_paths"][lvl])
         if not p.exists():
-            raise FileNotFoundError("Generated Multi-Days DSR PDF file is no longer available.")
-        return entry["pdf_filename"], p.read_bytes(), "application/pdf"
+            generate_multiday_dsr_pdf(
+                entry["result"],
+                p,
+                include_time_matrix=bool(entry.get("include_time_matrix", True)),
+                level=lvl,
+            )
+        return entry["pdf_filenames"][lvl], p.read_bytes(), "application/pdf"
 
     if kind == "excel":
         p = Path(entry["excel_path"])
@@ -175,12 +185,5 @@ def get_job_artifact(job_id: str, kind: str, level: str = "district") -> tuple[s
             p.read_bytes(),
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-
-    if kind == "csv":
-        lvl = (level or "district").strip().lower()
-        if lvl not in entry["csv_bytes"]:
-            lvl = "district"
-        fname, raw = entry["csv_bytes"][lvl]
-        return fname, raw, "text/csv; charset=utf-8"
 
     raise ValueError(f"Unsupported artifact kind: {kind}")

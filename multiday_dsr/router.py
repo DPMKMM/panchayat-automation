@@ -179,15 +179,10 @@ def _download_artifact_response(request: Request, job_id: str, kind: str, level:
 
 
 @router.get("/api/multiday-dsr/jobs/{job_id}/download-pdf", include_in_schema=False)
-def download_multiday_dsr_pdf(job_id: str, request: Request, inline: bool = False) -> Response:
-    return _download_artifact_response(request, job_id, "pdf", inline=inline)
+def download_multiday_dsr_pdf(job_id: str, request: Request, level: str = "all", inline: bool = False) -> Response:
+    return _download_artifact_response(request, job_id, "pdf", level=level, inline=inline)
 
 
 @router.get("/api/multiday-dsr/jobs/{job_id}/download-excel", include_in_schema=False)
-def download_multiday_dsr_excel(job_id: str, request: Request) -> Response:
+def download_multiday_dsr_excel(request: Request, job_id: str) -> Response:
     return _download_artifact_response(request, job_id, "excel")
-
-
-@router.get("/api/multiday-dsr/jobs/{job_id}/download-csv", include_in_schema=False)
-def download_multiday_dsr_csv(job_id: str, request: Request, level: str = "district") -> Response:
-    return _download_artifact_response(request, job_id, "csv", level=level)

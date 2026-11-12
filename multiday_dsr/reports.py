@@ -130,10 +130,25 @@ def generate_multiday_dsr_pdf(
     result: MultiDayDsrResult,
     output_path: str | Path,
     include_time_matrix: bool = True,
+    level: str = "all",
 ) -> Path:
-    """Compile colorful Landscape A4 Multi-Days DSR PDF (no graphs) with abstract + optional exact time matrix."""
+    """Compile colorful Landscape A4 Multi-Days DSR PDF for 'all' or a specific level ('district'|'mandal'|'gp'|'time_matrix')."""
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    lvl = (level or "all").strip().lower()
+    if lvl in ("exact_time", "time"):
+        lvl = "time_matrix"
+    if lvl not in ("all", "district", "mandal", "gp", "time_matrix"):
+        lvl = "all"
+
+    level_titles = {
+        "all": "CONSOLIDATED MULTI-DAYS PS ATTENDANCE & DSR ABSTRACT",
+        "district": "DISTRICT LEVEL — DATE-WISE ATTENDANCE & DSR ABSTRACT",
+        "mandal": "MANDAL LEVEL — MANDAL & DATE-WISE ATTENDANCE & DSR ABSTRACT",
+        "gp": "GRAM PANCHAYAT LEVEL — PERIOD ATTENDANCE & DSR SUMMARY",
+        "time_matrix": "GRAM PANCHAYAT DAY-WISE EXACT ATTENDANCE TIME & AVERAGE TIME",
+    }
 
     page_w, _ = landscape(A4)
     usable_w = page_w - 20 * mm
@@ -178,7 +193,7 @@ def generate_multiday_dsr_pdf(
     gen_str = result.generated_at.strftime("%d-%m-%Y %I:%M %p")
     banner = Table(
         [
-            [Paragraph(f"MULTIPLE DAYS PS ATTENDANCE & DSR ABSTRACT — {html.escape(result.dist_name.upper())}", styles["banner_title"])],
+            [Paragraph(f"{level_titles[lvl]} — {html.escape(result.dist_name.upper())}", styles["banner_title"])],
             [Paragraph(
                 f"Period: {html.escape(result.start_date)} to {html.escape(result.end_date)}  |  "
                 f"Reporting Days: {result.total_reporting_days}  |  Mandals: {result.mandal_count}  |  Total GPs: {result.total_gps}  |  "
@@ -201,59 +216,70 @@ def generate_multiday_dsr_pdf(
     )
 
     story: list[Any] = [banner, Spacer(1, 6)]
+    first_section = True
+
+    def _need_break() -> None:
+        nonlocal first_section
+        if not first_section:
+            story.append(PageBreak())
+        first_section = False
 
     # 1. District Level (Date-Wise) — 14 columns
-    story.append(Paragraph("1. District Level — Date-Wise Attendance & DSR Summary", styles["sec"]))
-    dist_widths = [
-        usable_w * r
-        for r in (0.04, 0.085, 0.07, 0.075, 0.065, 0.065, 0.065, 0.065, 0.075, 0.075, 0.075, 0.075, 0.085, 0.085)
-    ]
-    story.append(
-        _df_to_pdf_table(
-            result.district,
-            dist_widths,
-            pct_cols={"Before 9 AM %", "After 9 AM %"},
-            left_cols=set(),
-            styles=styles,
+    if lvl in ("all", "district"):
+        _need_break()
+        story.append(Paragraph("1. District Level — Date-Wise Attendance & DSR Summary", styles["sec"]))
+        dist_widths = [
+            usable_w * r
+            for r in (0.04, 0.085, 0.07, 0.075, 0.065, 0.065, 0.065, 0.065, 0.075, 0.075, 0.075, 0.075, 0.085, 0.085)
+        ]
+        story.append(
+            _df_to_pdf_table(
+                result.district,
+                dist_widths,
+                pct_cols={"Before 9 AM %", "After 9 AM %"},
+                left_cols=set(),
+                styles=styles,
+            )
         )
-    )
-    story.append(PageBreak())
 
     # 2. Mandal Level (Mandal + Date-Wise) — 15 columns
-    story.append(Paragraph("2. Mandal Level — Mandal & Date-Wise Attendance & DSR Summary", styles["sec"]))
-    mandal_widths = [
-        usable_w * r
-        for r in (0.038, 0.125, 0.078, 0.06, 0.068, 0.06, 0.058, 0.058, 0.058, 0.065, 0.065, 0.065, 0.065, 0.068, 0.069)
-    ]
-    story.append(
-        _df_to_pdf_table(
-            result.mandal,
-            mandal_widths,
-            pct_cols={"Before 9 AM %", "After 9 AM %"},
-            left_cols={"Mandal Name"},
-            styles=styles,
+    if lvl in ("all", "mandal"):
+        _need_break()
+        story.append(Paragraph("2. Mandal Level — Mandal & Date-Wise Attendance & DSR Summary", styles["sec"]))
+        mandal_widths = [
+            usable_w * r
+            for r in (0.038, 0.125, 0.078, 0.06, 0.068, 0.06, 0.058, 0.058, 0.058, 0.065, 0.065, 0.065, 0.065, 0.068, 0.069)
+        ]
+        story.append(
+            _df_to_pdf_table(
+                result.mandal,
+                mandal_widths,
+                pct_cols={"Before 9 AM %", "After 9 AM %"},
+                left_cols={"Mandal Name"},
+                styles=styles,
+            )
         )
-    )
-    story.append(PageBreak())
 
     # 3. GP Level (Period Summary) — 15 columns
-    story.append(Paragraph("3. Gram Panchayat Level — Period Attendance & DSR Summary", styles["sec"]))
-    gp_widths = [
-        usable_w * r
-        for r in (0.036, 0.105, 0.115, 0.062, 0.065, 0.055, 0.055, 0.055, 0.055, 0.065, 0.065, 0.065, 0.065, 0.068, 0.069)
-    ]
-    story.append(
-        _df_to_pdf_table(
-            result.gp_summary,
-            gp_widths,
-            pct_cols={"Before 9 AM %", "After 9 AM %"},
-            left_cols={"Mandal Name", "Panchayat Name"},
-            styles=styles,
+    if lvl in ("all", "gp"):
+        _need_break()
+        story.append(Paragraph("3. Gram Panchayat Level — Period Attendance & DSR Summary", styles["sec"]))
+        gp_widths = [
+            usable_w * r
+            for r in (0.036, 0.105, 0.115, 0.062, 0.065, 0.055, 0.055, 0.055, 0.055, 0.065, 0.065, 0.065, 0.065, 0.068, 0.069)
+        ]
+        story.append(
+            _df_to_pdf_table(
+                result.gp_summary,
+                gp_widths,
+                pct_cols={"Before 9 AM %", "After 9 AM %"},
+                left_cols={"Mandal Name", "Panchayat Name"},
+                styles=styles,
+            )
         )
-    )
 
     # 4. Day-Wise Exact Attendance Time + Status Counts + Average Time & No. of Days Before 9 AM
-    if include_time_matrix and not result.time_matrix.empty:
+    if (lvl == "time_matrix" or (lvl == "all" and include_time_matrix)) and not result.time_matrix.empty:
         tm_df = result.time_matrix
         fixed_left = ["S.No", "Mandal Name", "Panchayat Name"]
         summary_right = [
@@ -279,7 +305,7 @@ def generate_multiday_dsr_pdf(
                 pdf_aliases[d_c] = d_c[:5]
 
         for slice_idx, d_chunk in enumerate(date_chunks, start=1):
-            story.append(PageBreak())
+            _need_break()
             suffix = f" (Part {slice_idx}/{len(date_chunks)})" if len(date_chunks) > 1 else ""
             story.append(
                 Paragraph(
