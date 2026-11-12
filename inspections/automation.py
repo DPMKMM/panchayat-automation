@@ -101,7 +101,7 @@ def _inspect_selects(iframe) -> dict[str, Any]:
 
 
 def _classify_selects(select_infos: list[dict[str, Any]]) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """Identify Designation dropdown and Week dropdown from frame select metadata."""
+    """Identify Inspected-by Designation dropdown and Select-Week dropdown (skipping District dropdown)."""
     desig_sel = None
     week_sel = None
 
@@ -111,26 +111,29 @@ def _classify_selects(select_infos: list[dict[str, Any]]) -> tuple[dict[str, Any
 
         if desig_sel is None and (
             "desig" in id_name
-            or ("mpo" in opt_texts and ("dlpo" in opt_texts or "dpo" in opt_texts))
+            or "inspect" in id_name
+            or ("mpo" in opt_texts and ("dlpo" in opt_texts or "dpo" in opt_texts or "mpdo" in opt_texts))
         ):
             desig_sel = info
             continue
 
-        if week_sel is None and (
-            "week" in id_name
-            or "period" in id_name
-            or "from" in id_name
-            or any(
-                re.search(r"\d{2}[-/][A-Za-z0-9]{2,3}[-/]\d{4}", o.get("text", ""))
-                for o in info.get("options", [])
-            )
-        ):
+        if "dist" in id_name and "week" not in id_name:
+            continue
+
+        has_week_dates = any(
+            re.search(r"\d{4}[-/]\d{2}[-/]\d{2}", o.get("text", ""))
+            or re.search(r"\d{2}[-/][A-Za-z0-9]{2,3}[-/]\d{4}", o.get("text", ""))
+            or " to " in o.get("text", "").lower()
+            for o in info.get("options", [])
+        )
+        if week_sel is None and ("week" in id_name or "period" in id_name or has_week_dates):
             week_sel = info
 
-    # Fallback: if there are 2 selects and one wasn't matched
+    # Fallback: skip designation & district selects
     if not week_sel:
         for info in select_infos:
-            if info is not desig_sel and len(info.get("options", [])) > 1:
+            id_name = f"{info.get('id', '')} {info.get('name', '')}".lower()
+            if info is not desig_sel and "dist" not in id_name and len(info.get("options", [])) > 1:
                 week_sel = info
                 break
     return desig_sel, week_sel
@@ -192,6 +195,7 @@ def _open_gmr391_frame(bot):
     target_selectors = (
         "a:has-text('39.1')",
         "a:has-text('GM-R 39.1')",
+        "a:has-text('MPO,DLPO,DPO Inspection Data Entry')",
         "a:has-text('MPO, DLPO, DPO Inspection Data Entry')",
     )
 
@@ -365,11 +369,18 @@ def fetch_inspection_metadata(bot, designation: str | None = None) -> dict[str, 
 
 
 def _find_excel_icon_locator(iframe):
-    """Locate the portal Excel export icon / button rendered after GM-R 39.1 Submit."""
+    """Locate the Excel icon/image button next to Submit / CompleteReport inside GM-R 39.1."""
     excel_selectors = (
+        "input[type='image'][src*='excel' i]",
+        "input[type='image'][src*='xls' i]",
+        "input[type='image'][id*='excel' i]",
+        "input[type='image'][id*='xls' i]",
+        "input[type='image'][title*='Excel' i]",
         "input[src*='excel' i]",
         "a:has(img[src*='excel' i])",
         "img[src*='excel' i]",
+        "a:has(img[src*='xls' i])",
+        "img[src*='xls' i]",
         "a[title*='Excel' i]",
         "input[title*='Excel' i]",
         "button[title*='Excel' i]",
@@ -377,14 +388,44 @@ def _find_excel_icon_locator(iframe):
         "button:has-text('Excel')",
         "a[id*='Excel' i]",
         "input[id*='Excel' i]",
-        "a:has(img[src*='xls' i])",
-        "img[src*='xls' i]",
         "[onclick*='Excel' i]",
+        "input[type='image'][src*='xl' i]",
+        "a:has(img[src*='xl' i])",
+        "input[type='image'][id*='Export' i]",
+        "a[id*='Export' i]",
+        "input[type='image']",
     )
     for sel in excel_selectors:
         vis = _find_visible(iframe, sel)
         if vis is not None:
             return vis
+    # Structural DOM fallback: clickable image/anchor directly adjacent to Submit or CompleteReport button
+    try:
+        idx = iframe.evaluate(
+            """() => {
+                const btns = Array.from(document.querySelectorAll("input, button, a, img"));
+                for (let i = 0; i < btns.length; i++) {
+                    const txt = ((btns[i].value || btns[i].innerText || btns[i].title || '') + '').trim().toLowerCase();
+                    if (txt.includes('completereport') || txt.includes('complete report')) {
+                        for (let j = i - 1; j >= Math.max(0, i - 4); j--) {
+                            const tag = btns[j].tagName.toLowerCase();
+                            const t = (btns[j].type || '').toLowerCase();
+                            if (tag === 'img' || t === 'image' || tag === 'a') {
+                                btns[j].setAttribute('data-epts-excel-icon', '1');
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }"""
+        )
+        if idx:
+            cand = iframe.locator("[data-epts-excel-icon='1']").first
+            if cand.is_visible():
+                return cand
+    except Exception:
+        pass
     return None
 
 
@@ -456,9 +497,48 @@ def download_inspection_weeks(
                 week_loc.select_option(value=wk["value"])
             except Exception:
                 week_loc.select_option(label=wk["text"])
-            time.sleep(1.0)
+            time.sleep(0.8)
 
             iframe = _get_my_iframe(page) or iframe
+            excel_loc = _find_excel_icon_locator(iframe)
+
+            # If Excel icon is already visible on the filter bar (standard GM-R 39.1 layout),
+            # try downloading directly on week selection first; if no download fires, click Submit then Excel.
+            did_download = False
+            if excel_loc is not None:
+                try:
+                    iframe.evaluate("() => { for (const f of document.forms) f.removeAttribute('target'); }")
+                except Exception:
+                    pass
+                try:
+                    with page.expect_download(timeout=12000) as dl_info:
+                        excel_loc.click()
+                    dl = dl_info.value
+                    suggested = dl.suggested_filename or f"GMR39_1_{canon_desig}_week_{idx:02d}.xls"
+                    dest = insp_dir / f"w{idx:02d}_{suggested}"
+                    dl.save_as(str(dest))
+                    raw_bytes = dest.read_bytes()
+                    downloaded_items.append({
+                        "week_label": wk["text"],
+                        "filename": suggested,
+                        "raw_bytes": raw_bytes,
+                        "status": "downloaded" if raw_bytes else "no_data",
+                    })
+                    did_download = True
+                except Exception:
+                    if any("no data" in m.lower() or "no record" in m.lower() for m in portal_dialogs):
+                        downloaded_items.append({
+                            "week_label": wk["text"],
+                            "filename": "",
+                            "raw_bytes": b"",
+                            "status": "no_data",
+                        })
+                        continue
+
+            if did_download:
+                continue
+
+            # Fallback path: click Submit first, then click Excel icon
             try:
                 submit_btn = _find_visible(
                     iframe,
@@ -471,7 +551,6 @@ def download_inspection_weeks(
                 logger.debug("Submit click note on week %s: %s", wk["text"], exc)
 
             iframe = _get_my_iframe(page) or iframe
-            # Wait briefly for Excel icon to become visible
             excel_loc = None
             xl_deadline = time.time() + 12.0
             while time.time() < xl_deadline:

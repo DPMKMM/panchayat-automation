@@ -60,17 +60,17 @@ def _make_week_xls_html(rows: list[dict[str, str]]) -> bytes:
 
 
 def _console_login(client: TestClient, monkeypatch, tag: str = "insp"):
+    from portal import router as portal_router
+
     ts = int(time.time() * 1000)
-    monkeypatch.setattr(
-        firebase_app,
-        "verify_firebase_id_token",
-        lambda tok: {
-            "uid": f"fb_{tag}_{ts}",
-            "email": f"{tag}_{ts}@gmail.com",
-            "name": f"Officer {tag}",
-            "picture": "",
-        },
-    )
+    fake_user = lambda tok: {
+        "firebase_uid": f"fb_{tag}_{ts}",
+        "gmail": f"{tag}_{ts}@gmail.com",
+        "name": f"Officer {tag}",
+        "profile_picture": "",
+    }
+    monkeypatch.setattr(firebase_app, "verify_firebase_id_token", fake_user)
+    monkeypatch.setattr(portal_router, "verify_firebase_id_token", fake_user)
     res = client.post(
         "/api/auth/firebase-login",
         headers={"Host": "autoreports.panchayatautomation.in"},
@@ -195,10 +195,21 @@ def test_strict_submitted_filter_consolidation_pdf_excel_and_csv(tmp_path):
 
 
 def test_resolve_week_slice_handles_asc_and_desc_orders():
+    from inspections.automation import _classify_selects
+
+    # Exact 3-select GM-R 39.1 layout from portal UI: Inspected by, District (skip!), Select Week (YYYY-MM-DD to YYYY-MM-DD)
+    desig_sel, week_sel = _classify_selects([
+        {"idx": 0, "id": "ddlInspectedBy", "name": "ddlInspectedBy", "options": [{"value": "MPO", "text": "MPO"}, {"value": "DLPO", "text": "DLPO"}, {"value": "DPO", "text": "DPO"}]},
+        {"idx": 1, "id": "ddlDistrict", "name": "ddlDistrict", "options": [{"value": "0", "text": "--Select--"}, {"value": "19", "text": "Khammam"}]},
+        {"idx": 2, "id": "ddlWeek", "name": "ddlWeek", "options": [{"value": "1", "text": "2026-11-09 to 2026-11-14"}, {"value": "2", "text": "2026-11-02 to 2026-11-07"}]},
+    ])
+    assert desig_sel is not None and desig_sel["id"] == "ddlInspectedBy"
+    assert week_sel is not None and week_sel["id"] == "ddlWeek"
+
     weeks = [
-        {"value": "w3", "text": "16-11-2026 to 21-11-2026"},
-        {"value": "w2", "text": "09-11-2026 to 14-11-2026"},
-        {"value": "w1", "text": "02-11-2026 to 07-11-2026"},
+        {"value": "w3", "text": "2026-11-16 to 2026-11-21"},
+        {"value": "w2", "text": "2026-11-09 to 2026-11-14"},
+        {"value": "w1", "text": "2026-11-02 to 2026-11-07"},
     ]
     sliced = resolve_week_slice(weeks, from_week="w1", to_week="w3")
     assert len(sliced) == 3

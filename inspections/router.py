@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 
 from core.dependencies import (
     enforce_console_api_access,
@@ -96,6 +96,7 @@ def generate_inspections_api(
 @router.post("/upload-consolidate", include_in_schema=False)
 async def upload_consolidate_inspections(
     request: Request,
+    console_user: Optional[dict[str, Any]] = Depends(enforce_console_api_access),
     files: List[UploadFile] = File(...),
     designation: str = Form(default="MPO"),
     from_week: str = Form(default=""),
@@ -104,7 +105,6 @@ async def upload_consolidate_inspections(
     target_override: Optional[int] = Form(default=None),
 ) -> dict[str, Any]:
     """Consolidate manually uploaded GM-R 39.1 weekly Excel downloads into abstract, PDF & Excel."""
-    console_user = enforce_console_api_access(request)
     sid = _get_sid(request)
     payload_files: list[tuple[str, bytes]] = []
     for f in files:
