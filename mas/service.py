@@ -26,6 +26,20 @@ def get_available_mas_modules() -> List[Dict[str, Any]]:
     return build_module_options()
 
 
+def fetch_available_periods(bot: Any, year: Optional[int] = None) -> Dict[str, Any]:
+    """Scrape live available Years & Months from GM-R 5.24 in the active EPTS session."""
+    if bot is None or getattr(bot, "page", None) is None:
+        raise PermissionError("e-Panchayat browser session is inactive. Please authenticate once from Console.")
+    data = mas_automation.fetch_mas_available_periods(bot.page, year=year)
+    return {
+        "success": True,
+        "years": data.get("years") or [],
+        "months": data.get("months") or [],
+        "selected_year": data.get("selected_year") or "",
+        "selected_month": data.get("selected_month") or "",
+    }
+
+
 def join_reports(
     gmr_524_data: dict,
     gmr_523_lookup: dict,

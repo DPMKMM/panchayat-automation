@@ -239,7 +239,10 @@ MAS_PAGE_HTML = (
             <option value="November">November</option>
             <option value="December">December</option>
           </select>
-          <select id="mas-select-year" class="mas-select" title="Select Reporting Year" onchange="onMasSelectionChanged()"></select>
+          <select id="mas-select-year" class="mas-select" title="Select Reporting Year" onchange="onMasYearChanged()"></select>
+          <button type="button" id="btn-fetch-mas-years" onclick="fetchMasYearsFromPortal(false)" class="btn" title="Fetch live available Years &amp; Months from e-Panchayat portal" style="background:rgba(255,255,255,0.14); color:#ffffff; border:1px solid rgba(255,255,255,0.32);">
+            🔄 Fetch Years
+          </button>
           <select id="mas-select-report-type" class="mas-select" title="Choose Report Scope" onchange="onMasReportTypeChanged()">
             <option value="">-- Select Report Type --</option>
             <option value="abstract_only">Mandal Abstract Only (Fast)</option>
@@ -435,6 +438,8 @@ MAS_PAGE_HTML = (
     let masCurrentData = null;
     let isStage1Authenticated = false;
     let isDeptAuthenticated = false;
+    let hasFetchedPortalYears = false;
+    let isFetchingPortalYears = false;
     let authGateActionMode = 'dept';
 
     function escapeHtml(str) {
@@ -570,6 +575,102 @@ MAS_PAGE_HTML = (
         html += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}</option>`;
       }
       yearSelect.innerHTML = html;
+    }
+
+    function applyPortalPeriodsToSelects(data, preferredYear) {
+      const yearSelect = document.getElementById('mas-select-year');
+      const monthSelect = document.getElementById('mas-select-month');
+      const years = Array.isArray(data && data.years) ? data.years : [];
+      if (yearSelect && years.length) {
+        const curVal = String(preferredYear || yearSelect.value || (data && data.selected_year) || '').trim();
+        yearSelect.innerHTML = years.map(y => {
+          const val = String(y.value || y.text || '').trim();
+          const txt = String(y.text || y.value || '').trim();
+          const sel = val === curVal ? 'selected' : '';
+          return `<option value="${escapeHtml(val)}" ${sel}>${escapeHtml(txt)}</option>`;
+        }).join('');
+        if (!yearSelect.value && years[0]) {
+          yearSelect.value = String(years[0].value || years[0].text || '').trim();
+        }
+      }
+      const months = Array.isArray(data && data.months) ? data.months : [];
+      if (monthSelect && months.length) {
+        const curMonth = String(monthSelect.value || '').trim();
+        let mHtml = '<option value="">-- Select Month --</option>';
+        months.forEach(m => {
+          const txt = String(m.text || m.value || '').trim();
+          if (!txt) return;
+          const canonical = txt.charAt(0).toUpperCase() + txt.slice(1);
+          const sel = canonical.toLowerCase() === curMonth.toLowerCase() ? 'selected' : '';
+          mHtml += `<option value="${escapeHtml(canonical)}" ${sel}>${escapeHtml(canonical)}</option>`;
+        });
+        monthSelect.innerHTML = mHtml;
+      }
+    }
+
+    async function fetchMasYearsFromPortal(isSilent, requestedYear) {
+      if (isFetchingPortalYears) return;
+      if (!isStage1Authenticated) {
+        if (!isSilent) handleMasAuthGateAction();
+        return;
+      }
+      if (!isDeptAuthenticated) {
+        if (!isSilent) {
+          showPortalNotice('Department Login required once before fetching live Years from e-Panchayat portal.', 'warning');
+          redirectMasToConsoleLogin('required', false);
+        }
+        return;
+      }
+      const btn = document.getElementById('btn-fetch-mas-years');
+      const yrSel = document.getElementById('mas-select-year');
+      const targetYear = requestedYear || (yrSel ? yrSel.value : '');
+      isFetchingPortalYears = true;
+      if (btn && !isSilent) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Fetching Years...';
+      }
+      try {
+        const url = targetYear
+          ? `/api/reports/mas-consolidated/years?year=${encodeURIComponent(targetYear)}`
+          : '/api/reports/mas-consolidated/years';
+        const res = await consoleApiFetch(url);
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          if (!isSilent) {
+            showPortalNotice(data.detail || 'Departmental session expired. Please re-authenticate once.', 'warning');
+            redirectMasToConsoleLogin('expired', false);
+          }
+          return;
+        }
+        if (data && data.success && Array.isArray(data.years) && data.years.length) {
+          hasFetchedPortalYears = true;
+          applyPortalPeriodsToSelects(data, requestedYear || (yrSel ? yrSel.value : ''));
+          if (!isSilent) {
+            const yrLabels = data.years.map(y => y.text || y.value).join(', ');
+            showPortalNotice(`✅ Fetched ${data.years.length} portal year(s) from GM-R 5.24: ${yrLabels}`, 'success');
+          }
+        } else if (!isSilent) {
+          showPortalNotice((data && data.detail) || 'No years returned from portal GM-R 5.24 dropdown.', 'warning');
+        }
+      } catch (err) {
+        if (!isSilent) {
+          showPortalNotice('Unable to fetch years from EPTS portal: ' + (err && err.message ? err.message : err), 'error');
+        }
+      } finally {
+        isFetchingPortalYears = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = '🔄 Fetch Years';
+        }
+      }
+    }
+
+    function onMasYearChanged() {
+      onMasSelectionChanged();
+      if (isStage1Authenticated && isDeptAuthenticated) {
+        const y = (document.getElementById('mas-select-year')?.value || '').trim();
+        if (y) fetchMasYearsFromPortal(true, y);
+      }
     }
 
     function renderMasModuleChips(initialExcludedSet) {
@@ -787,7 +888,6 @@ MAS_PAGE_HTML = (
       }
 
       const excluded = getSelectedExcludedModules();
-      const btn = document.getElementById('btn-run-mas');
       if (btn && !isSilent) {
         btn.disabled = true;
         btn.textContent = reportType === 'abstract_only'
@@ -1114,7 +1214,11 @@ MAS_PAGE_HTML = (
           dept = await window.DeptSessionManager.verifyStatus();
         }
       }
+      const prevDept = isDeptAuthenticated;
       updateSessionBannerUI(stage1, dept);
+      if (!prevDept && isStage1Authenticated && isDeptAuthenticated && !hasFetchedPortalYears) {
+        fetchMasYearsFromPortal(true);
+      }
       return { stage1, dept };
     }
 
@@ -1152,11 +1256,18 @@ MAS_PAGE_HTML = (
       const mSel = document.getElementById('mas-select-month');
       const ySel = document.getElementById('mas-select-year');
       const rtSel = document.getElementById('mas-select-report-type');
+      const qpYear = qp.get('year');
       if (mSel && qp.get('month')) mSel.value = qp.get('month');
-      if (ySel && qp.get('year')) ySel.value = qp.get('year');
+      if (ySel && qpYear) ySel.value = qpYear;
       if (rtSel && qp.get('report_type')) {
         rtSel.value = qp.get('report_type');
         onMasReportTypeChanged();
+      }
+
+      if (isStage1Authenticated && isDeptAuthenticated) {
+        await fetchMasYearsFromPortal(true, qpYear || (ySel ? ySel.value : ''));
+        if (mSel && qp.get('month')) mSel.value = qp.get('month');
+        if (ySel && qpYear) ySel.value = qpYear;
       }
 
       if (qp.get('auto_generate') === '1' && mSel && mSel.value && isStage1Authenticated && isDeptAuthenticated) {

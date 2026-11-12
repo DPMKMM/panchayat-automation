@@ -17,8 +17,11 @@ XPATH_MY_IFRAME = "//iframe[@name='my-iframe' or @id='my-iframe' or contains(@sr
 
 # Master Section Accordion (GM-R 5)
 XPATH_GMR5_ACCORDION = (
-    "//a[contains(., 'GM-R 5.')] | //a[contains(., 'GM-R 5')] | //a[contains(., 'GM-R5')] | "
-    "//*[contains(text(), 'Monthly Activity Statement Reports')] | //a[contains(., '5. Monthly Activity')]"
+    "//a[contains(., 'GM-R 5.')] | "
+    "//a[contains(., 'Monthly Activity Statement')] | "
+    "//*[contains(text(), 'Monthly Activity Statement Reports')] | "
+    "//a[contains(., '5. Monthly Activity')] | "
+    "//a[contains(., 'GM-R5.')]"
 )
 
 # Sub-Report 5.24 (17 MAS Indicators) & Sub-Report 5.23 (Births Register)
@@ -33,10 +36,13 @@ XPATH_GMR_523_LINK = (
 
 # Filter Controls inside GM-R 5.24 / 5.23 Frame
 XPATH_DDL_MONTH = (
-    "//select[@id='ContentPlaceHolder1_ddlMonth' or contains(@id, 'ddlMonth') or contains(@name, 'Month')]"
+    "//select[@id='ContentPlaceHolder1_ddlMonth' or contains(@id, 'ddlMonth') "
+    "or contains(translate(@id,'MONTH','month'),'month') or contains(translate(@name,'MONTH','month'),'month')]"
 )
 XPATH_DDL_YEAR = (
-    "//select[@id='ContentPlaceHolder1_ddlYear' or contains(@id, 'ddlYear') or contains(@name, 'Year')]"
+    "//select[@id='ContentPlaceHolder1_ddlYear' or contains(@id, 'ddlYear') "
+    "or contains(translate(@id,'YEAR','year'),'year') or contains(translate(@name,'YEAR','year'),'year') "
+    "or contains(translate(@id,'YR','yr'),'yr')]"
 )
 XPATH_BTN_SUBMIT = (
     "//input[@id='ContentPlaceHolder1_btnsubmit' or @id='ContentPlaceHolder1_btnSubmit' "

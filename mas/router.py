@@ -101,6 +101,39 @@ def _get_mas_modules_impl(request: Request) -> dict[str, Any]:
     }
 
 
+def _get_mas_years_impl(request: Request, year: Optional[int] = None) -> dict[str, Any]:
+    _, sid = enforce_department_api_access(request, always_require=True)
+    session = automation_service.get_or_create_session(sid)
+    bot = session.get("bot")
+
+    def _run_on_session_thread():
+        active_bot = bot
+        if not automation_service._is_bot_alive(active_bot):
+            active_bot = automation_service.ensure_active_bot(session)
+        return mas_service.fetch_available_periods(active_bot, year=year)
+
+    try:
+        return automation_service.run_in_session_thread(session, _run_on_session_thread)
+    except PermissionError as exc:
+        try:
+            from core.session_manager import mark_session_expired
+            mark_session_expired(sid, str(exc))
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=401,
+            detail=str(exc),
+            headers={"X-Dept-Auth-Required": "true"},
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("MAS years fetch failed for sid=%s: %s", sid, exc)
+        raise HTTPException(status_code=502, detail=f"Failed to fetch portal years for MAS: {exc}") from exc
+
+
 def _generate_mas_report_impl(request: Request, req: MasGenerateRequest) -> dict[str, Any]:
     console_user, sid = enforce_department_api_access(request, always_require=True)
     session = automation_service.get_or_create_session(sid)
@@ -207,6 +240,12 @@ def get_mas_modules(request: Request) -> dict[str, Any]:
     return _get_mas_modules_impl(request)
 
 
+@router.get("/years", include_in_schema=False)
+@router.get("/periods", include_in_schema=False)
+def get_mas_years(request: Request, year: Optional[int] = None) -> dict[str, Any]:
+    return _get_mas_years_impl(request, year=year)
+
+
 @router.post("/generate", include_in_schema=False)
 async def generate_mas_consolidated(request: Request) -> dict[str, Any]:
     req = await _parse_generate_payload(request)
@@ -223,6 +262,11 @@ for _alias_router in (mas_alias_router, mas_upper_router):
     @_alias_router.get("/modules", include_in_schema=False)
     def get_mas_modules_alias(request: Request) -> dict[str, Any]:
         return _get_mas_modules_impl(request)
+
+    @_alias_router.get("/years", include_in_schema=False)
+    @_alias_router.get("/periods", include_in_schema=False)
+    def get_mas_years_alias(request: Request, year: Optional[int] = None) -> dict[str, Any]:
+        return _get_mas_years_impl(request, year=year)
 
     @_alias_router.post("/generate", include_in_schema=False)
     async def generate_mas_alias(request: Request) -> dict[str, Any]:

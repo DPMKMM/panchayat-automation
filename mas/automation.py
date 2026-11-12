@@ -233,78 +233,187 @@ def _open_gmr_report_frame(page, report_num: str = "5.24"):
     )
 
 
-def _submit_month_year_and_wait_table(frame, month_num: int, year: int, report_label: str = "GM-R 5.24") -> None:
-    """Validate available Month/Year dropdowns inside frame, click Submit, and wait for GridView1."""
-    logger.info("[*] Selecting Month=%d, Year=%d in %s...", month_num, year, report_label)
-
+def _inspect_mas_dropdowns(frame) -> dict[str, Any]:
+    """Discover Month and Year <select> controls inside GM-R 5.24 / 5.23 frame."""
     try:
-        dropdown_info = frame.evaluate(
+        raw = frame.evaluate(
             """() => {
-                const getOpts = (sel) => {
-                    const el = document.getElementById(sel) || document.querySelector(`select[id*='${sel.replace('ContentPlaceHolder1_', '')}']`);
-                    return el ? Array.from(el.options).map(o => ({ value: String(o.value), text: (o.text || '').trim() })) : [];
-                };
-                return {
-                    months: getOpts('ContentPlaceHolder1_ddlMonth'),
-                    years: getOpts('ContentPlaceHolder1_ddlYear'),
-                };
+                const selects = Array.from(document.querySelectorAll('select'));
+                return selects.map((el, idx) => ({
+                    idx: idx,
+                    id: el.id || '',
+                    name: el.name || '',
+                    value: String(el.value || '').trim(),
+                    options: Array.from(el.options).map(o => ({
+                        value: String(o.value || '').trim(),
+                        text: String(o.text || '').trim(),
+                        selected: Boolean(o.selected),
+                    })),
+                }));
             }"""
         )
     except Exception:
-        dropdown_info = None
+        return {"year_select": None, "month_select": None, "years": [], "months": [], "selected_year": "", "selected_month": ""}
 
-    if isinstance(dropdown_info, dict):
-        avail_years = [
-            o["value"] for o in dropdown_info.get("years", [])
-            if str(o.get("value", "")).strip() not in ("", "0")
-            and "select" not in str(o.get("text", "")).lower()
-        ]
-        avail_year_texts = [
-            o["text"] for o in dropdown_info.get("years", [])
-            if str(o.get("value", "")).strip() not in ("", "0")
-            and "select" not in str(o.get("text", "")).lower()
-        ]
-        if avail_years and str(year) not in avail_years and str(year) not in avail_year_texts:
-            raise ValueError(
-                f"Year {year} is not available in the e-Panchayat portal {report_label} dropdown "
-                f"(available: {', '.join(avail_years)})."
-            )
+    if not isinstance(raw, list):
+        raw = []
 
-        avail_months = [
-            o for o in dropdown_info.get("months", [])
-            if str(o.get("value", "")).strip() not in ("", "0")
-            and "select" not in str(o.get("text", "")).lower()
-        ]
-        month_names_chk = [
-            "", "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December",
-        ]
-        target_name_chk = month_names_chk[month_num] if 1 <= month_num <= 12 else ""
-        if avail_months and not any(
-            str(o.get("value", "")).strip() in (str(month_num), f"{month_num:02d}")
-            or (target_name_chk and str(o.get("text", "")).strip().lower().startswith(target_name_chk.lower()[:3]))
-            for o in avail_months
-        ):
-            avail_m_labels = [o.get("text") or o.get("value") for o in avail_months]
-            raise ValueError(
-                f"Month {target_name_chk or month_num} {year} is not yet available in portal {report_label} dropdown "
-                f"(available: {', '.join(avail_m_labels)})."
-            )
+    month_words = ("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+    year_sel = None
+    month_sel = None
 
-    yr_select = frame.locator(XPATH_REGISTRY["ddl_year"]).first
-    mo_select = frame.locator(XPATH_REGISTRY["ddl_month"]).first
+    for item in raw:
+        ident = f"{item.get('id', '')} {item.get('name', '')}".lower()
+        opts = item.get("options") or []
+        opt_blob = " ".join(f"{o.get('value', '')} {o.get('text', '')}".lower() for o in opts)
+        has_years = any(re.search(r"\b20\d{2}\b", f"{o.get('value', '')} {o.get('text', '')}") for o in opts)
+        has_months = any(any(m[:3] in f"{o.get('text', '')}".lower() for m in month_words) for o in opts)
 
-    try:
-        yr_select.select_option(str(year))
-    except Exception:
-        yr_select.select_option(label=str(year))
-    time.sleep(0.5)
+        if year_sel is None and ("ddlyear" in ident or "finyear" in ident or ("year" in ident and "month" not in ident) or (has_years and not has_months)):
+            year_sel = item
+        if month_sel is None and ("ddlmonth" in ident or "month" in ident or (has_months and not "ddlyear" in ident)):
+            month_sel = item
 
-    month_names = [
+    def _clean_opts(sel_info: dict[str, Any] | None) -> list[dict[str, str]]:
+        if not sel_info:
+            return []
+        cleaned = []
+        for o in sel_info.get("options") or []:
+            val = str(o.get("value") or "").strip()
+            txt = str(o.get("text") or "").strip()
+            if not txt and not val:
+                continue
+            if val in ("", "0", "-1") and ("select" in txt.lower() or txt.startswith("--")):
+                continue
+            if "select" in txt.lower() and not re.search(r"\d{4}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec", txt.lower()):
+                continue
+            cleaned.append({"value": val or txt, "text": txt or val})
+        return cleaned
+
+    years = _clean_opts(year_sel)
+    months = _clean_opts(month_sel)
+    return {
+        "year_select": year_sel,
+        "month_select": month_sel,
+        "years": years,
+        "months": months,
+        "selected_year": str((year_sel or {}).get("value") or "").strip(),
+        "selected_month": str((month_sel or {}).get("value") or "").strip(),
+    }
+
+
+def _select_locator_for_info(frame, sel_info: dict[str, Any] | None, fallback_xpath: str):
+    if isinstance(sel_info, dict):
+        sel_id = str(sel_info.get("id") or "").strip()
+        if sel_id:
+            return frame.locator(f"select[id='{sel_id}']").first
+        sel_name = str(sel_info.get("name") or "").strip()
+        if sel_name:
+            return frame.locator(f"select[name='{sel_name}']").first
+    return frame.locator(f"xpath={fallback_xpath}").first
+
+
+def _select_year_option(yr_select, years_opts: list[dict[str, str]], year: int) -> None:
+    target_str = str(year)
+    matched_val = None
+    for o in years_opts:
+        v = str(o.get("value") or "").strip()
+        t = str(o.get("text") or "").strip()
+        if v == target_str or t == target_str or target_str in t or target_str in v:
+            matched_val = v
+            break
+    if matched_val:
+        yr_select.select_option(value=matched_val)
+    else:
+        try:
+            yr_select.select_option(target_str)
+        except Exception:
+            yr_select.select_option(label=target_str)
+
+
+def fetch_mas_available_periods(page, year: int | None = None) -> dict[str, Any]:
+    """Fetch available Years and Months from EPTS GM-R 5.24 live dropdowns inside active session."""
+    frame = _open_gmr_report_frame(page, "5.24")
+    info = _inspect_mas_dropdowns(frame)
+
+    if year is not None and info.get("years"):
+        target_str = str(year)
+        cur_sel = str(info.get("selected_year") or "").strip()
+        avail_Match = any(
+            target_str == o["value"] or target_str == o["text"] or target_str in o["text"]
+            for o in info["years"]
+        )
+        if avail_Match and cur_sel != target_str:
+            yr_loc = _select_locator_for_info(frame, info.get("year_select"), XPATH_REGISTRY["ddl_year"])
+            try:
+                _select_year_option(yr_loc, info["years"], int(year))
+                time.sleep(0.9)
+                info = _inspect_mas_dropdowns(frame)
+            except Exception as exc:
+                logger.warning("Failed to switch portal year to %s while fetching months: %s", year, exc)
+
+    years_out: list[dict[str, str]] = []
+    seen_y: set[str] = set()
+    for o in info.get("years") or []:
+        m_yr = re.search(r"(20\d{2})", o["text"]) or re.search(r"(20\d{2})", o["value"])
+        label = o["text"]
+        val = m_yr.group(1) if m_yr and "-" not in o["value"] else o["value"]
+        if val not in seen_y:
+            seen_y.add(val)
+            years_out.append({"value": val, "text": label, "portal_value": o["value"]})
+
+    return {
+        "years": years_out,
+        "months": info.get("months") or [],
+        "selected_year": info.get("selected_year") or (years_out[0]["value"] if years_out else ""),
+        "selected_month": info.get("selected_month") or "",
+    }
+
+
+def _submit_month_year_and_wait_table(frame, month_num: int, year: int, report_label: str = "GM-R 5.24") -> None:
+    """Validate available Year/Month dropdowns (handling Year->Month postback), click Submit, and wait for GridView1."""
+    logger.info("[*] Selecting Month=%d, Year=%d in %s...", month_num, year, report_label)
+
+    info = _inspect_mas_dropdowns(frame)
+    avail_years = info.get("years") or []
+    target_yr_str = str(year)
+    if avail_years and not any(
+        target_yr_str == o["value"] or target_yr_str == o["text"] or target_yr_str in o["text"]
+        for o in avail_years
+    ):
+        raise ValueError(
+            f"Year {year} is not available in the e-Panchayat portal {report_label} dropdown "
+            f"(available: {', '.join(o['text'] for o in avail_years)})."
+        )
+
+    yr_select = _select_locator_for_info(frame, info.get("year_select"), XPATH_REGISTRY["ddl_year"])
+    prev_year_val = str(info.get("selected_year") or "").strip()
+    _select_year_option(yr_select, avail_years, year)
+    time.sleep(0.8 if prev_year_val != target_yr_str else 0.4)
+
+    # Re-inspect Month options AFTER selecting Year in case ddlYear triggers an ASP.NET postback
+    info_after = _inspect_mas_dropdowns(frame)
+    avail_months = info_after.get("months") or []
+    month_names_chk = [
         "", "January", "February", "March", "April", "May", "June",
         "July", "August", "September", "October", "November", "December",
     ]
-    target_name = month_names[month_num] if 1 <= month_num <= 12 else "July"
+    target_name_chk = month_names_chk[month_num] if 1 <= month_num <= 12 else ""
+    if avail_months and not any(
+        str(o.get("value", "")).strip() in (str(month_num), f"{month_num:02d}")
+        or (target_name_chk and str(o.get("text", "")).strip().lower().startswith(target_name_chk.lower()[:3]))
+        for o in avail_months
+    ):
+        avail_m_labels = [o.get("text") or o.get("value") for o in avail_months]
+        raise ValueError(
+            f"Month {target_name_chk or month_num} {year} is not yet available in portal {report_label} dropdown "
+            f"(available: {', '.join(avail_m_labels)})."
+        )
+
+    mo_select = _select_locator_for_info(frame, info_after.get("month_select"), XPATH_REGISTRY["ddl_month"])
+
+    month_names = month_names_chk
+    target_name = target_name_chk or "July"
     month_selected = False
     for opt in mo_select.locator("option").all():
         val = (opt.get_attribute("value") or "").strip()

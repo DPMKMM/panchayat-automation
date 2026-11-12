@@ -550,3 +550,114 @@ def test_mas_navigation_waits_for_iframe_and_expands_gmr5_accordion(monkeypatch)
     assert "click:gmr5" in state["clicks"]
     assert "click:target_524" in state["clicks"]
     assert state["report_loaded"] is True
+
+
+def test_mas_fetch_portal_years_periods_and_views_js(monkeypatch, tmp_path):
+    """Verify MAS fetches live portal Years/Months, handles year->month postback, and /reports/mas JS executes cleanly."""
+    from playwright.sync_api import sync_playwright
+    from dsr import service as automation_service
+
+    # 1. Playwright real Chromium checks:
+    #   (a) MAS_PAGE_HTML has zero JS SyntaxErrors and populates #mas-select-year cleanly on DOMContentLoaded
+    #   (b) _inspect_mas_dropdowns + _submit_month_year_and_wait_table handle lowercase/custom year select & cascading months
+    page_res = client.get("/reports/mas", headers={"Host": "reports.panchayatautomation.in"})
+    assert page_res.status_code == 200
+    assert 'id="btn-fetch-mas-years"' in page_res.text
+
+    report_html = """
+    <html><body>
+      <select id="ddlyear" onchange="switchYear(this.value)">
+        <option value="0">--Select--</option>
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+      </select>
+      <select id="ddlMonth">
+        <option value="0">--Select--</option>
+        <option value="1">January</option>
+        <option value="11">November</option>
+      </select>
+      <input id="ContentPlaceHolder1_btnSubmit" type="submit" value="Submit"
+             onclick="event.preventDefault(); document.getElementById('ContentPlaceHolder1_GridView1').style.display='table';" />
+      <table id="ContentPlaceHolder1_GridView1" style="display:none;">
+        <tr><td>1</td><td>Bonakal</td></tr>
+      </table>
+      <script>
+        function switchYear(y) {
+          var m = document.getElementById('ddlMonth');
+          if (y === '2025') {
+            m.innerHTML = '<option value="0">--Select--</option><option value="12">December</option>';
+          } else {
+            m.innerHTML = '<option value="0">--Select--</option><option value="1">January</option><option value="11">November</option>';
+          }
+        }
+      </script>
+    </body></html>
+    """
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        try:
+            ctx = browser.new_context()
+
+            # Check MAS_PAGE_HTML JS execution in real browser (catches SyntaxErrors like duplicate const btn)
+            ui_page = ctx.new_page()
+            ui_errors = []
+            ui_page.on("pageerror", lambda err: ui_errors.append(str(err)))
+            ui_page.route("**/api/**", lambda route: route.fulfill(status=200, content_type="application/json", body='{"authenticated": false}'))
+            ui_page.set_content(page_res.text)
+            ui_page.wait_for_timeout(300)
+            assert ui_errors == [], f"JS errors on /reports/mas: {ui_errors}"
+            year_opts = ui_page.eval_on_selector_all("#mas-select-year option", "els => els.map(e => e.value)")
+            assert len(year_opts) >= 3
+            ui_page.close()
+
+            # Check fetch_mas_available_periods & cascading Year -> Month submit
+            frame_page = ctx.new_page()
+            frame_page.set_content(report_html)
+            monkeypatch.setattr(mas_automation, "_open_gmr_report_frame", lambda pg, report_num="5.24": frame_page)
+
+            periods = mas_automation.fetch_mas_available_periods(frame_page, year=2025)
+            assert [y["value"] for y in periods["years"]] == ["2025", "2026"]
+            assert [m["text"] for m in periods["months"]] == ["December"]
+
+            # Selecting 2025 + December submits after Year postback repopulates December
+            mas_automation._submit_month_year_and_wait_table(frame_page, 12, 2025, "GM-R 5.24")
+            assert frame_page.locator("#ContentPlaceHolder1_GridView1").is_visible()
+        finally:
+            browser.close()
+
+    # 2. Verify /api/reports/mas-consolidated/years & aliases enforce auth & return live years
+    c = TestClient(app)
+    _console_login(c, monkeypatch, "years_api")
+    sid = "sid_mas_years_api"
+    sess = automation_service.get_or_create_session(sid)
+    sess["authenticated"] = True
+    sess["status"] = "authenticated"
+    sess["user_id"] = "DPOA3698"
+    sess["bot"] = _DummyBot()
+
+    monkeypatch.setattr(automation_service, "_is_bot_alive", lambda b: True)
+    monkeypatch.setattr(automation_service, "run_in_session_thread", lambda s, fn, *a, **kw: fn(*a, **kw))
+    monkeypatch.setattr(
+        mas_automation,
+        "fetch_mas_available_periods",
+        lambda pg, year=None: {
+            "years": [{"value": "2026", "text": "2026"}, {"value": "2025", "text": "2025"}],
+            "months": [{"value": "11", "text": "November"}],
+            "selected_year": "2026",
+            "selected_month": "11",
+        },
+    )
+
+    # Requires dept auth (unauth session blocked 401)
+    assert c.get("/api/reports/mas-consolidated/years", headers={"Host": "reports.panchayatautomation.in", "X-Session-ID": "unauth_sid"}).status_code == 401
+
+    for ep in ("/api/reports/mas-consolidated/years", "/api/mas/years", "/api/MAS/periods"):
+        res = c.get(
+            ep,
+            headers={"Host": "reports.panchayatautomation.in", "X-Session-ID": sid},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["success"] is True
+        assert [y["value"] for y in body["years"]] == ["2026", "2025"]
