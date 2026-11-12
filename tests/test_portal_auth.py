@@ -440,8 +440,9 @@ def test_unified_home_login_and_manual_plus_automated_reports(monkeypatch):
     assert 'id="nav-btn-mas"' not in html
     assert "/reports/ps-attendance#reports" in html
     assert "Open Free Access" not in html
-    assert 'id="badge-policy-module_dsr_multiday">Upcoming<' in html
+    assert 'id="badge-policy-module_dsr_multiday">● Live<' in html
     assert 'id="btn-launch-multiday-dsr"' in html
+    assert "/reports/multi-day-dsr" in html
     assert "/reports/mas" in html
     assert "openMasRobot" in html
     assert "Resend OTP" not in html

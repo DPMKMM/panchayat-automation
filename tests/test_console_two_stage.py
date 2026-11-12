@@ -199,7 +199,7 @@ def test_buttons_modals_and_navigation_regression_guards():
     assert "'btn-launch-free-dsr'" in auth_js
     assert "Open Free Access" not in auth_js
     assert "UPCOMING_BADGE_LABELS" in auth_js
-    assert "module_dsr_multiday: 'Upcoming'" in auth_js
+    assert "module_dsr_multiday: '● Live'" in auth_js
 
     # 2. Console.js uses config-object confirm calls, stepper guards, safe tax fullscreen link, and single Escape flow
     console_js = client.get("/static/js/console.js").text

@@ -676,15 +676,14 @@
 
   var DEFAULT_BADGE_LABELS = {
     module_dsr_excel: '',
+    module_dsr_multiday: '● Live',
     module_dcb_live: '● Live Analytics',
     module_dsr_automation: '● Active Robot',
     module_gp_balance_automation: '● Active Robot',
     module_mas_automation: '● Live',
   };
 
-  var UPCOMING_BADGE_LABELS = {
-    module_dsr_multiday: 'Upcoming',
-  };
+  var UPCOMING_BADGE_LABELS = {};
 
   window.applyAccessPolicyUi = function (policy) {
     var flags = policy && policy.flags ? policy.flags : policy || {};
@@ -1644,9 +1643,7 @@
     if (!target || (window.DeptSessionManager && urlParams.get('pending_module'))) return;
 
     if (target === 'multiday' || target === 'multi-day' || target === 'dsr_multiday') {
-      if (typeof window.showUpcomingModal === 'function') {
-        window.showUpcomingModal('Multiple Days DSR & Attendance Reports', '📅', 'Multi-Day Attendance & DSR consolidation across custom date ranges is marked as Upcoming. Daily PS Attendance & DSR PDF generation remains active and ready.');
-      }
+      window.location.href = '/reports/multi-day-dsr';
     } else if (target === 'dsr_excel' || target === 'manual-reports' || target === 'manual_reports') {
       window.location.href = '/reports/ps-attendance#reports';
     } else if (target === 'tax-dcb' || target === 'tax' || target === 'tax-station') {

@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiple Days DSR &amp; Attendance Reports | {{PLATFORM_NAME}}</title>
+  <link rel="stylesheet" href="/static/css/common.css">
+  <style>
+    :root {
+      --md-emerald: #0c3829;
+      --md-emerald-mid: #167451;
+      --md-gold: #d97706;
+      --md-bg: #f4f7f5;
+      --md-surface: #ffffff;
+      --md-border: #dbe4df;
+      --md-text: #152b23;
+      --md-muted: #52685f;
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--md-bg);
+      color: var(--md-text);
+    }
+    .md-topbar {
+      background: linear-gradient(135deg, #092c20 0%, #14533c 100%);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      box-shadow: 0 2px 10px rgba(12, 56, 41, 0.16);
+    }
+    .md-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .md-brand-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+    .md-brand-sub {
+      font-size: 0.8rem;
+      color: #bbf7d0;
+    }
+    .md-nav-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .md-nav-btn {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      transition: background 0.15s;
+    }
+    .md-nav-btn:hover { background: rgba(255, 255, 255, 0.24); }
+    .md-container {
+      max-width: 1320px;
+      margin: 24px auto;
+      padding: 0 18px 40px;
+    }
+    .md-card {
+      background: var(--md-surface);
+      border: 1px solid var(--md-border);
+      border-radius: 14px;
+      padding: 22px 24px;
+      box-shadow: 0 4px 16px rgba(15, 45, 32, 0.05);
+      margin-bottom: 20px;
+    }
+    .md-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .md-title {
+      margin: 0 0 4px;
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: var(--md-emerald);
+    }
+    .md-desc {
+      margin: 0;
+      color: var(--md-muted);
+      font-size: 0.92rem;
+    }
+    .md-pill-live {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .md-dropzone {
+      border: 2px dashed #9cc5b2;
+      background: #f8fcfa;
+      border-radius: 12px;
+      padding: 24px 18px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .md-dropzone.dragover {
+      border-color: var(--md-emerald-mid);
+      background: #eaf7f0;
+    }
+    .md-file-list {
+      margin-top: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .md-file-chip {
+      background: #eef6f1;
+      border: 1px solid #c6dfd1;
+      color: #164e39;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .md-actions {
+      margin-top: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .md-btn {
+      border: none;
+      border-radius: 9px;
+      padding: 11px 18px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: transform 0.1s, opacity 0.15s;
+    }
+    .md-btn:active { transform: translateY(1px); }
+    .md-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .md-btn-primary {
+      background: linear-gradient(135deg, #0f5132 0%, #167451 100%);
+      color: #fff;
+    }
+    .md-btn-pdf { background: #dc2626; color: #fff; }
+    .md-btn-excel { background: #15803d; color: #fff; }
+    .md-btn-csv { background: #1d4ed8; color: #fff; }
+    .md-btn-ghost {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+    .md-status {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 9px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: none;
+    }
+    .md-status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; display: block; }
+    .md-status.ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; display: block; }
+    .md-status.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; display: block; }
+
+    .md-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .md-kpi {
+      background: #f8fbf9;
+      border: 1px solid var(--md-border);
+      border-radius: 11px;
+      padding: 13px 15px;
+    }
+    .md-kpi-label {
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--md-muted);
+      letter-spacing: 0.03em;
+    }
+    .md-kpi-val {
+      margin-top: 4px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: var(--md-emerald);
+    }
+    .md-tabs-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+      border-bottom: 2px solid #e2ece7;
+      padding-bottom: 10px;
+    }
+    .md-tab-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .md-tab-btn {
+      background: #eef4f1;
+      color: #26483b;
+      border: 1px solid #cfe0d7;
+      border-radius: 8px;
+      padding: 9px 15px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .md-tab-btn.active {
+      background: var(--md-emerald);
+      color: #fff;
+      border-color: var(--md-emerald);
+    }
+    .md-filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .md-input {
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      min-width: 190px;
+      background: #fff;
+    }
+    .md-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--md-border);
+      border-radius: 10px;
+      max-height: 620px;
+    }
+    table.md-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+      white-space: nowrap;
+    }
+    table.md-table th {
+      position: sticky;
+      top: 0;
+      background: #0f4c3a;
+      color: #fff;
+      padding: 9px 10px;
+      text-align: center;
+      font-weight: 700;
+      z-index: 2;
+      border-right: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    table.md-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid #e5ece8;
+      border-right: 1px solid #eef3f0;
+      text-align: center;
+      color: #1e293b;
+    }
+    table.md-table td.left { text-align: left; font-weight: 600; }
+    table.md-table tbody tr:nth-child(even) td { background: #fafdfb; }
+    .md-pct-pill {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 6px;
+      font-weight: 800;
+      min-width: 58px;
+    }
+    .md-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: var(--md-muted);
+      align-items: center;
+    }
+    .md-leg-box {
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-weight: 700;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <header class="md-topbar">
+    <div class="md-brand">
+      <div class="md-brand-title">{{PLATFORM_NAME}} · Multiple Days DSR</div>
+      <div class="md-brand-sub">{{TAGLINE}}</div>
+    </div>
+    <nav class="md-nav-links">
+      <a class="md-nav-btn" href="/manualreports">← Manual Reports</a>
+      <a class="md-nav-btn" href="/reports/ps-attendance#reports">Single-Day DSR</a>
+      <a class="md-nav-btn" href="/">Portal Home</a>
+    </nav>
+  </header>
+
+  <main class="md-container">
+    <section class="md-card">
+      <div class="md-header-row">
+        <div>
+          <h1 class="md-title">📅 Multiple Days DSR &amp; Attendance Consolidation</h1>
+          <p class="md-desc">
+            Upload multiple daily GM-R 1.2.7 Attendance &amp; DSR reports (.xls HTML export, .xlsx, or .csv) to compile
+            District Date-Wise, Mandal Date-Wise, and GP-Level Multi-Day Summaries with instant PDF, Excel &amp; CSV downloads.
+          </p>
+        </div>
+        <span class="md-pill-live">● Live · Manual Reports</span>
+      </div>
+
+      <form id="md-upload-form">
+        <div class="md-dropzone" id="md-dropzone" onclick="document.getElementById('md-files-input').click()">
+          <div style="font-size:1.6rem; margin-bottom:6px;">📂</div>
+          <div style="font-weight:700; font-size:0.98rem; color:#0c3829;">
+            Click to select multiple daily DSR files or drag &amp; drop them here
+          </div>
+          <div style="font-size:0.83rem; color:#52685f; margin-top:4px;">
+            Supports portal GM-R 1.2.7 .xls HTML reports, .xlsx, and .csv (select all dates at once)
+          </div>
+          <input id="md-files-input" name="files" type="file" multiple accept=".xls,.xlsx,.csv,.html,.htm" style="display:none;">
+        </div>
+
+        <div id="md-file-list" class="md-file-list"></div>
+
+        <div class="md-actions">
+          <button type="submit" id="md-analyze-btn" class="md-btn md-btn-primary">
+            ⚡ Compile Multi-Days DSR Report
+          </button>
+          <button type="button" id="md-clear-btn" class="md-btn md-btn-ghost">
+            Clear Files
+          </button>
+        </div>
+
+        <div id="md-status-box" class="md-status" role="status" aria-live="polite"></div>
+      </form>
+    </section>
+
+    <section id="md-results-section" class="md-card" style="display:none;">
+      <div class="md-header-row" style="margin-bottom:14px;">
+        <div>
+          <h2 class="md-title" id="md-res-heading" style="font-size:1.2rem;">Compiled Multi-Days DSR Results</h2>
+          <p class="md-desc" id="md-res-subheading"></p>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+          <a id="md-dl-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer">📄 Download PDF</a>
+          <a id="md-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">📊 Download Excel (4 Sheets)</a>
+          <a id="md-dl-csv" class="md-btn md-btn-csv" href="#" target="_blank" rel="noopener noreferrer">📝 Download Active CSV</a>
+        </div>
+      </div>
+
+      <div class="md-kpi-grid" id="md-kpi-grid"></div>
+
+      <div class="md-tabs-bar">
+        <div class="md-tab-group">
+          <button type="button" class="md-tab-btn active" data-tab="district" onclick="switchMdTab('district')">
+            🏛️ District Level (Date-Wise)
+          </button>
+          <button type="button" class="md-tab-btn" data-tab="mandal" onclick="switchMdTab('mandal')">
+            📍 Mandal Level (Mandal + Date)
+          </button>
+          <button type="button" class="md-tab-btn" data-tab="gp" onclick="switchMdTab('gp')">
+            🏘️ GP Level (Period Summary)
+          </button>
+        </div>
+
+        <div class="md-filters">
+          <select id="md-mandal-filter" class="md-input" style="display:none; min-width:170px;" onchange="renderActiveTable()">
+            <option value="">All Mandals</option>
+          </select>
+          <input id="md-search-input" class="md-input" type="search" placeholder="Search Mandal / GP / Date..." style="display:none;" oninput="renderActiveTable()">
+        </div>
+      </div>
+
+      <div class="md-table-wrap">
+        <table class="md-table" id="md-data-table">
+          <thead id="md-table-head"></thead>
+          <tbody id="md-table-body"></tbody>
+        </table>
+      </div>
+
+      <div class="md-legend">
+        <strong>Before 9 AM % Color Scale:</strong>
+        <span class="md-leg-box" style="background:#f8d7da; color:#721c24;">0%</span>
+        <span class="md-leg-box" style="background:#f5c6cb; color:#721c24;">1–49%</span>
+        <span class="md-leg-box" style="background:#fff3cd; color:#856404;">50–74%</span>
+        <span class="md-leg-box" style="background:#ffeeba; color:#856404;">75–90%</span>
+        <span class="md-leg-box" style="background:#c3e6cb; color:#155724;">91–99%</span>
+        <span class="md-leg-box" style="background:#28a745; color:#ffffff;">100%</span>
+      </div>
+    </section>
+  </main>
+
+  {{CANONICAL_FOOTER}}
+
+  <script>
+    (function () {
+      var selectedFiles = [];
+      var currentPayload = null;
+      var activeTab = 'district';
+
+      var filesInput = document.getElementById('md-files-input');
+      var dropzone = document.getElementById('md-dropzone');
+      var fileListEl = document.getElementById('md-file-list');
+      var statusEl = document.getElementById('md-status-box');
+      var analyzeBtn = document.getElementById('md-analyze-btn');
+
+      function setStatus(msg, kind) {
+        statusEl.textContent = msg;
+        statusEl.className = 'md-status ' + (kind || 'info');
+      }
+
+      function clearStatus() {
+        statusEl.className = 'md-status';
+        statusEl.textContent = '';
+      }
+
+      function renderFileChips() {
+        fileListEl.innerHTML = '';
+        selectedFiles.forEach(function (f) {
+          var chip = document.createElement('span');
+          chip.className = 'md-file-chip';
+          chip.textContent = f.name + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)';
+          fileListEl.appendChild(chip);
+        });
+      }
+
+      function addFiles(list) {
+        var arr = Array.prototype.slice.call(list || []);
+        arr.forEach(function (f) {
+          if (!selectedFiles.some(function (x) { return x.name === f.name && x.size === f.size; })) {
+            selectedFiles.push(f);
+          }
+        });
+        renderFileChips();
+        clearStatus();
+      }
+
+      filesInput.addEventListener('change', function () {
+        addFiles(filesInput.files);
+      });
+
+      dropzone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+      dropzone.addEventListener('dragleave', function () {
+        dropzone.classList.remove('dragover');
+      });
+      dropzone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        addFiles(e.dataTransfer && e.dataTransfer.files);
+      });
+
+      document.getElementById('md-clear-btn').addEventListener('click', function () {
+        selectedFiles = [];
+        filesInput.value = '';
+        renderFileChips();
+        clearStatus();
+      });
+
+      document.getElementById('md-upload-form').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!selectedFiles.length) {
+          setStatus('Please select one or more daily GM-R 1.2.7 files first.', 'error');
+          return;
+        }
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = '⏳ Compiling Multi-Days DSR...';
+        setStatus('Reading uploaded files and generating District, Mandal & GP Multi-Day reports...', 'info');
+
+        try {
+          var fd = new FormData();
+          selectedFiles.forEach(function (f) { fd.append('files', f, f.name); });
+          var res = await fetch('/api/multiday-dsr/analyze', { method: 'POST', body: fd });
+          var data = await res.json();
+          if (!res.ok) {
+            throw new Error((data && (data.detail && data.detail.message || data.detail)) || 'Processing failed.');
+          }
+          currentPayload = data;
+          populateDashboard(data);
+          setStatus(
+            'Compiled ' + data.summary.total_reporting_days + ' reporting day(s) across ' +
+            data.summary.total_gps + ' Gram Panchayats successfully.',
+            'ok'
+          );
+        } catch (err) {
+          setStatus(err.message || 'Failed to process uploaded files.', 'error');
+        } finally {
+          analyzeBtn.disabled = false;
+          analyzeBtn.textContent = '⚡ Compile Multi-Days DSR Report';
+        }
+      });
+
+      function populateDashboard(data) {
+        var s = data.summary || {};
+        document.getElementById('md-results-section').style.display = 'block';
+        document.getElementById('md-res-heading').textContent =
+          (s.dist_name || 'District') + ' — Multi-Days PS Attendance & DSR Abstract';
+        document.getElementById('md-res-subheading').textContent =
+          'Period: ' + s.start_date + ' to ' + s.end_date + ' · Report Generated On: ' + s.generated_on;
+
+        document.getElementById('md-dl-pdf').href = data.download_urls.pdf;
+        document.getElementById('md-dl-excel').href = data.download_urls.excel;
+
+        var kpis = [
+          { label: 'District', val: s.dist_name || '-' },
+          { label: 'Reporting Period', val: (s.start_date || '') + ' to ' + (s.end_date || '') },
+          { label: 'Reporting Days', val: s.total_reporting_days },
+          { label: 'Total Mandals', val: s.mandal_count },
+          { label: 'Total Gram Panchayats', val: s.total_gps },
+          { label: 'Overall Before 9 AM %', val: Number(s.overall_before9_pct || 0).toFixed(2) + '%' },
+        ];
+        var kpiHtml = '';
+        kpis.forEach(function (k) {
+          kpiHtml += '<div class="md-kpi"><div class="md-kpi-label">' + escapeHtml(k.label) +
+            '</div><div class="md-kpi-val">' + escapeHtml(String(k.val)) + '</div></div>';
+        });
+        document.getElementById('md-kpi-grid').innerHTML = kpiHtml;
+
+        // Populate mandal filter dropdown
+        var mandalSel = document.getElementById('md-mandal-filter');
+        var seenMandals = {};
+        (data.gp_rows || []).forEach(function (r) {
+          if (r['Mandal Name']) seenMandals[r['Mandal Name']] = true;
+        });
+        mandalSel.innerHTML = '<option value="">All Mandals</option>';
+        Object.keys(seenMandals).sort().forEach(function (m) {
+          var opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          mandalSel.appendChild(opt);
+        });
+
+        window.switchMdTab('district');
+        document.getElementById('md-results-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      window.switchMdTab = function (tab) {
+        activeTab = tab || 'district';
+        document.querySelectorAll('.md-tab-btn').forEach(function (btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-tab') === activeTab);
+        });
+        var showFilter = (activeTab === 'mandal' || activeTab === 'gp');
+        document.getElementById('md-mandal-filter').style.display = showFilter ? 'inline-block' : 'none';
+        document.getElementById('md-search-input').style.display = showFilter ? 'inline-block' : 'none';
+
+        if (currentPayload && currentPayload.download_urls) {
+          var csvBtn = document.getElementById('md-dl-csv');
+          if (activeTab === 'mandal') csvBtn.href = currentPayload.download_urls.csv_mandal;
+          else if (activeTab === 'gp') csvBtn.href = currentPayload.download_urls.csv_gp;
+          else csvBtn.href = currentPayload.download_urls.csv_district;
+        }
+        window.renderActiveTable();
+      };
+
+      window.renderActiveTable = function () {
+        if (!currentPayload) return;
+        var cols = [];
+        var rows = [];
+        if (activeTab === 'mandal') {
+          cols = currentPayload.mandal_columns || [];
+          rows = currentPayload.mandal_rows || [];
+        } else if (activeTab === 'gp') {
+          cols = currentPayload.gp_columns || [];
+          rows = currentPayload.gp_rows || [];
+        } else {
+          cols = currentPayload.district_columns || [];
+          rows = currentPayload.district_rows || [];
+        }
+
+        var mFilter = (document.getElementById('md-mandal-filter').value || '').trim().toLowerCase();
+        var q = (document.getElementById('md-search-input').value || '').trim().toLowerCase();
+        if (activeTab !== 'district' && (mFilter || q)) {
+          rows = rows.filter(function (r) {
+            if (mFilter && String(r['Mandal Name'] || '').toLowerCase() !== mFilter) return false;
+            if (q) {
+              var hay = (
+                String(r['Mandal Name'] || '') + ' ' +
+                String(r['Panchayat Name'] || '') + ' ' +
+                String(r['Date'] || '')
+              ).toLowerCase();
+              if (hay.indexOf(q) === -1) return false;
+            }
+            return true;
+          });
+        }
+
+        var headHtml = '<tr>' + cols.map(function (c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') + '</tr>';
+        document.getElementById('md-table-head').innerHTML = headHtml;
+
+        var leftCols = { 'Mandal Name': true, 'Panchayat Name': true };
+        var bodyHtml = '';
+        rows.forEach(function (r) {
+          bodyHtml += '<tr>';
+          cols.forEach(function (c) {
+            var val = r[c];
+            if (c === 'Before 9 AM %') {
+              var st = r._before9_style || {};
+              bodyHtml += '<td><span class="md-pct-pill" style="' + escapeHtml(st.css || '') + '">' +
+                escapeHtml(Number(val || 0).toFixed(2) + '%') + '</span></td>';
+            } else if (c === 'After 9 AM %') {
+              bodyHtml += '<td>' + escapeHtml(Number(val || 0).toFixed(2) + '%') + '</td>';
+            } else if (leftCols[c]) {
+              bodyHtml += '<td class="left">' + escapeHtml(String(val === undefined || val === null ? '' : val)) + '</td>';
+            } else {
+              bodyHtml += '<td>' + escapeHtml(String(val === undefined || val === null ? '' : val)) + '</td>';
+            }
+          });
+          bodyHtml += '</tr>';
+        });
+        document.getElementById('md-table-body').innerHTML = bodyHtml || '<tr><td colspan="' + cols.length + '">No matching records.</td></tr>';
+      };
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+    })();
+  </script>
+</body>
+</html>

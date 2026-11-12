@@ -29,6 +29,7 @@ from dsr.router import router as dsr_router
 from gp_balance.router import router as gp_balance_router
 from inspections.router import router as inspections_router
 from mas.router import mas_alias_router, mas_upper_router, router as mas_router, web_router as mas_web_router
+from multiday_dsr.router import router as multiday_dsr_router
 from portal.admin_router import router as admin_router
 from portal.billing_router import router as billing_router
 from portal.router import router as portal_router
@@ -46,7 +47,7 @@ def _resolve_tracked_tool_event(method: str, path: str) -> tuple[str, str, str] 
             return "tools", f"pdf:{slug}", "execute"
     if m == "POST" and p == "/api/web/reports":
         return "portal", "dsr_manual", "generate"
-    if m == "POST" and p == "/api/web/multi-day-reports":
+    if m == "POST" and p in ("/api/web/multi-day-reports", "/api/multiday-dsr/analyze"):
         return "portal", "dsr_multiday", "generate"
     if p in ("/api/tax/report.pdf", "/api/tax/download-pdf", "/api/tax/powerbi-report.pdf", "/api/tax/download") and m == "GET":
         return "portal", "dcb_live", p.rsplit("/", 1)[-1]
@@ -205,6 +206,7 @@ def create_app() -> FastAPI:
     app.include_router(dcb_router)
     app.include_router(gp_balance_router)
     app.include_router(inspections_router)
+    app.include_router(multiday_dsr_router)
     app.include_router(mas_web_router)
     app.include_router(mas_router)
     app.include_router(mas_alias_router)
