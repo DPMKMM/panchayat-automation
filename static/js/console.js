@@ -640,6 +640,11 @@
       if (desEl && desEl.value) merged.designation = desEl.value;
       if (fwEl && fwEl.value) merged.from_week = fwEl.value;
       if (twEl && twEl.value) merged.to_week = twEl.value;
+    } else if (mod === 'auto-multi-dsr' || mod === 'auto-multiday') {
+      var sEl = document.getElementById('auto-multi-start-date');
+      var eEl = document.getElementById('auto-multi-end-date');
+      if (sEl && sEl.value) merged.start_date = sEl.value;
+      if (eEl && eEl.value) merged.end_date = eEl.value;
     }
     if (overrideParams && typeof overrideParams === 'object') {
       Object.keys(overrideParams).forEach(function (k) {
@@ -790,6 +795,14 @@
     }
     if (mod === 'inspections') {
       await window.openGpInspectionsStation({
+        skipAuthCheck: true,
+        autoGenerate: autoGen,
+        params: params,
+      });
+      return true;
+    }
+    if (mod === 'auto-multi-dsr' || mod === 'auto-multiday' || mod === 'auto-multi') {
+      await window.openAutoMultiDsrStation({
         skipAuthCheck: true,
         autoGenerate: autoGen,
         params: params,
@@ -3640,6 +3653,445 @@
         );
       }).join('');
     } catch (e) {}
+  };
+
+  // ---------------------------------------------------------------------------
+  // Automated Multiple Days DSR & PS Attendance Robot Station (#auto-multi-dsr-station)
+  // ---------------------------------------------------------------------------
+
+  var autoMultiPublicHolidays = [];
+  var autoMultiCurrentReport = null;
+  var autoMultiActiveTab = 'district';
+  var autoMultiPollTimer = null;
+
+  window.openAutoMultiDsrStation = async function (options) {
+    var opts = options || {};
+    if (!opts.skipAuthCheck && typeof window.ensureDepartmentSession === 'function') {
+      var ok = await window.ensureDepartmentSession('auto-multi-dsr', {
+        autoGenerate: opts.autoGenerate === true,
+        params: opts.params,
+      });
+      if (!ok) return;
+    }
+
+    if (typeof window.hideAllStations === 'function') {
+      window.hideAllStations();
+    }
+    var stEl = document.getElementById('auto-multi-dsr-station');
+    if (stEl) {
+      stEl.style.display = 'block';
+      stEl.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    var sInput = document.getElementById('auto-multi-start-date');
+    var eInput = document.getElementById('auto-multi-end-date');
+    if (sInput && !sInput.value) {
+      var dStart = new Date();
+      dStart.setDate(dStart.getDate() - 7);
+      sInput.value = dStart.toISOString().split('T')[0];
+    }
+    if (eInput && !eInput.value) {
+      var dEnd = new Date();
+      dEnd.setDate(dEnd.getDate() - 1);
+      eInput.value = dEnd.toISOString().split('T')[0];
+    }
+
+    if (opts.params) {
+      if (opts.params.start_date && sInput) sInput.value = opts.params.start_date;
+      if (opts.params.end_date && eInput) eInput.value = opts.params.end_date;
+    }
+
+    await window.fetchAutoMultiDsrPreview();
+
+    try {
+      var sessRes = await window.safeFetchJson('/api/auto-multi-dsr/session-job');
+      if (sessRes && sessRes.success && sessRes.job) {
+        var j = sessRes.job;
+        if (j.status === 'running' || j.status === 'queued') {
+          window.startAutoMultiDsrPolling(j.job_id);
+        } else if (j.status === 'completed' && j.report_data) {
+          window.renderAutoMultiDsrResults(j);
+        }
+      }
+    } catch (e) {}
+
+    if (opts.autoGenerate === true) {
+      await window.runAutoMultiDsrRobot();
+    }
+  };
+
+  window.onAutoMultiDsrDateChange = function () {
+    window.fetchAutoMultiDsrPreview();
+  };
+
+  window.addAutoMultiDsrPublicHoliday = function () {
+    var inp = document.getElementById('auto-multi-pub-holiday-input');
+    if (!inp || !inp.value) return;
+    var val = inp.value.trim();
+    if (autoMultiPublicHolidays.indexOf(val) === -1) {
+      autoMultiPublicHolidays.push(val);
+      autoMultiPublicHolidays.sort();
+    }
+    inp.value = '';
+    renderAutoMultiPublicHolidayChips();
+    window.fetchAutoMultiDsrPreview();
+  };
+
+  window.removeAutoMultiDsrPublicHoliday = function (val) {
+    autoMultiPublicHolidays = autoMultiPublicHolidays.filter(function (d) { return d !== val; });
+    renderAutoMultiPublicHolidayChips();
+    window.fetchAutoMultiDsrPreview();
+  };
+
+  function renderAutoMultiPublicHolidayChips() {
+    var wrap = document.getElementById('auto-multi-pub-holidays-wrap');
+    var chips = document.getElementById('auto-multi-pub-holidays-chips');
+    if (!wrap || !chips) return;
+    if (autoMultiPublicHolidays.length === 0) {
+      wrap.style.display = 'none';
+      chips.innerHTML = '';
+      return;
+    }
+    wrap.style.display = 'block';
+    chips.innerHTML = autoMultiPublicHolidays.map(function (d) {
+      return (
+        '<span style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">' +
+          '<span>' + esc(d) + '</span>' +
+          '<button type="button" onclick="removeAutoMultiDsrPublicHoliday(\'' + esc(d) + '\')" style="background:none; border:none; cursor:pointer; color:#b45309; font-weight:800; font-size:0.9rem; line-height:1; padding:0;">&times;</button>' +
+        '</span>'
+      );
+    }).join('');
+  }
+
+  window.fetchAutoMultiDsrPreview = async function () {
+    var sInput = document.getElementById('auto-multi-start-date');
+    var eInput = document.getElementById('auto-multi-end-date');
+    if (!sInput || !eInput || !sInput.value || !eInput.value) return;
+
+    try {
+      var res = await window.safeFetchJson('/api/auto-multi-dsr/preview-dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_date: sInput.value,
+          end_date: eInput.value,
+          public_holidays: autoMultiPublicHolidays,
+        }),
+      });
+      if (res && res.success && res.date_analysis) {
+        var a = res.date_analysis;
+        var elTot = document.getElementById('val-total-calendar-days');
+        var elWk = document.getElementById('val-working-days-count');
+        var elSun = document.getElementById('val-sundays-count');
+        var elSat = document.getElementById('val-second-saturdays-count');
+        var elPub = document.getElementById('val-public-holidays-count');
+        var listEl = document.getElementById('auto-multi-working-days-list');
+
+        if (elTot) elTot.textContent = a.total_calendar_days;
+        if (elWk) elWk.textContent = a.working_days_count;
+        if (elSun) elSun.textContent = a.excluded_sundays_count;
+        if (elSat) elSat.textContent = a.excluded_second_saturdays_count;
+        if (elPub) elPub.textContent = a.excluded_public_holidays_count;
+
+        if (listEl) {
+          listEl.innerHTML = (a.working_day_items || []).map(function (item) {
+            return (
+              '<span style="background:#ffffff; border:1px solid #86efac; color:#14532d; padding:3px 8px; border-radius:6px; font-size:0.75rem; font-weight:700;">' +
+                esc(item.display) + ' (' + esc(item.day_name.slice(0, 3)) + ')' +
+              '</span>'
+            );
+          }).join('') || '<span style="color:#991b1b; font-size:0.8rem; font-weight:700;">No working days in range!</span>';
+        }
+      }
+    } catch (e) {}
+  };
+
+  window.runAutoMultiDsrRobot = async function () {
+    var sInput = document.getElementById('auto-multi-start-date');
+    var eInput = document.getElementById('auto-multi-end-date');
+    var chkTime = document.getElementById('chk-auto-multi-time-matrix');
+    var btn = document.getElementById('btn-run-auto-multi-robot');
+
+    if (!sInput || !eInput || !sInput.value || !eInput.value) {
+      showNotice('Please select both Start Date and End Date.', 'warning');
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Starting Robot...';
+    }
+    var progCard = document.getElementById('auto-multi-progress-card');
+    var resCard = document.getElementById('auto-multi-results-section');
+    if (progCard) progCard.style.display = 'block';
+    if (resCard) resCard.style.display = 'none';
+
+    try {
+      var res = await window.safeFetchJson('/api/auto-multi-dsr/start-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_date: sInput.value,
+          end_date: eInput.value,
+          public_holidays: autoMultiPublicHolidays,
+          include_time_matrix: Boolean(!chkTime || chkTime.checked),
+        }),
+      });
+
+      if (!res.success || !res.job_id) {
+        throw new Error(res.error || res.detail || 'Could not start robot job.');
+      }
+      showNotice('Multi-Days DSR Robot started for ' + res.total_working_days + ' working day(s).', 'success');
+      window.startAutoMultiDsrPolling(res.job_id);
+    } catch (err) {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⚡ Run Multi-Days DSR Robot';
+      }
+      if (progCard) progCard.style.display = 'none';
+      if (handleDepartmentSessionExpiredError(err, 'auto-multi-dsr', { start_date: sInput.value, end_date: eInput.value })) return;
+      showNotice('Robot error: ' + (err.message || err), 'error');
+    }
+  };
+
+  window.startAutoMultiDsrPolling = function (jobId) {
+    if (autoMultiPollTimer) clearInterval(autoMultiPollTimer);
+    var btn = document.getElementById('btn-run-auto-multi-robot');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Robot Running...';
+    }
+
+    autoMultiPollTimer = setInterval(async function () {
+      try {
+        var job = await window.safeFetchJson('/api/auto-multi-dsr/jobs/' + encodeURIComponent(jobId));
+        if (!job) return;
+
+        var pct = job.progress_pct || 0;
+        var fillEl = document.getElementById('auto-multi-progress-fill');
+        var badgeEl = document.getElementById('auto-multi-progress-pct-badge');
+        var statusEl = document.getElementById('auto-multi-progress-status');
+        var statTot = document.getElementById('auto-multi-stat-total');
+        var statDone = document.getElementById('auto-multi-stat-done');
+        var statFail = document.getElementById('auto-multi-stat-failed');
+
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (badgeEl) badgeEl.textContent = pct + '%';
+        if (statusEl) statusEl.textContent = job.current_date ? ('Processing ' + job.current_date) : job.status;
+        if (statTot) statTot.textContent = job.total_working_days || 0;
+        if (statDone) statDone.textContent = job.completed_count || 0;
+        if (statFail) statFail.textContent = job.failed_count || 0;
+
+        // Render download logs table
+        var tbody = document.getElementById('auto-multi-logs-tbody');
+        if (tbody && Array.isArray(job.download_logs)) {
+          if (job.download_logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:12px; color:#64748b;">Initializing download tasks...</td></tr>';
+          } else {
+            tbody.innerHTML = job.download_logs.map(function (log) {
+              var stBadge = log.status === 'success'
+                ? '<span style="background:#ecfdf5; color:#065f46; padding:2px 8px; border-radius:4px; font-weight:800;">✓ Success</span>'
+                : '<span style="background:#fef2f2; color:#991b1b; padding:2px 8px; border-radius:4px; font-weight:800;">✗ Failed</span>';
+              var sizeTxt = log.file_size ? (Math.round(log.file_size / 1024) + ' KB') : '—';
+              return (
+                '<tr style="border-bottom:1px solid #f1f5f9;">' +
+                  '<td style="padding:6px 10px; font-weight:700;">' + esc(log.display_date || log.date) + '</td>' +
+                  '<td style="padding:6px 10px; color:#64748b;">' + esc(log.portal_date || '') + '</td>' +
+                  '<td style="padding:6px 10px;">' + stBadge + '</td>' +
+                  '<td style="padding:6px 10px; color:#334155;">' + esc(log.filename || '—') + ' (' + sizeTxt + ')</td>' +
+                  '<td style="padding:6px 10px; color:' + (log.error ? '#dc2626' : '#64748b') + ';">' + esc(log.error || 'Downloaded cleanly') + '</td>' +
+                '</tr>'
+              );
+            }).join('');
+          }
+        }
+
+        if (job.status === 'completed') {
+          clearInterval(autoMultiPollTimer);
+          autoMultiPollTimer = null;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = '⚡ Run Multi-Days DSR Robot';
+          }
+          showNotice('✅ Multi-Days DSR Robot finished: ' + (job.completed_count || 0) + ' day(s) consolidated successfully.', 'success');
+          window.renderAutoMultiDsrResults(job);
+        } else if (job.status === 'failed') {
+          clearInterval(autoMultiPollTimer);
+          autoMultiPollTimer = null;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = '⚡ Run Multi-Days DSR Robot';
+          }
+          showNotice('Multi-Days DSR Robot failed: ' + (job.error || 'Unknown error'), 'error');
+        }
+      } catch (e) {}
+    }, 1500);
+  };
+
+  window.renderAutoMultiDsrResults = function (job) {
+    if (!job || !job.report_data) return;
+    autoMultiCurrentReport = job.report_data;
+    var data = job.report_data;
+    var s = data.summary || {};
+
+    var resSec = document.getElementById('auto-multi-results-section');
+    if (resSec) resSec.style.display = 'block';
+
+    var hEl = document.getElementById('auto-multi-res-heading');
+    var subEl = document.getElementById('auto-multi-res-subheading');
+    if (hEl) hEl.textContent = (s.dist_name || 'District') + ' — Automated Multi-Days PS Attendance & DSR Abstract';
+    if (subEl) {
+      subEl.textContent = 'Period: ' + s.start_date + ' to ' + s.end_date + ' • Report Generated On: ' + s.generated_on + ' • Working Days Downloaded: ' + s.working_days_downloaded + '/' + (job.total_working_days || s.total_reporting_days);
+    }
+
+    // Set download button URLs
+    var dlFullPdf = document.getElementById('btn-auto-multi-dl-full-pdf');
+    var dlExcel = document.getElementById('btn-auto-multi-dl-excel');
+    var dlExcelLbl = document.getElementById('btn-auto-multi-dl-excel-label');
+    var dlDistPdf = document.getElementById('btn-auto-multi-dl-dist-pdf');
+    var dlMandalPdf = document.getElementById('btn-auto-multi-dl-mandal-pdf');
+    var dlGpPdf = document.getElementById('btn-auto-multi-dl-gp-pdf');
+    var dlTimePdf = document.getElementById('btn-auto-multi-dl-time-pdf');
+    var timeTabBtn = document.getElementById('btn-auto-multi-tab-time');
+
+    var baseUrls = job.download_urls || {};
+    if (dlFullPdf) dlFullPdf.href = baseUrls.pdf || '#';
+    if (dlExcel) dlExcel.href = baseUrls.excel || '#';
+    if (dlExcelLbl) dlExcelLbl.textContent = (data.time_matrix_columns && data.time_matrix_columns.length) ? 'Download Excel (5 Sheets)' : 'Download Excel (4 Sheets)';
+    if (dlDistPdf) dlDistPdf.href = baseUrls.pdf_district || '#';
+    if (dlMandalPdf) dlMandalPdf.href = baseUrls.pdf_mandal || '#';
+    if (dlGpPdf) dlGpPdf.href = baseUrls.pdf_gp || '#';
+    if (dlTimePdf) {
+      dlTimePdf.href = baseUrls.pdf_time_matrix || '#';
+      dlTimePdf.style.display = (data.time_matrix_columns && data.time_matrix_columns.length) ? 'inline-flex' : 'none';
+    }
+    if (timeTabBtn) {
+      timeTabBtn.style.display = (data.time_matrix_columns && data.time_matrix_columns.length) ? 'inline-flex' : 'none';
+    }
+
+    // Render 6 KPI cards
+    var kpis = [
+      { label: 'District', val: s.dist_name || '-' },
+      { label: 'Reporting Period', val: (s.start_date || '') + ' to ' + (s.end_date || '') },
+      { label: 'Working Days Downloaded', val: (s.working_days_downloaded || s.total_reporting_days) + ' / ' + (job.total_working_days || s.total_reporting_days) },
+      { label: 'Total Mandals', val: s.mandal_count || 0 },
+      { label: 'Total Gram Panchayats', val: s.total_gps || 0 },
+      { label: 'Overall Before 9 AM %', val: Number(s.overall_before9_pct || 0).toFixed(2) + '%' },
+    ];
+    var kpiGrid = document.getElementById('auto-multi-kpi-grid');
+    if (kpiGrid) {
+      kpiGrid.innerHTML = kpis.map(function (k) {
+        return (
+          '<div class="md-kpi">' +
+            '<div class="md-kpi-label">' + esc(k.label) + '</div>' +
+            '<div class="md-kpi-val">' + esc(String(k.val)) + '</div>' +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    // Populate mandal filter dropdown
+    var mSel = document.getElementById('auto-multi-mandal-filter');
+    if (mSel) {
+      var seen = {};
+      (data.gp_rows || []).forEach(function (r) {
+        if (r['Mandal Name']) seen[r['Mandal Name']] = true;
+      });
+      mSel.innerHTML = '<option value="">All Mandals</option>' + Object.keys(seen).sort().map(function (m) {
+        return '<option value="' + esc(m) + '">' + esc(m) + '</option>';
+      }).join('');
+    }
+
+    window.switchAutoMultiDsrTab('district');
+    if (resSec) resSec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  window.switchAutoMultiDsrTab = function (tab) {
+    autoMultiActiveTab = tab || 'district';
+    document.querySelectorAll('[data-auto-tab]').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-auto-tab') === autoMultiActiveTab);
+    });
+    document.querySelectorAll('[data-auto-pdf]').forEach(function (lnk) {
+      lnk.classList.toggle('active-pdf', lnk.getAttribute('data-auto-pdf') === autoMultiActiveTab);
+    });
+    var showFilter = (autoMultiActiveTab === 'mandal' || autoMultiActiveTab === 'gp' || autoMultiActiveTab === 'time_matrix');
+    var mSel = document.getElementById('auto-multi-mandal-filter');
+    var qInp = document.getElementById('auto-multi-search-input');
+    if (mSel) mSel.style.display = showFilter ? 'inline-block' : 'none';
+    if (qInp) qInp.style.display = showFilter ? 'inline-block' : 'none';
+
+    window.renderAutoMultiDsrTable();
+  };
+
+  window.renderAutoMultiDsrTable = function () {
+    if (!autoMultiCurrentReport) return;
+    var data = autoMultiCurrentReport;
+    var cols = [];
+    var rows = [];
+
+    if (autoMultiActiveTab === 'mandal') {
+      cols = data.mandal_columns || [];
+      rows = data.mandal_rows || [];
+    } else if (autoMultiActiveTab === 'gp') {
+      cols = data.gp_columns || [];
+      rows = data.gp_rows || [];
+    } else if (autoMultiActiveTab === 'time_matrix') {
+      cols = data.time_matrix_columns || [];
+      rows = data.time_matrix_rows || [];
+    } else {
+      cols = data.district_columns || [];
+      rows = data.district_rows || [];
+    }
+
+    var mSel = document.getElementById('auto-multi-mandal-filter');
+    var qInp = document.getElementById('auto-multi-search-input');
+    var mFilter = (mSel && mSel.value || '').trim().toLowerCase();
+    var q = (qInp && qInp.value || '').trim().toLowerCase();
+
+    if (autoMultiActiveTab !== 'district' && (mFilter || q)) {
+      rows = rows.filter(function (r) {
+        if (mFilter && String(r['Mandal Name'] || '').toLowerCase() !== mFilter) return false;
+        if (q) {
+          var hay = (
+            String(r['Mandal Name'] || '') + ' ' +
+            String(r['Panchayat Name'] || '') + ' ' +
+            String(r['Date'] || '')
+          ).toLowerCase();
+          if (hay.indexOf(q) === -1) return false;
+        }
+        return true;
+      });
+    }
+
+    var thead = document.getElementById('auto-multi-table-head');
+    var tbody = document.getElementById('auto-multi-table-body');
+    if (thead) {
+      thead.innerHTML = '<tr>' + cols.map(function (c) { return '<th>' + esc(c) + '</th>'; }).join('') + '</tr>';
+    }
+
+    if (tbody) {
+      var leftCols = { 'Mandal Name': true, 'Panchayat Name': true };
+      tbody.innerHTML = rows.map(function (r) {
+        return '<tr>' + cols.map(function (c) {
+          var val = r[c];
+          if (c === 'Before 9 AM %') {
+            var st = r._before9_style || {};
+            return '<td><span class="md-pct-pill" style="' + esc(st.css || '') + '">' + esc(Number(val || 0).toFixed(2) + '%') + '</span></td>';
+          }
+          if (autoMultiActiveTab === 'time_matrix' && r._time_styles && r._time_styles[c]) {
+            var ts = r._time_styles[c] || {};
+            return '<td><span class="md-pct-pill" style="min-width:52px; font-variant-numeric:tabular-nums; font-weight:' + (c === 'Average Time' ? '800' : '600') + '; ' + esc(ts.css || '') + '">' + esc(String(val === undefined || val === null ? '' : val)) + '</span></td>';
+          }
+          if (c === 'After 9 AM %') {
+            return '<td>' + esc(Number(val || 0).toFixed(2) + '%') + '</td>';
+          }
+          if (leftCols[c]) {
+            return '<td class="left">' + esc(String(val === undefined || val === null ? '' : val)) + '</td>';
+          }
+          return '<td>' + esc(String(val === undefined || val === null ? '' : val)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') || '<tr><td colspan="' + cols.length + '" style="text-align:center; padding:18px; color:#64748b;">No matching records.</td></tr>';
+    }
   };
 
   window.triggerServerSync = async function (btn) {

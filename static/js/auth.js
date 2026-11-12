@@ -497,6 +497,7 @@
       'balance-station',
       'tax-dcb-station',
       'inspections-station',
+      'auto-multi-dsr-station',
       'results-section',
       'btn-back-dashboard-wrap',
     ].forEach(function (id) {
@@ -681,6 +682,7 @@
     module_dsr_automation: '● Active Robot',
     module_gp_balance_automation: '● Active Robot',
     module_mas_automation: '● Live',
+    module_auto_multi_dsr: '● Active Robot',
   };
 
   var UPCOMING_BADGE_LABELS = {};
@@ -1650,6 +1652,8 @@
       if (typeof window.openTaxDcbStation === 'function') await window.openTaxDcbStation();
     } else if (target === 'inspections') {
       if (typeof window.openGpInspectionsStation === 'function') await window.openGpInspectionsStation();
+    } else if (target === 'auto-multi-dsr' || target === 'auto-multiday' || target === 'auto-multi') {
+      if (typeof window.openAutoMultiDsrStation === 'function') await window.openAutoMultiDsrStation();
     } else if (target === 'admin' && window.isAdminRouteOrHost() && portalUser && portalUser.is_admin) {
       if (typeof window.openAdminDashboardStation === 'function') window.openAdminDashboardStation();
     } else if (target === 'balance' || target === 'balance-station') {

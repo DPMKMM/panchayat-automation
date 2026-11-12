@@ -717,6 +717,24 @@
               </div>
             </div>
 
+            <div class="module-card featured auto-robot-card" id="card-console-auto-multi-dsr" style="border-color:#167451;">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#ecfdf5; color:#047857;">📅</div>
+                  <span class="badge-pill-live auto-live-pill" id="badge-policy-module_auto_multi_dsr"><span class="auto-pill-dot"></span> Active Robot</span>
+                </div>
+                <h3>Automated Multi-Days DSR</h3>
+                <p>
+                  Automated date-range extraction of daily GM-R 1.2.7 raw data with automatic Sunday and Second Saturday exclusion, custom public holiday filtering, and complete multi-day consolidation into PDF &amp; Excel.
+                </p>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" class="btn btn-gold" id="btn-launch-auto-multi-dsr" style="width:100%; text-align:center;" onclick="openAutoMultiDsrStation()">
+                  ⚡ Launch Multi-Days DSR Robot →
+                </button>
+              </div>
+            </div>
+
             <div class="module-card">
               <div>
                 <div class="module-card-header">
@@ -2070,6 +2088,228 @@
       </div>
     </section>
 
+    <!-- ========================================================
+         AUTOMATED MULTIPLE DAYS DSR & PS ATTENDANCE ROBOT STATION
+         ======================================================== -->
+    <section class="automation-station" id="auto-multi-dsr-station" style="display: none; margin-bottom: 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding-bottom:14px; border-bottom:1.5px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:#ecfdf5; color:#047857; display:flex; align-items:center; justify-content:center; font-size:1.6rem;">📅</div>
+          <div>
+            <h2 style="margin:0; font-size:1.3rem; font-weight:800; color:var(--text);">Automated Multiple Days DSR &amp; PS Attendance Robot Station</h2>
+            <div style="font-size:0.85rem; color:var(--text-muted);">Automated date-range extraction of daily GM-R 1.2.7 raw data with automatic Sunday and Second Saturday exclusion, custom public holiday filtering, and complete multi-day consolidation into PDF &amp; Excel.</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" style="color:var(--text); border-color:var(--border);" onclick="showDashboard()">
+          ← Back to Dashboard
+        </button>
+      </div>
+
+      <!-- Station Configuration Card -->
+      <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:flex-end;">
+          <div>
+            <label for="auto-multi-start-date" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Start Date *</label>
+            <input type="date" id="auto-multi-start-date" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onAutoMultiDsrDateChange()">
+          </div>
+          <div>
+            <label for="auto-multi-end-date" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">End Date *</label>
+            <input type="date" id="auto-multi-end-date" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onAutoMultiDsrDateChange()">
+          </div>
+          <div>
+            <label for="auto-multi-pub-holiday-input" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Exclude Public Holiday (Optional)</label>
+            <div style="display:flex; gap:6px;">
+              <input type="date" id="auto-multi-pub-holiday-input" class="form-control" style="flex:1; padding:9px 10px; border:1.5px solid var(--border); border-radius:8px; font-size:0.85rem;">
+              <button type="button" class="btn btn-outline btn-sm" onclick="addAutoMultiDsrPublicHoliday()" style="white-space:nowrap; font-weight:700; border-color:#d97706; color:#b45309; background:#fffbeb;">
+                ➕ Add Holiday
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Public Holidays Chips Row -->
+        <div id="auto-multi-pub-holidays-wrap" style="margin-top:12px; display:none;">
+          <div style="font-size:0.78rem; font-weight:700; color:#b45309; margin-bottom:6px;">Custom Public Holidays Excluded:</div>
+          <div id="auto-multi-pub-holidays-chips" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+        </div>
+
+        <!-- Automatic Holiday Exclusion Banner -->
+        <div style="margin-top:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px; font-size:0.82rem; color:#166534; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <div>
+            <strong>✓ Automatic Holiday Exclusions:</strong>
+            <span style="margin-left:6px;">All Sundays and Second Saturdays (8th–14th) are automatically identified and excluded.</span>
+          </div>
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:700; margin:0; color:#0c3829;">
+            <input type="checkbox" id="chk-auto-multi-time-matrix" checked style="width:15px; height:15px; accent-color:#0c3829;">
+            <span>Include Day-Wise Exact Attendance Time Matrix</span>
+          </label>
+        </div>
+
+        <!-- Working Days & Holiday Calculation Preview Strip -->
+        <div id="auto-multi-preview-strip" style="margin-top:14px; background:#f8fafc; border:1px solid var(--border); border-radius:10px; padding:12px 14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+            <span style="font-size:0.82rem; font-weight:800; text-transform:uppercase; color:#475569; letter-spacing:0.04em;">Working Days Identification &amp; Holiday Preview</span>
+            <button type="button" class="btn btn-white btn-sm" onclick="fetchAutoMultiDsrPreview()" style="font-size:0.75rem; padding:3px 8px;">🔄 Re-Calculate Preview</button>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px;" id="auto-multi-preview-pills">
+            <span style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:5px 10px; font-size:0.82rem; font-weight:700; color:#334155;">Total Calendar Days: <span id="val-total-calendar-days">--</span></span>
+            <span style="background:#ecfdf5; border:1px solid #86efac; border-radius:6px; padding:5px 10px; font-size:0.82rem; font-weight:800; color:#065f46;">Working Days to Download: <span id="val-working-days-count">--</span></span>
+            <span style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:5px 10px; font-size:0.82rem; font-weight:700; color:#991b1b;">Sundays Excluded: <span id="val-sundays-count">--</span></span>
+            <span style="background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:5px 10px; font-size:0.82rem; font-weight:700; color:#92400e;">2nd Saturdays Excluded: <span id="val-second-saturdays-count">--</span></span>
+            <span style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:5px 10px; font-size:0.82rem; font-weight:700; color:#1e40af;">Public Holidays: <span id="val-public-holidays-count">--</span></span>
+          </div>
+          <div id="auto-multi-working-days-list" style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;"></div>
+        </div>
+
+        <!-- Action Row -->
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:16px;">
+          <div style="font-size:0.84rem; color:var(--text-muted);">
+            Zero Duplicate Login • Reuses active Departmental Playwright session to download GM-R 1.2.7 daily raw files.
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" class="btn btn-gold" id="btn-run-auto-multi-robot" onclick="runAutoMultiDsrRobot()" style="padding:10px 22px; font-size:0.95rem; font-weight:800;">
+              ⚡ Run Multi-Days DSR Robot
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Robot Progress Box -->
+      <div id="auto-multi-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="auto-sonar-ring" style="width:14px; height:14px; border:2px solid #0284c7; border-radius:50%;"></div>
+            <strong style="color:#0369a1; font-size:0.95rem;" id="auto-multi-progress-title">Automated Multi-Days DSR Robot Active</strong>
+          </div>
+          <span id="auto-multi-progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
+        </div>
+        <div style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+          <div id="auto-multi-progress-fill" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; transition:width 0.3s;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155; margin-bottom:12px;">
+          <div><span style="font-weight:700;">Status:</span> <span id="auto-multi-progress-status">Initializing robot...</span></div>
+          <div style="display:flex; gap:10px;">
+            <span>Working Days: <strong id="auto-multi-stat-total">0</strong></span>
+            <span>Downloaded: <strong id="auto-multi-stat-done" style="color:#059669;">0</strong></span>
+            <span>Failed: <strong id="auto-multi-stat-failed" style="color:#dc2626;">0</strong></span>
+          </div>
+        </div>
+
+        <!-- Live Date Download Logs Table -->
+        <div style="max-height:220px; overflow-y:auto; border:1px solid #cbd5e1; border-radius:8px;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.8rem; text-align:left;">
+            <thead>
+              <tr style="background:#f1f5f9; color:#475569; position:sticky; top:0;">
+                <th style="padding:6px 10px;">Date</th>
+                <th style="padding:6px 10px;">Portal Date</th>
+                <th style="padding:6px 10px;">Status</th>
+                <th style="padding:6px 10px;">Filename / Size</th>
+                <th style="padding:6px 10px;">Notes / Error</th>
+              </tr>
+            </thead>
+            <tbody id="auto-multi-logs-tbody">
+              <tr><td colspan="5" style="text-align:center; padding:12px; color:#64748b;">No download logs yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Results Section -->
+      <div id="auto-multi-results-section" style="display:none; background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:20px; box-shadow:0 4px 18px rgba(0,0,0,0.06);">
+        <!-- Heading & Primary Downloads Row -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px; margin-bottom:14px; border-bottom:1.5px solid #e2e8f0; padding-bottom:14px;">
+          <div>
+            <h3 id="auto-multi-res-heading" style="margin:0 0 4px; font-size:1.25rem; font-weight:800; color:#0c3829;">Compiled Multi-Days DSR Results</h3>
+            <div id="auto-multi-res-subheading" style="font-size:0.86rem; color:#64748b;"></div>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <a id="btn-auto-multi-dl-full-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+              <span>Download Full PDF</span>
+            </a>
+            <a id="btn-auto-multi-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+              <span id="btn-auto-multi-dl-excel-label">Download Excel (5 Sheets)</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Report-Wise PDF Downloads Row -->
+        <div style="background:#f8fbf9; border:1px solid #d5e5dc; border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+            <span style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#047857;">Report-Wise PDF Downloads:</span>
+            <a id="btn-auto-multi-dl-dist-pdf" class="md-btn md-btn-subpdf active-pdf" data-auto-pdf="district" href="#" target="_blank" rel="noopener noreferrer">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+              <span>District Level PDF</span>
+            </a>
+            <a id="btn-auto-multi-dl-mandal-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="mandal" href="#" target="_blank" rel="noopener noreferrer">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>Mandal Level PDF</span>
+            </a>
+            <a id="btn-auto-multi-dl-gp-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="gp" href="#" target="_blank" rel="noopener noreferrer">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <span>GP Summary PDF</span>
+            </a>
+            <a id="btn-auto-multi-dl-time-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="time_matrix" href="#" target="_blank" rel="noopener noreferrer">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Exact Time &amp; Avg PDF</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- KPI Summary Cards -->
+        <div class="md-kpi-grid" id="auto-multi-kpi-grid"></div>
+
+        <!-- Interactive Tabs Bar -->
+        <div class="md-tabs-bar" style="margin-top:14px;">
+          <div class="md-tab-group">
+            <button type="button" class="md-tab-btn active" data-auto-tab="district" onclick="switchAutoMultiDsrTab('district')" style="display:inline-flex; align-items:center; gap:6px;">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+              <span>District Level (Date-Wise)</span>
+            </button>
+            <button type="button" class="md-tab-btn" data-auto-tab="mandal" onclick="switchAutoMultiDsrTab('mandal')" style="display:inline-flex; align-items:center; gap:6px;">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>Mandal Level (Mandal + Date)</span>
+            </button>
+            <button type="button" class="md-tab-btn" data-auto-tab="gp" onclick="switchAutoMultiDsrTab('gp')" style="display:inline-flex; align-items:center; gap:6px;">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <span>GP Level (Period Summary)</span>
+            </button>
+            <button type="button" class="md-tab-btn" id="btn-auto-multi-tab-time" data-auto-tab="time_matrix" onclick="switchAutoMultiDsrTab('time_matrix')" style="display:inline-flex; align-items:center; gap:6px;">
+              <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Day-Wise Exact Time &amp; Avg</span>
+            </button>
+          </div>
+
+          <div class="md-filters">
+            <select id="auto-multi-mandal-filter" class="md-input" style="display:none; min-width:170px;" onchange="renderAutoMultiDsrTable()">
+              <option value="">All Mandals</option>
+            </select>
+            <input id="auto-multi-search-input" class="md-input" type="search" placeholder="Search Mandal / GP / Date..." style="display:none;" oninput="renderAutoMultiDsrTable()">
+          </div>
+        </div>
+
+        <!-- Table Wrap -->
+        <div class="md-table-wrap">
+          <table class="md-table" id="auto-multi-data-table">
+            <thead id="auto-multi-table-head"></thead>
+            <tbody id="auto-multi-table-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Color Scale Legend -->
+        <div class="md-legend">
+          <strong>Before 9 AM % Color Scale:</strong>
+          <span class="md-leg-box" style="background:#f8d7da; color:#721c24;">0%</span>
+          <span class="md-leg-box" style="background:#f5c6cb; color:#721c24;">1–49%</span>
+          <span class="md-leg-box" style="background:#fff3cd; color:#856404;">50–74%</span>
+          <span class="md-leg-box" style="background:#ffeeba; color:#856404;">75–90%</span>
+          <span class="md-leg-box" style="background:#c3e6cb; color:#155724;">91–99%</span>
+          <span class="md-leg-box" style="background:#28a745; color:#ffffff;">100%</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Modals -->
     <div id="upcoming-modal" class="modal-overlay">
       <div style="background:white; border-radius:16px; max-width:480px; width:100%; padding:26px; box-shadow:0 24px 50px rgba(0,0,0,0.3); border:1.5px solid var(--border);">
@@ -2189,8 +2429,8 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=6"></script>
-  <script src="/static/js/auth.js?v=26"></script>
-  <script src="/static/js/console.js?v=23"></script>
+  <script src="/static/js/auth.js?v=27"></script>
+  <script src="/static/js/console.js?v=24"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>

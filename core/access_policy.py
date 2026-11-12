@@ -23,6 +23,7 @@ DEFAULT_POLICY: dict[str, bool] = {
     "module_dsr_automation": True,
     "module_gp_balance_automation": True,
     "module_mas_automation": True,
+    "module_auto_multi_dsr": True,
     "automated_subscription_required": False,
 }
 
@@ -36,6 +37,7 @@ POLICY_DESCRIPTIONS: dict[str, str] = {
     "module_dsr_automation": "Console Automation: Daily PS Attendance & DSR Robot",
     "module_gp_balance_automation": "Console Automation: Thursday GP Balance Robot",
     "module_mas_automation": "Console Automation: Monthly Activity Statement (MAS) Robot",
+    "module_auto_multi_dsr": "Console Automation: Automated Multiple Days DSR & PS Attendance Robot",
     "automated_subscription_required": "Require active subscription for Automated Reports Console (currently open without subscription)",
 }
 
