@@ -464,10 +464,6 @@
         closeModalByIdSafely(id);
       }
     });
-    var profModal = document.getElementById('officer-profile-modal');
-    if (profModal && e.target === profModal && window._profileModalMode === 'view') {
-      profModal.style.display = 'none';
-    }
   });
 
   document.addEventListener('keydown', function (e) {
@@ -485,10 +481,6 @@
     ['upcoming-modal', 'sessions-modal', 'insp-detail-modal', 'privacy-legal-modal', 'feedback-modal', 'dept-login-modal'].forEach(function (id) {
       closeModalByIdSafely(id);
     });
-    if (window._profileModalMode === 'view') {
-      var profModal = document.getElementById('officer-profile-modal');
-      if (profModal && profModal.style.display === 'flex') profModal.style.display = 'none';
-    }
   });
 
   // ---------------------------------------------------------------------------
@@ -988,186 +980,6 @@
     if (urlSp.get('dept_login') === '1' || window.currentWorkspaceMode === 'automated' || dedSection === 'automated' || reqMode === 'automated') {
       if (!deptAuthed && typeof window.openDepartmentLoginModal === 'function') {
         window.openDepartmentLoginModal();
-      }
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Officer Profile Registration & Edit View
-  // ---------------------------------------------------------------------------
-
-  window.syncDesignationToRole = function (desig) {
-    var roleEl = document.getElementById('prof-role');
-    if (!roleEl) return;
-    if (desig === 'DPO' || desig === 'DPM') {
-      roleEl.value = 'District Level';
-    } else if (desig === 'DLPO') {
-      roleEl.value = 'Division Level';
-    } else if (['MPDO', 'MPO', 'PS', 'DEO'].indexOf(desig) !== -1) {
-      roleEl.value = 'Mandal Level';
-    }
-  };
-
-  window.closeOfficerProfileModal = function () {
-    var modal = document.getElementById('officer-profile-modal');
-    if (modal) modal.style.display = 'none';
-  };
-
-  window.openOfficerProfileView = function () {
-    var userData = window.getScopedUser();
-    if (!userData) {
-      userData = {
-        name: (document.getElementById('nav-user-name') && document.getElementById('nav-user-name').textContent) || '',
-        designation: (document.getElementById('nav-user-desig') && document.getElementById('nav-user-desig').textContent) || '',
-        role: (document.getElementById('nav-user-role') && document.getElementById('nav-user-role').textContent) || '',
-        gmail: (document.getElementById('nav-user-gmail') && document.getElementById('nav-user-gmail').textContent) || '',
-      };
-    }
-    window.showOfficerProfileModal(userData, { allowClose: true });
-  };
-
-  window.showOfficerProfileModal = function (userData, options) {
-    var modal = document.getElementById('officer-profile-modal');
-    if (!modal) return;
-    var allowClose = Boolean(options && options.allowClose);
-    window._profileModalMode = allowClose ? 'view' : 'register';
-
-    var closeBtn = document.getElementById('prof-modal-close-btn');
-    if (closeBtn) closeBtn.style.display = allowClose ? 'inline-block' : 'none';
-
-    var titleEl = document.getElementById('prof-modal-title');
-    if (titleEl) titleEl.textContent = allowClose ? 'Officer Profile' : 'User Profile Registration';
-
-    var subEl = document.getElementById('prof-modal-subtitle');
-    if (subEl) {
-      subEl.textContent = allowClose
-        ? 'View or update your ' + PLATFORM_NAME + ' officer profile'
-        : 'Complete your official ' + PLATFORM_NAME + ' details to activate your account';
-    }
-
-    var saveBtn = document.getElementById('btn-save-profile');
-    if (saveBtn) {
-      saveBtn.innerHTML = allowClose
-        ? '<span>💾</span> Save Profile Changes →'
-        : '<span>📝</span> Submit / Complete Registration →';
-    }
-
-    var nameEl = document.getElementById('prof-name');
-    var gmailEl = document.getElementById('prof-gmail');
-    var phoneEl = document.getElementById('prof-phone');
-    var desigEl = document.getElementById('prof-desig');
-    var roleEl = document.getElementById('prof-role');
-
-    if (nameEl) nameEl.value = (userData && userData.name) || '';
-    if (gmailEl) gmailEl.value = (userData && (userData.gmail || userData.email)) || '';
-    if (phoneEl) phoneEl.value = (userData && (userData.mobile_number || userData.phone)) || '';
-
-    if (desigEl) {
-      var uDesig = userData && userData.designation;
-      if (uDesig && DESIGNATIONS.indexOf(uDesig) !== -1) {
-        desigEl.value = uDesig;
-      } else {
-        desigEl.selectedIndex = 0;
-      }
-    }
-    if (roleEl) {
-      var uRole = userData && userData.role;
-      if (uRole && ROLES.indexOf(uRole) !== -1) {
-        roleEl.value = uRole;
-      } else if (desigEl && desigEl.value) {
-        window.syncDesignationToRole(desigEl.value);
-      } else {
-        roleEl.selectedIndex = 0;
-      }
-    }
-
-    var alertEl = document.getElementById('profile-modal-alert');
-    if (alertEl) alertEl.style.display = 'none';
-    modal.style.display = 'flex';
-  };
-
-  window.handleOfficerProfileSubmit = async function (e) {
-    if (e) e.preventDefault();
-    var name = (document.getElementById('prof-name') && document.getElementById('prof-name').value || '').trim();
-    var designation = (document.getElementById('prof-desig') && document.getElementById('prof-desig').value || '').trim();
-    var role = (document.getElementById('prof-role') && document.getElementById('prof-role').value || '').trim();
-    var phone = (document.getElementById('prof-phone') && document.getElementById('prof-phone').value || '').trim();
-    var alertBox = document.getElementById('profile-modal-alert');
-    var btn = document.getElementById('btn-save-profile');
-
-    var showProfAlert = function (msg, isErr) {
-      if (!alertBox) return;
-      alertBox.style.display = 'block';
-      alertBox.style.background = isErr ? '#fef2f2' : '#ecfdf5';
-      alertBox.style.border = isErr ? '1.5px solid #f87171' : '1.5px solid #34d399';
-      alertBox.style.color = isErr ? '#991b1b' : '#065f46';
-      alertBox.textContent = msg;
-    };
-
-    if (!name) {
-      showProfAlert('Please enter your Full Name.', true);
-      return;
-    }
-    if (!designation) {
-      showProfAlert('Please select your official Designation (DPO, DPM, DLPO, MPDO, MPO, PS, DEO).', true);
-      return;
-    }
-    if (!role) {
-      showProfAlert('Please select your Role / Access Level (Mandal Level, Division Level, District Level).', true);
-      return;
-    }
-    var mobileClean = phone.replace(/[^0-9]/g, '');
-    if (!/^[6-9][0-9]{9}$/.test(mobileClean)) {
-      showProfAlert('Please enter a valid 10-digit Indian Mobile Number starting with 6, 7, 8, or 9.', true);
-      return;
-    }
-
-    var wasEditMode = window._profileModalMode === 'view';
-    if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = '<span>⏳</span> Saving Profile Details...';
-    }
-    if (alertBox) alertBox.style.display = 'none';
-
-    try {
-      var res = await fetch('/api/auth/register-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name,
-          designation: designation,
-          role: role,
-          mobile_number: mobileClean,
-        }),
-      });
-      var data = await res.json().catch(function () {
-        return { success: false, message: 'Server error while saving profile.' };
-      });
-      if (res.ok && data && data.success && data.user) {
-        var sc = (data && data.platform_scope) || window.getPlatformScope();
-        if (data.token) window.setScopedAuthToken(data.token, sc);
-        window.setScopedUser(data.user, sc);
-        window.setPortalUI(true, data.user);
-        var modal = document.getElementById('officer-profile-modal');
-        if (modal) modal.style.display = 'none';
-
-        if (wasEditMode) {
-          window.showPortalNotice('Officer profile updated successfully.', 'success');
-        } else {
-          window.showPortalNotice('Registration completed. ' + PLATFORM_NAME + ' dashboard activated!', 'success');
-          await window.proceedAfterPortalAuth();
-        }
-      } else {
-        showProfAlert((data && (data.message || data.detail)) || 'Failed to save profile details.', true);
-      }
-    } catch (err) {
-      showProfAlert('Error saving profile: ' + err.message, true);
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = window._profileModalMode === 'view'
-          ? '<span>💾</span> Save Profile Changes →'
-          : '<span>📝</span> Submit / Complete Registration →';
       }
     }
   };

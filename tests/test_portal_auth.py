@@ -121,27 +121,27 @@ def test_section_1_and_7_login_page_firebase_google_and_no_passwords():
     assert "Authorized Officer Access" in html
 
 
-def test_section_2_mandatory_profile_registration_view_fields():
-    """Verify Mandatory profile fields (Name, Designation, Role, Mobile, Read-only Gmail)."""
+def test_section_2_officer_profile_modal_completely_removed():
+    """Verify the Officer Profile / User Profile Registration popup and click trigger are completely removed."""
     res = client.get("/")
     assert res.status_code == 200
     html = res.text
+    auth_js = client.get("/static/js/auth.js?v=24").text
 
-    assert "officer-profile-modal" in html
-    assert "prof-gmail" in html
-    assert "prof-name" in html
-    assert "prof-desig" in html
-    assert "prof-role" in html
-    assert "prof-phone" in html
-    assert 'id="prof-gmail" readonly' in html or "readonly required" in html
-
-    for d in sorted(VALID_DESIGNATIONS):
-        assert f'value="{d}"' in html
-
-    for r in sorted(VALID_ROLES):
-        assert f'value="{r}"' in html
-
-    assert "Submit / Complete Registration" in html
+    for removed_id in (
+        "officer-profile-modal",
+        "prof-gmail",
+        "prof-name",
+        "prof-desig",
+        "prof-role",
+        "prof-phone",
+        "Submit / Complete Registration",
+        "Save Profile Changes",
+        "openOfficerProfileView",
+        "showOfficerProfileModal",
+    ):
+        assert removed_id not in html
+        assert removed_id not in auth_js
 
 
 def test_section_2_and_3_profile_registration_validations(monkeypatch):
@@ -535,7 +535,7 @@ def test_authenticated_module_load_hides_login_card_ssr(monkeypatch):
     assert css_res.status_code == 200
     assert "body.state-auth-resolving #portal-hero-card" in css_res.text
 
-    js_res = client.get("/static/js/auth.js?v=23", headers={"Host": "panchayatautomation.in"})
+    js_res = client.get("/static/js/auth.js?v=24", headers={"Host": "panchayatautomation.in"})
     assert js_res.status_code == 200
     assert "state-auth-resolving" in js_res.text
     assert "cachedToken && cachedUser" in js_res.text
