@@ -491,7 +491,6 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
                 session["last_activity"] = time.time()
                 session["_last_epts_ping_at"] = time.time()
                 session["_keepalive_fail_count"] = 0
-                _save_bot_storage_state(session, bot)
                 _save_session_state(session)
                 elapsed_s = time.perf_counter() - t_login_start
                 _push_login_progress(
@@ -690,13 +689,12 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
 
         page = bot.page
         try:
-            if page.locator("#otp").is_visible():
-                page.fill("#otp", clean_otp)
-            else:
-                page.fill("input[placeholder*='otp' i]", clean_otp)
+            otp_loc = page.locator("#otp, input[id*='otp' i], input[name*='otp' i], input[placeholder*='otp' i]").first
+            otp_loc.wait_for(state="visible", timeout=10000)
+            otp_loc.fill(clean_otp)
 
             time.sleep(0.5)
-            validate_btn = page.locator("button:has-text('Validate OTP'), input[value='Validate OTP']").first
+            validate_btn = page.locator("button:has-text('Validate OTP'), input[value*='Validate OTP' i], button[type='submit']").first
             validate_btn.click()
             time.sleep(4)
 

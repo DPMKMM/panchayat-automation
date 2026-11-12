@@ -197,20 +197,35 @@ class EPTSAutomation:
         print("[+] Department Login modal is open.", flush=True)
         self._emit("Browser Opened")
 
+    def _refresh_captcha(self) -> None:
+        refresh_btn = self.page.locator("button.fa-refresh, .fa-refresh").first
+        if not refresh_btn.is_visible():
+            return
+        try:
+            with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=4000):
+                refresh_btn.click()
+        except Exception:
+            try:
+                refresh_btn.click()
+            except Exception:
+                pass
+        time.sleep(0.25)
+
     def solve_captcha(self, retries=5):
         self._emit("Solving Captcha")
         save_dbg = os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1"
+        best_code = ""
         for attempt in range(1, retries + 1):
             captcha_img = self.page.locator("#img1")
-            captcha_img.wait_for(state="visible", timeout=5000)
+            captcha_img.wait_for(state="visible", timeout=8000)
             try:
                 self.page.wait_for_function(
                     "() => { const img = document.getElementById('img1'); return !!(img && img.complete && img.naturalWidth > 0); }",
-                    timeout=3000,
+                    timeout=4000,
                 )
             except Exception:
                 pass
-            img_bytes = captcha_img.screenshot()
+            img_bytes = captcha_img.screenshot(timeout=5000)
 
             if save_dbg:
                 with open(CAPTCHA_CACHE_FILE, "wb") as f:
@@ -218,21 +233,86 @@ class EPTSAutomation:
 
             with _OCR_LOCK:
                 code = self.ocr.classification(img_bytes)
-            code = code.strip().replace(" ", "").lower()
-            if len(code) >= 4:
+            code = re.sub(r"[^a-z0-9]", "", str(code or "").lower())
+            if len(code) > len(best_code):
+                best_code = code
+            min_len = 6 if attempt < retries else 4
+            if len(code) >= min_len:
                 print(f"[+] Captcha auto-detected (attempt {attempt}): {code}", flush=True)
                 return code
             print(f"[-] Low confidence on captcha '{code}', refreshing...", flush=True)
             self._emit("Refreshing Captcha")
-            refresh_btn = self.page.locator("button.fa-refresh").first
-            if refresh_btn.is_visible():
-                try:
-                    with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=4000):
-                        refresh_btn.click()
-                except Exception:
-                    refresh_btn.click()
-                time.sleep(0.15)
-        return ""
+            self._refresh_captcha()
+        return best_code
+
+    def _is_otp_screen_visible(self) -> bool:
+        try:
+            return bool(self.page.evaluate("""() => {
+                const otpEl = document.querySelector("#otp, input[id*='otp' i], input[name*='otp' i], input[placeholder*='otp' i], button[value*='Validate OTP' i], input[value*='Validate OTP' i]");
+                if (otpEl && (otpEl.offsetParent !== null || otpEl.getBoundingClientRect().width > 0)) return true;
+                const pvals = document.getElementById('pvals');
+                const txt = pvals ? (pvals.innerText || '').trim() : '';
+                if (/otp\\s+(has\\s+been\\s+)?sent|registered\\s+mobile|enter\\s+otp/i.test(txt)) return true;
+                const bodyTxt = document.body ? (document.body.innerText || '') : '';
+                return /otp\\s+has\\s+been\\s+sent\\s+to\\s+your\\s+registered\\s+mobile/i.test(bodyTxt);
+            }"""))
+        except Exception:
+            return False
+
+    def _wait_for_otp_or_login_error(self, timeout_ms: int = 18000) -> tuple[bool, str]:
+        """Poll safely across POST reload for either visible OTP screen/notice or #pvals error."""
+        deadline = time.time() + (timeout_ms / 1000.0)
+        while time.time() < deadline:
+            try:
+                outcome_handle = self.page.wait_for_function(
+                    """() => {
+                        if (!document.body || document.readyState === 'loading') return false;
+                        const otpEl = document.querySelector("#otp, input[id*='otp' i], input[name*='otp' i], input[placeholder*='otp' i], input[value*='Validate OTP' i]");
+                        if (otpEl && (otpEl.offsetParent !== null || otpEl.getBoundingClientRect().width > 0)) {
+                            return 'otp';
+                        }
+                        const pvals = document.getElementById('pvals');
+                        const err = pvals ? (pvals.innerText || '').trim() : '';
+                        if (err) {
+                            if (/otp\\s+(has\\s+been\\s+)?sent|registered\\s+mobile|enter\\s+otp/i.test(err)) {
+                                return 'otp';
+                            }
+                            return 'error:' + err;
+                        }
+                        const bodyTxt = document.body ? (document.body.innerText || '') : '';
+                        if (/otp\\s+has\\s+been\\s+sent\\s+to\\s+your\\s+registered\\s+mobile/i.test(bodyTxt)) {
+                            return 'otp';
+                        }
+                        return false;
+                    }""",
+                    timeout=max(1000, int((deadline - time.time()) * 1000)),
+                )
+                outcome = str(outcome_handle.json_value() or "")
+                if outcome == "otp":
+                    return True, ""
+                if outcome.startswith("error:"):
+                    return False, outcome[6:].strip()
+            except Exception as exc:
+                low_exc = str(exc).lower()
+                if any(k in low_exc for k in ("execution context", "navigation", "destroyed", "detached", "specified id")):
+                    try:
+                        self.page.wait_for_load_state("domcontentloaded", timeout=5000)
+                    except Exception:
+                        pass
+                    time.sleep(0.25)
+                    continue
+                break
+
+        if self._is_otp_screen_visible():
+            return True, ""
+        try:
+            pvals = self.page.locator("#pvals")
+            err = pvals.inner_text().strip() if pvals.is_visible() else ""
+            if err and re.search(r"otp\s+(has\s+been\s+)?sent|registered\s+mobile|enter\s+otp", err, re.I):
+                return True, ""
+        except Exception:
+            err = ""
+        return False, err
 
     def get_dynamic_otp_message(self) -> str:
         """Scrapes the live dynamic OTP notice from the e-Panchayat page, e.g.
@@ -287,12 +367,28 @@ class EPTSAutomation:
     def submit_credentials_and_generate_otp(self, username, password):
         max_attempts = 5
         for attempt in range(1, max_attempts + 1):
+            if self._is_otp_screen_visible():
+                self._emit("OTP Sent")
+                self.otp_message = self.get_dynamic_otp_message()
+                return True
+            try:
+                if not self.page.locator("#userId").is_visible():
+                    self.open_department_login_modal()
+            except Exception:
+                self.open_department_login_modal()
+
             print(f"[*] Entering credentials (attempt {attempt})...", flush=True)
             self._emit("Entering User ID & Password")
             self.page.fill("#userId", username)
             self.page.fill("#npwd", password)
 
             captcha_text = self.solve_captcha()
+            if not captcha_text:
+                if attempt < max_attempts:
+                    self._refresh_captcha()
+                    continue
+                raise RuntimeError("Could not read portal captcha image cleanly.")
+
             print(f"[*] Filling captcha field ({captcha_text}) & clicking 'Generate OTP to Login'...", flush=True)
             self._emit("Logging In")
             self.page.fill("#cp", captcha_text)
@@ -301,40 +397,7 @@ class EPTSAutomation:
             self.page.evaluate("() => { const el = document.getElementById('pvals'); if(el) el.innerText = ''; }")
             self.page.locator("#submit1").click()
 
-            # Wait immediately for EITHER fully-rendered OTP screen OR inline error message (#pvals)
-            error_text = ""
-            reached_otp = False
-            try:
-                outcome_handle = self.page.wait_for_function(
-                    """() => {
-                        if (!document.body || document.readyState === 'loading') return false;
-                        const otpEl = document.querySelector("#otp, input[placeholder*='otp' i]");
-                        if (otpEl && otpEl.offsetParent !== null) {
-                            return 'otp';
-                        }
-                        const pvals = document.getElementById('pvals');
-                        const err = pvals ? (pvals.innerText || '').trim() : '';
-                        if (err) {
-                            return 'error:' + err;
-                        }
-                        return false;
-                    }""",
-                    timeout=18000,
-                )
-                outcome = str(outcome_handle.json_value() or "")
-                if outcome == "otp":
-                    reached_otp = True
-                elif outcome.startswith("error:"):
-                    error_text = outcome[6:].strip()
-            except Exception:
-                reached_otp = (
-                    "login" in self.page.url.lower()
-                    or self.page.locator("#otp").is_visible()
-                    or self.page.locator("input[placeholder*='otp' i]").is_visible()
-                )
-                if not reached_otp:
-                    pvals = self.page.locator("#pvals")
-                    error_text = pvals.inner_text().strip() if pvals.is_visible() else ""
+            reached_otp, error_text = self._wait_for_otp_or_login_error(timeout_ms=18000)
 
             if reached_otp:
                 print("[+] OTP generation triggered successfully! Reached OTP verification screen.", flush=True)
@@ -355,26 +418,19 @@ class EPTSAutomation:
                     self.page.screenshot(path=str(OTP_SCREENSHOT))
                 return True
 
-            if "invalid captcha" in error_text.lower():
-                print("[-] Captcha rejected by server. Retrying immediately with fresh captcha...", flush=True)
+            low_err = error_text.lower()
+            if "captcha" in low_err:
+                print(f"[-] Captcha rejected by server ({error_text}). Retrying with fresh captcha...", flush=True)
                 self._emit("Retrying Captcha")
                 if not self.page.locator("#userId").is_visible():
                     self.open_department_login_modal()
                 else:
-                    refresh_btn = self.page.locator("button.fa-refresh").first
-                    if refresh_btn.is_visible():
-                        try:
-                            with self.page.expect_response(lambda r: "CaptchaServlet" in r.url, timeout=4000):
-                                refresh_btn.click()
-                        except Exception:
-                            refresh_btn.click()
-                        time.sleep(0.15)
+                    self._refresh_captcha()
                 continue
 
             if error_text:
                 print(f"[!] Server message: {error_text}", flush=True)
-                if "invalid user" in error_text.lower() or "password" in error_text.lower():
-                    raise ValueError(f"Login failed: {error_text}")
+                raise ValueError(f"Login failed: {error_text}")
 
         raise RuntimeError("Failed to generate OTP after multiple captcha attempts.")
 

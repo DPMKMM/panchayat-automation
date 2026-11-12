@@ -247,3 +247,104 @@ def test_buttons_modals_and_navigation_regression_guards():
     mas_html = client.get("/reports/mas").text
     assert "if (btn && btn.disabled) return;" in mas_html
 
+    # 8. Console.js handles non-JSON/HTML errors accurately instead of blaming credentials on 5xx
+    assert "e-Panchayat login service returned HTTP" in console_js
+    assert "Login failed. Please check credentials." not in console_js
+
+
+def test_epts_login_credential_error_short_circuits_and_no_url_false_positive(monkeypatch):
+    """Verify #pvals credential errors fail immediately on attempt 1 and /login URL alone doesn't fake OTP."""
+    import pytest
+    from dsr.automation import EPTSAutomation
+
+    bot = EPTSAutomation.__new__(EPTSAutomation)
+    bot.ocr = None
+    bot.otp_message = ""
+    bot.on_status = None
+
+    class _Loc:
+        def __init__(self, vis=True, txt=""):
+            self._vis = vis
+            self._txt = txt
+        @property
+        def first(self):
+            return self
+        def is_visible(self, timeout=None):
+            return self._vis
+        def click(self):
+            pass
+        def inner_text(self):
+            return self._txt
+
+    class _Handle:
+        def __init__(self, val):
+            self._val = val
+        def json_value(self):
+            return self._val
+
+    class _Page:
+        url = "https://epanchayat.telangana.gov.in/login"
+        def __init__(self):
+            self.calls = 0
+        def locator(self, sel):
+            if "#pvals" in sel:
+                return _Loc(True, "Invalid Credentials")
+            if "#otp" in sel:
+                return _Loc(False, "")
+            return _Loc(True, "")
+        def fill(self, sel, val):
+            pass
+        def evaluate(self, js):
+            return False
+        def wait_for_function(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Execution context was destroyed, most likely because of a navigation.")
+            return _Handle("error:Invalid Credentials")
+        def wait_for_load_state(self, *args, **kwargs):
+            pass
+
+    bot.page = _Page()
+    captcha_calls = []
+    bot.solve_captcha = lambda: captcha_calls.append(1) or "abc123"
+
+    with pytest.raises(ValueError, match="Invalid Credentials"):
+        bot.submit_credentials_and_generate_otp("DPOA3698", "badpwd")
+    assert len(captcha_calls) == 1
+
+    # Verify _wait_for_otp_or_login_error recovers from navigation destruction to detect OTP screen
+    class _OtpAfterNavPage(_Page):
+        def wait_for_function(self, *args, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Execution context was destroyed, most likely because of a navigation.")
+            return _Handle("otp")
+
+    bot.page = _OtpAfterNavPage()
+    bot.get_dynamic_otp_message = lambda: "A 6 digit OTP has been sent to your registered mobile number xxxxxx5586."
+    assert bot.submit_credentials_and_generate_otp("DPOA3698", "goodpwd") is True
+
+    # Verify #pvals with 'OTP has been sent...' is treated as OTP sent, never an error
+    class _OtpPvalsPage(_Page):
+        def locator(self, sel):
+            if "#pvals" in sel:
+                return _Loc(True, "A 6 digit OTP has been sent to your registered mobile number xxxxxx5586.")
+            return _Loc(False, "")
+        def wait_for_function(self, *args, **kwargs):
+            raise TimeoutError("wait timed out")
+
+    bot.page = _OtpPvalsPage()
+    assert bot._wait_for_otp_or_login_error(timeout_ms=50) == (True, "")
+
+    # Also verify _wait_for_otp_or_login_error returns False even when URL contains '/login' and #pvals is empty
+    class _IdleLoginPage(_Page):
+        def locator(self, sel):
+            return _Loc(False, "")
+        def wait_for_function(self, *args, **kwargs):
+            raise TimeoutError("wait timed out")
+
+    bot.page = _IdleLoginPage()
+    reached_otp, err = bot._wait_for_otp_or_login_error(timeout_ms=50)
+    assert reached_otp is False
+    assert err == ""
+

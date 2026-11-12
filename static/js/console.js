@@ -973,7 +973,11 @@
       var fetchOpts = { method: 'POST', body: formData };
       if (controller) fetchOpts.signal = controller.signal;
       var res = await fetch('/api/naresh/login', fetchOpts);
-      var data = await res.json().catch(function () { return {}; });
+      var rawText = await res.text().catch(function () { return ''; });
+      var data = {};
+      if (rawText) {
+        try { data = JSON.parse(rawText); } catch (e) { data = {}; }
+      }
 
       if (res.ok && (data.success || data.step === 'otp_required')) {
         resetDeptLoginProgress();
@@ -989,7 +993,21 @@
         }
       } else {
         deptLoginInProgress = false;
-        showModalAlert('dept-modal-alert-1', data.detail || data.message || 'Login failed. Please check credentials.', true);
+        var lastProgErr = '';
+        if (Array.isArray(latestLogs)) {
+          for (var li = latestLogs.length - 1; li >= 0; li--) {
+            if (latestLogs[li] && latestLogs[li].status === 'error' && latestLogs[li].text) {
+              lastProgErr = String(latestLogs[li].text);
+              break;
+            }
+          }
+        }
+        var fallbackMsg = lastProgErr || (
+          (rawText && rawText.indexOf('<') === -1)
+            ? rawText.trim().slice(0, 220)
+            : ('e-Panchayat login service returned HTTP ' + res.status + '. Please try again.')
+        );
+        showModalAlert('dept-modal-alert-1', data.detail || data.message || fallbackMsg, true);
       }
     } catch (err) {
       deptLoginInProgress = false;
