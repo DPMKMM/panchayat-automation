@@ -1912,7 +1912,7 @@
       </div>
 
       <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; align-items:flex-end;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(195px, 1fr)); gap:14px; align-items:flex-end;">
           <div>
             <label for="insp-designation" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Officer Designation *</label>
             <select id="insp-designation" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onInspectionDesignationChanged()">
@@ -1925,15 +1925,34 @@
             </select>
           </div>
           <div>
+            <label for="insp-period-mode" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Selection Mode</label>
+            <select id="insp-period-mode" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onInspectionPeriodModeChanged()">
+              <option value="weeks" selected>Week Range (From–To Week)</option>
+              <option value="months">Month-Wise Range (Monday Rule)</option>
+            </select>
+          </div>
+          <div id="insp-from-week-wrap">
             <label for="insp-from-week" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">From Week (Mon–Sat) *</label>
             <select id="insp-from-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner()">
               <option value="">Click "Fetch Portal Weeks" to load GM-R 39.1 weeks...</option>
             </select>
           </div>
-          <div>
+          <div id="insp-to-week-wrap">
             <label for="insp-to-week" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">To Week (Mon–Sat) *</label>
             <select id="insp-to-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner()">
               <option value="">Click "Fetch Portal Weeks" to load GM-R 39.1 weeks...</option>
+            </select>
+          </div>
+          <div id="insp-from-month-wrap" style="display:none;">
+            <label for="insp-from-month" style="display:block; font-size:0.82rem; font-weight:700; color:#065f46; margin-bottom:5px;">From Month *</label>
+            <select id="insp-from-month" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid #6ee7b7; border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="updateInspectionMonthPreview()">
+              <option value="">Click "Fetch Portal Weeks" first...</option>
+            </select>
+          </div>
+          <div id="insp-to-month-wrap" style="display:none;">
+            <label for="insp-to-month" style="display:block; font-size:0.82rem; font-weight:700; color:#065f46; margin-bottom:5px;">To Month *</label>
+            <select id="insp-to-month" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid #6ee7b7; border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="updateInspectionMonthPreview()">
+              <option value="">Click "Fetch Portal Weeks" first...</option>
             </select>
           </div>
           <div>
@@ -1941,6 +1960,7 @@
             <input type="text" id="insp-search-input" placeholder="Type name to filter..." style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onkeyup="filterInspectionsTable()">
           </div>
         </div>
+        <div id="insp-month-weeks-preview" style="display:none; margin-top:10px; padding:8px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; font-size:0.8rem; color:#1e3a8a; font-weight:600;"></div>
 
         <div id="insp-target-rule-banner" style="margin-top:12px; padding:10px 14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.84rem; color:#065f46; font-weight:700; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <span id="insp-target-rule-text">MPOs Inspection Target: Weekly 4 • Filter: Final Submit Status = Submitted Only</span>
@@ -1972,6 +1992,15 @@
             </button>
             <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #cbd5e1; color:#334155; font-weight:700;" onclick="downloadInspectionsArtifact('csv')">
               📄 Download CSV
+            </button>
+            <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #1d4ed8; color:#1e40af; font-weight:800; background:#eff6ff;" onclick="downloadInspectionsArtifact('monthwise-pdf')">
+              🗓️ Month-Wise PDF
+            </button>
+            <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #0369a1; color:#0369a1; font-weight:800; background:#f0f9ff;" onclick="downloadInspectionsArtifact('monthwise-excel')">
+              🗓️ Month-Wise Excel
+            </button>
+            <button type="button" class="btn btn-white btn-sm" style="border:1.5px solid #64748b; color:#334155; font-weight:700;" onclick="downloadInspectionsArtifact('monthwise-csv')">
+              🗓️ Month-Wise CSV
             </button>
           </div>
         </div>
@@ -2012,6 +2041,8 @@
           <div id="insp-kpi-rate" style="font-size:1.8rem; font-weight:800; color:#0284c7; margin-top:4px;">0.00%</div>
         </div>
       </div>
+
+      <div id="insp-month-tabs" style="display:none; margin-bottom:12px; gap:8px; flex-wrap:wrap;"></div>
 
       <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 4px 14px rgba(0,0,0,0.04);">
         <div style="padding:14px 18px; background:#f8fafc; border-bottom:1.5px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -2159,7 +2190,7 @@
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=5"></script>
   <script src="/static/js/auth.js?v=25"></script>
-  <script src="/static/js/console.js?v=22"></script>
+  <script src="/static/js/console.js?v=23"></script>
   <script src="/static/js/admin.js?v=7"></script>
 </body>
 </html>

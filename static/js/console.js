@@ -3057,9 +3057,101 @@
     }
   };
 
+  var inspMonthsCache = [];
+  var inspActiveMonthKey = 'all';
+
+  function parseMondayMonthFromWeekText(weekTxt) {
+    var m = String(weekTxt || '').match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
+    if (!m) return null;
+    var dt = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    if (isNaN(dt.getTime())) return null;
+    // Shift to Monday (Mon=0..Sun=6 via (getDay()+6)%7)
+    var offset = (dt.getDay() + 6) % 7;
+    dt.setDate(dt.getDate() - offset);
+    var yr = dt.getFullYear();
+    var mo = dt.getMonth() + 1;
+    var key = yr + '-' + (mo < 10 ? '0' + mo : String(mo));
+    var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return { key: key, label: names[mo - 1] + ' ' + yr, year: yr, month: mo };
+  }
+
+  function buildInspMonthsFromWeeks(weeks, serverMonths) {
+    if (Array.isArray(serverMonths) && serverMonths.length > 0) {
+      return serverMonths;
+    }
+    var byKey = {};
+    (weeks || []).forEach(function (w) {
+      var meta = parseMondayMonthFromWeekText(w.text || w.value || '');
+      if (!meta) return;
+      if (!byKey[meta.key]) {
+        byKey[meta.key] = { key: meta.key, label: meta.label, year: meta.year, month: meta.month, weeks: [] };
+      }
+      byKey[meta.key].weeks.push(w);
+    });
+    return Object.keys(byKey).sort().map(function (k) {
+      var item = byKey[k];
+      return {
+        key: item.key,
+        label: item.label,
+        year: item.year,
+        month: item.month,
+        week_count: item.weeks.length,
+        from_week: item.weeks[0].text,
+        to_week: item.weeks[item.weeks.length - 1].text,
+        weeks: item.weeks,
+      };
+    });
+  }
+
+  function countWeeksForMonthRange(fromM, toM) {
+    var lo = fromM <= toM ? fromM : toM;
+    var hi = fromM <= toM ? toM : fromM;
+    var cnt = 0;
+    (inspMonthsCache || []).forEach(function (m) {
+      if (m.key >= lo && m.key <= hi) cnt += Number(m.week_count || (m.weeks ? m.weeks.length : 0));
+    });
+    return Math.max(1, cnt);
+  }
+
+  window.onInspectionPeriodModeChanged = function () {
+    var mode = (document.getElementById('insp-period-mode') && document.getElementById('insp-period-mode').value) || 'weeks';
+    var isMonths = mode === 'months';
+    var fw = document.getElementById('insp-from-week-wrap');
+    var tw = document.getElementById('insp-to-week-wrap');
+    var fm = document.getElementById('insp-from-month-wrap');
+    var tm = document.getElementById('insp-to-month-wrap');
+    var prev = document.getElementById('insp-month-weeks-preview');
+    if (fw) fw.style.display = isMonths ? 'none' : 'block';
+    if (tw) tw.style.display = isMonths ? 'none' : 'block';
+    if (fm) fm.style.display = isMonths ? 'block' : 'none';
+    if (tm) tm.style.display = isMonths ? 'block' : 'none';
+    if (prev) prev.style.display = isMonths ? 'block' : 'none';
+    if (isMonths) window.updateInspectionMonthPreview();
+  };
+
+  window.updateInspectionMonthPreview = function () {
+    var prev = document.getElementById('insp-month-weeks-preview');
+    if (!prev) return;
+    var fm = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
+    var tm = (document.getElementById('insp-to-month') && document.getElementById('insp-to-month').value) || fm;
+    if (!fm || !inspMonthsCache.length) {
+      prev.textContent = 'Monday-Start Rule: Click "Fetch Portal Weeks" to group weeks into calendar months automatically.';
+      return;
+    }
+    var lo = fm <= tm ? fm : tm;
+    var hi = fm <= tm ? tm : fm;
+    var matched = inspMonthsCache.filter(function (m) { return m.key >= lo && m.key <= hi; });
+    var totalW = matched.reduce(function (a, m) { return a + Number(m.week_count || 0); }, 0);
+    var summary = matched.map(function (m) {
+      return m.label + ' (' + m.week_count + 'w: ' + m.from_week + (m.to_week && m.to_week !== m.from_week ? ' -> ' + m.to_week : '') + ')';
+    }).join(' | ');
+    prev.textContent = 'Monday-Allocated Weeks (' + totalW + ' total): ' + (summary || 'None');
+  };
+
   window.onInspectionDesignationChanged = function () {
     window.updateInspectionTargetBanner();
     inspWeeksCache = [];
+    inspMonthsCache = [];
     if (window.isDeptAuthenticated) {
       window.fetchInspectionWeeks(false);
     }
@@ -3070,6 +3162,8 @@
     var desEl = document.getElementById('insp-designation');
     var fromEl = document.getElementById('insp-from-week');
     var toEl = document.getElementById('insp-to-week');
+    var fmEl = document.getElementById('insp-from-month');
+    var tmEl = document.getElementById('insp-to-month');
     var btn = document.getElementById('btn-fetch-insp-weeks');
     var desig = (desEl && desEl.value) || 'MPO';
 
@@ -3080,6 +3174,7 @@
       var res = await window.safeFetchJson('/api/inspections/weeks?designation=' + encodeURIComponent(desig));
       var weeks = (res && res.weeks) || [];
       inspWeeksCache = weeks;
+      inspMonthsCache = buildInspMonthsFromWeeks(weeks, res && res.months);
       if (fromEl && toEl) {
         if (!weeks.length) {
           fromEl.innerHTML = '<option value="">No weeks found on portal</option>';
@@ -3094,9 +3189,24 @@
           if (pendingParams && pendingParams.to_week) toEl.value = pendingParams.to_week;
         }
       }
+      if (fmEl && tmEl) {
+        if (!inspMonthsCache.length) {
+          fmEl.innerHTML = '<option value="">No months available</option>';
+          tmEl.innerHTML = '<option value="">No months available</option>';
+        } else {
+          var mHtml = inspMonthsCache.map(function (m) {
+            return '<option value="' + esc(m.key) + '">' + esc(m.label) + ' (' + esc(m.week_count) + ' Weeks)</option>';
+          }).join('');
+          fmEl.innerHTML = mHtml;
+          tmEl.innerHTML = mHtml;
+          fmEl.selectedIndex = Math.max(0, inspMonthsCache.length - 1);
+          tmEl.selectedIndex = Math.max(0, inspMonthsCache.length - 1);
+          window.updateInspectionMonthPreview();
+        }
+      }
       if (syncEl) {
         syncEl.textContent = weeks.length
-          ? ('Loaded ' + weeks.length + ' weekly inspection period(s) from GM-R 39.1 for ' + desig + '. Select From–To weeks and click Run.')
+          ? ('Loaded ' + weeks.length + ' weekly inspection period(s) across ' + inspMonthsCache.length + ' month(s) for ' + desig + '. Select Week Range or Month-Wise Range and click Run.')
           : ('GM-R 39.1 returned no weekly options for ' + desig + '.');
       }
       if (explicitClick) showNotice('Loaded ' + weeks.length + ' weeks from GM-R 39.1 for ' + desig + '.', 'success');
@@ -3111,13 +3221,18 @@
 
   window.runInspectionsRobot = async function () {
     var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
+    var mode = (document.getElementById('insp-period-mode') && document.getElementById('insp-period-mode').value) || 'weeks';
     var fromWeek = (document.getElementById('insp-from-week') && document.getElementById('insp-from-week').value) || '';
     var toWeek = (document.getElementById('insp-to-week') && document.getElementById('insp-to-week').value) || fromWeek;
+    var fromMonth = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
+    var toMonth = (document.getElementById('insp-to-month') && document.getElementById('insp-to-month').value) || fromMonth;
     var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
     var btn = document.getElementById('btn-run-inspections-robot');
     var syncEl = document.getElementById('insp-sync-time');
 
-    var wkCnt = countSelectedInspWeeks(fromWeek, toWeek);
+    var wkCnt = (mode === 'months' && fromMonth)
+      ? countWeeksForMonthRange(fromMonth, toMonth)
+      : countSelectedInspWeeks(fromWeek, toWeek);
     startInspProgressTimer(Math.max(10, wkCnt * 4 + 6));
 
     if (btn) {
@@ -3129,8 +3244,13 @@
     try {
       var fd = new FormData();
       fd.append('designation', desig);
-      if (fromWeek) fd.append('from_week', fromWeek);
-      if (toWeek) fd.append('to_week', toWeek);
+      if (mode === 'months' && fromMonth) {
+        fd.append('from_month', fromMonth);
+        fd.append('to_month', toMonth || fromMonth);
+      } else {
+        if (fromWeek) fd.append('from_week', fromWeek);
+        if (toWeek) fd.append('to_week', toWeek);
+      }
       if (overrideVal && parseInt(overrideVal, 10) > 0) {
         fd.append('target_override', String(parseInt(overrideVal, 10)));
       }
@@ -3139,6 +3259,7 @@
         body: fd,
       });
       finishInspProgressTimer(true);
+      inspActiveMonthKey = 'all';
       window.renderInspectionsReport(data);
       showNotice('Compiled GM-R 39.1 ' + data.designation + ' Inspection Abstract (' + (data.weeks_count || 1) + ' week(s)).', 'success');
     } catch (err) {
@@ -3185,9 +3306,44 @@
     }
   };
 
+  window.selectInspectionMonthTab = function (monthKey) {
+    inspActiveMonthKey = monthKey || 'all';
+    window.renderInspectionMonthTabs();
+    window.filterInspectionsTable();
+  };
+
+  window.renderInspectionMonthTabs = function () {
+    var wrap = document.getElementById('insp-month-tabs');
+    if (!wrap) return;
+    var secs = (inspCurrentReport && Array.isArray(inspCurrentReport.monthly_sections))
+      ? inspCurrentReport.monthly_sections
+      : [];
+    if (secs.length === 0) {
+      wrap.style.display = 'none';
+      wrap.innerHTML = '';
+      return;
+    }
+    wrap.style.display = 'flex';
+    var btns = [
+      '<button type="button" onclick="selectInspectionMonthTab(\'all\')" class="btn btn-sm" style="padding:6px 12px; border-radius:8px; font-size:0.8rem; font-weight:800; cursor:pointer; ' +
+      (inspActiveMonthKey === 'all' ? 'background:#064e3b; color:#ffffff; border:1.5px solid #064e3b;' : 'background:#ffffff; color:#0f172a; border:1.5px solid #cbd5e1;') +
+      '">📊 All Months (' + esc(inspCurrentReport.weeks_count || 1) + 'w)</button>'
+    ];
+    secs.forEach(function (s) {
+      var active = inspActiveMonthKey === s.month_key;
+      btns.push(
+        '<button type="button" onclick="selectInspectionMonthTab(\'' + esc(s.month_key) + '\')" class="btn btn-sm" style="padding:6px 12px; border-radius:8px; font-size:0.8rem; font-weight:800; cursor:pointer; ' +
+        (active ? 'background:#1e3a8a; color:#ffffff; border:1.5px solid #1e3a8a;' : 'background:#f8fafc; color:#1e293b; border:1.5px solid #cbd5e1;') +
+        '">🗓️ ' + esc(s.month_label) + ' (' + esc(s.week_count) + 'w)</button>'
+      );
+    });
+    wrap.innerHTML = btns.join('');
+  };
+
   window.renderInspectionsReport = function (data) {
     if (!data) return;
     inspCurrentReport = data;
+    inspActiveMonthKey = 'all';
     var levelLabel = data.group_label || 'Mandal';
     var plural = levelLabel === 'Mandal' ? 'Mandals' : (levelLabel === 'Division' ? 'Divisions' : 'Districts');
 
@@ -3229,11 +3385,27 @@
       el.textContent = distHeading + ' — ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
     }
 
+    window.renderInspectionMonthTabs();
     window.filterInspectionsTable();
   };
 
   window.filterInspectionsTable = function () {
-    var rows = (inspCurrentReport && inspCurrentReport.rows) ? inspCurrentReport.rows : [];
+    var rows = [];
+    if (inspCurrentReport) {
+      if (inspActiveMonthKey !== 'all' && Array.isArray(inspCurrentReport.monthly_sections)) {
+        var foundSec = inspCurrentReport.monthly_sections.find(function (s) { return s.month_key === inspActiveMonthKey; });
+        if (foundSec) {
+          rows = foundSec.rows || [];
+          var ruleEl = document.getElementById('insp-target-rule-text');
+          if (ruleEl) ruleEl.textContent = foundSec.month_label + ': ' + (foundSec.target_rule_desc || '') + ' • Weeks (' + foundSec.week_count + '): ' + (foundSec.weeks_included || []).join(', ');
+        }
+      }
+      if (!rows.length && inspActiveMonthKey === 'all') {
+        rows = inspCurrentReport.rows || [];
+        var ruleEl2 = document.getElementById('insp-target-rule-text');
+        if (ruleEl2) ruleEl2.textContent = (inspCurrentReport.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only';
+      }
+    }
     var searchEl = document.getElementById('insp-search-input');
     var q = (searchEl ? searchEl.value : '').toLowerCase().trim();
     var filtered = rows.filter(function (r) {

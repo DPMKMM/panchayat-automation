@@ -23,6 +23,9 @@ from inspections.reports import (
     generate_inspections_csv,
     generate_inspections_excel,
     generate_inspections_pdf,
+    generate_monthwise_inspections_csv,
+    generate_monthwise_inspections_excel,
+    generate_monthwise_inspections_pdf,
 )
 
 logger = logging.getLogger("inspections_service")
@@ -60,6 +63,45 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
             "details": records_by_unit.get(row.unit_name.casefold(), []),
         })
 
+    monthly_payload = []
+    for sec in report.monthly_sections or []:
+        m_rows = []
+        for r in sec.abstract_rows:
+            m_recs = [
+                d for d in records_by_unit.get(r.unit_name.casefold(), [])
+                if d.get("week") in sec.weeks_included
+            ]
+            m_rows.append({
+                "sl_no": r.serial,
+                "unit_name": r.unit_name,
+                "target": r.target,
+                "completed": r.completed,
+                "balance": r.balance,
+                "pct_completed": r.pct_completed,
+                "details": m_recs,
+            })
+        monthly_payload.append({
+            "year": sec.year,
+            "month": sec.month,
+            "month_key": sec.month_key,
+            "month_label": sec.month_label,
+            "weeks_included": sec.weeks_included,
+            "week_count": sec.week_count,
+            "target_per_unit": sec.target_per_unit,
+            "target_rule_desc": sec.target_rule_desc,
+            "totals": {
+                "units_count": len(sec.abstract_rows),
+                "target": sec.total_target,
+                "completed": sec.total_completed,
+                "balance": sec.total_balance,
+                "pct_completed": sec.total_pct_completed,
+                "raw_row_count": sec.raw_row_count,
+                "submitted_row_count": sec.submitted_row_count,
+                "excluded_non_submitted_count": sec.excluded_non_submitted_count,
+            },
+            "rows": m_rows,
+        })
+
     return {
         "success": True,
         "module": "gp_inspections",
@@ -87,16 +129,20 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
             "excluded_non_submitted_count": report.excluded_non_submitted_count,
         },
         "rows": rows_payload,
+        "monthly_sections": monthly_payload,
         "week_logs": report.week_download_logs,
         "pdf_url": "/api/inspections/report.pdf",
         "download_pdf_url": "/api/inspections/download-pdf",
         "excel_url": "/api/inspections/download-excel",
         "csv_url": "/api/inspections/download-csv",
+        "monthwise_pdf_url": "/api/inspections/download-monthwise-pdf",
+        "monthwise_excel_url": "/api/inspections/download-monthwise-excel",
+        "monthwise_csv_url": "/api/inspections/download-monthwise-csv",
     }
 
 
 def _persist_artifacts_for_session(session_id: str, report: InspectionReport) -> dict[str, Any]:
-    """Generate PDF & Excel files for the session and store metadata in session memory."""
+    """Generate consolidated and Month-Wise PDF/Excel/CSV files and store metadata in session memory."""
     reports_dir = get_reports_dir()
     safe_sid = re.sub(r"[^a-zA-Z0-9_-]", "", session_id)[:12] or "sess"
     safe_dist = re.sub(r"[^A-Za-z0-9_-]", "_", report.district_name or "District")
@@ -105,13 +151,20 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
 
     pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts}.pdf"
     xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Consolidated_{ts}.xlsx"
+    mw_pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts}.pdf"
+    mw_xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts}.xlsx"
 
     pdf_path = reports_dir / f"{safe_sid}_{pdf_name}"
     xlsx_path = reports_dir / f"{safe_sid}_{xlsx_name}"
+    mw_pdf_path = reports_dir / f"{safe_sid}_{mw_pdf_name}"
+    mw_xlsx_path = reports_dir / f"{safe_sid}_{mw_xlsx_name}"
 
     generate_inspections_pdf(report, pdf_path)
     generate_inspections_excel(report, xlsx_path)
     csv_bytes = generate_inspections_csv(report)
+    generate_monthwise_inspections_pdf(report, mw_pdf_path)
+    generate_monthwise_inspections_excel(report, mw_xlsx_path)
+    mw_csv_bytes = generate_monthwise_inspections_csv(report)
 
     payload = serialize_inspection_report(report)
     with _SESSION_STORE_LOCK:
@@ -124,6 +177,12 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
             "xlsx_filename": xlsx_name,
             "csv_bytes": csv_bytes,
             "csv_filename": f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts}.csv",
+            "mw_pdf_path": str(mw_pdf_path),
+            "mw_pdf_filename": mw_pdf_name,
+            "mw_xlsx_path": str(mw_xlsx_path),
+            "mw_xlsx_filename": mw_xlsx_name,
+            "mw_csv_bytes": mw_csv_bytes,
+            "mw_csv_filename": f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts}.csv",
         }
     return payload
 
@@ -160,9 +219,11 @@ def generate_live_inspection_report(
     designation: str = "MPO",
     from_week: str = "",
     to_week: str = "",
+    from_month: str = "",
+    to_month: str = "",
     target_override: int | None = None,
 ) -> dict[str, Any]:
-    """Download each selected week from GM-R 39.1 via shared EPTS session and consolidate abstract."""
+    """Download each selected week (by week range or Monday-month range) from GM-R 39.1 and consolidate."""
     from dsr import service as automation_service
 
     spec = get_designation_spec(designation)
@@ -179,13 +240,17 @@ def generate_live_inspection_report(
                     "e-Panchayat browser session is not active. Please complete Departmental Login first."
                 )
 
-            week_files, week_labels = download_inspection_weeks(
-                bot=bot,
-                designation=canon_desig,
-                from_week=from_week,
-                to_week=to_week,
-                downloads_dir=session["downloads_dir"],
-            )
+            dl_kwargs: dict[str, Any] = {
+                "bot": bot,
+                "designation": canon_desig,
+                "from_week": from_week,
+                "to_week": to_week,
+                "downloads_dir": session["downloads_dir"],
+            }
+            if from_month.strip():
+                dl_kwargs["from_month"] = from_month
+                dl_kwargs["to_month"] = to_month
+            week_files, week_labels = download_inspection_weeks(**dl_kwargs)
             dist_name = str(session.get("district_name") or "").strip()
             user_level = str(session.get("user_level") or "district").strip().lower()
             mandal_name = str(session.get("mandal_name") or "").strip()
@@ -288,4 +353,20 @@ def get_session_download_artifact(session_id: str, kind: str) -> tuple[str, byte
         )
     if kind == "csv":
         return entry["csv_filename"], entry["csv_bytes"], "text/csv; charset=utf-8"
+    if kind == "monthwise-pdf":
+        p = Path(entry["mw_pdf_path"])
+        if not p.exists():
+            raise FileNotFoundError("Generated Month-Wise inspection PDF is no longer available.")
+        return entry["mw_pdf_filename"], p.read_bytes(), "application/pdf"
+    if kind == "monthwise-excel":
+        p = Path(entry["mw_xlsx_path"])
+        if not p.exists():
+            raise FileNotFoundError("Generated Month-Wise inspection Excel is no longer available.")
+        return (
+            entry["mw_xlsx_filename"],
+            p.read_bytes(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    if kind == "monthwise-csv":
+        return entry["mw_csv_filename"], entry["mw_csv_bytes"], "text/csv; charset=utf-8"
     raise ValueError(f"Unsupported artifact kind: {kind}")

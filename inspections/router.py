@@ -55,9 +55,11 @@ def generate_inspections_api(
     designation: str = Form(default="MPO"),
     from_week: str = Form(default=""),
     to_week: str = Form(default=""),
+    from_month: str = Form(default=""),
+    to_month: str = Form(default=""),
     target_override: Optional[int] = Form(default=None),
 ) -> dict[str, Any]:
-    """Iterate selected weeks in GM-R 39.1, download weekly Excel reports, and consolidate abstract."""
+    """Iterate selected weeks (by week range or Monday-month range) in GM-R 39.1 and consolidate abstract."""
     console_user, sid = enforce_department_api_access(request, always_require=True)
     try:
         res = inspections_service.generate_live_inspection_report(
@@ -65,6 +67,8 @@ def generate_inspections_api(
             designation=designation,
             from_week=from_week,
             to_week=to_week,
+            from_month=from_month,
+            to_month=to_month,
             target_override=target_override,
         )
         if console_user:
@@ -159,12 +163,11 @@ def view_inspections_pdf(request: Request) -> Response:
     )
 
 
-@router.get("/download-pdf", include_in_schema=False)
-def download_inspections_pdf(request: Request) -> Response:
+def _artifact_download_response(request: Request, kind: str) -> Response:
     enforce_console_api_access(request)
     sid = _get_sid(request)
     try:
-        fname, data, mime = inspections_service.get_session_download_artifact(sid, "pdf")
+        fname, data, mime = inspections_service.get_session_download_artifact(sid, kind)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
     return Response(
@@ -175,39 +178,33 @@ def download_inspections_pdf(request: Request) -> Response:
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+@router.get("/download-pdf", include_in_schema=False)
+def download_inspections_pdf(request: Request) -> Response:
+    return _artifact_download_response(request, "pdf")
 
 
 @router.get("/download-excel", include_in_schema=False)
 def download_inspections_excel(request: Request) -> Response:
-    enforce_console_api_access(request)
-    sid = _get_sid(request)
-    try:
-        fname, data, mime = inspections_service.get_session_download_artifact(sid, "excel")
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
-    return Response(
-        content=data,
-        media_type=mime,
-        headers={
-            "Content-Disposition": f'attachment; filename="{fname}"',
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
-    )
+    return _artifact_download_response(request, "excel")
 
 
 @router.get("/download-csv", include_in_schema=False)
 def download_inspections_csv(request: Request) -> Response:
-    enforce_console_api_access(request)
-    sid = _get_sid(request)
-    try:
-        fname, data, mime = inspections_service.get_session_download_artifact(sid, "csv")
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
-    return Response(
-        content=data,
-        media_type=mime,
-        headers={
-            "Content-Disposition": f'attachment; filename="{fname}"',
-            "Access-Control-Expose-Headers": "Content-Disposition",
-        },
-    )
+    return _artifact_download_response(request, "csv")
+
+
+@router.get("/download-monthwise-pdf", include_in_schema=False)
+def download_monthwise_inspections_pdf(request: Request) -> Response:
+    return _artifact_download_response(request, "monthwise-pdf")
+
+
+@router.get("/download-monthwise-excel", include_in_schema=False)
+def download_monthwise_inspections_excel(request: Request) -> Response:
+    return _artifact_download_response(request, "monthwise-excel")
+
+
+@router.get("/download-monthwise-csv", include_in_schema=False)
+def download_monthwise_inspections_csv(request: Request) -> Response:
+    return _artifact_download_response(request, "monthwise-csv")

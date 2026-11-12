@@ -13,7 +13,14 @@ import time
 from pathlib import Path
 from typing import Any
 
-from inspections.models import SUPPORTED_DESIGNATIONS, get_designation_spec
+from inspections.models import (
+    SUPPORTED_DESIGNATIONS,
+    assign_week_to_month,
+    extract_week_dates,
+    format_month_key_label,
+    get_designation_spec,
+    parse_month_key,
+)
 
 logger = logging.getLogger("inspections_automation")
 
@@ -461,8 +468,65 @@ def resolve_week_slice(
     return available_weeks[lo:hi + 1]
 
 
+def group_available_weeks_by_month(available_weeks: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Group portal weekly items by calendar month using strict Monday-start week allocation."""
+    by_ym: dict[tuple[int, int], list[dict[str, str]]] = {}
+    for item in available_weeks or []:
+        ym = assign_week_to_month(item.get("text") or item.get("value") or "")
+        if ym is not None:
+            by_ym.setdefault(ym, []).append(item)
+
+    grouped: list[dict[str, Any]] = []
+    for ym in sorted(by_ym.keys()):
+        items = sorted(
+            by_ym[ym],
+            key=lambda w: (extract_week_dates(w.get("text") or "")[0] or 0, w.get("text") or ""),
+        )
+        grouped.append({
+            "key": f"{ym[0]:04d}-{ym[1]:02d}",
+            "label": format_month_key_label(ym),
+            "year": ym[0],
+            "month": ym[1],
+            "week_count": len(items),
+            "from_week": items[0]["text"],
+            "to_week": items[-1]["text"],
+            "weeks": items,
+        })
+    return grouped
+
+
+def resolve_month_week_slice(
+    available_weeks: list[dict[str, str]],
+    from_month: str = "",
+    to_month: str = "",
+) -> list[dict[str, str]]:
+    """Return all available weeks whose Monday falls within [from_month .. to_month] chronologically."""
+    if not available_weeks:
+        return []
+    m1 = parse_month_key(from_month)
+    m2 = parse_month_key(to_month or from_month)
+    if m1 is None and m2 is None:
+        return resolve_week_slice(available_weeks)
+    if m1 is None:
+        m1 = m2
+    if m2 is None:
+        m2 = m1
+    lo_m, hi_m = min(m1, m2), max(m1, m2)  # type: ignore[type-var]
+
+    matched: list[tuple[Any, dict[str, str]]] = []
+    for item in available_weeks:
+        txt = item.get("text") or item.get("value") or ""
+        ym = assign_week_to_month(txt)
+        if ym is not None and lo_m <= ym <= hi_m:
+            s_dt, _ = extract_week_dates(txt)
+            matched.append((s_dt, item))
+
+    matched.sort(key=lambda pair: (pair[0] or 0, pair[1].get("text") or ""))
+    return [pair[1] for pair in matched]
+
+
 def fetch_inspection_metadata(bot, designation: str | None = None) -> dict[str, Any]:
-    """Open GM-R 39.1 inside shared session and extract live Designations & Week options."""
+    """Open GM-R 39.1 inside shared session and extract live Designations, Weeks & Monday-grouped Months."""
     page = bot.page
 
     def _on_dialog(dialog):
@@ -499,6 +563,7 @@ def fetch_inspection_metadata(bot, designation: str | None = None) -> dict[str, 
             "designations": list(SUPPORTED_DESIGNATIONS),
             "portal_designations": portal_desigs,
             "weeks": weeks,
+            "months": group_available_weeks_by_month(weeks),
             "selected_designation": get_designation_spec(designation or "MPO")["designation"],
         }
     finally:
@@ -607,6 +672,8 @@ def download_inspection_weeks(
     from_week: str,
     to_week: str,
     downloads_dir: Path,
+    from_month: str = "",
+    to_month: str = "",
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Iterate selected weeks in GM-R 39.1, click Submit then Excel icon, and save weekly files."""
     page = bot.page
@@ -657,7 +724,15 @@ def download_inspection_weeks(
                 f"No weekly date ranges found in portal GM-R 39.1 for designation {canon_desig}."
             )
 
-        selected_weeks = resolve_week_slice(available_weeks, from_week=from_week, to_week=to_week)
+        if from_month.strip():
+            selected_weeks = resolve_month_week_slice(available_weeks, from_month=from_month, to_month=to_month)
+            if not selected_weeks:
+                raise FileNotFoundError(
+                    f"No portal weeks found whose Monday start date falls in '{from_month}'"
+                    + (f" to '{to_month}'." if to_month and to_month != from_month else ".")
+                )
+        else:
+            selected_weeks = resolve_week_slice(available_weeks, from_week=from_week, to_week=to_week)
         week_labels = [w["text"] for w in selected_weeks]
         logger.info("[*] GM-R 39.1 Selected Weeks (%d): %s", len(selected_weeks), week_labels)
 

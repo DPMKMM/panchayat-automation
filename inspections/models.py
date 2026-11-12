@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 SUPPORTED_DESIGNATIONS: tuple[str, ...] = (
@@ -143,33 +143,84 @@ def extract_week_dates(week_label: str) -> tuple[date | None, date | None]:
     return dates[0], dates[-1]
 
 
+def get_week_monday_date(week_label: str) -> date | None:
+    """Return the Monday start date of a week string using strict Monday-to-Sunday rules."""
+    start_dt, end_dt = extract_week_dates(week_label)
+    dt = start_dt or end_dt
+    if not dt:
+        return None
+    return dt - timedelta(days=dt.weekday())
+
+
+def assign_week_to_month(week_label: str) -> tuple[int, int] | None:
+    """Assign a week strictly to the calendar (year, month) in which its Monday falls.
+
+    Example: '2026-08-31 to 2026-09-05' has Monday 2026-08-31 -> (2026, 8) (August 2026).
+    Never splits across two months or uses majority-of-days / midpoint.
+    """
+    mon = get_week_monday_date(week_label)
+    if not mon:
+        return None
+    return (mon.year, mon.month)
+
+
+def get_calendar_month_mondays(year: int, month: int) -> list[tuple[date, date]]:
+    """Return all (Monday, Sunday) weeks for a calendar month starting at its first Monday."""
+    first_day = date(int(year), int(month), 1)
+    days_to_first_mon = (0 - first_day.weekday()) % 7
+    cur_mon = first_day + timedelta(days=days_to_first_mon)
+    weeks: list[tuple[date, date]] = []
+    while cur_mon.month == int(month) and cur_mon.year == int(year):
+        weeks.append((cur_mon, cur_mon + timedelta(days=6)))
+        cur_mon += timedelta(days=7)
+    return weeks
+
+
+def parse_month_key(val: str | None) -> tuple[int, int] | None:
+    """Parse 'YYYY-MM' or 'Aug 2026' or 'August 2026' into (year, month)."""
+    clean = str(val or "").strip()
+    if not clean:
+        return None
+    m_ym = re.match(r"^(\d{4})[-/](\d{1,2})$", clean)
+    if m_ym:
+        y, mo = int(m_ym.group(1)), int(m_ym.group(2))
+        if 1 <= mo <= 12:
+            return (y, mo)
+    for fmt in ("%b %Y", "%B %Y", "%b-%Y", "%B-%Y", "%m-%Y", "%m/%Y"):
+        try:
+            dt = datetime.strptime(clean, fmt).date()
+            return (dt.year, dt.month)
+        except ValueError:
+            continue
+    return assign_week_to_month(clean)
+
+
+def format_month_key_label(ym: tuple[int, int]) -> str:
+    return date(ym[0], ym[1], 1).strftime("%b %Y")
+
+
 def count_distinct_week_months(week_labels: list[str] | tuple[str, ...]) -> int:
-    """Count distinct calendar months represented by the selected week labels (minimum 1)."""
+    """Count distinct calendar months using strictly each week's Monday start date (minimum 1)."""
     if not week_labels:
         return 1
     months: set[tuple[int, int]] = set()
     for lbl in week_labels:
-        start_dt, end_dt = extract_week_dates(lbl)
-        if start_dt and end_dt:
-            mid_dt = start_dt + (end_dt - start_dt) // 2
-            months.add((mid_dt.year, mid_dt.month))
-        elif start_dt:
-            months.add((start_dt.year, start_dt.month))
+        ym = assign_week_to_month(lbl)
+        if ym is not None:
+            months.add(ym)
     if months:
         return max(1, len(months))
     return max(1, (len(week_labels) + 3) // 4)
 
 
 def format_month_range_from_weeks(from_week: str, to_week: str = "") -> str:
-    """Derive 'From Month to To Month' (e.g. 'Apr 2026 to Nov 2026') from starting and ending weeks."""
-    s_start, s_end = extract_week_dates(from_week)
-    e_start, e_end = extract_week_dates(to_week or from_week)
-    start_dt = s_start or s_end
-    end_dt = e_start or e_end or start_dt
-    if not start_dt:
+    """Derive 'From Month to To Month' (e.g. 'Apr 2026 to Nov 2026') using Monday-start month allocation."""
+    ym_from = assign_week_to_month(from_week)
+    ym_to = assign_week_to_month(to_week or from_week) or ym_from
+    if not ym_from:
         return ""
-    from_m = start_dt.strftime("%b %Y")
-    to_m = (end_dt or start_dt).strftime("%b %Y")
+    from_m = format_month_key_label(ym_from)
+    to_m = format_month_key_label(ym_to or ym_from)
     if from_m == to_m:
         return from_m
     return f"{from_m} to {to_m}"
@@ -233,6 +284,28 @@ class InspectionAbstractRow:
 
 
 @dataclass
+class MonthInspectionSection:
+    """Single calendar month abstract calculated using strict Monday-start week allocation rules."""
+
+    year: int
+    month: int
+    month_key: str
+    month_label: str
+    weeks_included: list[str]
+    week_count: int
+    target_per_unit: int
+    target_rule_desc: str
+    abstract_rows: list[InspectionAbstractRow] = field(default_factory=list)
+    total_target: int = 0
+    total_completed: int = 0
+    total_balance: int = 0
+    total_pct_completed: float = 0.0
+    raw_row_count: int = 0
+    submitted_row_count: int = 0
+    excluded_non_submitted_count: int = 0
+
+
+@dataclass
 class InspectionReport:
     """Complete consolidated GM-R 39.1 Inspection report for a designation and week range."""
 
@@ -257,6 +330,7 @@ class InspectionReport:
     submitted_row_count: int = 0
     excluded_non_submitted_count: int = 0
     week_download_logs: list[dict[str, Any]] = field(default_factory=list)
+    monthly_sections: list[MonthInspectionSection] = field(default_factory=list)
 
     @property
     def generated_time_str(self) -> str:

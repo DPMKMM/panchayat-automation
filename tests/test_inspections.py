@@ -640,3 +640,131 @@ def test_playwright_gmr391_submit_before_excel_download(tmp_path, monkeypatch):
         assert items[0]["status"] == "downloaded"
         assert b"Janakipuram" in items[0]["raw_bytes"]
         browser.close()
+
+
+def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
+    from datetime import date
+    from inspections.automation import group_available_weeks_by_month, resolve_month_week_slice
+    from inspections.models import assign_week_to_month, get_calendar_month_mondays
+    from inspections.reports import (
+        generate_monthwise_inspections_csv,
+        generate_monthwise_inspections_excel,
+        generate_monthwise_inspections_pdf,
+    )
+
+    # Exact user example: August 2026 starts Mon 3rd Aug, ends Mon 31st Aug (5 weeks total)
+    aug_mondays = get_calendar_month_mondays(2026, 8)
+    assert [m for m, _ in aug_mondays] == [
+        date(2026, 8, 3),
+        date(2026, 8, 10),
+        date(2026, 8, 17),
+        date(2026, 8, 24),
+        date(2026, 8, 31),
+    ]
+    assert aug_mondays[-1] == (date(2026, 8, 31), date(2026, 9, 6))
+
+    # Days before first Monday (1st/2nd Aug) belong to July 2026 (Monday 27th Jul), excluded from August 2026
+    assert assign_week_to_month("2026-07-27 to 2026-08-02") == (2026, 7)
+    assert assign_week_to_month("2026-08-01") == (2026, 7)
+    assert assign_week_to_month("2026-08-02") == (2026, 7)
+
+    # Week extending into September (31st Aug to 5th Sep / 6th Sep) MUST belong entirely to August 2026!
+    assert assign_week_to_month("2026-08-31 to 2026-09-05") == (2026, 8)
+    assert assign_week_to_month("2026-08-31 to 2026-09-06") == (2026, 8)
+    assert assign_week_to_month("2026-09-07 to 2026-09-12") == (2026, 9)
+
+    avail_weeks = [
+        {"value": "w7", "text": "2026-09-07 to 2026-09-12"},
+        {"value": "w6", "text": "2026-08-31 to 2026-09-05"},
+        {"value": "w5", "text": "2026-08-24 to 2026-08-29"},
+        {"value": "w4", "text": "2026-08-17 to 2026-08-22"},
+        {"value": "w3", "text": "2026-08-10 to 2026-08-15"},
+        {"value": "w2", "text": "2026-08-03 to 2026-08-08"},
+        {"value": "w1", "text": "2026-07-27 to 2026-08-01"},
+    ]
+    grouped = group_available_weeks_by_month(avail_weeks)
+    assert [g["label"] for g in grouped] == ["Jul 2026", "Aug 2026", "Sep 2026"]
+    aug_group = next(g for g in grouped if g["key"] == "2026-08")
+    assert aug_group["week_count"] == 5
+    assert aug_group["to_week"] == "2026-08-31 to 2026-09-05"
+
+    aug_only = resolve_month_week_slice(avail_weeks, from_month="2026-08", to_month="2026-08")
+    assert [w["text"] for w in aug_only] == [
+        "2026-08-03 to 2026-08-08",
+        "2026-08-10 to 2026-08-15",
+        "2026-08-17 to 2026-08-22",
+        "2026-08-24 to 2026-08-29",
+        "2026-08-31 to 2026-09-05",
+    ]
+
+    # Consolidate across Jul 27 (Jul), 5 Aug weeks (including Aug 31..Sep 5), and Sep 7 (Sep)
+    wf_jul = _make_week_xls_html([{"mandal": "Bonakal", "gp": "GP_Jul", "date": "2026-07-30", "status": "Submitted"}])
+    wf_aug1 = _make_week_xls_html([{"mandal": "Bonakal", "gp": "GP_Aug1", "date": "2026-08-04", "status": "Submitted"}])
+    wf_aug5 = _make_week_xls_html([
+        {"mandal": "Bonakal", "gp": "GP_Aug31", "date": "2026-09-03", "status": "Submitted"},
+        {"mandal": "Wyra", "gp": "GP_Wyra_Draft", "date": "2026-09-04", "status": "Not Submitted"},
+    ])
+    wf_sep1 = _make_week_xls_html([{"mandal": "Bonakal", "gp": "GP_Sep1", "date": "2026-09-08", "status": "Submitted"}])
+
+    rep = consolidate_inspection_files(
+        week_files=[
+            {"week_label": "2026-07-27 to 2026-08-01", "filename": "j.xls", "raw_bytes": wf_jul},
+            {"week_label": "2026-08-03 to 2026-08-08", "filename": "a1.xls", "raw_bytes": wf_aug1},
+            {"week_label": "2026-08-10 to 2026-08-15", "filename": "a2.xls", "raw_bytes": b""},
+            {"week_label": "2026-08-17 to 2026-08-22", "filename": "a3.xls", "raw_bytes": b""},
+            {"week_label": "2026-08-24 to 2026-08-29", "filename": "a4.xls", "raw_bytes": b""},
+            {"week_label": "2026-08-31 to 2026-09-05", "filename": "a5.xls", "raw_bytes": wf_aug5},
+            {"week_label": "2026-09-07 to 2026-09-12", "filename": "s1.xls", "raw_bytes": wf_sep1},
+        ],
+        designation="MPO",
+    )
+    secs = {s.month_key: s for s in rep.monthly_sections}
+    assert list(secs.keys()) == ["2026-07", "2026-08", "2026-09"]
+    # August 2026 gets 5 weeks (target 4 * 5 = 20), and GP_Aug31 on 2026-09-03 counts inside August!
+    assert secs["2026-08"].week_count == 5
+    assert secs["2026-08"].target_per_unit == 20
+    aug_bonakal = {r.unit_name: r for r in secs["2026-08"].abstract_rows}["Bonakal"]
+    assert aug_bonakal.completed == 2 and aug_bonakal.balance == 18
+    # September 2026 gets ONLY 1 week (target 4 * 1 = 4) and ONLY 1 completed (GP_Sep1)
+    assert secs["2026-09"].week_count == 1
+    assert secs["2026-09"].target_per_unit == 4
+    sep_bonakal = {r.unit_name: r for r in secs["2026-09"].abstract_rows}["Bonakal"]
+    assert sep_bonakal.completed == 1
+
+    # Verify Month-Wise PDF (Portrait A4 + bars), Excel & CSV generation
+    mw_pdf = tmp_path / "mw.pdf"
+    generate_monthwise_inspections_pdf(rep, mw_pdf)
+    mw_txt = "\n".join(p.extract_text() for p in PdfReader(str(mw_pdf)).pages)
+    assert "MONTH-WISE GRAM PANCHAYAT INSPECTIONS REPORT" in mw_txt
+    assert "Aug 2026" in mw_txt and "2026-08-31 to 2026-09-05" in mw_txt
+
+    mw_xlsx = tmp_path / "mw.xlsx"
+    generate_monthwise_inspections_excel(rep, mw_xlsx)
+    wb = openpyxl.load_workbook(mw_xlsx)
+    assert "Month-Wise Summary" in wb.sheetnames
+    assert "Unit x Month Matrix" in wb.sheetnames
+    assert "Aug 2026" in wb.sheetnames
+
+    mw_csv = generate_monthwise_inspections_csv(rep).decode("utf-8-sig")
+    assert "Aug 2026,5," in mw_csv
+
+    # Verify API endpoints serve Month-Wise PDF/Excel/CSV after upload consolidation
+    client = TestClient(create_app())
+    tok = _console_login(client, monkeypatch, "insp_mw")
+    sid = "sess_mw_test_01"
+    up_res = client.post(
+        "/api/inspections/upload-consolidate",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid},
+        data={"designation": "MPO", "district_name": "Khammam"},
+        files=[("files", ("aug.xls", wf_aug5, "application/vnd.ms-excel"))],
+    )
+    assert up_res.status_code == 200
+    assert up_res.json()["monthwise_pdf_url"] == "/api/inspections/download-monthwise-pdf"
+    for ep, sig in [
+        ("/api/inspections/download-monthwise-pdf", b"%PDF"),
+        ("/api/inspections/download-monthwise-excel", b"PK"),
+    ]:
+        r_dl = client.get(ep, headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid})
+        assert r_dl.status_code == 200 and r_dl.content[:len(sig)] == sig
+    r_csv = client.get("/api/inspections/download-monthwise-csv", headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid})
+    assert r_csv.status_code == 200 and "Month" in r_csv.text

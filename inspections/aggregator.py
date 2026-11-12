@@ -9,10 +9,48 @@ from inspections.models import (
     InspectionAbstractRow,
     InspectionRecord,
     InspectionReport,
+    MonthInspectionSection,
+    assign_week_to_month,
     compute_designation_target,
+    extract_week_dates,
+    format_month_key_label,
     get_designation_spec,
 )
 from inspections.parser import parse_inspection_file
+
+
+def _build_abstract_rows(
+    observed_units: dict[str, str],
+    counts_by_key: dict[str, int],
+    target_per_unit: int,
+) -> tuple[list[InspectionAbstractRow], int, int, int, float]:
+    """Compute sorted abstract rows and summary totals for a unit/count set."""
+    unsorted_rows: list[tuple[float, str, int, int, int]] = []
+    for key, display_unit in observed_units.items():
+        completed = counts_by_key.get(key, 0)
+        balance = max(0, target_per_unit - completed)
+        pct = round((completed / target_per_unit) * 100.0, 2) if target_per_unit > 0 else 0.0
+        unsorted_rows.append((pct, display_unit, target_per_unit, completed, balance))
+
+    unsorted_rows.sort(key=lambda r: (r[0], r[1].casefold()))
+
+    abstract_rows: list[InspectionAbstractRow] = [
+        InspectionAbstractRow(
+            serial=idx,
+            unit_name=unit_name,
+            target=tgt,
+            completed=comp,
+            balance=bal,
+            pct_completed=pct,
+        )
+        for idx, (pct, unit_name, tgt, comp, bal) in enumerate(unsorted_rows, start=1)
+    ]
+
+    tot_target = sum(r.target for r in abstract_rows)
+    tot_completed = sum(r.completed for r in abstract_rows)
+    tot_balance = sum(r.balance for r in abstract_rows)
+    tot_pct = round((tot_completed / tot_target) * 100.0, 2) if tot_target > 0 else 0.0
+    return abstract_rows, tot_target, tot_completed, tot_balance, tot_pct
 
 
 def consolidate_inspection_files(
@@ -146,32 +184,79 @@ def consolidate_inspection_files(
         observed_units.setdefault(key, rec.unit_name)
         counts_by_key[key] = counts_by_key.get(key, 0) + 1
 
-    # Build abstract rows sorted ascending by % Completed (lagging units first), then alphabetically
-    unsorted_rows: list[tuple[float, str, int, int, int]] = []
-    for key, display_unit in observed_units.items():
-        completed = counts_by_key.get(key, 0)
-        balance = max(0, target_per_unit - completed)
-        pct = round((completed / target_per_unit) * 100.0, 2) if target_per_unit > 0 else 0.0
-        unsorted_rows.append((pct, display_unit, target_per_unit, completed, balance))
+    abstract_rows, tot_target, tot_completed, tot_balance, tot_pct = _build_abstract_rows(
+        observed_units,
+        counts_by_key,
+        target_per_unit,
+    )
 
-    unsorted_rows.sort(key=lambda r: (r[0], r[1].casefold()))
+    # Group weeks and records into MonthInspectionSection strictly using Monday-start week allocation
+    weeks_by_ym: dict[tuple[int, int], list[str]] = {}
+    for w_lbl in effective_weeks:
+        ym = assign_week_to_month(w_lbl)
+        if ym is not None:
+            weeks_by_ym.setdefault(ym, [])
+            if w_lbl not in weeks_by_ym[ym]:
+                weeks_by_ym[ym].append(w_lbl)
 
-    abstract_rows: list[InspectionAbstractRow] = [
-        InspectionAbstractRow(
-            serial=idx,
-            unit_name=unit_name,
-            target=tgt,
-            completed=comp,
-            balance=bal,
-            pct_completed=pct,
+    records_by_ym: dict[tuple[int, int], list[InspectionRecord]] = {}
+    for rec in all_submitted:
+        ym = assign_week_to_month(rec.week_label) or assign_week_to_month(rec.inspection_date)
+        if ym is not None:
+            weeks_by_ym.setdefault(ym, [])
+            records_by_ym.setdefault(ym, []).append(rec)
+
+    raw_by_ym: dict[tuple[int, int], tuple[int, int]] = {}
+    for wl in week_logs:
+        ym = assign_week_to_month(wl.get("week", ""))
+        if ym is not None:
+            prev_r, prev_e = raw_by_ym.get(ym, (0, 0))
+            raw_by_ym[ym] = (prev_r + int(wl.get("raw_rows", 0) or 0), prev_e + int(wl.get("excluded_rows", 0) or 0))
+
+    monthly_sections: list[MonthInspectionSection] = []
+    for ym in sorted(weeks_by_ym.keys()):
+        m_weeks = sorted(
+            weeks_by_ym[ym],
+            key=lambda w: (extract_week_dates(w)[0] or datetime.max.date(), w),
         )
-        for idx, (pct, unit_name, tgt, comp, bal) in enumerate(unsorted_rows, start=1)
-    ]
+        m_recs = records_by_ym.get(ym, [])
+        m_counts: dict[str, int] = {}
+        for rec in m_recs:
+            k = rec.unit_name.casefold()
+            m_counts[k] = m_counts.get(k, 0) + 1
 
-    tot_target = sum(r.target for r in abstract_rows)
-    tot_completed = sum(r.completed for r in abstract_rows)
-    tot_balance = sum(r.balance for r in abstract_rows)
-    tot_pct = round((tot_completed / tot_target) * 100.0, 2) if tot_target > 0 else 0.0
+        m_target, m_rule = compute_designation_target(
+            canon_desig,
+            week_labels=m_weeks,
+            week_count=len(m_weeks),
+            target_override=target_override,
+        )
+        m_rows, m_tot_t, m_tot_c, m_tot_b, m_tot_p = _build_abstract_rows(
+            observed_units,
+            m_counts,
+            m_target,
+        )
+        m_raw, m_excl = raw_by_ym.get(ym, (len(m_recs), 0))
+        monthly_sections.append(
+            MonthInspectionSection(
+                year=ym[0],
+                month=ym[1],
+                month_key=f"{ym[0]:04d}-{ym[1]:02d}",
+                month_label=format_month_key_label(ym),
+                weeks_included=m_weeks,
+                week_count=len(m_weeks),
+                target_per_unit=m_target,
+                target_rule_desc=m_rule,
+                abstract_rows=m_rows,
+                total_target=m_tot_t,
+                total_completed=m_tot_c,
+                total_balance=m_tot_b,
+                total_pct_completed=m_tot_p,
+                raw_row_count=m_raw,
+                submitted_row_count=len(m_recs),
+                excluded_non_submitted_count=m_excl,
+            )
+        )
 
     return InspectionReport(
         designation=canon_desig,
@@ -195,4 +280,5 @@ def consolidate_inspection_files(
         submitted_row_count=len(all_submitted),
         excluded_non_submitted_count=excluded_total,
         week_download_logs=week_logs,
+        monthly_sections=monthly_sections,
     )
