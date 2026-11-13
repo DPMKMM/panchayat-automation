@@ -638,7 +638,12 @@ def _generate_server_state_format_impl(
     target_date_dir = load_ps_directory_cache(date_ps_cache_path) if date_ps_cache_path.exists() else {}
 
     # 2. Download files for this target date if missing or force_fresh requested:
-    # Always ensure RAW data (1.2.7), Presenties (1.2.11), and Absentees (1.2.10) are downloaded
+    # =========================================================================
+    # Step 1: Download Required Raw Data from e-Panchayat Portal
+    # 1. DSR RAW DATA (GM-R 1.2.7)
+    # 2. PRESENTES DATA (GM-R 1.2.11)
+    # 3. ABSENTEES DATA (GM-R 1.2.10) (Handled gracefully without error if 0 absentees)
+    # =========================================================================
     need_raw = not raw_path or not raw_path.exists() or force_fresh
     need_presentees = not presentees_bytes or force_fresh
     need_absentees = not absentees_bytes or force_fresh
@@ -652,20 +657,18 @@ def _generate_server_state_format_impl(
             )
 
         if need_raw:
-            logger.info("[%s] Downloading GM-R 1.2.7 for State Format date %s...", sid[:6], portal_date_fmt)
+            logger.info("[%s] Step 1.1: Downloading GM-R 1.2.7 DSR Raw Data for date %s...", sid[:6], portal_date_fmt)
             try:
                 raw_path = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
             except Exception as exc:
-                logger.error("[%s] State Format GM-R 1.2.7 download failed: %s", sid[:6], exc)
+                logger.error("[%s] GM-R 1.2.7 DSR raw download failed: %s", sid[:6], exc)
                 raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR raw data from portal for date '{portal_date_fmt}': {exc}") from exc
 
-        # Download presentees & absentees for the EXACT same user input date
         if need_presentees:
-            logger.info("[%s] Downloading GM-R 1.2.11 Presentees for target date %s...", sid[:6], portal_date_fmt)
+            logger.info("[%s] Step 1.2: Downloading GM-R 1.2.11 Presentees for target date %s...", sid[:6], portal_date_fmt)
             try:
                 p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
                 if p_f and p_f.exists() and p_f.stat().st_size > 0:
-                    # Validate if downloaded file matches target date; portal often exports today's live snapshot
                     if not _matches_target_date(p_f.name):
                         logger.warning(
                             "[%s] Portal GM-R 1.2.11 download '%s' does not match requested date '%s'. Searching for date-matched file...",
@@ -679,7 +682,6 @@ def _generate_server_state_format_impl(
                             presentees_name = matched_dl.name
                         elif target_date_dir:
                             logger.info("[%s] Using verified target date cache for %s (%d regulars)", sid[:6], portal_date_fmt, sum(1 for v in target_date_dir.values() if v.get("nature_of_posting") == "Regular"))
-                            # Keep presentees_bytes empty so target_date_dir is preserved
                         else:
                             presentees_bytes = p_f.read_bytes()
                             presentees_name = p_f.name
@@ -690,7 +692,7 @@ def _generate_server_state_format_impl(
                 logger.warning("[%s] Could not download GM-R 1.2.11 Presentees for date %s: %s", sid[:6], portal_date_fmt, e)
 
         if need_absentees:
-            logger.info("[%s] Downloading GM-R 1.2.10 Absentees for target date %s...", sid[:6], portal_date_fmt)
+            logger.info("[%s] Step 1.3: Downloading GM-R 1.2.10 Absentees for target date %s...", sid[:6], portal_date_fmt)
             try:
                 a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
                 if a_f and a_f.exists() and a_f.stat().st_size > 0:
@@ -707,21 +709,31 @@ def _generate_server_state_format_impl(
                         absentees_bytes = a_f.read_bytes()
                         absentees_name = a_f.name
             except Exception as e:
-                logger.warning("[%s] Could not download GM-R 1.2.10 Absentees for date %s: %s", sid[:6], portal_date_fmt, e)
+                # If all Panchayat Secretaries are present, the Absentees file may not be available.
+                # Handle this scenario gracefully without errors.
+                logger.info(
+                    "[%s] GM-R 1.2.10 Absentees file not available or 0 absentees for date %s: %s (continuing with presentees only)",
+                    sid[:6], portal_date_fmt, e,
+                )
 
     if not raw_path or not raw_path.exists() or raw_path.stat().st_size == 0:
         raise FileNotFoundError(f"No DSR attendance report was returned by e-Panchayat portal for date '{portal_date_fmt}'.")
 
-    # 3. Build PS directory EXCLUSIVELY from online downloaded Presenties (1.2.11) and Absentees (1.2.10) for this target date.
+    # =========================================================================
+    # Step 2: Consolidate Attendance Data
+    # - Consolidate PRESENTES and ABSENTEES into a single attendance dataset.
+    # - If ABSENTEES is unavailable, consider all available PRESENTES records.
+    # - Ensure attendance records are not duplicated (deduplicated by LGD code).
+    # =========================================================================
     online_ps_dir: dict[str, dict[str, str]] = {}
     if presentees_bytes:
-        logger.info("[%s] Parsing online downloaded GM-R 1.2.11 Presenties (%d bytes)...", sid[:6], len(presentees_bytes))
+        logger.info("[%s] Step 2.1: Consolidating GM-R 1.2.11 Presenties (%d bytes)...", sid[:6], len(presentees_bytes))
         online_ps_dir = merge_ps_directories(
             online_ps_dir,
             parse_ps_directory_file(presentees_name, presentees_bytes)
         )
     if absentees_bytes:
-        logger.info("[%s] Parsing online downloaded GM-R 1.2.10 Absentees (%d bytes)...", sid[:6], len(absentees_bytes))
+        logger.info("[%s] Step 2.2: Consolidating GM-R 1.2.10 Absentees (%d bytes)...", sid[:6], len(absentees_bytes))
         online_ps_dir = merge_ps_directories(
             online_ps_dir,
             parse_ps_directory_file(absentees_name, absentees_bytes)
@@ -732,7 +744,13 @@ def _generate_server_state_format_impl(
     if online_ps_dir:
         save_ps_directory_cache(online_ps_dir, date_ps_cache_path)
 
-    # 4. Parse State Format Data
+    # =========================================================================
+    # Step 3 & Step 4: Identify Regular PS & Prepare the Final Report
+    # - Uses LGD Code available in DSR RAW DATA as primary key.
+    # - Matches with consolidated PRESENTES and ABSENTEES dataset to retrieve Regular status.
+    # - Excludes Non-Regular secretaries from calculations if exclude_incharge=True.
+    # - Produces official 14-column report, PDF and Excel exports.
+    # =========================================================================
     from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
     st_report = parse_state_format_data(
         raw_path.read_bytes(),

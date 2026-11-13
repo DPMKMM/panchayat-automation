@@ -240,31 +240,44 @@ def parse_state_format_data(
     unique_gps: list[dict[str, Any]] = []
     directory = ps_directory or {}
 
+    # Step 3: Identify Regular Panchayat Secretaries
+    # Use LGD Code from DSR RAW DATA as primary key to map each GP with PS details
+    # Match information with consolidated PRESENTES and ABSENTEES dataset
     for lgd, group in valid.groupby("Panchayat LGD", sort=False, dropna=False):
         chosen = group.loc[group["First Attendence Status"].ne("")]
         row = chosen.iloc[0] if not chosen.empty else group.iloc[0]
 
         lgd_str = str(lgd)
         dir_info = directory.get(lgd_str, {})
+
+        # Check DSR RAW DATA row for Nature of Posting or variant column names
+        raw_posting = _clean_name(row.get("Nature of Posting", ""))
+        if not raw_posting:
+            for col in row.index:
+                col_l = str(col).strip().lower()
+                if "nature" in col_l or "posting" in col_l or "regular" in col_l:
+                    val = _clean_name(row.get(col, ""))
+                    if val:
+                        raw_posting = val
+                        break
+
+        # Match with consolidated PRESENTES and ABSENTEES attendance dataset
         nature_of_posting = (
             _clean_name(dir_info.get("nature_of_posting", ""))
-            or _clean_name(row.get("Nature of Posting", ""))
+            or raw_posting
         )
         posting_lower = nature_of_posting.casefold()
 
-        # Classify Nature of Posting across the 4 portal variants:
-        # 1. Regular
-        # 2. Incharge
-        # 3. Fully Additional Charge (or Full Additional Charge)
-        # 4. Blank (missing / empty / unassigned)
-        # Requirement: While preparing the report, consider ONLY Regular.
-        # Incharge, Fully Additional Charge, and Blank are NOT Regular.
+        # Classify Nature of Posting:
+        # 1. Regular -> Counted in full-time regular secretary attendance calculations
+        # 2. Incharge / Full Additional Charge (FAC) / Blank -> Excluded from regular attendance calculations
         if (
             not posting_lower
             or posting_lower in {"nan", "none", "null", "na", "-", "."}
             or "incharge" in posting_lower
             or "charge" in posting_lower
             or "additional" in posting_lower
+            or "fac" in posting_lower
         ):
             is_regular = False
         elif "regular" in posting_lower:
