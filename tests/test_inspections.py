@@ -799,3 +799,27 @@ def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
         assert r_dl.status_code == 200 and r_dl.content[:len(sig)] == sig
     r_csv = client.get("/api/inspections/download-monthwise-csv", headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid})
     assert r_csv.status_code == 200 and "Month" in r_csv.text
+
+
+def test_inspections_ui_fresh_entry_and_download_options_reveal_only_after_run():
+    """Verify that opening the Inspections station resets the view, does not auto-display previous reports,
+    and keeps download options hidden until generate/run completes."""
+    portal_html = (ROOT / "templates" / "portal_shell.html").read_text(encoding="utf-8")
+    console_js = (ROOT / "static" / "js" / "console.js").read_text(encoding="utf-8")
+
+    # 1. HTML initially hides all download options
+    assert 'id="insp-actions-wrap"' in portal_html
+    assert 'style="display:none;' in portal_html.split('id="insp-actions-wrap"')[0].split('<div')[-1]
+
+    # 2. console.js defines resetInspectionsView that hides insp-actions-wrap
+    assert "window.resetInspectionsView = function" in console_js
+
+    # 3. openGpInspectionsStation calls resetInspectionsView and does NOT auto-fetch /api/inspections/data
+    open_station_fn = console_js.split("window.openGpInspectionsStation = async function")[1].split("window.fetchInspectionWeeks")[0]
+    assert "window.resetInspectionsView()" in open_station_fn
+    assert "/api/inspections/data" not in open_station_fn
+
+    # 4. runInspectionsRobot hides actionsWrap at start and shows it via renderInspectionsReport on success
+    run_fn = console_js.split("window.runInspectionsRobot = async function")[1].split("window.uploadConsolidateInspections")[0]
+    assert "actionsWrap.style.display = 'none'" in run_fn
+    assert "window.renderInspectionsReport(data)" in run_fn

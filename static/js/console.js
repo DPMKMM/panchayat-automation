@@ -3030,6 +3030,49 @@
     if (unitsLbl && !inspCurrentReport) unitsLbl.textContent = 'Total ' + meta.plural;
   };
 
+  window.resetInspectionsView = function () {
+    inspCurrentReport = null;
+    inspFilteredCache = [];
+    inspActiveMonthKey = 'all';
+
+    var actionsWrap = document.getElementById('insp-actions-wrap');
+    if (actionsWrap) actionsWrap.style.display = 'none';
+
+    var monthTabs = document.getElementById('insp-month-tabs');
+    if (monthTabs) {
+      monthTabs.style.display = 'none';
+      monthTabs.innerHTML = '';
+    }
+
+    var el;
+    el = document.getElementById('insp-kpi-mandals'); if (el) el.textContent = '0';
+    el = document.getElementById('insp-kpi-target'); if (el) el.textContent = '0';
+    el = document.getElementById('insp-kpi-completed'); if (el) el.textContent = '0';
+    el = document.getElementById('insp-kpi-pending'); if (el) el.textContent = '0';
+    el = document.getElementById('insp-kpi-rate'); if (el) el.textContent = '0.00%';
+    el = document.getElementById('insp-table-counter'); if (el) el.textContent = 'Ready';
+    el = document.getElementById('insp-table-title');
+    if (el) el.textContent = 'GM-R 39.1 Consolidated Abstract (Final Submit Status: Submitted Only)';
+
+    var tbody = document.getElementById('insp-table-body');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color:#64748b;">Select Designation &amp; From–To Weeks above and click <strong>⚡ Run Inspections Robot</strong> (or upload weekly Excel files).</td></tr>';
+    }
+
+    var searchEl = document.getElementById('insp-search-input');
+    if (searchEl) searchEl.value = '';
+
+    var pStrip = document.getElementById('insp-progress-strip');
+    if (pStrip) pStrip.style.display = 'none';
+
+    var syncEl = document.getElementById('insp-sync-time');
+    if (syncEl) {
+      syncEl.textContent = 'Status: Select Officer Designation and click "Fetch Portal Weeks" (or upload GM-R 39.1 weekly Excel files).';
+    }
+
+    window.updateInspectionTargetBanner();
+  };
+
   window.openGpInspectionsStation = async function (options) {
     var opts = options || {};
     if (!opts.skipAuthCheck && typeof window.ensureDepartmentSession === 'function') {
@@ -3053,14 +3096,10 @@
       var desEl = document.getElementById('insp-designation');
       if (desEl && opts.params.designation) desEl.value = opts.params.designation;
     }
-    window.updateInspectionTargetBanner();
 
-    try {
-      var existing = await window.safeFetchJson('/api/inspections/data');
-      if (existing && existing.rows && existing.rows.length > 0) {
-        window.renderInspectionsReport(existing);
-      }
-    } catch (e) {}
+    // Always reset the view so previously generated reports are never automatically displayed
+    // and all download options remain strictly hidden until the Run/Generate button is clicked.
+    window.resetInspectionsView();
 
     if (inspWeeksCache.length === 0) {
       await window.fetchInspectionWeeks(false, opts.params);
@@ -3140,6 +3179,7 @@
     if (tm) tm.style.display = isMonths ? 'block' : 'none';
     if (prev) prev.style.display = isMonths ? 'block' : 'none';
     if (isMonths) window.updateInspectionMonthPreview();
+    window.resetInspectionsView();
   };
 
   window.updateInspectionMonthPreview = function () {
@@ -3162,7 +3202,7 @@
   };
 
   window.onInspectionDesignationChanged = function () {
-    window.updateInspectionTargetBanner();
+    window.resetInspectionsView();
     inspWeeksCache = [];
     inspMonthsCache = [];
     if (window.isDeptAuthenticated) {
@@ -3242,6 +3282,10 @@
     var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
     var btn = document.getElementById('btn-run-inspections-robot');
     var syncEl = document.getElementById('insp-sync-time');
+    var actionsWrap = document.getElementById('insp-actions-wrap');
+
+    // Ensure download options are hidden until generation succeeds
+    if (actionsWrap) actionsWrap.style.display = 'none';
 
     var wkCnt = (mode === 'months' && fromMonth)
       ? countWeeksForMonthRange(fromMonth, toMonth)
@@ -3277,6 +3321,7 @@
       showNotice('Compiled GM-R 39.1 ' + data.designation + ' Inspection Abstract (' + (data.weeks_count || 1) + ' week(s)).', 'success');
     } catch (err) {
       finishInspProgressTimer(false);
+      if (actionsWrap) actionsWrap.style.display = 'none';
       if (handleDepartmentSessionExpiredError(err, 'inspections', { designation: desig, from_week: fromWeek, to_week: toWeek })) return;
       if (syncEl) syncEl.textContent = 'Error: ' + err.message;
       showNotice('Inspections Robot error: ' + err.message, 'error');
@@ -3290,6 +3335,9 @@
 
   window.uploadConsolidateInspections = async function (fileList) {
     if (!fileList || !fileList.length) return;
+    var actionsWrap = document.getElementById('insp-actions-wrap');
+    if (actionsWrap) actionsWrap.style.display = 'none';
+
     var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
     var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
     var syncEl = document.getElementById('insp-sync-time');
@@ -3311,6 +3359,7 @@
       window.renderInspectionsReport(data);
       showNotice('Consolidated ' + fileList.length + ' weekly Excel file(s) successfully.', 'success');
     } catch (err) {
+      if (actionsWrap) actionsWrap.style.display = 'none';
       if (syncEl) syncEl.textContent = 'Consolidation error: ' + err.message;
       showNotice('Excel consolidation error: ' + err.message, 'error');
     } finally {

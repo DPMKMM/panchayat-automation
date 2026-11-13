@@ -53,7 +53,7 @@ def download_portal_raw_data() -> bytes:
             "Pragma": "no-cache",
         }
 
-    with httpx.Client(verify=False, timeout=60.0) as client:
+    with httpx.Client(verify=False, timeout=60.0, follow_redirects=True) as client:
         resp = client.get(request_url, headers=headers)
         resp.raise_for_status()
         content = resp.content
