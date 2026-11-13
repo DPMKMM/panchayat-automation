@@ -176,8 +176,21 @@ def create_app() -> FastAPI:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         # Security Patch 3: Keep HttpOnly epts_session_id cookie synchronized across page & asset requests
+        handler_set_epts = False
+        try:
+            raw_cookies = response.headers.getlist("set-cookie") if hasattr(response.headers, "getlist") else []
+            if not raw_cookies:
+                raw_cookies = [v for k, v in getattr(response, "raw_headers", []) if k.lower() == b"set-cookie"]
+                raw_cookies = [c.decode("latin1", "ignore") if isinstance(c, bytes) else str(c) for c in raw_cookies]
+            for c in raw_cookies:
+                if "epts_session_id=" in c:
+                    handler_set_epts = True
+                    break
+        except Exception:
+            handler_set_epts = False
+
         cookie_sid = (request.cookies.get("epts_session_id") or "").strip()
-        if not request.url.path.startswith("/static/") and (is_new or not cookie_sid or cookie_sid != sid):
+        if not handler_set_epts and not request.url.path.startswith("/static/") and (is_new or not cookie_sid or cookie_sid != sid):
             response.set_cookie(
                 key="epts_session_id",
                 value=sid,

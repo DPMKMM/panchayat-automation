@@ -59,14 +59,14 @@
       if (isValidSid(urlSid)) sid = urlSid.trim();
     } catch (e) {}
     if (!isValidSid(sid)) {
+      var fromCookie = readCookie('epts_session_id');
+      if (isValidSid(fromCookie)) sid = fromCookie.trim();
+    }
+    if (!isValidSid(sid)) {
       try { sid = sessionStorage.getItem('epts_session_id') || ''; } catch (e) {}
     }
     if (!isValidSid(sid)) {
       try { sid = localStorage.getItem('epts_session_id') || ''; } catch (e) {}
-    }
-    if (!isValidSid(sid)) {
-      var fromCookie = readCookie('epts_session_id');
-      if (isValidSid(fromCookie)) sid = fromCookie.trim();
     }
     if (!isValidSid(sid)) {
       sid =
@@ -81,10 +81,15 @@
 
   function adoptServerSessionId(serverSid) {
     if (!isValidSid(serverSid)) return getSessionId();
-    if (!hasStoredSid()) {
-      return persistSid(serverSid.trim());
+    var clean = serverSid.trim();
+    var current = '';
+    try {
+      current = (sessionStorage.getItem('epts_session_id') || localStorage.getItem('epts_session_id') || '').trim();
+    } catch (e) {}
+    if (current && current !== clean) {
+      clearEptsMetadata();
     }
-    return getSessionId();
+    return persistSid(clean);
   }
 
   function isReportsHost() {
@@ -159,6 +164,17 @@
       try { sessionStorage.removeItem(k); } catch (e) {}
       try { localStorage.removeItem(k); } catch (e) {}
     });
+    try { sessionStorage.removeItem('epts_session_id'); } catch (e) {}
+    try { localStorage.removeItem('epts_session_id'); } catch (e) {}
+    if (typeof window !== 'undefined') {
+      window.reportData = null;
+      window.currentMandalName = '';
+      window.currentUserLevel = 'district';
+      ['results-section', 'state-format-results', 'auto-multi-results-section', 'inspections-results-card', 'balance-results-card'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+    }
   }
 
   function syncEptsMetadata(data, fallbackUser) {
@@ -374,8 +390,22 @@
     try {
       var res = await consoleFetch('/api/auth/portal-status?_ts=' + Date.now(), { cache: 'no-store' });
       if (res.status >= 500) return { authenticated: false, user: null, transientError: true };
-      if (!res.ok) return { authenticated: false, user: null };
+      if (!res.ok) {
+        clearEptsMetadata();
+        return { authenticated: false, user: null };
+      }
       var data = await res.json().catch(function () { return {}; });
+      if (!data || !data.authenticated || !data.user) {
+        clearEptsMetadata();
+        return data || { authenticated: false, user: null };
+      }
+      var loggedUid = String(data.user.user_id || data.user.id || '').trim();
+      var lastUid = '';
+      try { lastUid = (sessionStorage.getItem('last_console_uid') || '').trim(); } catch (e) {}
+      if (loggedUid && lastUid && loggedUid !== lastUid) {
+        clearEptsMetadata();
+      }
+      try { if (loggedUid) sessionStorage.setItem('last_console_uid', loggedUid); } catch (e) {}
       if (data && data.epts_session_id) {
         adoptServerSessionId(data.epts_session_id);
       }

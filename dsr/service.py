@@ -245,13 +245,29 @@ def _generate_server_report_impl(
     norm_sections = normalize_dsr_sections(include_sections)
     norm_sections_key = "all" if len(norm_sections) == len(ALL_DSR_SECTIONS) else "+".join(norm_sections)
 
-    cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by, cache_level, target_mandal_norm, norm_layout, norm_sections_key, exclude_incharge)
+    scoped_user = str(session.get("user_id", "")).strip().upper()
+    cache_key = (
+        sid,
+        scoped_user,
+        module,
+        portal_date_fmt,
+        dist_name,
+        cutoff_time,
+        sort_by,
+        cache_level,
+        target_mandal_norm,
+        norm_layout,
+        norm_sections_key,
+        exclude_incharge,
+    )
     legacy_district_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by)
 
     with _DSR_CACHE_LOCK:
         cached_entry = _DSR_CACHE.get(cache_key)
-        if not cached_entry and cache_level == "district" and not target_mandal_norm and norm_layout == "individual" and norm_sections_key == "all":
-            cached_entry = _DSR_CACHE.get(legacy_district_key)
+        if not cached_entry and cache_level == "district" and not is_mandal_level and not target_mandal_norm and norm_layout == "individual" and norm_sections_key == "all":
+            cand = _DSR_CACHE.get(legacy_district_key)
+            if cand and not cand.get("report_data", {}).get("is_mandal_level"):
+                cached_entry = cand
         if cached_entry:
             age = time.time() - cached_entry["timestamp"]
             if age < _DSR_CACHE_TTL_SECONDS and Path(cached_entry["latest_pdf_path"]).exists():

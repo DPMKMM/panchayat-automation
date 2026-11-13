@@ -181,6 +181,7 @@ def _save_session_state(session: dict[str, Any]) -> None:
     try:
         payload = {
             "session_id": sid,
+            "owner_user_id": session.get("owner_user_id", ""),
             "user_id": session.get("user_id", ""),
             "user_level": session.get("user_level", "district"),
             "mandal_name": session.get("mandal_name", ""),
@@ -229,12 +230,31 @@ def _clear_session_state(session_id: str) -> None:
         pass
 
 
-def get_or_create_session(session_id: str = "") -> dict[str, Any]:
+def get_or_create_session(session_id: str = "", owner_user_id: str = "") -> dict[str, Any]:
     """Retrieve or create an isolated session context with its own profile, downloads dir, and worker thread."""
-    sid = _sanitize_session_id(session_id)
+    clean_owner = str(owner_user_id or "").strip()
+    raw_sid = (session_id or "").strip()
+    if (not raw_sid or raw_sid == "default") and clean_owner:
+        sid = _sanitize_session_id(f"user_{clean_owner}")
+    else:
+        sid = _sanitize_session_id(raw_sid)
+
     with _sessions_lock:
         session = _sessions.get(sid)
-        if not session:
+        if session:
+            existing_owner = str(session.get("owner_user_id") or "").strip()
+            if clean_owner and existing_owner and clean_owner != existing_owner:
+                logger.warning(
+                    "Session %s owner mismatch (existing: %s != requested: %s). Resetting session for new owner.",
+                    sid[:8], existing_owner, clean_owner,
+                )
+                _expire_session_impl(session)
+                session["owner_user_id"] = clean_owner
+                _save_session_state(session)
+            elif clean_owner and not existing_owner:
+                session["owner_user_id"] = clean_owner
+                _save_session_state(session)
+        else:
             data_dir = get_data_dir()
             prof_dir = data_dir / "browser_profiles" / f"session_{sid}"
             prof_dir.mkdir(parents=True, exist_ok=True)
@@ -245,8 +265,17 @@ def get_or_create_session(session_id: str = "") -> dict[str, Any]:
                 thread_name_prefix=f"Bot_{sid[:6]}",
             )
             saved = _load_session_state(sid)
+            if saved and clean_owner and saved.get("owner_user_id") and saved.get("owner_user_id") != clean_owner:
+                logger.warning(
+                    "Persisted session %s on-disk owner mismatch (%s != %s). Discarding stale file.",
+                    sid[:8], saved.get("owner_user_id"), clean_owner,
+                )
+                _clear_session_state(sid)
+                saved = {}
+
             session = {
                 "session_id": sid,
+                "owner_user_id": clean_owner or (saved.get("owner_user_id", "") if saved else ""),
                 "user_id": saved.get("user_id", "") if saved else "",
                 "user_level": saved.get("user_level", "district") if saved else "district",
                 "mandal_name": saved.get("mandal_name", "") if saved else "",
@@ -905,9 +934,9 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     }
 
 
-def get_session_status(session_id: str = "") -> dict[str, Any]:
+def get_session_status(session_id: str = "", owner_user_id: str = "") -> dict[str, Any]:
     """Return current background session status for this specific user."""
-    session = get_or_create_session(session_id)
+    session = get_or_create_session(session_id, owner_user_id=owner_user_id)
     return run_in_session_thread(session, _get_session_status_impl, session)
 
 

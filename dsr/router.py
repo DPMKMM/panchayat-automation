@@ -441,10 +441,11 @@ def naresh_verify_otp(
 
 @router.get("/api/naresh/session-status", include_in_schema=False)
 def naresh_session_status(request: Request) -> dict[str, Any]:
-    enforce_console_api_access(request)
-    sid = _get_sid(request)
+    console_user = enforce_console_api_access(request)
+    c_uid = str(console_user["user_id"]) if console_user else ""
+    sid = extract_epts_session_id(request, user_id=c_uid)
     try:
-        return automation_service.get_session_status(session_id=sid)
+        return automation_service.get_session_status(session_id=sid, owner_user_id=c_uid)
     except Exception:
         return {"success": False, "authenticated": False, "status": "idle", "session_id": sid}
 

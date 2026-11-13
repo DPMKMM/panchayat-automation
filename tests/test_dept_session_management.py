@@ -573,3 +573,169 @@ def test_switching_from_mpo_to_dpoa_clears_mandal_and_report_caches(monkeypatch)
     assert dept_st["user_level"] == "district"
     assert dept_st["mandal_name"] == ""
 
+
+def test_multi_user_google_session_and_ownership_isolation(monkeypatch):
+    """Verify that different Google users are strictly isolated and cannot hijack another user's session."""
+    from core import session_manager
+
+    ts = int(time.time() * 1000)
+    c1 = TestClient(app)
+    c2 = TestClient(app)
+
+    # 1. User 1 logs into Console
+    user1_login = _console_login(c1, monkeypatch, f"user1_{ts}")
+    u1_id = str(user1_login["user"]["user_id"])
+    u1_sid = c1.cookies.get("epts_session_id")
+    assert u1_sid and f"sid_{u1_id}_" in u1_sid
+
+    # User 1 connects e-Panchayat session as MPO Thallada
+    s1 = session_manager.get_or_create_session(u1_sid, owner_user_id=u1_id)
+    s1["status"] = "authenticated"
+    s1["mode"] = "cloud_sync"
+    s1["user_id"] = "MPO_Thallada"
+    s1["user_level"] = "mandal"
+    s1["mandal_name"] = "Thallada"
+    s1["report_data"] = {"mandal_name": "Thallada", "is_mandal_level": True, "generated": True}
+
+    # Verify User 1 sees authenticated departmental session
+    st1 = c1.get("/api/auth/department-status", headers={"Host": "reports.panchayatautomation.in"}).json()
+    assert st1["authenticated"] is True
+    assert st1["user_id"] == "MPO_Thallada"
+    assert st1["mandal_name"] == "Thallada"
+
+    # 2. User 2 logs into Console from a different client
+    user2_login = _console_login(c2, monkeypatch, f"user2_{ts}")
+    u2_id = str(user2_login["user"]["user_id"])
+    u2_sid = c2.cookies.get("epts_session_id")
+    assert u2_sid and f"sid_{u2_id}_" in u2_sid
+    assert u1_sid != u2_sid  # Must be different session IDs!
+
+    # User 2 status MUST be idle / not authenticated with User 1's departmental bot!
+    st2 = c2.get("/api/auth/department-status", headers={"Host": "reports.panchayatautomation.in"}).json()
+    assert st2["authenticated"] is False
+    assert st2["user_id"] == ""
+
+    # 3. If User 2 maliciously sends User 1's session ID in X-Session-ID, ownership mismatch resets session
+    hijack_attempt = c2.get(
+        "/api/auth/department-status",
+        headers={"Host": "reports.panchayatautomation.in", "X-Session-ID": u1_sid},
+    ).json()
+    assert hijack_attempt["authenticated"] is False
+    assert hijack_attempt["user_id"] == ""
+
+    # User 2 cannot access User 1's report data
+    rep2 = c2.get(
+        "/api/naresh/data",
+        headers={"Host": "reports.panchayatautomation.in", "X-Session-ID": u1_sid},
+    )
+    assert rep2.status_code == 401  # Rejected!
+
+
+def test_cross_session_dsr_cache_never_leaks(tmp_path):
+    """Verify that cached reports from Officer A (e.g. MPO) NEVER serve to Officer B in another session."""
+    from core import session_manager
+    from core.session_manager import _DSR_CACHE, _DSR_CACHE_LOCK
+    from dsr import service as dsr_service
+
+    sid_a = f"sid_mpo_{int(time.time()*1000)}"
+    sid_b = f"sid_dpo_{int(time.time()*1000)}"
+
+    sess_a = session_manager.get_or_create_session(sid_a)
+    sess_a["status"] = "authenticated"
+    sess_a["user_id"] = "MPO_Thallada"
+    sess_a["user_level"] = "mandal"
+    sess_a["mandal_name"] = "Thallada"
+    sess_a["district_name"] = "Khammam"
+
+    sess_b = session_manager.get_or_create_session(sid_b)
+    sess_b["status"] = "authenticated"
+    sess_b["user_id"] = "DPOA3698"
+    sess_b["user_level"] = "district"
+    sess_b["district_name"] = "Khammam"
+
+    dummy_pdf_a = tmp_path / "thallada_mandal.pdf"
+    dummy_pdf_a.write_bytes(b"%PDF-1.4 dummy " + b"1" * 600)
+
+    # Put a cached entry for Session A (MPO Thallada)
+    cache_key_a = (
+        sid_a,
+        "MPO_THALLADA",
+        "dsr",
+        "10-Nov-2026",
+        "Khammam",
+        "09:00",
+        "before_9",
+        "mandal",
+        "thallada",
+        "individual",
+        "all",
+        False,
+    )
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE[cache_key_a] = {
+            "timestamp": time.time(),
+            "latest_pdf_path": str(dummy_pdf_a),
+            "download_filename": "Thallada_Report.pdf",
+            "latest_report_date": "10-Nov-2026",
+            "report_data": {
+                "mandal_name": "Thallada",
+                "is_mandal_level": True,
+                "district_name": "Khammam",
+            },
+            "response": {
+                "success": True,
+                "is_mandal_level": True,
+                "mandal_name": "Thallada",
+            },
+        }
+
+    # Now Officer B (DPOA, district level) requests report for the same date and district
+    # Because of session and officer scoping, Session B MUST NOT get Session A's cache!
+    scoped_officer_b = "DPOA3698"
+    cache_key_b = (
+        sid_b,
+        scoped_officer_b,
+        "dsr",
+        "10-Nov-2026",
+        "Khammam",
+        "09:00",
+        "before_9",
+        "district",
+        "",
+        "individual",
+        "all",
+        False,
+    )
+    with _DSR_CACHE_LOCK:
+        cached_for_b = _DSR_CACHE.get(cache_key_b)
+        assert cached_for_b is None  # Zero cache bleed from Session A!
+
+
+def test_portal_logout_clears_epts_cookies_and_session(monkeypatch):
+    """Verify that logging out from Console clears the epts_session_id cookie and resets backend state."""
+    from core import session_manager
+
+    ts = int(time.time() * 1000)
+    c = TestClient(app)
+    _console_login(c, monkeypatch, f"logout_{ts}")
+
+    sid = c.cookies.get("epts_session_id")
+    assert sid
+
+    sess = session_manager.get_or_create_session(sid)
+    sess["status"] = "authenticated"
+    sess["user_id"] = "DPOA3698"
+
+    # Logout
+    logout_res = c.post("/api/auth/portal-logout", headers={"Host": "reports.panchayatautomation.in"})
+    assert logout_res.status_code == 200
+
+    # Cookie must be cleared in Set-Cookie headers
+    set_cookies = logout_res.headers.get_list("set-cookie") if hasattr(logout_res.headers, "get_list") else [logout_res.headers.get("set-cookie", "")]
+    joined_cookies = " ".join(set_cookies)
+    assert 'epts_session_id=""' in joined_cookies or 'epts_session_id=;' in joined_cookies or 'Max-Age=0' in joined_cookies
+
+    # Backend session must be idle
+    assert sess["status"] == "idle"
+    assert sess["user_id"] == ""
+

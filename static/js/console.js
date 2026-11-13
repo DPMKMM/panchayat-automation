@@ -107,6 +107,7 @@
       'epts_mandal_name',
       'epts_district_name',
       'epts_office_name',
+      'epts_session_id',
     ];
     keys.forEach(function (k) {
       try { sessionStorage.removeItem(k); } catch (e) {}

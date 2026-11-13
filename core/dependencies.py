@@ -349,8 +349,12 @@ def enforce_console_api_access(request: Request) -> Optional[dict[str, Any]]:
     return None
 
 
-def extract_epts_session_id(request: Request) -> str:
-    """Resolve canonical Stage-2 EPTS session ID across state, headers, query params, and cookies."""
+def extract_epts_session_id(request: Request, user_id: str = "") -> str:
+    """Resolve canonical Stage-2 EPTS session ID across state, headers, query params, and cookies.
+
+    If no explicit session ID is sent by an authenticated Google console user, scopes the session
+    strictly to that user's ID to prevent cross-user collisions on a shared 'default' session.
+    """
     state_sid = getattr(request.state, "session_id", None)
     if state_sid and str(state_sid).strip():
         return str(state_sid).strip()
@@ -362,6 +366,11 @@ def extract_epts_session_id(request: Request) -> str:
         or request.cookies.get("ept_session_id")
         or ""
     ).strip()
+    if sid and sid != "default":
+        return sid
+    clean_uid = str(user_id or "").strip()
+    if clean_uid:
+        return f"user_{clean_uid}"
     return sid or "default"
 
 
@@ -380,13 +389,14 @@ def enforce_department_api_access(
         Tuple of `(console_user_or_none, resolved_session_id)`.
     """
     console_user = enforce_console_api_access(request)
-    sid = extract_epts_session_id(request)
+    c_uid = str(console_user["user_id"]) if console_user else ""
+    sid = extract_epts_session_id(request, user_id=c_uid)
     requires_dept = bool(always_require or console_user is not None or _is_explicit_console_request(request))
     if requires_dept:
         from core.session_manager import get_or_create_session, is_authenticated
 
+        sess = get_or_create_session(sid, owner_user_id=c_uid)
         if not is_authenticated(session_id=sid):
-            sess = get_or_create_session(sid)
             is_expired = sess.get("status") == "expired"
             detail = (
                 "Department Login session has expired. Please complete Department Login again."

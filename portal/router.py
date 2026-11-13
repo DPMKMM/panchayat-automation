@@ -13,11 +13,13 @@ from core.access_policy import can_user_access_automated_reports, get_access_pol
 from core.branding import WELCOME_MESSAGE, apply_portal_branding, apply_subpage_console_branding
 from core.config import REVOKED_ADMIN_EMAILS, get_firebase_web_config, is_admin_email
 from core.dependencies import (
+    auth_cookie_domain,
     clear_auth_cookie,
     enforce_console_api_access,
     extract_all_auth_tokens,
     extract_epts_session_id,
     get_current_user_optional,
+    is_https_request,
     resolve_platform_scope,
     resolve_sso_session,
     set_auth_cookie,
@@ -261,9 +263,26 @@ async def api_firebase_login(request: Request, response: Response):
         action="firebase_login",
     )
 
+    import secrets
+    user_sid = f"sid_{user_record['user_id']}_{secrets.token_hex(8)}"
+    response.set_cookie(
+        key="epts_session_id",
+        value=user_sid,
+        httponly=False,
+        samesite="lax",
+        secure=is_https_request(request),
+        domain=auth_cookie_domain(request),
+        path="/",
+    )
+    try:
+        automation_service.get_or_create_session(user_sid, owner_user_id=str(user_record["user_id"]))
+    except Exception:
+        pass
+
     return {
         "success": True,
         "token": token,
+        "epts_session_id": user_sid,
         "platform_scope": scope,
         "user": serialize_user_payload(user_record),
         "is_first_time": is_new,
@@ -281,6 +300,12 @@ def api_portal_logout(request: Request, response: Response):
         revoke_portal_session(tok)
     clear_auth_cookie(response, scope, request)
 
+    dom = auth_cookie_domain(request)
+    response.delete_cookie("epts_session_id", domain=dom, path="/")
+    response.delete_cookie("epts_session_id", path="/")
+    response.delete_cookie("ept_session_id", domain=dom, path="/")
+    response.delete_cookie("ept_session_id", path="/")
+
     browser_closed = False
     sid = extract_epts_session_id(request)
     has_console_bot = bool(sid and sid in getattr(automation_service, "_sessions", {}))
@@ -293,6 +318,11 @@ def api_portal_logout(request: Request, response: Response):
         try:
             from gp_balance import service as gp_balance_service
             gp_balance_service.reset_balance_data(session_id=sid)
+        except Exception:
+            pass
+        try:
+            from inspections.service import clear_session_inspections
+            clear_session_inspections(session_id=sid)
         except Exception:
             pass
 
@@ -314,7 +344,10 @@ def api_portal_status(request: Request, response: Response):
     if user is not None:
         sync_sso_cookie_if_needed(request, response, user, tok)
     policy = get_access_policy()["flags"]
+    c_uid = str(user.get("user_id") if user else "").strip()
     epts_sid = str(getattr(request.state, "session_id", "") or "").strip()
+    if not epts_sid and user:
+        epts_sid = extract_epts_session_id(request, user_id=c_uid)
     base_payload = {
         "authenticated": bool(user),
         "platform_scope": scope,
@@ -339,10 +372,11 @@ def api_portal_status(request: Request, response: Response):
 @router.get("/api/auth/department-status", include_in_schema=False)
 def api_department_status(request: Request) -> dict[str, Any]:
     """Centralized Stage-2 Department Login verification endpoint across all Console modules."""
-    enforce_console_api_access(request)
-    sid = extract_epts_session_id(request)
+    console_user = enforce_console_api_access(request)
+    c_uid = str(console_user["user_id"]) if console_user else ""
+    sid = extract_epts_session_id(request, user_id=c_uid)
     try:
-        st = automation_service.get_session_status(session_id=sid)
+        st = automation_service.get_session_status(session_id=sid, owner_user_id=c_uid)
     except Exception:
         st = {"success": False, "authenticated": False, "expired": False, "status": "idle", "session_id": sid}
     is_auth = bool(st.get("authenticated"))
