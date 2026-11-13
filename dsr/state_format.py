@@ -96,6 +96,7 @@ class StateFormatReport:
     overall_pct_before_9: float
     rows: list[StateFormatRow]
     total_row: StateFormatRow
+    percentage_row: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -111,6 +112,7 @@ class StateFormatReport:
             "overall_pct_before_9": self.overall_pct_before_9,
             "rows": [r.to_dict() for r in self.rows],
             "total_row": self.total_row.to_dict(),
+            "percentage_row": self.percentage_row,
         }
 
 
@@ -176,7 +178,7 @@ def parse_state_format_data(
     raw_bytes: bytes,
     filename: str,
     ps_directory: dict[str, dict[str, str]] | None = None,
-    exclude_incharge: bool = False,
+    exclude_incharge: bool = True,
     report_date_override: date | None = None,
     generated_at_override: datetime | None = None,
 ) -> StateFormatReport:
@@ -248,7 +250,30 @@ def parse_state_format_data(
             _clean_name(dir_info.get("nature_of_posting", ""))
             or _clean_name(row.get("Nature of Posting", ""))
         )
-        is_incharge = "incharge" in nature_of_posting.casefold() or "additional charge" in nature_of_posting.casefold()
+        posting_lower = nature_of_posting.casefold()
+
+        # Classify Nature of Posting across the 4 portal variants:
+        # 1. Regular
+        # 2. Incharge
+        # 3. Fully Additional Charge (or Full Additional Charge)
+        # 4. Blank (missing / empty / unassigned)
+        # Requirement: While preparing the report, consider ONLY Regular.
+        # Incharge, Fully Additional Charge, and Blank are NOT Regular.
+        if (
+            not posting_lower
+            or posting_lower in {"nan", "none", "null", "na", "-", "."}
+            or "incharge" in posting_lower
+            or "charge" in posting_lower
+            or "additional" in posting_lower
+        ):
+            is_regular = False
+        elif "regular" in posting_lower:
+            is_regular = True
+        else:
+            is_regular = False
+
+        is_full_time = is_regular
+        is_incharge = not is_regular
 
         mandal_name = _clean_name(row.get("Mandal Name", "")) or "(Unspecified)"
         gp_name = _clean_name(row.get("Panchayat Name", ""))
@@ -262,11 +287,15 @@ def parse_state_format_data(
         is_meeting_training = ("meeting" in combined_st or "training" in combined_st) and not is_present
         is_leave = "leave" in combined_st and not (is_present or is_meeting_training)
         is_not_reported = not (is_present or is_meeting_training or is_leave)
-        is_reported = is_present or is_meeting_training
+        is_reported = is_present or is_meeting_training or is_leave
 
-        # Arrival bucket classification (for all reported PS: both GP attended and Meeting/Training)
+        # Arrival bucket classification (for all reported PS: GP attended, Meeting/Training, and On Leave)
         arrival_bucket = ""
-        if is_reported:
+        if is_leave:
+            # In official state reporting, secretaries on approved leave have notified
+            # their absence prior to duty and are credited as reported in the before 9 AM (6-9 AM) bucket.
+            arrival_bucket = "6_9"
+        elif is_reported:
             ts_val = row.get("_timestamp")
             if pd.isna(ts_val) or ts_val is None:
                 sec_ts = row.get("Second Attendence Datetime")
@@ -309,11 +338,11 @@ def parse_state_format_data(
         else:
             eval_mask = pd.Series(True, index=m_group.index)
         
-        b_6_9 = int(((m_group["arrival_bucket"] == "6_9") & m_group["is_reported"] & eval_mask).sum())
-        b_9_10 = int(((m_group["arrival_bucket"] == "9_10") & m_group["is_reported"] & eval_mask).sum())
-        b_10_11 = int(((m_group["arrival_bucket"] == "10_11") & m_group["is_reported"] & eval_mask).sum())
-        b_11_12 = int(((m_group["arrival_bucket"] == "11_12") & m_group["is_reported"] & eval_mask).sum())
-        b_after_12 = int(((m_group["arrival_bucket"] == "after_12") & m_group["is_reported"] & eval_mask).sum())
+        b_6_9 = int(((m_group["arrival_bucket"] == "6_9") & eval_mask).sum())
+        b_9_10 = int(((m_group["arrival_bucket"] == "9_10") & eval_mask).sum())
+        b_10_11 = int(((m_group["arrival_bucket"] == "10_11") & eval_mask).sum())
+        b_11_12 = int(((m_group["arrival_bucket"] == "11_12") & eval_mask).sum())
+        b_after_12 = int(((m_group["arrival_bucket"] == "after_12") & eval_mask).sum())
         
         # Col 11: Total No.of PSs attended GP (physically attended the Gram Panchayat)
         total_attended_gp = int((m_group["is_present"] & eval_mask).sum())
@@ -394,6 +423,25 @@ def parse_state_format_data(
         not_reported=tot_not_rep,
     )
 
+    # Calculate Percentage Row (bottom summary row matching official state format)
+    denom = tot_ft if exclude_incharge and tot_ft > 0 else (tot_gps if tot_gps > 0 else 1)
+    percentage_row = {
+        "sl_no": "",
+        "mandal_name": "Percentage",
+        "total_gps": "",
+        "full_time_working": "",
+        "b_6_9": round(tot_6_9 / denom * 100, 2) if denom > 0 else 0.0,
+        "b_9_10": round(tot_9_10 / denom * 100, 2) if denom > 0 else 0.0,
+        "b_10_11": round(tot_10_11 / denom * 100, 2) if denom > 0 else 0.0,
+        "b_11_12": round(tot_11_12 / denom * 100, 2) if denom > 0 else 0.0,
+        "b_after_12": round(tot_aft12 / denom * 100, 2) if denom > 0 else 0.0,
+        "pct_before_9": "",
+        "total_attended": round(tot_att / denom * 100, 2) if denom > 0 else 0.0,
+        "meeting_training": round(tot_mtg / denom * 100, 2) if denom > 0 else 0.0,
+        "on_leave": round(tot_leave / denom * 100, 2) if denom > 0 else 0.0,
+        "not_reported": round(tot_not_rep / denom * 100, 2) if denom > 0 else 0.0,
+    }
+
     return StateFormatReport(
         district_name=district_name,
         report_date=rep_date,
@@ -407,6 +455,7 @@ def parse_state_format_data(
         overall_pct_before_9=overall_pct_b9,
         rows=mandal_list,
         total_row=total_row,
+        percentage_row=percentage_row,
     )
 
 
@@ -427,27 +476,39 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
 
     story: list[Any] = []
 
-    # Title: Red Bold, Centered
+    # Line 1: District Name (Maroon/Red bold, Centered)
+    dist_style = ParagraphStyle(
+        "StateFormatDistrict",
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=15,
+        textColor=HexColor("#990000"),
+        alignment=TA_CENTER,
+        spaceAfter=1.5,
+    )
+    story.append(Paragraph(f"District Name: {report.district_name}", dist_style))
+
+    # Line 2: Report Title (Maroon/Red bold, Centered)
     title_style = ParagraphStyle(
         "StateFormatTitle",
         fontName="Helvetica-Bold",
-        fontSize=13,
-        leading=16,
+        fontSize=12,
+        leading=15,
         textColor=HexColor("#990000"),
         alignment=TA_CENTER,
         spaceAfter=2,
     )
     story.append(Paragraph("Mandal wise Status of Panchayat Secretaries Attendance With Time", title_style))
 
-    # Subtitle: Blue Bold, Centered
+    # Line 3: Subtitle / Timestamp (Blue bold, Centered)
     sub_style = ParagraphStyle(
         "StateFormatSubtitle",
         fontName="Helvetica-Bold",
-        fontSize=10.5,
+        fontSize=10,
         leading=13,
         textColor=HexColor("#003399"),
         alignment=TA_CENTER,
-        spaceAfter=7,
+        spaceAfter=6,
     )
     story.append(Paragraph(report.subtitle, sub_style))
 
@@ -456,8 +517,8 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
     hdr_row0 = [
         "Sl.\nNo.",
         "Mandal Name",
-        "Total No.\nof GPs",
-        "No.of PS\nin which\nfull time\nworking",
+        "Total\nNo. of GPs",
+        "No.of PS in\nwhich full time\nworking",
         "No.of Panchayat Secretaries reported",
         "", "", "", "", "", "", "", "", "",
     ]
@@ -472,37 +533,37 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
         "% of PS\nReported\nbefore 9 AM\n↓",
         "Total No.of\nPSs attended\nGP",
         "No.of PSs\nreported to\nMtg / Trngs\ntoday",
-        "No.of PSs\non Leave\nToday",
-        "No.of PS\nNot\nreported",
+        "No.of PSs on\nLeave Today",
+        "No.of PS Not\nreported",
     ]
-    # Row 2: Column numbers 1 to 14
-    hdr_row2 = [str(i) for i in range(1, 15)]
+    # Row 2: Column numbers matching manual government reporting format
+    hdr_row2 = ["1", "2", "3", "", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]
 
     table_data = [hdr_row0, hdr_row1, hdr_row2]
 
-    # Data rows
+    # Data rows: Blanks for zero counts in columns 6, 7, 8, 9, 12, 13
     for r in report.rows:
-        pct_display = f"{r.pct_before_9:.2f}%" if r.pct_before_9 > 0 else "0.00%"
+        pct_display = f"{r.pct_before_9:.2f}"
         table_data.append([
             str(r.sl_no),
             r.mandal_name,
             str(r.total_gps),
             str(r.full_time_working),
-            str(r.b_6_9),
-            str(r.b_9_10),
-            str(r.b_10_11),
-            str(r.b_11_12),
-            str(r.b_after_12),
+            str(r.b_6_9) if r.b_6_9 > 0 else "",
+            str(r.b_9_10) if r.b_9_10 > 0 else "",
+            str(r.b_10_11) if r.b_10_11 > 0 else "",
+            str(r.b_11_12) if r.b_11_12 > 0 else "",
+            str(r.b_after_12) if r.b_after_12 > 0 else "",
             pct_display,
-            str(r.total_attended),
-            str(r.meeting_training),
-            str(r.on_leave),
+            str(r.total_attended) if r.total_attended > 0 else "",
+            str(r.meeting_training) if r.meeting_training > 0 else "",
+            str(r.on_leave) if r.on_leave > 0 else "",
             str(r.not_reported),
         ])
 
     # Total Row
     tot = report.total_row
-    tot_pct_display = f"{tot.pct_before_9:.2f}%" if tot.pct_before_9 > 0 else "0.00%"
+    tot_pct_display = f"{tot.pct_before_9:.2f}"
     table_data.append([
         "",
         "Total",
@@ -519,6 +580,27 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
         str(tot.on_leave),
         str(tot.not_reported),
     ])
+
+    # Percentage Row (Bottom row summary matching official state format)
+    has_percentage_row = bool(report.percentage_row)
+    if has_percentage_row:
+        p = report.percentage_row  # type: ignore[assignment]
+        table_data.append([
+            "",
+            "Percentage",
+            "",
+            "",
+            f"{p['b_6_9']:.2f}",
+            f"{p['b_9_10']:.2f}",
+            f"{p['b_10_11']:.2f}",
+            f"{p['b_11_12']:.2f}",
+            f"{p['b_after_12']:.2f}",
+            "",
+            f"{p['total_attended']:.2f}",
+            f"{p['meeting_training']:.2f}",
+            f"{p['on_leave']:.2f}",
+            f"{p['not_reported']:.2f}",
+        ])
 
     # Table Column Widths (Sum = 277mm max available)
     col_widths = [
@@ -539,9 +621,9 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
     ]
 
     total_rows = len(table_data)
-    total_data_row_idx = total_rows - 1
+    total_data_row_idx = total_rows - 2 if has_percentage_row else total_rows - 1
 
-    t_style = TableStyle([
+    t_style_cmds = [
         # Header spans
         ("SPAN", (0, 0), (0, 1)),  # Sl. No.
         ("SPAN", (1, 0), (1, 1)),  # Mandal Name
@@ -550,8 +632,7 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
         ("SPAN", (4, 0), (13, 0)),  # Group header across 10 cols
 
         # Background Colors
-        ("BACKGROUND", (0, 0), (-1, 2), HexColor("#EBF3FA")),  # Soft blue state header
-        ("BACKGROUND", (0, total_data_row_idx), (-1, total_data_row_idx), HexColor("#F1F5F9")),  # Total row light fill
+        ("BACKGROUND", (0, 0), (-1, 2), HexColor("#D9E8F5")),  # State light ice blue header
 
         # Alignment
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
@@ -560,29 +641,46 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: str | Path
 
         # Fonts & Sizes
         ("FONTNAME", (0, 0), (-1, 2), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 2), 7.5),
-        ("LEADING", (0, 0), (-1, 2), 9.0),
+        ("FONTSIZE", (0, 0), (-1, 2), 7.2),
+        ("LEADING", (0, 0), (-1, 2), 8.8),
 
-        ("FONTNAME", (0, 3), (-1, -2), "Helvetica"),
-        ("FONTSIZE", (0, 3), (-1, -2), 7.5),
-        ("LEADING", (0, 3), (-1, -2), 8.8),
+        ("FONTNAME", (0, 3), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 3), (-1, -1), 7.5),
+        ("LEADING", (0, 3), (-1, -1), 8.8),
 
+        # Highlight % column (Col index 9) in Red Bold for data rows & Total row
+        ("TEXTCOLOR", (9, 3), (9, total_data_row_idx), HexColor("#C00000")),
+        ("FONTNAME", (9, 3), (9, total_data_row_idx), "Helvetica-Bold"),
+
+        # Total Row Bold
         ("FONTNAME", (0, total_data_row_idx), (-1, total_data_row_idx), "Helvetica-Bold"),
-        ("FONTSIZE", (0, total_data_row_idx), (-1, total_data_row_idx), 8.0),
+        ("FONTSIZE", (0, total_data_row_idx), (-1, total_data_row_idx), 7.8),
 
         # Grid Borders
         ("GRID", (0, 0), (-1, -1), 0.5, HexColor("#334155")),
-        ("LINEBELOW", (0, 2), (-1, 2), 1.0, HexColor("#1E293B")),
-        ("LINEABOVE", (0, total_data_row_idx), (-1, total_data_row_idx), 1.0, HexColor("#1E293B")),
-        ("LINEBELOW", (0, total_data_row_idx), (-1, total_data_row_idx), 1.2, HexColor("#1E293B")),
+        ("LINEBELOW", (0, 2), (-1, 2), 1.0, HexColor("#000000")),
+        ("LINEABOVE", (0, total_data_row_idx), (-1, total_data_row_idx), 1.0, HexColor("#000000")),
 
         # Padding
-        ("TOPPADDING", (0, 0), (-1, -1), 2.2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.2),
-        ("LEFTPADDING", (0, 0), (-1, -1), 2.5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 2.5),
-    ])
+        ("TOPPADDING", (0, 0), (-1, -1), 2.0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.0),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2.2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2.2),
+    ]
 
+    if has_percentage_row:
+        pct_row_idx = total_rows - 1
+        t_style_cmds.extend([
+            ("FONTNAME", (0, pct_row_idx), (-1, pct_row_idx), "Helvetica-Bold"),
+            ("FONTSIZE", (0, pct_row_idx), (-1, pct_row_idx), 7.8),
+            ("TEXTCOLOR", (0, pct_row_idx), (-1, pct_row_idx), HexColor("#C00000")),
+            ("LINEBELOW", (0, total_data_row_idx), (-1, total_data_row_idx), 0.5, HexColor("#000000")),
+            ("LINEBELOW", (0, pct_row_idx), (-1, pct_row_idx), 1.2, HexColor("#000000")),
+        ])
+    else:
+        t_style_cmds.append(("LINEBELOW", (0, total_data_row_idx), (-1, total_data_row_idx), 1.2, HexColor("#000000")))
+
+    t_style = TableStyle(t_style_cmds)
     report_table = Table(table_data, colWidths=col_widths, repeatRows=3, style=t_style)
     story.append(report_table)
 
@@ -648,90 +746,100 @@ def generate_state_format_excel(report: StateFormatReport, output_path: str | Pa
     left_align = Alignment(horizontal="left", vertical="center")
     right_align = Alignment(horizontal="right", vertical="center")
 
-    # Row 1: Title
+    # Row 1: District Name
     ws.merge_cells("A1:N1")
-    title_cell = ws["A1"]
+    dist_cell = ws["A1"]
+    dist_cell.value = f"District Name: {report.district_name}"
+    dist_cell.font = title_font
+    dist_cell.alignment = center_align
+    ws.row_dimensions[1].height = 22
+
+    # Row 2: Title
+    ws.merge_cells("A2:N2")
+    title_cell = ws["A2"]
     title_cell.value = "Mandal wise Status of Panchayat Secretaries Attendance With Time"
     title_cell.font = title_font
     title_cell.alignment = center_align
-    ws.row_dimensions[1].height = 24
+    ws.row_dimensions[2].height = 22
 
-    # Row 2: Subtitle
-    ws.merge_cells("A2:N2")
-    sub_cell = ws["A2"]
+    # Row 3: Subtitle
+    ws.merge_cells("A3:N3")
+    sub_cell = ws["A3"]
     sub_cell.value = report.subtitle
     sub_cell.font = sub_font
     sub_cell.alignment = center_align
-    ws.row_dimensions[2].height = 20
+    ws.row_dimensions[3].height = 19
 
-    # Row 3: Blank separator
-    ws.row_dimensions[3].height = 8
+    # Row 4: Blank separator
+    ws.row_dimensions[4].height = 6
 
-    # Row 4 & 5: Tiered Header
-    headers_r4 = [
+    # Row 5 & 6: Tiered Header
+    headers_r5 = [
         "Sl. No.", "Mandal Name", "Total No. of GPs", "No.of PS in which full time working",
         "No.of Panchayat Secretaries reported", "", "", "", "", "", "", "", "", ""
     ]
-    headers_r5 = [
+    headers_r6 = [
         "", "", "", "",
         "6 AM - 9 AM", "9 AM - 10 AM", "10 AM - 11 AM", "11 AM - 12 Noon", "After 12 Noon",
         "% of PS Reported before 9 AM ↓", "Total No.of PSs attended GP",
         "No.of PSs reported to Mtg / Trngs today", "No.of PSs on Leave Today", "No.of PS Not reported"
     ]
-    headers_r6 = [str(i) for i in range(1, 15)]
+    # Row 7: Column numbers matching manual government report format
+    headers_r7 = ["1", "2", "3", "", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]
 
-    ws.append(headers_r4)  # Row 4
     ws.append(headers_r5)  # Row 5
     ws.append(headers_r6)  # Row 6
+    ws.append(headers_r7)  # Row 7
 
     # Merges for Header
-    ws.merge_cells("A4:A5")
-    ws.merge_cells("B4:B5")
-    ws.merge_cells("C4:C5")
-    ws.merge_cells("D4:D5")
-    ws.merge_cells("E4:N4")
+    ws.merge_cells("A5:A6")
+    ws.merge_cells("B5:B6")
+    ws.merge_cells("C5:C6")
+    ws.merge_cells("D5:D6")
+    ws.merge_cells("E5:N5")
 
-    ws.row_dimensions[4].height = 24
-    ws.row_dimensions[5].height = 28
-    ws.row_dimensions[6].height = 18
+    ws.row_dimensions[5].height = 24
+    ws.row_dimensions[6].height = 28
+    ws.row_dimensions[7].height = 18
 
-    for r_num in (4, 5, 6):
+    for r_num in (5, 6, 7):
         for col_num in range(1, 15):
             c = ws.cell(row=r_num, column=col_num)
             c.fill = header_fill
-            c.font = num_hdr_font if r_num == 6 else header_font
+            c.font = num_hdr_font if r_num == 7 else header_font
             c.alignment = center_align
             c.border = cell_border
 
-    # Data Rows (Row 7 onwards)
-    current_row = 7
+    # Data Rows (Row 8 onwards)
+    current_row = 8
+    red_pct_font = Font(name="Calibri", size=9.5, bold=True, color="C00000")
     for r in report.rows:
         row_vals = [
             r.sl_no,
             r.mandal_name,
             r.total_gps,
             r.full_time_working,
-            r.b_6_9,
-            r.b_9_10,
-            r.b_10_11,
-            r.b_11_12,
-            r.b_after_12,
-            f"{r.pct_before_9:.2f}%",
-            r.total_attended,
-            r.meeting_training,
-            r.on_leave,
+            r.b_6_9 if r.b_6_9 > 0 else "",
+            r.b_9_10 if r.b_9_10 > 0 else "",
+            r.b_10_11 if r.b_10_11 > 0 else "",
+            r.b_11_12 if r.b_11_12 > 0 else "",
+            r.b_after_12 if r.b_after_12 > 0 else "",
+            f"{r.pct_before_9:.2f}",
+            r.total_attended if r.total_attended > 0 else "",
+            r.meeting_training if r.meeting_training > 0 else "",
+            r.on_leave if r.on_leave > 0 else "",
             r.not_reported,
         ]
         ws.append(row_vals)
         ws.row_dimensions[current_row].height = 19
         for col_num in range(1, 15):
             c = ws.cell(row=current_row, column=col_num)
-            c.font = data_font
+            c.font = red_pct_font if col_num == 10 else data_font
             c.border = cell_border
             if col_num == 2:
                 c.alignment = left_align
             elif col_num == 10:
-                c.alignment = right_align
+                c.alignment = center_align
             else:
                 c.alignment = center_align
         current_row += 1
@@ -748,7 +856,7 @@ def generate_state_format_excel(report: StateFormatReport, output_path: str | Pa
         tot.b_10_11,
         tot.b_11_12,
         tot.b_after_12,
-        f"{tot.pct_before_9:.2f}%",
+        f"{tot.pct_before_9:.2f}",
         tot.total_attended,
         tot.meeting_training,
         tot.on_leave,
@@ -758,16 +866,47 @@ def generate_state_format_excel(report: StateFormatReport, output_path: str | Pa
     ws.row_dimensions[current_row].height = 22
     for col_num in range(1, 15):
         c = ws.cell(row=current_row, column=col_num)
-        c.font = total_font
+        c.font = Font(name="Calibri", size=10, bold=True, color="C00000" if col_num == 10 else "000000")
         c.fill = total_fill
         c.border = total_border
         if col_num == 2:
             c.alignment = left_align
-        elif col_num == 10:
-            c.alignment = right_align
         else:
             c.alignment = center_align
     current_row += 1
+
+    # Percentage Row (Bottom row summary matching official state format)
+    if report.percentage_row:
+        p = report.percentage_row
+        pct_row_vals = [
+            "",
+            "Percentage",
+            "",
+            "",
+            f"{p['b_6_9']:.2f}",
+            f"{p['b_9_10']:.2f}",
+            f"{p['b_10_11']:.2f}",
+            f"{p['b_11_12']:.2f}",
+            f"{p['b_after_12']:.2f}",
+            "",
+            f"{p['total_attended']:.2f}",
+            f"{p['meeting_training']:.2f}",
+            f"{p['on_leave']:.2f}",
+            f"{p['not_reported']:.2f}",
+        ]
+        ws.append(pct_row_vals)
+        ws.row_dimensions[current_row].height = 22
+        pct_font = Font(name="Calibri", size=10, bold=True, color="C00000")
+        for col_num in range(1, 15):
+            c = ws.cell(row=current_row, column=col_num)
+            c.font = pct_font
+            c.fill = total_fill
+            c.border = total_border
+            if col_num == 2:
+                c.alignment = left_align
+            else:
+                c.alignment = center_align
+        current_row += 1
 
     # Footer Row
     current_row += 1

@@ -536,7 +536,7 @@ def _generate_server_report_impl(
 def generate_server_state_format_report(
     session_id: str = "",
     date_str: str = "",
-    exclude_incharge: bool = False,
+    exclude_incharge: bool = True,
     force_fresh: bool = False,
 ) -> dict[str, Any]:
     """Generate official 14-column State Format Attendance report for the session."""
@@ -555,7 +555,7 @@ def generate_server_state_format_report(
 def _generate_server_state_format_impl(
     session: dict[str, Any],
     date_str: str = "",
-    exclude_incharge: bool = False,
+    exclude_incharge: bool = True,
     force_fresh: bool = False,
 ) -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
@@ -637,11 +637,13 @@ def _generate_server_state_format_impl(
     date_ps_cache_path = data_dir / f"ps_directory_cache_{date_iso}.json"
     target_date_dir = load_ps_directory_cache(date_ps_cache_path) if date_ps_cache_path.exists() else {}
 
-    # 2. Download files for this target date if missing or force_fresh requested
+    # 2. Download files for this target date if missing or force_fresh requested:
+    # Always ensure RAW data (1.2.7), Presenties (1.2.11), and Absentees (1.2.10) are downloaded
     need_raw = not raw_path or not raw_path.exists() or force_fresh
-    need_postings = (not presentees_bytes and not target_date_dir) or force_fresh
+    need_presentees = not presentees_bytes or force_fresh
+    need_absentees = not absentees_bytes or force_fresh
 
-    if need_raw or need_postings:
+    if need_raw or need_presentees or need_absentees:
         if not _is_bot_alive(bot):
             bot = ensure_active_bot(session)
         if not _is_bot_alive(bot):
@@ -658,7 +660,7 @@ def _generate_server_state_format_impl(
                 raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR raw data from portal for date '{portal_date_fmt}': {exc}") from exc
 
         # Download presentees & absentees for the EXACT same user input date
-        if need_postings:
+        if need_presentees:
             logger.info("[%s] Downloading GM-R 1.2.11 Presentees for target date %s...", sid[:6], portal_date_fmt)
             try:
                 p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
@@ -668,6 +670,7 @@ def _generate_server_state_format_impl(
             except Exception as e:
                 logger.warning("[%s] Could not download GM-R 1.2.11 Presentees for date %s: %s", sid[:6], portal_date_fmt, e)
 
+        if need_absentees:
             logger.info("[%s] Downloading GM-R 1.2.10 Absentees for target date %s...", sid[:6], portal_date_fmt)
             try:
                 a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)

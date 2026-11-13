@@ -4560,37 +4560,28 @@
     }
 
     var tbody = document.getElementById('state-format-tbody');
+    var fmt = function (v) { return (v && Number(v) > 0) ? v : ''; };
+
     if (tbody) {
       var rowsHtml = '';
       (data.rows || []).forEach(function (r) {
         var pct = Number(r.pct_before_9 || 0);
-        var pctBg = '#ffffff';
-        var pctColor = '#0f172a';
-        if (pct >= 90) {
-          pctBg = '#dcfce7'; pctColor = '#15803d';
-        } else if (pct >= 75) {
-          pctBg = '#fef9c3'; pctColor = '#854d0e';
-        } else if (pct >= 50) {
-          pctBg = '#ffedd5'; pctColor = '#c2410c';
-        } else if (pct > 0) {
-          pctBg = '#fee2e2'; pctColor = '#b91c1c';
-        }
 
         rowsHtml += '<tr style="border-bottom:1px solid #cbd5e1;">' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.sl_no || '') + '</td>' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:left; font-weight:700;">' + (r.mandal_name || '') + '</td>' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.total_gps || 0) + '</td>' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600;">' + (r.full_time_working || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_6_9 || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_9_10 || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_10_11 || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_11_12 || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_after_12 || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:800; background:' + pctBg + '; color:' + pctColor + ';">' + pct.toFixed(2) + '%</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + (r.total_attended || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.meeting_training || 0) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.on_leave || 0) + '</td>' +
-          '<td style="padding:6px 4px;">' + (r.not_reported || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.b_6_9) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.b_9_10) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.b_10_11) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.b_11_12) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.b_after_12) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:800; color:#c00000;">' + pct.toFixed(2) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + fmt(r.total_attended) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.meeting_training) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmt(r.on_leave) + '</td>' +
+          '<td style="padding:6px 4px;">' + (r.not_reported != null ? r.not_reported : 0) + '</td>' +
           '</tr>';
       });
       tbody.innerHTML = rowsHtml;
@@ -4600,22 +4591,43 @@
     if (tfoot && data.total_row) {
       var tot = data.total_row;
       var totPct = Number(tot.pct_before_9 || 0);
-      var totHtml = '<tr>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;"></td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 8px; text-align:left; font-weight:800; font-size:0.9rem;">Total</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.total_gps || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.full_time_working || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_6_9 || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_9_10 || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_10_11 || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_11_12 || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_after_12 || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px; font-weight:900; background:#e0f2fe; color:#0369a1;">' + totPct.toFixed(2) + '%</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.total_attended || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.meeting_training || 0) + '</td>' +
-        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.on_leave || 0) + '</td>' +
-        '<td style="padding:8px 4px;">' + (tot.not_reported || 0) + '</td>' +
+      var totHtml = '<tr style="background:#ffffff; font-weight:800; border-top:1.5px solid #1e293b;">' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;"></td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 8px; text-align:left; font-weight:800; font-size:0.9rem;">Total</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.total_gps || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.full_time_working || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.b_6_9 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.b_9_10 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.b_10_11 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.b_11_12 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.b_after_12 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px; font-weight:900; color:#c00000;">' + totPct.toFixed(2) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.total_attended || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.meeting_training || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:7px 4px;">' + (tot.on_leave || 0) + '</td>' +
+        '<td style="padding:7px 4px;">' + (tot.not_reported != null ? tot.not_reported : 0) + '</td>' +
         '</tr>';
+
+      if (data.percentage_row) {
+        var p = data.percentage_row;
+        totHtml += '<tr style="background:#ffffff; font-weight:800; color:#c00000; border-top:1px solid #334155; border-bottom:2px double #1e293b;">' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px;"></td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 8px; text-align:left; font-weight:800; color:#c00000;">Percentage</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px;"></td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px;"></td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.b_6_9 != null ? Number(p.b_6_9).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.b_9_10 != null ? Number(p.b_9_10).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.b_10_11 != null ? Number(p.b_10_11).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.b_11_12 != null ? Number(p.b_11_12).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.b_after_12 != null ? Number(p.b_after_12).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px;"></td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.total_attended != null ? Number(p.total_attended).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.meeting_training != null ? Number(p.meeting_training).toFixed(2) : '') + '</td>' +
+          '<td style="border-right:1px solid #334155; padding:7px 4px; color:#c00000;">' + (p.on_leave != null ? Number(p.on_leave).toFixed(2) : '') + '</td>' +
+          '<td style="padding:7px 4px; color:#c00000;">' + (p.not_reported != null ? Number(p.not_reported).toFixed(2) : '') + '</td>' +
+          '</tr>';
+      }
+
       tfoot.innerHTML = totHtml;
     }
 

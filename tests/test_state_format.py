@@ -57,8 +57,8 @@ def test_state_format_data_all_gps(tmp_path):
     assert tot.total_gps == 571
     assert tot.full_time_working == 508
     assert tot.total_attended == 538
-    # Arrival buckets (Cols 5-9) cover all reported secretaries (Attended GP + Meeting/Training)
-    assert tot.total_attended + tot.meeting_training == (tot.b_6_9 + tot.b_9_10 + tot.b_10_11 + tot.b_11_12 + tot.b_after_12)
+    # Arrival buckets (Cols 5-9) cover all reported secretaries (Attended GP + Meeting/Training + On Leave)
+    assert tot.total_attended + tot.meeting_training + tot.on_leave == (tot.b_6_9 + tot.b_9_10 + tot.b_10_11 + tot.b_11_12 + tot.b_after_12)
     assert tot.total_attended + tot.meeting_training + tot.on_leave + tot.not_reported == tot.total_gps
 
     # Generate PDF
@@ -91,6 +91,7 @@ def test_state_format_data_exclude_incharge(tmp_path):
     assert tot.total_gps == 571
     assert tot.full_time_working == 508
     assert tot.total_attended == 486
+    assert tot.total_attended + tot.meeting_training + tot.on_leave == (tot.b_6_9 + tot.b_9_10 + tot.b_10_11 + tot.b_11_12 + tot.b_after_12)
     assert tot.total_attended + tot.meeting_training + tot.on_leave + tot.not_reported == tot.full_time_working
 
     # Generate PDF
@@ -229,3 +230,93 @@ def test_meeting_training_punctuality_formula(tmp_path):
     assert th_all.b_9_10 == 2
     # Total GPs denominator: 25 / 27 * 100 = 92.59%
     assert th_all.pct_before_9 == 92.59
+
+
+def test_user_manual_report_leave_and_percentage_row(tmp_path):
+    """Verify that Leave is credited before 9 AM, 14-col balancing holds, and percentage row is generated."""
+    import pandas as pd
+    from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
+
+    # Thallada scenario:
+    # 27 GPs total: 21 Regular, 6 Incharge
+    # Among 21 Regular:
+    # 19 Present before 9 AM
+    # 2 On Leave before 9 AM (e.g. 06:25 AM, 06:58 AM)
+    rows = []
+    for i in range(1, 20):
+        rows.append({
+            "Panchayat LGD": str(990000 + i),
+            "District Name": "Khammam",
+            "Mandal Name": "Thallada",
+            "Panchayat Name": f"GP {i}",
+            "Nature of Posting": "Regular",
+            "First Attendence Status": "Present",
+            "First Attendence Datetime": "2026-11-12 08:35:00",
+            "Second Attendence Status": "",
+            "Second Attendence Datetime": "",
+        })
+    # 2 on leave
+    for i in range(20, 22):
+        rows.append({
+            "Panchayat LGD": str(990000 + i),
+            "District Name": "Khammam",
+            "Mandal Name": "Thallada",
+            "Panchayat Name": f"GP {i}",
+            "Nature of Posting": "Regular",
+            "First Attendence Status": "On Leave",
+            "First Attendence Datetime": "2026-11-12 06:45:00",
+            "Second Attendence Status": "",
+            "Second Attendence Datetime": "",
+        })
+    # 6 incharge
+    for i in range(22, 28):
+        rows.append({
+            "Panchayat LGD": str(990000 + i),
+            "District Name": "Khammam",
+            "Mandal Name": "Thallada",
+            "Panchayat Name": f"GP {i}",
+            "Nature of Posting": "Incharge",
+            "First Attendence Status": "Present",
+            "First Attendence Datetime": "2026-11-12 08:45:00",
+            "Second Attendence Status": "",
+            "Second Attendence Datetime": "",
+        })
+
+    df = pd.DataFrame(rows)
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False)
+    raw_bytes = buf.getvalue()
+
+    rep = parse_state_format_data(raw_bytes, "Thallada_12Nov.xlsx", ps_directory={}, exclude_incharge=True)
+    r = rep.rows[0]
+
+    assert r.total_gps == 27
+    assert r.full_time_working == 21
+    # Both 19 present and 2 on leave are credited before 9 AM -> 21
+    assert r.b_6_9 == 21
+    assert r.b_9_10 == 0
+    assert r.pct_before_9 == 100.00
+    assert r.total_attended == 19
+    assert r.meeting_training == 0
+    assert r.on_leave == 2
+    assert r.not_reported == 0
+
+    # Check Total & Percentage Row
+    assert rep.total_row.b_6_9 == 21
+    assert rep.percentage_row is not None
+    assert rep.percentage_row["b_6_9"] == 100.00
+    assert rep.percentage_row["total_attended"] == round(19 / 21 * 100, 2)
+    assert rep.percentage_row["on_leave"] == round(2 / 21 * 100, 2)
+
+    # Test PDF generation
+    pdf_p = tmp_path / "manual_match.pdf"
+    generate_state_format_pdf(rep, pdf_p)
+    assert pdf_p.exists()
+    assert pdf_p.stat().st_size > 1000
+
+    # Test Excel generation
+    xlsx_p = tmp_path / "manual_match.xlsx"
+    generate_state_format_excel(rep, xlsx_p)
+    assert xlsx_p.exists()
+    assert xlsx_p.stat().st_size > 1000
+
