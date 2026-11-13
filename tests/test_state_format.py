@@ -19,6 +19,12 @@ SAMPLE_RAW_DSR = Path("dsr/downloads/session_bb833d53b268d8241dec88a7b533e0d7/Kh
 
 
 def test_classify_arrival_bucket():
+    # Early punches before 6:00 AM must be considered in the Before 9 AM bucket
+    assert _classify_arrival_bucket("2026-11-07 04:30:00") == "6_9"
+    assert _classify_arrival_bucket("2026-11-07 05:15:00") == "6_9"
+    assert _classify_arrival_bucket("2026-11-07 05:45:00") == "6_9"
+    assert _classify_arrival_bucket("05:30:00") == "6_9"
+    assert _classify_arrival_bucket("05:45 AM") == "6_9"
     assert _classify_arrival_bucket("2026-11-07 07:30:00") == "6_9"
     assert _classify_arrival_bucket("2026-11-07 08:59:00") == "6_9"
     assert _classify_arrival_bucket("2026-11-07 09:00:00") == "9_10"

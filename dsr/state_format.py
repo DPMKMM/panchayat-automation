@@ -115,20 +115,26 @@ class StateFormatReport:
 
 
 def _classify_arrival_bucket(dt: Any) -> str:
-    """Classify attendance arrival timestamp into 5 hourly buckets.
+    """Classify attendance arrival timestamp into hourly buckets.
     
-    6 AM - 9 AM: < 09:00:00 (includes early arrivals)
-    9 AM - 10 AM: 09:00:00 to 09:59:59
-    10 AM - 11 AM: 10:00:00 to 10:59:59
-    11 AM - 12 Noon: 11:00:00 to 11:59:59
-    After 12 Noon: >= 12:00:00
+    Before 9 AM (Col 5): all arrivals with time < 09:00:00 (including before 06:00 AM)
+    9 AM - 10 AM (Col 6): 09:00:00 to 09:59:59
+    10 AM - 11 AM (Col 7): 10:00:00 to 10:59:59
+    11 AM - 12 Noon (Col 8): 11:00:00 to 11:59:59
+    After 12 Noon (Col 9): >= 12:00:00
     """
-    if pd.isna(dt) or dt is None:
+    if pd.isna(dt) or dt is None or dt == "":
         return "6_9"
     try:
-        ts = pd.Timestamp(dt)
-        minute_of_day = ts.hour * 60 + ts.minute
-        if minute_of_day < 540:  # Before 9:00 AM
+        if isinstance(dt, time):
+            minute_of_day = dt.hour * 60 + dt.minute
+        else:
+            ts = pd.Timestamp(dt)
+            minute_of_day = ts.hour * 60 + ts.minute
+
+        # Strictly consider all arrivals before 9:00 AM (< 540 minutes from midnight).
+        # Any punch before 6:00 AM (e.g. 5:15 AM, 5:30 AM, 5:45 AM) is fully credited here.
+        if minute_of_day < 540:
             return "6_9"
         elif 540 <= minute_of_day < 600:  # 9:00 to 9:59
             return "9_10"
@@ -139,6 +145,30 @@ def _classify_arrival_bucket(dt: Any) -> str:
         else:  # 12:00 PM and later
             return "after_12"
     except Exception:
+        # Fallback to string regex if Timestamp parsing threw an exception
+        try:
+            s = str(dt).strip()
+            match = re.search(r"(\d{1,2}):(\d{2})", s)
+            if match:
+                h = int(match.group(1))
+                m = int(match.group(2))
+                if "pm" in s.lower() and h < 12:
+                    h += 12
+                elif "am" in s.lower() and h == 12:
+                    h = 0
+                minute_of_day = h * 60 + m
+                if minute_of_day < 540:
+                    return "6_9"
+                elif 540 <= minute_of_day < 600:
+                    return "9_10"
+                elif 600 <= minute_of_day < 660:
+                    return "10_11"
+                elif 660 <= minute_of_day < 720:
+                    return "11_12"
+                else:
+                    return "after_12"
+        except Exception:
+            pass
         return "6_9"
 
 
