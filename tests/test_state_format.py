@@ -73,10 +73,18 @@ def test_state_format_data_exclude_incharge(tmp_path):
     report = parse_state_format_data(raw_bytes, SAMPLE_RAW_DSR.name, exclude_incharge=True)
 
     assert report.exclude_incharge is True
-    assert report.total_gps == 508
+    # Total No of GPs (Col 3) must NOT exclude incharge: it should be the total GP count (571 in Khammam)
+    assert report.total_gps == 571
     assert report.total_working_ps == 508
     assert report.total_attended == 486
     assert len(report.rows) == 20
+
+    # Total row checks
+    tot = report.total_row
+    assert tot.total_gps == 571
+    assert tot.full_time_working == 508
+    assert tot.total_attended == 486
+    assert tot.total_attended + tot.meeting_training + tot.on_leave + tot.not_reported == tot.full_time_working
 
     # Generate PDF
     pdf_out = tmp_path / "test_state_format_ex.pdf"

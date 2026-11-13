@@ -215,10 +215,6 @@ def parse_state_format_data(
         )
         is_incharge = "incharge" in nature_of_posting.casefold() or "additional charge" in nature_of_posting.casefold()
 
-        # If user selected exclude incharge, skip this GP record entirely
-        if exclude_incharge and is_incharge:
-            continue
-
         mandal_name = _clean_name(row.get("Mandal Name", "")) or "(Unspecified)"
         gp_name = _clean_name(row.get("Panchayat Name", ""))
 
@@ -253,29 +249,36 @@ def parse_state_format_data(
         })
 
     if not unique_gps:
-        raise ValueError("No eligible GP records remaining after applying exclusion filters.")
+        raise ValueError("No eligible GP records found.")
 
     records_df = pd.DataFrame(unique_gps)
 
     # Group by Mandal
     mandal_list: list[StateFormatRow] = []
     for mandal, m_group in records_df.groupby("mandal", sort=False):
+        # Total No. of GPs (Col 3) is always the complete GP count; never exclude incharge from Col 3
         total_gps = len(m_group)
-        full_time = int(m_group["is_full_time"].sum()) if not exclude_incharge else total_gps
+        full_time = int(m_group["is_full_time"].sum())
+
+        # If user chooses to exclude incharge, only evaluate full-time regular PS for attendance (Cols 5-14)
+        if exclude_incharge:
+            eval_mask = m_group["is_full_time"]
+        else:
+            eval_mask = pd.Series(True, index=m_group.index)
         
-        b_6_9 = int(((m_group["arrival_bucket"] == "6_9") & m_group["is_present"]).sum())
-        b_9_10 = int(((m_group["arrival_bucket"] == "9_10") & m_group["is_present"]).sum())
-        b_10_11 = int(((m_group["arrival_bucket"] == "10_11") & m_group["is_present"]).sum())
-        b_11_12 = int(((m_group["arrival_bucket"] == "11_12") & m_group["is_present"]).sum())
-        b_after_12 = int(((m_group["arrival_bucket"] == "after_12") & m_group["is_present"]).sum())
+        b_6_9 = int(((m_group["arrival_bucket"] == "6_9") & m_group["is_present"] & eval_mask).sum())
+        b_9_10 = int(((m_group["arrival_bucket"] == "9_10") & m_group["is_present"] & eval_mask).sum())
+        b_10_11 = int(((m_group["arrival_bucket"] == "10_11") & m_group["is_present"] & eval_mask).sum())
+        b_11_12 = int(((m_group["arrival_bucket"] == "11_12") & m_group["is_present"] & eval_mask).sum())
+        b_after_12 = int(((m_group["arrival_bucket"] == "after_12") & m_group["is_present"] & eval_mask).sum())
         
         total_attended = b_6_9 + b_9_10 + b_10_11 + b_11_12 + b_after_12
-        mtg_trng = int(m_group["is_meeting_training"].sum())
-        on_leave = int(m_group["is_leave"].sum())
-        not_rep = int(m_group["is_not_reported"].sum())
+        mtg_trng = int((m_group["is_meeting_training"] & eval_mask).sum())
+        on_leave = int((m_group["is_leave"] & eval_mask).sum())
+        not_rep = int((m_group["is_not_reported"] & eval_mask).sum())
 
-        # Percentage before 9 AM
-        # Denominator is full-time working PS (or total GPs if full-time is 0 or less than b_6_9)
+        # Percentage before 9 AM (Col 10):
+        # Denominator is full-time working PS (Col 4)
         denominator = full_time if full_time > 0 and b_6_9 <= full_time else total_gps
         pct_b9 = round((b_6_9 / denominator * 100), 2) if denominator > 0 else 0.0
 
