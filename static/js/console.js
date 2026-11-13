@@ -4418,7 +4418,7 @@
     if (progCard) progCard.style.display = 'block';
     if (barEl) barEl.style.width = '15%';
     if (pctEl) pctEl.textContent = '15%';
-    if (statEl) statEl.textContent = 'Connecting to e-Panchayat portal & downloading GM-R 1.2.7 raw data...';
+    if (statEl) statEl.textContent = 'Connecting to e-Panchayat portal & downloading fresh online reports (GM-R 1.2.7, 1.2.11, 1.2.10)...';
     if (btn) btn.disabled = true;
 
     startStateFormatTimer();
@@ -4426,19 +4426,20 @@
     var timer1 = setTimeout(function () {
       if (barEl) barEl.style.width = '45%';
       if (pctEl) pctEl.textContent = '45%';
-      if (statEl) statEl.textContent = 'Extracting attendance timestamps and hourly arrival time buckets...';
+      if (statEl) statEl.textContent = 'Extracting attendance timestamps, postings & arrival time buckets from online data...';
     }, 1500);
 
     var timer2 = setTimeout(function () {
       if (barEl) barEl.style.width = '75%';
       if (pctEl) pctEl.textContent = '75%';
-      if (statEl) statEl.textContent = 'Calculating % before 9 AM, full-time working PS counts, and compiling reports...';
+      if (statEl) statEl.textContent = 'Calculating % before 9 AM from online regular postings and compiling official report...';
     }, 3000);
 
     try {
       var formData = new FormData();
       formData.append('date', dateVal);
       formData.append('exclude_incharge', excludeIncharge);
+      formData.append('force_fresh', 'true');
 
       var resp = await fetch('/api/dsr/state-format/generate', {
         method: 'POST',

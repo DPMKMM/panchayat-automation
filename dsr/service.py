@@ -537,7 +537,7 @@ def generate_server_state_format_report(
     session_id: str = "",
     date_str: str = "",
     exclude_incharge: bool = True,
-    force_fresh: bool = False,
+    force_fresh: bool = True,
 ) -> dict[str, Any]:
     """Generate official 14-column State Format Attendance report for the session."""
     session = get_or_create_session(session_id)
@@ -556,7 +556,7 @@ def _generate_server_state_format_impl(
     session: dict[str, Any],
     date_str: str = "",
     exclude_incharge: bool = True,
-    force_fresh: bool = False,
+    force_fresh: bool = True,
 ) -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
     if not is_auth:
@@ -683,25 +683,27 @@ def _generate_server_state_format_impl(
     if not raw_path or not raw_path.exists() or raw_path.stat().st_size == 0:
         raise FileNotFoundError(f"No DSR attendance report was returned by e-Panchayat portal for date '{portal_date_fmt}'.")
 
-    # 3. Load or build PS directory specifically for this target date
-    ps_cache_path = data_dir / "ps_directory_cache.json"
-    cached_ps_dir = load_ps_directory_cache(ps_cache_path)
+    # 3. Build PS directory EXCLUSIVELY from online downloaded Presenties (1.2.11) and Absentees (1.2.10) for this target date.
+    # Never fall back to or merge with stale offline cache files (e.g. ps_directory_cache.json).
+    online_ps_dir: dict[str, dict[str, str]] = {}
+    if presentees_bytes:
+        logger.info("[%s] Parsing online downloaded GM-R 1.2.11 Presenties (%d bytes)...", sid[:6], len(presentees_bytes))
+        online_ps_dir = merge_ps_directories(
+            online_ps_dir,
+            parse_ps_directory_file(presentees_name, presentees_bytes)
+        )
+    if absentees_bytes:
+        logger.info("[%s] Parsing online downloaded GM-R 1.2.10 Absentees (%d bytes)...", sid[:6], len(absentees_bytes))
+        online_ps_dir = merge_ps_directories(
+            online_ps_dir,
+            parse_ps_directory_file(absentees_name, absentees_bytes)
+        )
 
-    if presentees_bytes or absentees_bytes:
-        fresh_date_dir: dict[str, dict[str, str]] = {}
-        if presentees_bytes:
-            fresh_date_dir = merge_ps_directories(fresh_date_dir, parse_ps_directory_file(presentees_name, presentees_bytes))
-        if absentees_bytes:
-            fresh_date_dir = merge_ps_directories(fresh_date_dir, parse_ps_directory_file(absentees_name, absentees_bytes))
-        if fresh_date_dir:
-            target_date_dir = merge_ps_directories(target_date_dir, fresh_date_dir)
-            save_ps_directory_cache(target_date_dir, date_ps_cache_path)
-            # Also merge into master fallback cache
-            cached_ps_dir = merge_ps_directories(cached_ps_dir, target_date_dir)
-            save_ps_directory_cache(cached_ps_dir, ps_cache_path)
+    if online_ps_dir:
+        save_ps_directory_cache(online_ps_dir, date_ps_cache_path)
 
-    # Active directory is built from date-specific postings for the user input date
-    active_ps_dir = merge_ps_directories(cached_ps_dir, target_date_dir) if target_date_dir else cached_ps_dir
+    # Use ONLY the fresh online downloaded directory for the target date
+    active_ps_dir = online_ps_dir
 
     # 4. Parse State Format Data
     from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel

@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import app
+from dsr.pdf_generator import load_ps_directory_cache
 from dsr.state_format import (
     parse_state_format_data,
     generate_state_format_pdf,
@@ -16,6 +17,7 @@ from dsr.state_format import (
 
 
 SAMPLE_RAW_DSR = Path("dsr/downloads/session_bb833d53b268d8241dec88a7b533e0d7/Khammam_AttendenceStatusandDSRRawdata_07-Nov-2026.xls")
+SAMPLE_PS_CACHE = Path("data/ps_directory_cache.json")
 
 
 def test_classify_arrival_bucket():
@@ -38,7 +40,8 @@ def test_classify_arrival_bucket():
 @pytest.mark.skipif(not SAMPLE_RAW_DSR.exists(), reason="Sample raw DSR file not found")
 def test_state_format_data_all_gps(tmp_path):
     raw_bytes = SAMPLE_RAW_DSR.read_bytes()
-    report = parse_state_format_data(raw_bytes, SAMPLE_RAW_DSR.name, exclude_incharge=False)
+    ps_dir = load_ps_directory_cache(SAMPLE_PS_CACHE) if SAMPLE_PS_CACHE.exists() else {}
+    report = parse_state_format_data(raw_bytes, SAMPLE_RAW_DSR.name, exclude_incharge=False, ps_directory=ps_dir)
 
     assert report.district_name == "Khammam"
     assert report.total_gps == 571
@@ -77,7 +80,8 @@ def test_state_format_data_all_gps(tmp_path):
 @pytest.mark.skipif(not SAMPLE_RAW_DSR.exists(), reason="Sample raw DSR file not found")
 def test_state_format_data_exclude_incharge(tmp_path):
     raw_bytes = SAMPLE_RAW_DSR.read_bytes()
-    report = parse_state_format_data(raw_bytes, SAMPLE_RAW_DSR.name, exclude_incharge=True)
+    ps_dir = load_ps_directory_cache(SAMPLE_PS_CACHE) if SAMPLE_PS_CACHE.exists() else {}
+    report = parse_state_format_data(raw_bytes, SAMPLE_RAW_DSR.name, exclude_incharge=True, ps_directory=ps_dir)
 
     assert report.exclude_incharge is True
     # Total No of GPs (Col 3) must NOT exclude incharge: it should be the total GP count (571 in Khammam)

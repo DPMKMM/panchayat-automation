@@ -1031,12 +1031,12 @@ def auto_load_web_report(
 def generate_state_format(
     request: Request,
     date: str = Form(default=""),
-    exclude_incharge: str = Form(default="false"),
-    force_fresh: str = Form(default="false"),
+    exclude_incharge: str = Form(default="true"),
+    force_fresh: str = Form(default="true"),
 ) -> dict[str, Any]:
     console_user, sid = enforce_department_api_access(request, always_require=True)
-    is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
-    is_exclude_incharge = str(exclude_incharge).strip().lower() in ("true", "1", "yes", "on")
+    is_force_fresh = str(force_fresh).strip().lower() not in ("false", "0", "no", "off")
+    is_exclude_incharge = str(exclude_incharge).strip().lower() not in ("false", "0", "no", "off")
 
     try:
         res = automation_service.generate_server_state_format_report(
@@ -1126,22 +1126,15 @@ def upload_state_format_manual(
 
     data_dir = get_data_dir()
     reports_dir = get_reports_dir()
-    ps_cache_path = data_dir / "ps_directory_cache.json"
-    cached_ps_dir = report_generator.load_ps_directory_cache(ps_cache_path)
 
-    new_dir: dict[str, dict[str, str]] = {}
+    # Build active directory strictly from uploaded files (no fallback to stale offline master cache)
+    active_dir: dict[str, dict[str, str]] = {}
     if presentees and presentees.filename:
         p_bytes = _read_upload(presentees, MAX_UPLOAD_BYTES)
-        new_dir = report_generator.merge_ps_directories(new_dir, report_generator.parse_ps_directory_file(presentees.filename, p_bytes))
+        active_dir = report_generator.merge_ps_directories(active_dir, report_generator.parse_ps_directory_file(presentees.filename, p_bytes))
     if absentees and absentees.filename:
         a_bytes = _read_upload(absentees, MAX_UPLOAD_BYTES)
-        new_dir = report_generator.merge_ps_directories(new_dir, report_generator.parse_ps_directory_file(absentees.filename, a_bytes))
-
-    active_dir = None
-    if new_dir:
-        cached_ps_dir = report_generator.merge_ps_directories(cached_ps_dir, new_dir)
-        report_generator.save_ps_directory_cache(cached_ps_dir, ps_cache_path)
-        active_dir = cached_ps_dir
+        active_dir = report_generator.merge_ps_directories(active_dir, report_generator.parse_ps_directory_file(absentees.filename, a_bytes))
 
     try:
         st_report = parse_state_format_data(
@@ -1154,9 +1147,9 @@ def upload_state_format_manual(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # If new presentees/absentees files were supplied, save a date-specific cache for this report date
-    if new_dir:
+    if active_dir:
         date_cache_path = data_dir / f"ps_directory_cache_{st_report.report_date.isoformat()}.json"
-        report_generator.save_ps_directory_cache(new_dir, date_cache_path)
+        report_generator.save_ps_directory_cache(active_dir, date_cache_path)
 
     clean_dist = re.sub(r"[^A-Za-z0-9_-]", "_", st_report.district_name)
     now_dt = datetime.now()

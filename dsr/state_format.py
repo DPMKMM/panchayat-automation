@@ -226,15 +226,15 @@ def parse_state_format_data(
     time_str = now_dt.strftime("%I:%M %p")
     subtitle = f"{date_str} - @ {time_str}"
 
-    # Ensure directory is loaded: prioritize date-specific cache for this exact target date
+    # Ensure directory is loaded: prioritize date-specific online download data for this exact target date.
+    # Never fall back to stale offline master cache files (e.g. data/ps_directory_cache.json).
     if not ps_directory:
         date_iso = rep_date.isoformat()
         date_cache_file = Path(f"data/ps_directory_cache_{date_iso}.json")
         if date_cache_file.exists():
             ps_directory = load_ps_directory_cache(date_cache_file)
-        if not ps_directory:
-            cache_file = Path("data/ps_directory_cache.json")
-            ps_directory = load_ps_directory_cache(cache_file)
+        else:
+            ps_directory = {}
 
     # Deduplicate by Panchayat LGD (one record per GP)
     unique_gps: list[dict[str, Any]] = []
