@@ -4415,7 +4415,13 @@
 
       if (!resp.ok) {
         var errJson = await resp.json().catch(function () { return {}; });
-        throw new Error(errJson.detail || ('State Format generation failed (HTTP ' + resp.status + ')'));
+        var msg = errJson.detail || ('State Format generation failed (HTTP ' + resp.status + ')');
+        if (resp.status === 401 && typeof window.openDsrRobot === 'function') {
+          showNotice('e-Panchayat portal session expired or not authenticated. Please login first.', 'error');
+          window.openDsrRobot();
+          return;
+        }
+        throw new Error(msg);
       }
 
       var data = await resp.json();

@@ -1028,138 +1028,34 @@ def generate_state_format(
     is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
     is_exclude_incharge = str(exclude_incharge).strip().lower() in ("true", "1", "yes", "on")
 
-    from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
-    from dsr.auto_download import format_portal_date, download_single_report_with_menu
-
-    session = automation_service.get_or_create_session(sid)
-    dl_dir: Path = session["download_dir"]
-    reports_dir = get_reports_dir()
-
-    req_date = date.strip() if date else datetime.now().strftime("%Y-%m-%d")
-    portal_date_fmt = format_portal_date(req_date)
-
-    # Check for existing GM-R 1.2.7 file in downloads directory
-    raw_path: Path | None = None
-    presentees_bytes: bytes | None = None
-    presentees_name: str = ""
-    absentees_bytes: bytes | None = None
-    absentees_name: str = ""
-
-    if not is_force_fresh and dl_dir.exists():
-        for f in dl_dir.iterdir():
-            if f.is_file() and f.suffix.lower() in (".xls", ".xlsx"):
-                fname_lower = f.name.lower()
-                if (portal_date_fmt.lower() in fname_lower or "1.2.7" in fname_lower or "attendencestatus" in fname_lower) and "present" not in fname_lower and "absent" not in fname_lower:
-                    if f.stat().st_size > 500:
-                        raw_path = f
-                elif "present" in fname_lower or "1.2.11" in fname_lower:
-                    presentees_bytes = f.read_bytes()
-                    presentees_name = f.name
-                elif "absent" in fname_lower or "1.2.10" in fname_lower:
-                    absentees_bytes = f.read_bytes()
-                    absentees_name = f.name
-
-    # If raw file not already downloaded or fresh requested, download via robot
-    if not raw_path or not raw_path.exists():
-        is_auth = session.get("status") == "authenticated"
-        if not is_auth:
-            raise HTTPException(
-                status_code=401,
-                detail="e-Panchayat session is not active. Please complete Login & OTP verification first.",
-                headers={"X-Dept-Auth-Required": "true"},
-            )
-        bot = session.get("bot")
-        if not automation_service._is_bot_alive(bot):
-            bot = automation_service.ensure_active_bot(session)
-        if not automation_service._is_bot_alive(bot):
-            raise HTTPException(
-                status_code=401,
-                detail="e-Panchayat browser session has expired. Please log in again.",
-                headers={"X-Dept-Auth-Required": "true"},
-            )
-
-        try:
-            logger.info("[%s] Downloading GM-R 1.2.7 for State Format date %s...", sid[:6], portal_date_fmt)
-            raw_path = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
-        except Exception as e:
-            logger.error("[%s] State Format GM-R 1.2.7 download failed: %s", sid[:6], e)
-            raise HTTPException(status_code=500, detail=f"Failed to download DSR raw data from portal: {e}") from e
-
-        # Also download optional presentees & absentees
-        try:
-            p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
-            if p_f and p_f.exists() and p_f.stat().st_size > 0:
-                presentees_bytes = p_f.read_bytes()
-                presentees_name = p_f.name
-        except Exception:
-            pass
-
-        try:
-            a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
-            if a_f and a_f.exists() and a_f.stat().st_size > 0:
-                absentees_bytes = a_f.read_bytes()
-                absentees_name = a_f.name
-        except Exception:
-            pass
-
-    if not raw_path or not raw_path.exists() or raw_path.stat().st_size == 0:
-        raise HTTPException(status_code=404, detail=f"No DSR raw attendance data available for date '{portal_date_fmt}'.")
-
-    # Load or merge PS directory cache
-    data_dir = get_data_dir()
-    ps_cache_path = data_dir / "ps_directory_cache.json"
-    cached_ps_dir = report_generator.load_ps_directory_cache(ps_cache_path)
-
-    if presentees_bytes or absentees_bytes:
-        new_dir: dict[str, dict[str, str]] = {}
-        if presentees_bytes:
-            new_dir = report_generator.merge_ps_directories(new_dir, report_generator.parse_ps_directory_file(presentees_name, presentees_bytes))
-        if absentees_bytes:
-            new_dir = report_generator.merge_ps_directories(new_dir, report_generator.parse_ps_directory_file(absentees_name, absentees_bytes))
-        if new_dir:
-            cached_ps_dir = report_generator.merge_ps_directories(cached_ps_dir, new_dir)
-            report_generator.save_ps_directory_cache(cached_ps_dir, ps_cache_path)
-
-    # Parse State Format Data
     try:
-        st_report = parse_state_format_data(
-            raw_path.read_bytes(),
-            raw_path.name,
-            ps_directory=cached_ps_dir,
+        res = automation_service.generate_server_state_format_report(
+            session_id=sid,
+            date_str=date,
             exclude_incharge=is_exclude_incharge,
+            force_fresh=is_force_fresh,
         )
+        if console_user:
+            log_usage(user_id=console_user["user_id"], platform_scope="console", module="state_format", action="generate_report")
+        return res
+    except PermissionError as exc:
+        try:
+            from core.session_manager import mark_session_expired
+            mark_session_expired(sid, str(exc))
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=401,
+            detail=str(exc),
+            headers={"X-Dept-Auth-Required": "true"},
+        ) from None
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.exception("Failed to parse State Format data: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    # Generate PDF and Excel
-    clean_dist = re.sub(r"[^A-Za-z0-9_-]", "_", st_report.district_name)
-    now_dt = datetime.now()
-    gen_time_file = now_dt.strftime("%I-%M-%p")
-    pdf_filename = f"{clean_dist}_Mandal_Wise_PS_Attendance_State_Format_{portal_date_fmt}_{gen_time_file}.pdf"
-    excel_filename = f"{clean_dist}_Mandal_Wise_PS_Attendance_State_Format_{portal_date_fmt}_{gen_time_file}.xlsx"
-
-    pdf_out = reports_dir / pdf_filename
-    excel_out = reports_dir / excel_filename
-
-    generate_state_format_pdf(st_report, pdf_out)
-    generate_state_format_excel(st_report, excel_out)
-
-    session["state_format_pdf"] = str(pdf_out)
-    session["state_format_excel"] = str(excel_out)
-    session["state_format_pdf_filename"] = pdf_filename
-    session["state_format_excel_filename"] = excel_filename
-
-    if console_user:
-        log_usage(user_id=console_user["user_id"], platform_scope="console", module="state_format", action="generate_report")
-
-    resp = st_report.to_dict()
-    resp["status"] = "ok"
-    resp["pdf_filename"] = pdf_filename
-    resp["excel_filename"] = excel_filename
-    resp["pdf_download_url"] = "/api/dsr/state-format/download-pdf"
-    resp["excel_download_url"] = "/api/dsr/state-format/download-excel"
-    return resp
+        logger.exception("generate_state_format failed for date=%s sid=%s: %s", date, sid, exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/api/dsr/state-format/download-pdf", include_in_schema=False)
