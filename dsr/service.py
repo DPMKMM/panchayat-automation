@@ -665,8 +665,27 @@ def _generate_server_state_format_impl(
             try:
                 p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
                 if p_f and p_f.exists() and p_f.stat().st_size > 0:
-                    presentees_bytes = p_f.read_bytes()
-                    presentees_name = p_f.name
+                    # Validate if downloaded file matches target date; portal often exports today's live snapshot
+                    if not _matches_target_date(p_f.name):
+                        logger.warning(
+                            "[%s] Portal GM-R 1.2.11 download '%s' does not match requested date '%s'. Searching for date-matched file...",
+                            sid[:6], p_f.name, portal_date_fmt,
+                        )
+                        dl_candidates = list(Path("C:/Users/dpmkm/Downloads").glob("Report_on_Presenties*.xls*")) + list(dl_dir.glob("Report_on_Presenties*.xls*"))
+                        matched_dl = next((c for c in dl_candidates if _matches_target_date(c.name) and c.stat().st_size > 500), None)
+                        if matched_dl:
+                            logger.info("[%s] Found date-matched Presenties file in Downloads: %s", sid[:6], matched_dl.name)
+                            presentees_bytes = matched_dl.read_bytes()
+                            presentees_name = matched_dl.name
+                        elif target_date_dir:
+                            logger.info("[%s] Using verified target date cache for %s (%d regulars)", sid[:6], portal_date_fmt, sum(1 for v in target_date_dir.values() if v.get("nature_of_posting") == "Regular"))
+                            # Keep presentees_bytes empty so target_date_dir is preserved
+                        else:
+                            presentees_bytes = p_f.read_bytes()
+                            presentees_name = p_f.name
+                    else:
+                        presentees_bytes = p_f.read_bytes()
+                        presentees_name = p_f.name
             except Exception as e:
                 logger.warning("[%s] Could not download GM-R 1.2.11 Presentees for date %s: %s", sid[:6], portal_date_fmt, e)
 
@@ -675,8 +694,18 @@ def _generate_server_state_format_impl(
             try:
                 a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
                 if a_f and a_f.exists() and a_f.stat().st_size > 0:
-                    absentees_bytes = a_f.read_bytes()
-                    absentees_name = a_f.name
+                    if not _matches_target_date(a_f.name):
+                        dl_candidates = list(Path("C:/Users/dpmkm/Downloads").glob("*Absent*.xls*")) + list(dl_dir.glob("*Absent*.xls*"))
+                        matched_dl = next((c for c in dl_candidates if _matches_target_date(c.name) and c.stat().st_size > 500), None)
+                        if matched_dl:
+                            absentees_bytes = matched_dl.read_bytes()
+                            absentees_name = matched_dl.name
+                        elif not target_date_dir:
+                            absentees_bytes = a_f.read_bytes()
+                            absentees_name = a_f.name
+                    else:
+                        absentees_bytes = a_f.read_bytes()
+                        absentees_name = a_f.name
             except Exception as e:
                 logger.warning("[%s] Could not download GM-R 1.2.10 Absentees for date %s: %s", sid[:6], portal_date_fmt, e)
 
@@ -684,7 +713,6 @@ def _generate_server_state_format_impl(
         raise FileNotFoundError(f"No DSR attendance report was returned by e-Panchayat portal for date '{portal_date_fmt}'.")
 
     # 3. Build PS directory EXCLUSIVELY from online downloaded Presenties (1.2.11) and Absentees (1.2.10) for this target date.
-    # Never fall back to or merge with stale offline cache files (e.g. ps_directory_cache.json).
     online_ps_dir: dict[str, dict[str, str]] = {}
     if presentees_bytes:
         logger.info("[%s] Parsing online downloaded GM-R 1.2.11 Presenties (%d bytes)...", sid[:6], len(presentees_bytes))
@@ -699,11 +727,10 @@ def _generate_server_state_format_impl(
             parse_ps_directory_file(absentees_name, absentees_bytes)
         )
 
+    # Use online_ps_dir if available, else date-specific target_date_dir
+    active_ps_dir = online_ps_dir if online_ps_dir else target_date_dir
     if online_ps_dir:
         save_ps_directory_cache(online_ps_dir, date_ps_cache_path)
-
-    # Use ONLY the fresh online downloaded directory for the target date
-    active_ps_dir = online_ps_dir
 
     # 4. Parse State Format Data
     from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
