@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="doc-page-title">e-Panchayat Automation</title>
-  <link rel="stylesheet" href="/static/css/common.css?v=14">
+  <link rel="stylesheet" href="/static/css/common.css?v=15">
 </head>
 <body class="state-home-login">
   <script>
@@ -1431,39 +1431,40 @@
 
       <!-- STEP 4: Live Execution & Progress -->
       <div class="step-pane" id="pane-step-4">
-        <div class="live-progress-card">
-          <div class="spinner-wrap">
-            <div class="circle-progress-box">
-              <div class="spinner" id="auto-spinner"></div>
-              <span id="spinner-pct-text">0%</span>
+        <div class="robot-progress-card" id="auto-daily-progress-card" style="background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="robot-sonar-dot"></div>
+              <strong style="color:#0369a1; font-size:0.95rem;" id="progress-status-title">Daily DSR &amp; PS Attendance Robot Active</strong>
             </div>
-            <div style="flex:1;">
-              <div id="progress-status-title">e-Panchayat Automation · Processing in Background...</div>
-              <div id="progress-status-sub" style="font-size:0.82rem; color:#64748b; margin-top:2px;">e-Panchayat Automation is connecting to e-Panchayat server and downloading reports...</div>
+            <span id="spinner-pct-text" class="progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
+          </div>
+
+          <div class="progress-track-8px" style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+            <div id="progress-bar-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155; margin-bottom:12px;">
+            <div><span style="font-weight:700;">Status:</span> <span id="progress-status-sub">Connecting to e-Panchayat server and downloading reports...</span></div>
+            <div style="display:flex; gap:12px; font-weight:600;">
+              <span>⏱️ Elapsed: <strong id="val-elapsed-time" style="color:#047857;">00:00</strong></span>
+              <span>⏳ Expected: <strong id="val-expected-time" style="color:#0284c7;">00:45</strong></span>
             </div>
           </div>
 
-          <div class="progress-time-strip">
-            <div style="display:flex; align-items:center; gap:5px; color:#0f766e;">
-              <span>⏱️</span> Elapsed Time: <span id="val-elapsed-time" style="font-family:monospace; font-size:0.95rem; font-weight:800; color:#047857;">00:00</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:5px; color:#047857;">
-              <span>⏳</span> Expected Time: <span id="val-expected-time" style="font-family:monospace; font-size:0.95rem; font-weight:800; color:#047857;">00:45</span>
-            </div>
-          </div>
+          <div id="auto-spinner" style="display:none;"></div>
 
-          <div class="progress-bar-container">
-            <div class="progress-bar-active" id="progress-bar-fill" style="width: 0%;"></div>
-          </div>
-          <ul class="progress-steps" id="progress-steps-list">
+          <!-- Step Progression List -->
+          <ul class="progress-steps" id="progress-steps-list" style="margin-top:10px; padding:10px 14px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; list-style:none;">
             <li class="p-step active" id="ps-1">Authenticating with e-Panchayat Session...</li>
             <li class="p-step" id="ps-2">Step 1: GP Monitoring &rarr; Downloading GM-R 1.2.7 DSR Raw Data...</li>
             <li class="p-step" id="ps-3">Step 2: Re-select GP Monitoring &rarr; Downloading GM-R 1.2.11 Presentees Report...</li>
             <li class="p-step" id="ps-4">Step 3: Re-select GP Monitoring &rarr; Downloading GM-R 1.2.10 Absentees Report...</li>
             <li class="p-step" id="ps-5">Step 4: Compiling 6-section official District Attendance &amp; DSR PDF...</li>
           </ul>
+
           <div id="auto-completion-banner" style="display:none; margin-top:20px; padding:18px; background:#ecfdf5; border:1.5px solid #10b981; border-radius:10px; text-align:center;">
-            <strong style="color:#065f46; font-size:1.15rem; display:block; margin-bottom:6px;">🎉 e-Panchayat Automation · Official DSR Report Generated!</strong>
+            <strong style="color:#065f46; font-size:1.15rem; display:block; margin-bottom:6px;">🎉 Official DSR Report Generated!</strong>
             <span style="color:#047857; font-size:0.92rem;">The metrics, mandal statistics, and PDF preview below have been updated in real-time.</span>
             <div style="margin-top:14px; display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
               <a class="btn btn-gold btn-sm" id="btn-auto-download-pdf" href="/api/naresh/download" target="_blank">📥 Download PDF</a>
@@ -1534,6 +1535,27 @@
           <a class="btn btn-white btn-sm" id="btn-balance-pdf-dl" href="javascript:void(0)" download style="border:1.5px solid #047857; color:#047857; font-weight:700;">
             📥 Download PDF
           </a>
+        </div>
+      </div>
+
+      <!-- Live Robot Progress Box (GP Balance Entry) -->
+      <div id="balance-progress-card" class="robot-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="robot-sonar-dot"></div>
+            <strong style="color:#0369a1; font-size:0.95rem;">GM-R 14.2 GP Balance Entry Robot Active</strong>
+          </div>
+          <span id="balance-progress-pct" class="progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
+        </div>
+        <div class="progress-track-8px" style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+          <div id="balance-progress-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155;">
+          <div><span style="font-weight:700;">Status:</span> <span id="balance-status-text">Fetching Thursday balance data from e-Panchayat portal...</span></div>
+          <div style="display:flex; gap:12px; font-weight:600;">
+            <span>⏱️ Elapsed: <strong id="balance-elapsed-time" style="color:#047857;">00:00</strong></span>
+            <span>⏳ Estimated: <strong id="balance-estimated-time" style="color:#0284c7;">00:30</strong></span>
+          </div>
         </div>
       </div>
 
@@ -1684,6 +1706,27 @@
           <button type="button" class="btn btn-outline btn-sm" onclick="downloadTaxPbiPdf()" style="display:inline-flex; align-items:center; gap:6px; color:var(--text); border-color:var(--border);">
             📈 Download PowerBI Visual PDF
           </button>
+        </div>
+      </div>
+
+      <!-- Live Robot Progress Box (House Tax DCB) -->
+      <div id="tax-progress-card" class="robot-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="robot-sonar-dot"></div>
+            <strong style="color:#0369a1; font-size:0.95rem;">House Tax DCB Analytics Active</strong>
+          </div>
+          <span id="tax-progress-pct" class="progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
+        </div>
+        <div class="progress-track-8px" style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+          <div id="tax-progress-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155;">
+          <div><span style="font-weight:700;">Status:</span> <span id="tax-status-text">Synchronizing DCB ledger from e-Panchayat portal...</span></div>
+          <div style="display:flex; gap:12px; font-weight:600;">
+            <span>⏱️ Elapsed: <strong id="tax-elapsed-time" style="color:#047857;">00:00</strong></span>
+            <span>⏳ Estimated: <strong id="tax-estimated-time" style="color:#0284c7;">00:15</strong></span>
+          </div>
         </div>
       </div>
 
@@ -2022,14 +2065,24 @@
             </button>
           </div>
         </div>
-        <div id="insp-progress-strip" style="display:none; margin-top:12px; padding:10px 14px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; font-size:0.84rem; font-weight:700; color:#0f172a; margin-bottom:6px;">
-            <span style="color:#0f766e;">⏱️ Elapsed Time: <span id="insp-elapsed-time" style="font-family:monospace; font-size:0.94rem; color:#047857;">00:00</span></span>
-            <span style="color:#0369a1;">⏳ Estimated Time: <span id="insp-estimated-time" style="font-family:monospace; font-size:0.94rem; color:#0284c7;">--:--</span></span>
-            <span id="insp-progress-pct" style="font-family:monospace; color:#065f46;">0%</span>
+        <!-- Live Robot Progress Box (GM-R 39.1 Inspections) -->
+        <div id="insp-progress-strip" class="robot-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-top:16px; margin-bottom:16px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="robot-sonar-dot"></div>
+              <strong style="color:#0369a1; font-size:0.95rem;">GM-R 39.1 Inspections Robot Active</strong>
+            </div>
+            <span id="insp-progress-pct" class="progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
           </div>
-          <div style="width:100%; height:7px; background:#e2e8f0; border-radius:999px; overflow:hidden;">
-            <div id="insp-progress-fill" style="width:0%; height:100%; background:linear-gradient(90deg, #059669, #0ea5e9); transition:width 0.3s ease;"></div>
+          <div class="progress-track-8px" style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+            <div id="insp-progress-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155;">
+            <div><span style="font-weight:700;">Status:</span> <span id="insp-status-text">Processing inspections download...</span></div>
+            <div style="display:flex; gap:12px; font-weight:600;">
+              <span>⏱️ Elapsed: <strong id="insp-elapsed-time" style="color:#047857;">00:00</strong></span>
+              <span>⏳ Estimated: <strong id="insp-estimated-time" style="color:#0284c7;">--:--</strong></span>
+            </div>
           </div>
         </div>
         <div id="insp-sync-time" style="font-size:0.82rem; color:var(--text-muted); font-weight:600; margin-top:10px;">
@@ -2423,10 +2476,7 @@
         </div>
 
         <!-- Action Row -->
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-top:16px;">
-          <div style="font-size:0.84rem; color:var(--text-muted);">
-            Zero Duplicate Login • Reuses active Departmental Playwright session to download GM-R 1.2.7 daily raw files.
-          </div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; margin-top:16px;">
           <div style="display:flex; gap:10px;">
             <button type="button" class="btn btn-gold" id="btn-run-auto-multi-robot" onclick="runAutoMultiDsrRobot()" style="padding:10px 22px; font-size:0.95rem; font-weight:800;">
               ⚡ Run Multi-Days DSR Robot
@@ -2436,20 +2486,20 @@
       </div>
 
       <!-- Live Robot Progress Box -->
-      <div id="auto-multi-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+      <div id="auto-multi-progress-card" class="robot-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <div style="display:flex; align-items:center; gap:8px;">
-            <div class="auto-sonar-ring" style="width:14px; height:14px; border:2px solid #0284c7; border-radius:50%;"></div>
+            <div class="robot-sonar-dot"></div>
             <strong style="color:#0369a1; font-size:0.95rem;" id="auto-multi-progress-title">Automated Multi-Days DSR Robot Active</strong>
           </div>
-          <span id="auto-multi-progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
+          <span id="auto-multi-progress-pct-badge" class="progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
         </div>
-        <div style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
-          <div id="auto-multi-progress-fill" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; transition:width 0.3s;"></div>
+        <div class="progress-track-8px" style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+          <div id="auto-multi-progress-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155; margin-bottom:12px;">
           <div><span style="font-weight:700;">Status:</span> <span id="auto-multi-progress-status">Initializing robot...</span></div>
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; font-weight:600;">
             <span>Working Days: <strong id="auto-multi-stat-total">0</strong></span>
             <span>Downloaded: <strong id="auto-multi-stat-done" style="color:#059669;">0</strong></span>
             <span>Failed: <strong id="auto-multi-stat-failed" style="color:#dc2626;">0</strong></span>
@@ -2483,12 +2533,12 @@
             <h3 id="auto-multi-res-heading" style="margin:0 0 4px; font-size:1.25rem; font-weight:800; color:#0c3829;">Compiled Multi-Days DSR Results</h3>
             <div id="auto-multi-res-subheading" style="font-size:0.86rem; color:#64748b;"></div>
           </div>
-          <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
-            <a id="btn-auto-multi-dl-full-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer">
+          <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+            <a id="btn-auto-multi-dl-full-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color:#ffffff !important; padding:8px 16px; border-radius:8px; font-size:0.86rem; font-weight:700; text-decoration:none !important; box-shadow:0 2px 6px rgba(220,38,38,0.25); white-space:nowrap; border:none; cursor:pointer;">
               <svg class="md-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; min-width:16px; min-height:16px; max-width:16px; max-height:16px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
               <span>Download Full PDF</span>
             </a>
-            <a id="btn-auto-multi-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">
+            <a id="btn-auto-multi-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg, #16a34a 0%, #15803d 100%); color:#ffffff !important; padding:8px 16px; border-radius:8px; font-size:0.86rem; font-weight:700; text-decoration:none !important; box-shadow:0 2px 6px rgba(22,163,74,0.25); white-space:nowrap; border:none; cursor:pointer;">
               <svg class="md-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; min-width:16px; min-height:16px; max-width:16px; max-height:16px; flex-shrink:0; vertical-align:middle; display:inline-block;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
               <span id="btn-auto-multi-dl-excel-label">Download Excel (5 Sheets)</span>
             </a>
@@ -2499,19 +2549,19 @@
         <div class="md-dl-dock" style="background:#f8fbf9; border:1px solid #d5e5dc; border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
           <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
             <span class="md-dl-label" style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#047857; margin-right:4px;">Report-Wise PDF Downloads:</span>
-            <a id="btn-auto-multi-dl-dist-pdf" class="md-btn md-btn-subpdf active-pdf" data-auto-pdf="district" href="#" target="_blank" rel="noopener noreferrer">
+            <a id="btn-auto-multi-dl-dist-pdf" class="md-btn md-btn-subpdf active-pdf" data-auto-pdf="district" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
               <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
               <span>District Level PDF</span>
             </a>
-            <a id="btn-auto-multi-dl-mandal-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="mandal" href="#" target="_blank" rel="noopener noreferrer">
+            <a id="btn-auto-multi-dl-mandal-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="mandal" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
               <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>Mandal Level PDF</span>
             </a>
-            <a id="btn-auto-multi-dl-gp-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="gp" href="#" target="_blank" rel="noopener noreferrer">
+            <a id="btn-auto-multi-dl-gp-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="gp" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
               <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               <span>GP Summary PDF</span>
             </a>
-            <a id="btn-auto-multi-dl-time-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="time_matrix" href="#" target="_blank" rel="noopener noreferrer">
+            <a id="btn-auto-multi-dl-time-pdf" class="md-btn md-btn-subpdf" data-auto-pdf="time_matrix" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
               <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <span>Exact Time &amp; Avg PDF</span>
             </a>

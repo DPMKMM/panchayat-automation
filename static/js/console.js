@@ -2252,6 +2252,60 @@
     }
   };
 
+  var balProgressInterval = null;
+  function startBalanceProgressTimer(estSeconds) {
+    if (balProgressInterval) clearInterval(balProgressInterval);
+    var card = document.getElementById('balance-progress-card');
+    var elapEl = document.getElementById('balance-elapsed-time');
+    var estEl = document.getElementById('balance-estimated-time');
+    var pctEl = document.getElementById('balance-progress-pct');
+    var fillEl = document.getElementById('balance-progress-fill');
+    var statusEl = document.getElementById('balance-status-text');
+    var startMs = Date.now();
+    var targetSec = Math.max(10, estSeconds || 25);
+
+    if (card) card.style.display = 'block';
+    if (elapEl) elapEl.textContent = '00:00';
+    if (estEl) estEl.textContent = formatMinSec(targetSec);
+    if (pctEl) pctEl.textContent = '0%';
+    if (fillEl) fillEl.style.width = '0%';
+    if (statusEl) statusEl.textContent = 'Connecting to GM-R 14.2 and downloading Thursday balances...';
+
+    balProgressInterval = setInterval(function () {
+      var elapsed = Math.floor((Date.now() - startMs) / 1000);
+      if (elapEl) elapEl.textContent = formatMinSec(elapsed);
+      if (elapsed >= targetSec - 2) targetSec = elapsed + 5;
+      if (estEl) estEl.textContent = formatMinSec(Math.max(0, targetSec - elapsed));
+      var pct = Math.min(96, Math.round((elapsed / Math.max(1, targetSec)) * 96));
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (fillEl) fillEl.style.width = pct + '%';
+    }, 250);
+  }
+
+  function finishBalanceProgressTimer(success) {
+    if (balProgressInterval) {
+      clearInterval(balProgressInterval);
+      balProgressInterval = null;
+    }
+    var estEl = document.getElementById('balance-estimated-time');
+    var pctEl = document.getElementById('balance-progress-pct');
+    var fillEl = document.getElementById('balance-progress-fill');
+    var statusEl = document.getElementById('balance-status-text');
+    var card = document.getElementById('balance-progress-card');
+    if (success) {
+      if (estEl) estEl.textContent = '00:00';
+      if (pctEl) pctEl.textContent = '100%';
+      if (fillEl) fillEl.style.width = '100%';
+      if (statusEl) statusEl.textContent = 'Balance report compiled successfully!';
+      setTimeout(function () {
+        if (card) card.style.display = 'none';
+      }, 1500);
+    } else {
+      if (estEl) estEl.textContent = '--:--';
+      if (statusEl) statusEl.textContent = 'Balance compilation halted.';
+    }
+  }
+
   window.triggerBalancePipeline = async function () {
     if (balanceGenerationInFlight) return;
     var ok = await window.ensureDepartmentSession('balance', { autoGenerate: false });
@@ -2266,6 +2320,7 @@
 
     var incPmagy = isBalancePmagyIncluded();
     balanceGenerationInFlight = true;
+    startBalanceProgressTimer(25);
     var btn = document.getElementById('btn-run-balance-robot');
     if (btn) {
       btn.disabled = true;
@@ -2279,9 +2334,11 @@
         method: 'POST',
         body: fd,
       });
+      finishBalanceProgressTimer(true);
       showNotice(res.message || 'Balance report compiled successfully!', 'success');
       await window.loadBalanceData(dateVal);
     } catch (err) {
+      finishBalanceProgressTimer(false);
       if (!handleDepartmentSessionExpiredError(err, 'balance', { balance_date: dateVal, include_pmagy: incPmagy })) {
         showNotice('Balance robot: ' + (err.message || 'Balance pipeline failed.'), 'error');
       }
@@ -2596,6 +2653,60 @@
 
   window.onTaxMandalChanged = function () {};
 
+  var taxProgressInterval = null;
+  function startTaxProgressTimer(title, estSeconds) {
+    if (taxProgressInterval) clearInterval(taxProgressInterval);
+    var card = document.getElementById('tax-progress-card');
+    var elapEl = document.getElementById('tax-elapsed-time');
+    var estEl = document.getElementById('tax-estimated-time');
+    var pctEl = document.getElementById('tax-progress-pct');
+    var fillEl = document.getElementById('tax-progress-fill');
+    var statusEl = document.getElementById('tax-status-text');
+    var startMs = Date.now();
+    var targetSec = Math.max(6, estSeconds || 12);
+
+    if (card) card.style.display = 'block';
+    if (elapEl) elapEl.textContent = '00:00';
+    if (estEl) estEl.textContent = formatMinSec(targetSec);
+    if (pctEl) pctEl.textContent = '0%';
+    if (fillEl) fillEl.style.width = '0%';
+    if (statusEl) statusEl.textContent = title || 'Compiling DCB Ledger...';
+
+    taxProgressInterval = setInterval(function () {
+      var elapsed = Math.floor((Date.now() - startMs) / 1000);
+      if (elapEl) elapEl.textContent = formatMinSec(elapsed);
+      if (elapsed >= targetSec - 2) targetSec = elapsed + 4;
+      if (estEl) estEl.textContent = formatMinSec(Math.max(0, targetSec - elapsed));
+      var pct = Math.min(96, Math.round((elapsed / Math.max(1, targetSec)) * 96));
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (fillEl) fillEl.style.width = pct + '%';
+    }, 250);
+  }
+
+  function finishTaxProgressTimer(success) {
+    if (taxProgressInterval) {
+      clearInterval(taxProgressInterval);
+      taxProgressInterval = null;
+    }
+    var estEl = document.getElementById('tax-estimated-time');
+    var pctEl = document.getElementById('tax-progress-pct');
+    var fillEl = document.getElementById('tax-progress-fill');
+    var statusEl = document.getElementById('tax-status-text');
+    var card = document.getElementById('tax-progress-card');
+    if (success) {
+      if (estEl) estEl.textContent = '00:00';
+      if (pctEl) pctEl.textContent = '100%';
+      if (fillEl) fillEl.style.width = '100%';
+      if (statusEl) statusEl.textContent = 'DCB report compiled successfully!';
+      setTimeout(function () {
+        if (card) card.style.display = 'none';
+      }, 1200);
+    } else {
+      if (estEl) estEl.textContent = '--:--';
+      if (statusEl) statusEl.textContent = 'DCB processing halted.';
+    }
+  }
+
   window.generateTaxReport = async function () {
     var distEl = document.getElementById('tax-district-select');
     var dist = (distEl ? distEl.value : '').trim();
@@ -2610,9 +2721,12 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></span> Compiling DCB Report...';
     }
+    startTaxProgressTimer('Compiling House Tax DCB Report for ' + dist + '...', 12);
     try {
       await window.loadTaxData();
+      finishTaxProgressTimer(true);
     } catch (err) {
+      finishTaxProgressTimer(false);
       if (!(typeof window.isConsoleScope === 'function' && window.isConsoleScope() && handleDepartmentSessionExpiredError(err, 'tax-dcb'))) {
         showNotice('Failed to compile DCB report: ' + err.message, 'error');
       }
@@ -2631,6 +2745,7 @@
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></span> Fetching Live Portal Data...';
     }
+    startTaxProgressTimer('Synchronizing fresh live DCB data from e-Panchayat portal...', 20);
     try {
       var result = await window.safeFetchJson('/api/tax/refresh', { method: 'POST' });
       taxDataCache = null;
@@ -2639,8 +2754,10 @@
       if (dist) {
         await window.loadTaxData();
       }
+      finishTaxProgressTimer(true);
       showNotice('Fresh live DCB data synchronized (' + (result.total_gps || 0) + ' GP rows).', 'success');
     } catch (err) {
+      finishTaxProgressTimer(false);
       showNotice('Notice while refreshing live tax data: ' + err.message, 'error');
     } finally {
       if (btn) {
@@ -2962,13 +3079,14 @@
     return Math.abs(fIdx - tIdx) + 1;
   }
 
-  function startInspProgressTimer(estSeconds) {
+  function startInspProgressTimer(estSeconds, statusMsg) {
     if (inspTimerInterval) clearInterval(inspTimerInterval);
     var strip = document.getElementById('insp-progress-strip');
     var elapEl = document.getElementById('insp-elapsed-time');
     var estEl = document.getElementById('insp-estimated-time');
     var pctEl = document.getElementById('insp-progress-pct');
     var fillEl = document.getElementById('insp-progress-fill');
+    var statusEl = document.getElementById('insp-status-text');
     var startMs = Date.now();
     var targetSec = Math.max(8, estSeconds || 12);
 
@@ -2977,6 +3095,7 @@
     if (estEl) estEl.textContent = formatMinSec(targetSec);
     if (pctEl) pctEl.textContent = '0%';
     if (fillEl) fillEl.style.width = '0%';
+    if (statusEl) statusEl.textContent = statusMsg || 'Iterating weeks and compiling GM-R 39.1 inspection reports...';
 
     inspTimerInterval = setInterval(function () {
       var elapsed = Math.floor((Date.now() - startMs) / 1000);
@@ -2997,12 +3116,15 @@
     var estEl = document.getElementById('insp-estimated-time');
     var pctEl = document.getElementById('insp-progress-pct');
     var fillEl = document.getElementById('insp-progress-fill');
+    var statusEl = document.getElementById('insp-status-text');
     if (success) {
       if (estEl) estEl.textContent = '00:00';
       if (pctEl) pctEl.textContent = '100%';
       if (fillEl) fillEl.style.width = '100%';
+      if (statusEl) statusEl.textContent = 'Inspections abstract compiled successfully!';
     } else {
       if (estEl) estEl.textContent = '--:--';
+      if (statusEl) statusEl.textContent = 'Inspections robot halted.';
     }
   }
 

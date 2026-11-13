@@ -305,6 +305,27 @@ MAS_PAGE_HTML = (
         </div>
       </div>
 
+      <!-- Live Robot Progress Box (MAS) -->
+      <div id="mas-progress-card" class="robot-progress-card" style="display:none; background:#ffffff; border:1.5px solid #38bdf8; border-radius:12px; padding:18px; margin:16px 24px; box-shadow:0 4px 16px rgba(56,189,248,0.12);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="robot-sonar-dot" style="width:12px; height:12px; border-radius:50%; background:#0284c7; box-shadow:0 0 0 3px rgba(56,189,248,0.4);"></div>
+            <strong style="color:#0369a1; font-size:0.95rem;">GM-R 5.24 &amp; 5.23 MAS Robot Active</strong>
+          </div>
+          <span id="mas-progress-pct" class="progress-pct-badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:0.85rem; padding:3px 10px; border-radius:999px;">0%</span>
+        </div>
+        <div class="progress-track-8px" style="background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; margin-bottom:12px;">
+          <div id="mas-progress-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155;">
+          <div><span style="font-weight:700;">Status:</span> <span id="mas-status-text">Extracting GM-R 5.24 &amp; 5.23 reports from e-Panchayat portal...</span></div>
+          <div style="display:flex; gap:12px; font-weight:600;">
+            <span>⏱️ Elapsed: <strong id="mas-elapsed-time" style="color:#047857;">00:00</strong></span>
+            <span>⏳ Estimated: <strong id="mas-estimated-time" style="color:#0284c7;">01:30</strong></span>
+          </div>
+        </div>
+      </div>
+
       <!-- KPI Summary Row -->
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; padding:20px 24px; background:#ffffff; border-bottom:1px solid #e2e8f0;">
         <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:14px 16px;">
@@ -859,6 +880,67 @@ MAS_PAGE_HTML = (
       return handleMasDownloadClick(event, 'pdf');
     }
 
+    let masProgressInterval = null;
+    function startMasProgressTimer(targetSec = 45) {
+      if (masProgressInterval) clearInterval(masProgressInterval);
+      const card = document.getElementById('mas-progress-card');
+      const elapEl = document.getElementById('mas-elapsed-time');
+      const estEl = document.getElementById('mas-estimated-time');
+      const pctEl = document.getElementById('mas-progress-pct');
+      const fillEl = document.getElementById('mas-progress-fill');
+      const statusEl = document.getElementById('mas-status-text');
+      const startMs = Date.now();
+      let target = Math.max(15, targetSec);
+
+      if (card) card.style.display = 'block';
+      if (elapEl) elapEl.textContent = '00:00';
+      if (estEl) estEl.textContent = formatSecMin(target);
+      if (pctEl) pctEl.textContent = '0%';
+      if (fillEl) fillEl.style.width = '0%';
+      if (statusEl) statusEl.textContent = 'Extracting GM-R 5.24 & 5.23 reports from e-Panchayat portal...';
+
+      masProgressInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startMs) / 1000);
+        if (elapEl) elapEl.textContent = formatSecMin(elapsed);
+        if (elapsed >= target - 2) target = elapsed + 6;
+        if (estEl) estEl.textContent = formatSecMin(Math.max(0, target - elapsed));
+        const pct = Math.min(96, Math.round((elapsed / Math.max(1, target)) * 96));
+        if (pctEl) pctEl.textContent = pct + '%';
+        if (fillEl) fillEl.style.width = pct + '%';
+      }, 250);
+    }
+
+    function formatSecMin(sec) {
+      const s = Math.max(0, Math.floor(sec || 0));
+      const m = Math.floor(s / 60);
+      const rem = s % 60;
+      return (m < 10 ? '0' + m : m) + ':' + (rem < 10 ? '0' + rem : rem);
+    }
+
+    function finishMasProgressTimer(success) {
+      if (masProgressInterval) {
+        clearInterval(masProgressInterval);
+        masProgressInterval = null;
+      }
+      const estEl = document.getElementById('mas-estimated-time');
+      const pctEl = document.getElementById('mas-progress-pct');
+      const fillEl = document.getElementById('mas-progress-fill');
+      const statusEl = document.getElementById('mas-status-text');
+      const card = document.getElementById('mas-progress-card');
+      if (success) {
+        if (estEl) estEl.textContent = '00:00';
+        if (pctEl) pctEl.textContent = '100%';
+        if (fillEl) fillEl.style.width = '100%';
+        if (statusEl) statusEl.textContent = 'MAS report compiled successfully!';
+        setTimeout(() => {
+          if (card) card.style.display = 'none';
+        }, 1500);
+      } else {
+        if (estEl) estEl.textContent = '--:--';
+        if (statusEl) statusEl.textContent = 'MAS report generation halted.';
+      }
+    }
+
     async function runMasReportGeneration(isSilent) {
       const btn = document.getElementById('btn-run-mas');
       if (btn && btn.disabled) return;
@@ -890,6 +972,7 @@ MAS_PAGE_HTML = (
 
       const excluded = getSelectedExcludedModules();
       isGeneratingMas = true;
+      if (!isSilent) startMasProgressTimer(reportType === 'abstract_only' ? 30 : 75);
       if (btn && !isSilent) {
         btn.disabled = true;
         btn.textContent = reportType === 'abstract_only'
@@ -947,8 +1030,10 @@ MAS_PAGE_HTML = (
               break;
             }
             if (pollData && pollData.status === 'running') {
+              const sec = pollData.elapsed_sec ? Math.round(pollData.elapsed_sec) + 's' : '';
+              const statusEl = document.getElementById('mas-status-text');
+              if (statusEl) statusEl.textContent = sec ? `Extracting GM-R 5.24 & 5.23 reports (${sec})...` : 'Extracting GM-R 5.24 & 5.23 reports...';
               if (btn && !isSilent) {
-                const sec = pollData.elapsed_sec ? Math.round(pollData.elapsed_sec) + 's' : '';
                 btn.textContent = sec
                   ? `⏳ Extracting GM-R 5.24 & 5.23 (${sec})...`
                   : '⏳ Extracting GM-R 5.24 & 5.23...';
@@ -962,6 +1047,7 @@ MAS_PAGE_HTML = (
         }
 
         if (res.status === 401 || res.status === 403) {
+          finishMasProgressTimer(false);
           if (!isSilent) {
             showPortalNotice(data.detail || 'Departmental session expired. Please re-authenticate once on Console.', 'warning');
             redirectMasToConsoleLogin('expired', false);
@@ -969,6 +1055,7 @@ MAS_PAGE_HTML = (
           return;
         }
         if (data && data.success) {
+          finishMasProgressTimer(true);
           masCurrentData = data;
           renderMasKPIs(data);
           renderMasTable(data);
@@ -981,10 +1068,12 @@ MAS_PAGE_HTML = (
             );
           }
         } else if (!isSilent) {
+          finishMasProgressTimer(false);
           const errDetail = data.detail || data.error || data.message || `HTTP ${res.status || 'Error'} ${res.statusText || ''}`.trim();
           showPortalNotice('Error generating MAS report: ' + errDetail, 'error');
         }
       } catch (err) {
+        finishMasProgressTimer(false);
         if (!isSilent) showPortalNotice('Failed to generate MAS report: ' + ((err && err.message) || 'Network error'), 'error');
       } finally {
         isGeneratingMas = false;

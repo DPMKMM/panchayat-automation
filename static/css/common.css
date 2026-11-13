@@ -1654,6 +1654,69 @@ body.state-automation-page #console-modules-section .auto-robot-card::before {
 }
 
 /* ========================================================
+   EXECUTIVE ROBOT PROGRESS CARD (MODERN BLUE/CYAN THEME)
+   Matches Image reference design across all modules
+   ======================================================== */
+.robot-progress-card {
+  background: #ffffff;
+  border: 1.5px solid #38bdf8;
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.12);
+  transition: all 0.25s ease;
+}
+
+.robot-sonar-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #0284c7;
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.robot-sonar-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #38bdf8;
+  animation: robotSonarPulse 1.8s ease-out infinite;
+}
+@keyframes robotSonarPulse {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.0); opacity: 0; }
+}
+
+.progress-pct-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  display: inline-block;
+}
+
+.progress-track-8px {
+  background: #e2e8f0;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.progress-fill-gradient {
+  background: linear-gradient(90deg, #0284c7, #10b981);
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* ========================================================
    MULTI-DAYS DSR REPORT STYLING (AUTOMATED & MANUAL)
    ======================================================== */
 :root {

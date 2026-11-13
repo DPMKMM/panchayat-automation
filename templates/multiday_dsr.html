@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Multiple Days DSR &amp; Attendance Reports | {{PLATFORM_NAME}}</title>
-  <link rel="stylesheet" href="/static/css/common.css">
+  <link rel="stylesheet" href="/static/css/common.css?v=15">
   <style>
     :root {
       --md-emerald: #0c3829;
@@ -433,35 +433,35 @@
           <h2 class="md-title" id="md-res-heading" style="font-size:1.2rem;">Compiled Multi-Days DSR Results</h2>
           <p class="md-desc" id="md-res-subheading"></p>
         </div>
-        <div class="md-dl-group">
-          <a id="md-dl-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
+        <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px;">
+          <a id="md-dl-pdf" class="md-btn md-btn-pdf" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color:#ffffff !important; padding:8px 16px; border-radius:8px; font-size:0.86rem; font-weight:700; text-decoration:none !important; box-shadow:0 2px 6px rgba(220,38,38,0.25); white-space:nowrap; border:none; cursor:pointer;">
+            <svg class="md-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; min-width:16px; min-height:16px; max-width:16px; max-height:16px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M12 18v-6"/><path d="M9 15l3 3 3-3"/></svg>
             <span>Download Full PDF</span>
           </a>
-          <a id="md-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+          <a id="md-dl-excel" class="md-btn md-btn-excel" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:7px; background:linear-gradient(135deg, #16a34a 0%, #15803d 100%); color:#ffffff !important; padding:8px 16px; border-radius:8px; font-size:0.86rem; font-weight:700; text-decoration:none !important; box-shadow:0 2px 6px rgba(22,163,74,0.25); white-space:nowrap; border:none; cursor:pointer;">
+            <svg class="md-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px; min-width:16px; min-height:16px; max-width:16px; max-height:16px; flex-shrink:0; vertical-align:middle; display:inline-block;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
             <span id="md-dl-excel-label">Download Excel (5 Sheets)</span>
           </a>
         </div>
       </div>
 
-      <div class="md-dl-dock">
-        <div class="md-dl-group">
-          <span class="md-dl-label">Report-Wise PDF Downloads:</span>
-          <a id="md-dl-pdf-district" class="md-btn md-btn-subpdf active-pdf" data-pdf-level="district" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
+      <div class="md-dl-dock" style="background:#f8fbf9; border:1px solid #d5e5dc; border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+        <div class="md-dl-group" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+          <span class="md-dl-label" style="font-size:0.75rem; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#047857; margin-right:4px;">Report-Wise PDF Downloads:</span>
+          <a id="md-dl-pdf-district" class="md-btn md-btn-subpdf active-pdf" data-pdf-level="district" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
+            <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/></svg>
             <span>District Level PDF</span>
           </a>
-          <a id="md-dl-pdf-mandal" class="md-btn md-btn-subpdf" data-pdf-level="mandal" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <a id="md-dl-pdf-mandal" class="md-btn md-btn-subpdf" data-pdf-level="mandal" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
+            <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             <span>Mandal Level PDF</span>
           </a>
-          <a id="md-dl-pdf-gp" class="md-btn md-btn-subpdf" data-pdf-level="gp" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <a id="md-dl-pdf-gp" class="md-btn md-btn-subpdf" data-pdf-level="gp" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
+            <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             <span>GP Summary PDF</span>
           </a>
-          <a id="md-dl-pdf-time" class="md-btn md-btn-subpdf" data-pdf-level="time_matrix" href="#" target="_blank" rel="noopener noreferrer">
-            <svg class="md-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <a id="md-dl-pdf-time" class="md-btn md-btn-subpdf" data-pdf-level="time_matrix" href="#" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:6px; background:#fff5f5; color:#b91c1c !important; border:1px solid #fecaca; border-radius:6px; padding:6px 12px; font-size:0.82rem; font-weight:700; text-decoration:none !important; white-space:nowrap; cursor:pointer;">
+            <svg class="md-ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px; height:15px; min-width:15px; min-height:15px; max-width:15px; max-height:15px; flex-shrink:0; vertical-align:middle; display:inline-block;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <span>Exact Time &amp; Avg PDF</span>
           </a>
         </div>
