@@ -159,8 +159,8 @@ def _generate_server_report_impl(
         pmagy_q = f"&include_pmagy={'1' if report.include_pmagy else '0'}"
         clean_date = report.report_date_str.replace("/", "-")
         user_level = session.get("user_level", "district")
-        is_mandal_level = (user_level == "mandal") or bool(session.get("mandal_name"))
-        target_mandal = (session.get("mandal_name") or "").strip()
+        is_mandal_level = (user_level == "mandal")
+        target_mandal = (session.get("mandal_name") or "").strip() if is_mandal_level else ""
 
         if is_mandal_level:
             if not target_mandal and report.mandals:
@@ -230,10 +230,10 @@ def _generate_server_report_impl(
 
     dist_name = session.get("district_name", "Khammam")
     user_level = session.get("user_level", "district")
-    target_mandal_raw = (session.get("mandal_name") or "").strip()
-    is_mandal_level = (user_level == "mandal") or bool(target_mandal_raw)
+    is_mandal_level = (user_level == "mandal")
+    target_mandal_raw = (session.get("mandal_name") or "").strip() if is_mandal_level else ""
     target_mandal_norm = re.sub(r"[^a-zA-Z0-9]", "", target_mandal_raw).lower() if is_mandal_level else ""
-    cache_level = "mandal" if is_mandal_level else user_level
+    cache_level = "mandal" if is_mandal_level else "district"
 
     try:
         from dsr.pdf_generator import ALL_DSR_SECTIONS, normalize_dsr_page_layout, normalize_dsr_sections

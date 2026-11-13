@@ -168,7 +168,7 @@
     }
     var officer = String(data.user_id || fallbackUser || 'Officer').trim();
     var uLevel = String(data.user_level || 'district').trim();
-    var mName = String(data.mandal_name || '').trim();
+    var mName = (uLevel === 'mandal') ? String(data.mandal_name || '').trim() : '';
     var dName = String(data.district_name || '').trim();
     var oName = String(data.office_name || '').trim();
     try {
@@ -176,7 +176,11 @@
       sessionStorage.setItem('epts_dept_session', 'true');
       sessionStorage.setItem('epts_officer_id', officer);
       sessionStorage.setItem('epts_user_level', uLevel);
-      sessionStorage.setItem('epts_mandal_name', mName);
+      if (mName) {
+        sessionStorage.setItem('epts_mandal_name', mName);
+      } else {
+        sessionStorage.removeItem('epts_mandal_name');
+      }
       if (dName) sessionStorage.setItem('epts_district_name', dName);
       if (oName) sessionStorage.setItem('epts_office_name', oName);
     } catch (e) {}

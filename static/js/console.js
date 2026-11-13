@@ -88,6 +88,13 @@
   }
 
   function clearEptsStorageOnly() {
+    reportData = null;
+    window.currentMandalName = '';
+    window.currentUserLevel = 'district';
+    ['results-section', 'state-format-results', 'auto-multi-results-section', 'inspections-results-card', 'balance-results-card'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
     if (window.DeptSessionManager && typeof window.DeptSessionManager.clearEptsMetadata === 'function') {
       window.DeptSessionManager.clearEptsMetadata();
       return;
@@ -360,8 +367,24 @@
       } catch (e) {}
 
       var officer = String(userId || savedOfficer || 'Officer').trim();
-      var uLevel = String((sessionInfo && sessionInfo.user_level) || savedLevel || 'district').trim();
-      var mName = String((sessionInfo && sessionInfo.mandal_name) || savedMandal || '').trim();
+      var uLevel = String((sessionInfo && sessionInfo.user_level) || (userId ? 'district' : savedLevel) || 'district').trim();
+
+      // If switching officers or if user level changed, wipe previous cached reports and mandal state immediately
+      var officerChanged = Boolean(savedOfficer && officer && savedOfficer.toLowerCase() !== officer.toLowerCase());
+      if (officerChanged) {
+        savedMandal = '';
+        reportData = null;
+        ['results-section', 'state-format-results', 'auto-multi-results-section', 'inspections-results-card', 'balance-results-card'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+      }
+
+      var mName = '';
+      if (uLevel === 'mandal') {
+        mName = String((sessionInfo && sessionInfo.mandal_name) || savedMandal || '').trim();
+      }
+
       var dName = String((sessionInfo && sessionInfo.district_name) || savedDistrict || '').trim();
       var oName = String((sessionInfo && sessionInfo.office_name) || savedOffice || '').trim();
 
@@ -375,8 +398,12 @@
         sessionStorage.setItem('epts_dept_session', 'true');
         sessionStorage.setItem('epts_officer_id', officer);
         sessionStorage.setItem('epts_user_level', uLevel);
-        sessionStorage.setItem('epts_mandal_name', mName);
-        sessionStorage.setItem('epts_district_name', dName);
+        if (mName) {
+          sessionStorage.setItem('epts_mandal_name', mName);
+        } else {
+          sessionStorage.removeItem('epts_mandal_name');
+        }
+        if (dName) sessionStorage.setItem('epts_district_name', dName);
         if (oName) sessionStorage.setItem('epts_office_name', oName);
       } catch (e) {}
 
@@ -1219,6 +1246,10 @@
     reportData = null;
     deptLoginInProgress = false;
     setAuthenticated(false);
+    ['results-section', 'state-format-results', 'auto-multi-results-section', 'inspections-results-card', 'balance-results-card'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
     showNotice('Disconnected from e-Panchayat departmental session and closed background browser.', 'info');
   };
 

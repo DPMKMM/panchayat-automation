@@ -375,7 +375,16 @@ def naresh_api_data(request: Request) -> dict[str, Any]:
     try:
         session = automation_service.get_or_create_session(sid)
         session_data = session.get("report_data")
+        user_level = session.get("user_level", "district")
+        curr_mandal = (session.get("mandal_name") or "").strip().lower()
         if session_data:
+            report_is_mandal = bool(session_data.get("is_mandal_level"))
+            rep_mandal = str(session_data.get("mandal_name") or "").strip().lower()
+            # Mismatch detection: if active officer is district level but cached report is mandal level (or vice-versa), wipe it immediately
+            if (user_level == "district" and report_is_mandal) or (user_level == "mandal" and (not report_is_mandal or (curr_mandal and rep_mandal and curr_mandal != rep_mandal))):
+                session["report_data"] = {}
+                session["latest_pdf_path"] = ""
+                return {"district_name": "", "report_date": "", "totals": {}, "mandal_rows": [], "generated": False}
             return session_data
     except Exception:
         pass

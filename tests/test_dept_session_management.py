@@ -489,3 +489,87 @@ def test_console_selection_prompts_dept_login_once_and_logout_closes_browser(mon
     assert closed_calls == ["bot_closed"]
     assert sess["bot"] is None
     assert sess["status"] == "idle"
+
+
+def test_switching_from_mpo_to_dpoa_clears_mandal_and_report_caches(monkeypatch):
+    """Verify that when an MPO login is followed by a DPOA login in the same session,
+    all previous mandal scopes, report caches, and downloaded files are cleared immediately.
+    """
+    from core import session_manager
+    from core.session_manager import _DSR_CACHE, _DSR_CACHE_LOCK
+
+    ts = int(time.time() * 1000)
+    sid = f"sid_switch_{ts}"
+    c = TestClient(app)
+    _console_login(c, monkeypatch, f"switch_{ts}")
+    console_hdrs = {"Host": "reports.panchayatautomation.in", "X-Session-ID": sid}
+
+    monkeypatch.setattr(session_manager, "is_cloud_sync_fallback_allowed", lambda: True)
+
+    # 1. Simulate initial login as MPO Thallada
+    sess = session_manager.get_or_create_session(sid)
+    sess["user_id"] = "MPO_Thallada"
+    sess["user_level"] = "mandal"
+    sess["mandal_name"] = "Thallada"
+    sess["status"] = "authenticated"
+    sess["mode"] = "cloud_sync"
+    sess["report_data"] = {
+        "district_name": "Khammam",
+        "mandal_name": "Thallada",
+        "is_mandal_level": True,
+        "report_date": "10-Nov-2026",
+        "totals": {"unique_gps": 25},
+        "generated": True,
+    }
+    sess["latest_pdf_path"] = "/tmp/dummy_thallada.pdf"
+
+    # Add dummy file to downloads dir
+    dl_dir = sess["downloads_dir"]
+    dummy_file = dl_dir / "old_mpo_file.xls"
+    dummy_file.write_text("dummy mpo raw content", encoding="utf-8")
+    assert dummy_file.exists()
+
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE[("dsr", "10-Nov-2026", "Khammam")] = {"data": "old_mpo_cache"}
+
+    # Confirm /api/naresh/data initially returns MPO report for MPO
+    mpo_data = c.get("/api/naresh/data", headers=console_hdrs).json()
+    assert mpo_data.get("is_mandal_level") is True
+    assert mpo_data.get("mandal_name") == "Thallada"
+
+    # 2. Officer now logs in as DPOA3698
+    sess["status"] = "awaiting_otp"
+    sess["user_id"] = "DPOA3698"
+
+    otp_res = c.post("/api/naresh/verify-otp", headers=console_hdrs, data={"otp": "123456"})
+    assert otp_res.status_code == 200
+    otp_data = otp_res.json()
+    assert otp_data["success"] is True
+    assert otp_data["user_id"] == "DPOA3698"
+    assert otp_data["user_level"] == "district"
+    assert otp_data["mandal_name"] == ""
+
+    # 3. Verify session state in memory
+    assert sess["user_id"] == "DPOA3698"
+    assert sess["user_level"] == "district"
+    assert sess["mandal_name"] == ""
+    assert sess["division_name"] == ""
+    assert sess["report_data"] == {}
+    assert sess["latest_pdf_path"] == ""
+    assert not dummy_file.exists()  # Downloads folder wiped!
+
+    with _DSR_CACHE_LOCK:
+        assert len(_DSR_CACHE) == 0  # DSR cache cleared!
+
+    # 4. Verify /api/naresh/data returns clean/empty report data (no Thallada leak)
+    dpoa_data = c.get("/api/naresh/data", headers=console_hdrs).json()
+    assert dpoa_data.get("generated") is False
+    assert dpoa_data.get("mandal_rows") == []
+    assert dpoa_data.get("totals") == {}
+
+    # 5. Verify /api/auth/department-status reflects DPOA district level
+    dept_st = c.get("/api/auth/department-status", headers=console_hdrs).json()
+    assert dept_st["user_id"] == "DPOA3698"
+    assert dept_st["user_level"] == "district"
+    assert dept_st["mandal_name"] == ""
+

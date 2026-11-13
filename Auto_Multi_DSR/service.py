@@ -297,6 +297,14 @@ def get_job_status(job_id: str, session_id: str) -> dict[str, Any]:
         return job.to_public_dict()
 
 
+def clear_session_jobs(session_id: str) -> None:
+    """Wipe any active or completed jobs for this session."""
+    with _LOCK:
+        job_id = _ACTIVE_JOB_BY_SESSION.pop(session_id, None)
+        if job_id:
+            _JOBS.pop(job_id, None)
+
+
 def get_session_active_job(session_id: str) -> dict[str, Any] | None:
     with _LOCK:
         job_id = _ACTIVE_JOB_BY_SESSION.get(session_id)

@@ -437,6 +437,38 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
     t_login_start = time.perf_counter()
     sid = session["session_id"]
     _reset_login_progress(sid)
+
+    # Immediately reset previous user caches, scopes, and downloads so no prior report leaks
+    session["last_error"] = ""
+    session["report_data"] = {}
+    session["latest_pdf_path"] = ""
+    session["latest_report_date"] = ""
+    session["download_filename"] = ""
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
+    session["auto_multi_dsr_payload"] = None
+    session["auto_multi_dsr_result"] = None
+    session["auto_multi_dsr_job_id"] = None
+    session["user_level"] = "district"
+    session["mandal_name"] = ""
+    session["division_name"] = ""
+    session["district_name"] = ""
+    session["office_name"] = ""
+    session["office_id"] = ""
+
+    dl_dir = session.get("downloads_dir")
+    if dl_dir and dl_dir.exists():
+        for old_f in dl_dir.iterdir():
+            if old_f.is_file():
+                try:
+                    old_f.unlink()
+                except Exception:
+                    pass
+
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE.clear()
     playwright_available = False
     try:
         import playwright  # noqa: F401
@@ -708,22 +740,64 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
                 officer_info = extract_epanchayat_header_info(page)
                 level, m_name = determine_user_level(officer_info, user_id)
                 session["user_level"] = level
-                if m_name:
-                    session["mandal_name"] = m_name
-                elif officer_info.get("mandal_name"):
-                    session["mandal_name"] = officer_info["mandal_name"]
 
-                if officer_info.get("district_name"):
-                    session["district_name"] = officer_info["district_name"]
+                # Explicitly set or clear mandal_name and division_name based on user_level
+                if level == "mandal":
+                    session["mandal_name"] = m_name or officer_info.get("mandal_name", "")
+                    session["division_name"] = officer_info.get("division_name", "")
+                elif level == "division":
+                    session["mandal_name"] = ""
+                    session["division_name"] = officer_info.get("division_name", "")
+                else:  # district level (e.g. DPOA)
+                    session["mandal_name"] = ""
+                    session["division_name"] = ""
 
-                if officer_info.get("office_name"):
-                    session["office_name"] = officer_info["office_name"]
+                session["district_name"] = officer_info.get("district_name") or session.get("district_name") or "Khammam"
+                session["office_name"] = officer_info.get("office_name", "")
+                session["office_id"] = officer_info.get("office_id", "")
 
-                if officer_info.get("division_name"):
-                    session["division_name"] = officer_info["division_name"]
+                # IMMEDIATELY WIPE ALL PREVIOUS REPORTS, FILES, AND CACHES
+                session["report_data"] = {}
+                session["latest_pdf_path"] = ""
+                session["latest_report_date"] = ""
+                session["download_filename"] = ""
+                session["state_format_pdf"] = ""
+                session["state_format_excel"] = ""
+                session["state_format_pdf_filename"] = ""
+                session["state_format_excel_filename"] = ""
+                session["auto_multi_dsr_payload"] = None
+                session["auto_multi_dsr_result"] = None
+                session["auto_multi_dsr_job_id"] = None
 
-                if officer_info.get("office_id"):
-                    session["office_id"] = officer_info["office_id"]
+                dl_dir = session.get("downloads_dir")
+                if dl_dir and dl_dir.exists():
+                    for old_f in dl_dir.iterdir():
+                        if old_f.is_file():
+                            try:
+                                old_f.unlink()
+                            except Exception:
+                                pass
+
+                with _DSR_CACHE_LOCK:
+                    _DSR_CACHE.clear()
+
+                try:
+                    from inspections.service import clear_session_inspections
+                    clear_session_inspections(session["session_id"])
+                except Exception:
+                    pass
+
+                try:
+                    from gp_balance.service import reset_balance_data
+                    reset_balance_data(session_id=session["session_id"])
+                except Exception:
+                    pass
+
+                try:
+                    from Auto_Multi_DSR.service import clear_session_jobs
+                    clear_session_jobs(session["session_id"])
+                except Exception:
+                    pass
 
                 session["last_activity"] = time.time()
                 session["_last_epts_ping_at"] = time.time()
@@ -763,7 +837,59 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     session["user_id"] = user_id
     level, m_name = determine_user_level({}, user_id)
     session["user_level"] = level
-    session["mandal_name"] = m_name or ""
+    if level == "mandal":
+        session["mandal_name"] = m_name or ""
+        session["division_name"] = ""
+    elif level == "division":
+        session["mandal_name"] = ""
+        session["division_name"] = ""
+    else:  # district
+        session["mandal_name"] = ""
+        session["division_name"] = ""
+
+    # Immediately wipe previous reports and caches
+    session["report_data"] = {}
+    session["latest_pdf_path"] = ""
+    session["latest_report_date"] = ""
+    session["download_filename"] = ""
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
+    session["auto_multi_dsr_payload"] = None
+    session["auto_multi_dsr_result"] = None
+    session["auto_multi_dsr_job_id"] = None
+
+    dl_dir = session.get("downloads_dir")
+    if dl_dir and dl_dir.exists():
+        for old_f in dl_dir.iterdir():
+            if old_f.is_file():
+                try:
+                    old_f.unlink()
+                except Exception:
+                    pass
+
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE.clear()
+
+    try:
+        from inspections.service import clear_session_inspections
+        clear_session_inspections(session["session_id"])
+    except Exception:
+        pass
+
+    try:
+        from gp_balance.service import reset_balance_data
+        reset_balance_data(session_id=session["session_id"])
+    except Exception:
+        pass
+
+    try:
+        from Auto_Multi_DSR.service import clear_session_jobs
+        clear_session_jobs(session["session_id"])
+    except Exception:
+        pass
+
     _save_session_state(session)
     ensure_keepalive_running()
     return {
@@ -800,13 +926,59 @@ def _expire_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["status"] = "expired"
     session["mode"] = "idle"
     session["last_error"] = "Session auto-closed after inactivity timeout."
+    session["user_level"] = "district"
+    session["mandal_name"] = ""
+    session["division_name"] = ""
+    session["district_name"] = ""
+    session["office_name"] = ""
+    session["office_id"] = ""
     session["latest_pdf_path"] = ""
+    session["latest_report_date"] = ""
+    session["download_filename"] = ""
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
     session["report_data"] = {}
+    session["auto_multi_dsr_payload"] = None
+    session["auto_multi_dsr_result"] = None
+    session["auto_multi_dsr_job_id"] = None
     session["authenticated_at"] = 0.0
     session["_last_epts_ping_at"] = 0.0
     session["_keepalive_fail_count"] = 0
     session["session_duration"] = SESSION_DEFAULT_DURATION
     session["extended"] = False
+
+    dl_dir = session.get("downloads_dir")
+    if dl_dir and dl_dir.exists():
+        for old_f in dl_dir.iterdir():
+            if old_f.is_file():
+                try:
+                    old_f.unlink()
+                except Exception:
+                    pass
+
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE.clear()
+
+    try:
+        from inspections.service import clear_session_inspections
+        clear_session_inspections(session["session_id"])
+    except Exception:
+        pass
+
+    try:
+        from gp_balance.service import reset_balance_data
+        reset_balance_data(session_id=session["session_id"])
+    except Exception:
+        pass
+
+    try:
+        from Auto_Multi_DSR.service import clear_session_jobs
+        clear_session_jobs(session["session_id"])
+    except Exception:
+        pass
+
     return {"success": True, "message": "Session expired and browser closed."}
 
 
@@ -945,13 +1117,59 @@ def _logout_server_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["status"] = "idle"
     session["mode"] = "idle"
     session["last_error"] = ""
+    session["user_level"] = "district"
+    session["mandal_name"] = ""
+    session["division_name"] = ""
+    session["district_name"] = ""
+    session["office_name"] = ""
+    session["office_id"] = ""
     session["latest_pdf_path"] = ""
+    session["latest_report_date"] = ""
+    session["download_filename"] = ""
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
     session["report_data"] = {}
+    session["auto_multi_dsr_payload"] = None
+    session["auto_multi_dsr_result"] = None
+    session["auto_multi_dsr_job_id"] = None
     session["authenticated_at"] = 0.0
     session["_last_epts_ping_at"] = 0.0
     session["_keepalive_fail_count"] = 0
     session["session_duration"] = SESSION_DEFAULT_DURATION
     session["extended"] = False
+
+    dl_dir = session.get("downloads_dir")
+    if dl_dir and dl_dir.exists():
+        for old_f in dl_dir.iterdir():
+            if old_f.is_file():
+                try:
+                    old_f.unlink()
+                except Exception:
+                    pass
+
+    with _DSR_CACHE_LOCK:
+        _DSR_CACHE.clear()
+
+    try:
+        from inspections.service import clear_session_inspections
+        clear_session_inspections(session["session_id"])
+    except Exception:
+        pass
+
+    try:
+        from gp_balance.service import reset_balance_data
+        reset_balance_data(session_id=session["session_id"])
+    except Exception:
+        pass
+
+    try:
+        from Auto_Multi_DSR.service import clear_session_jobs
+        clear_session_jobs(session["session_id"])
+    except Exception:
+        pass
+
     return {"success": True, "message": "Logged out successfully."}
 
 

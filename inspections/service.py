@@ -327,6 +327,12 @@ def consolidate_uploaded_inspection_files(
     return _persist_artifacts_for_session(session_id, report)
 
 
+def clear_session_inspections(session_id: str) -> None:
+    """Wipe any cached inspection report for this session."""
+    with _SESSION_STORE_LOCK:
+        _SESSION_REPORTS.pop(session_id, None)
+
+
 def get_session_inspection_payload(session_id: str) -> dict[str, Any] | None:
     with _SESSION_STORE_LOCK:
         entry = _SESSION_REPORTS.get(session_id)
