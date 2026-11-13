@@ -224,12 +224,19 @@ def parse_state_format_data(
 
         # Attendance classification
         is_present = _is_present_status(first_st) or _is_present_status(second_st)
-        is_leave = "leave" in combined_st
-        is_meeting_training = "meeting" in combined_st or "training" in combined_st
+        is_meeting_training = ("meeting" in combined_st or "training" in combined_st) and not is_present
+        is_leave = "leave" in combined_st and not (is_present or is_meeting_training)
+        is_not_reported = not (is_present or is_meeting_training or is_leave)
+        is_reported = is_present or is_meeting_training
 
+        # Arrival bucket classification (for all reported PS: both GP attended and Meeting/Training)
         arrival_bucket = ""
-        if is_present:
+        if is_reported:
             ts_val = row.get("_timestamp")
+            if pd.isna(ts_val) or ts_val is None:
+                sec_ts = row.get("Second Attendence Datetime")
+                if sec_ts and not pd.isna(sec_ts):
+                    ts_val = _parse_timestamp(sec_ts)
             arrival_bucket = _classify_arrival_bucket(ts_val)
 
         # Full time working PS status
@@ -245,7 +252,8 @@ def parse_state_format_data(
             "arrival_bucket": arrival_bucket,
             "is_meeting_training": is_meeting_training,
             "is_leave": is_leave,
-            "is_not_reported": not (is_present or is_leave or is_meeting_training),
+            "is_not_reported": is_not_reported,
+            "is_reported": is_reported,
         })
 
     if not unique_gps:
@@ -266,21 +274,30 @@ def parse_state_format_data(
         else:
             eval_mask = pd.Series(True, index=m_group.index)
         
-        b_6_9 = int(((m_group["arrival_bucket"] == "6_9") & m_group["is_present"] & eval_mask).sum())
-        b_9_10 = int(((m_group["arrival_bucket"] == "9_10") & m_group["is_present"] & eval_mask).sum())
-        b_10_11 = int(((m_group["arrival_bucket"] == "10_11") & m_group["is_present"] & eval_mask).sum())
-        b_11_12 = int(((m_group["arrival_bucket"] == "11_12") & m_group["is_present"] & eval_mask).sum())
-        b_after_12 = int(((m_group["arrival_bucket"] == "after_12") & m_group["is_present"] & eval_mask).sum())
+        b_6_9 = int(((m_group["arrival_bucket"] == "6_9") & m_group["is_reported"] & eval_mask).sum())
+        b_9_10 = int(((m_group["arrival_bucket"] == "9_10") & m_group["is_reported"] & eval_mask).sum())
+        b_10_11 = int(((m_group["arrival_bucket"] == "10_11") & m_group["is_reported"] & eval_mask).sum())
+        b_11_12 = int(((m_group["arrival_bucket"] == "11_12") & m_group["is_reported"] & eval_mask).sum())
+        b_after_12 = int(((m_group["arrival_bucket"] == "after_12") & m_group["is_reported"] & eval_mask).sum())
         
-        total_attended = b_6_9 + b_9_10 + b_10_11 + b_11_12 + b_after_12
+        # Col 11: Total No.of PSs attended GP (physically attended the Gram Panchayat)
+        total_attended_gp = int((m_group["is_present"] & eval_mask).sum())
+        # Col 12: No.of PSs reported to Mtg / Trngs today
         mtg_trng = int((m_group["is_meeting_training"] & eval_mask).sum())
+        # Col 13: No.of PSs on Leave Today
         on_leave = int((m_group["is_leave"] & eval_mask).sum())
+        # Col 14: No.of PS Not reported
         not_rep = int((m_group["is_not_reported"] & eval_mask).sum())
 
         # Percentage before 9 AM (Col 10):
-        # Denominator is full-time working PS (Col 4)
-        denominator = full_time if full_time > 0 and b_6_9 <= full_time else total_gps
-        pct_b9 = round((b_6_9 / denominator * 100), 2) if denominator > 0 else 0.0
+        # User defined formula: (6 AM - 9 AM) / No.of PS in which full time working * 100
+        # If incharge is excluded, denominator is full_time (Col 4).
+        # If incharge is included, denominator is total_gps (Col 3).
+        if exclude_incharge:
+            denominator = full_time if full_time > 0 else total_gps
+        else:
+            denominator = total_gps if total_gps > 0 else full_time
+        pct_b9 = round(min(100.0, (b_6_9 / denominator * 100)), 2) if denominator > 0 else 0.0
 
         mandal_list.append(StateFormatRow(
             sl_no=0,
@@ -293,14 +310,14 @@ def parse_state_format_data(
             b_11_12=b_11_12,
             b_after_12=b_after_12,
             pct_before_9=pct_b9,
-            total_attended=total_attended,
+            total_attended=total_attended_gp,
             meeting_training=mtg_trng,
             on_leave=on_leave,
             not_reported=not_rep,
         ))
 
     # Sort descending by % of PS Reported before 9 AM ↓ (Col 10)
-    mandal_list.sort(key=lambda r: (r.pct_before_9, r.total_attended, r.b_6_9), reverse=True)
+    mandal_list.sort(key=lambda r: (r.pct_before_9, r.b_6_9, r.total_attended), reverse=True)
 
     # Assign Sl. No. (1, 2, 3...)
     for idx, r in enumerate(mandal_list, start=1):
@@ -319,8 +336,11 @@ def parse_state_format_data(
     tot_leave = sum(r.on_leave for r in mandal_list)
     tot_not_rep = sum(r.not_reported for r in mandal_list)
 
-    tot_denom = tot_ft if tot_ft > 0 and tot_6_9 <= tot_ft else tot_gps
-    overall_pct_b9 = round((tot_6_9 / tot_denom * 100), 2) if tot_denom > 0 else 0.0
+    if exclude_incharge:
+        tot_denom = tot_ft if tot_ft > 0 else tot_gps
+    else:
+        tot_denom = tot_gps if tot_gps > 0 else tot_ft
+    overall_pct_b9 = round(min(100.0, (tot_6_9 / tot_denom * 100)), 2) if tot_denom > 0 else 0.0
 
     total_row = StateFormatRow(
         sl_no="",
