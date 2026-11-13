@@ -577,6 +577,32 @@ def _generate_server_state_format_impl(
     dl_dir: Path = session["downloads_dir"]
     reports_dir = ROOT_DIR / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = ROOT_DIR / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine target date object and pattern variants for exact file matching
+    target_dt = None
+    try:
+        target_dt = datetime.strptime(req_date, "%Y-%m-%d").date()
+    except Exception:
+        try:
+            target_dt = datetime.strptime(portal_date_fmt, "%d-%b-%Y").date()
+        except Exception:
+            pass
+
+    date_patterns = [portal_date_fmt.lower()]
+    if target_dt:
+        date_patterns.extend([
+            target_dt.strftime("%d_%m_%Y").lower(),
+            target_dt.strftime("%d-%m-%Y").lower(),
+            target_dt.strftime("%d_%b_%Y").lower(),
+            target_dt.strftime("%d-%b-%Y").lower(),
+            target_dt.strftime("%Y-%m-%d").lower(),
+        ])
+
+    def _matches_target_date(fname: str) -> bool:
+        fn = fname.lower()
+        return any(pat in fn for pat in date_patterns)
 
     raw_path: Path | None = None
     presentees_bytes: bytes | None = None
@@ -584,23 +610,38 @@ def _generate_server_state_format_impl(
     absentees_bytes: bytes | None = None
     absentees_name: str = ""
 
-    # 1. Search for existing downloaded files for this target date
+    # 1. Search for existing downloaded files for this EXACT target date
     if not force_fresh and dl_dir.exists():
         for f in dl_dir.iterdir():
-            if f.is_file() and f.suffix.lower() in (".xls", ".xlsx"):
+            if f.is_file() and f.suffix.lower() in (".xls", ".xlsx") and _matches_target_date(f.name):
                 fname_lower = f.name.lower()
-                if (portal_date_fmt.lower() in fname_lower or "1.2.7" in fname_lower or "attendencestatus" in fname_lower) and "present" not in fname_lower and "absent" not in fname_lower:
+                if ("1.2.7" in fname_lower or "attendencestatus" in fname_lower) and "present" not in fname_lower and "absent" not in fname_lower:
                     if f.stat().st_size > 500:
                         raw_path = f
                 elif "present" in fname_lower or "1.2.11" in fname_lower:
-                    presentees_bytes = f.read_bytes()
-                    presentees_name = f.name
+                    if f.stat().st_size > 500:
+                        presentees_bytes = f.read_bytes()
+                        presentees_name = f.name
                 elif "absent" in fname_lower or "1.2.10" in fname_lower:
-                    absentees_bytes = f.read_bytes()
-                    absentees_name = f.name
+                    if f.stat().st_size > 500:
+                        absentees_bytes = f.read_bytes()
+                        absentees_name = f.name
 
-    # 2. If raw file not found or force_fresh requested, download with Playwright in session thread
-    if not raw_path or not raw_path.exists():
+    # Check for date-specific directory cache on disk
+    try:
+        from dsr.pdf_generator import load_ps_directory_cache, merge_ps_directories, parse_ps_directory_file, save_ps_directory_cache
+    except (ImportError, ModuleNotFoundError):
+        from report_generator import load_ps_directory_cache, merge_ps_directories, parse_ps_directory_file, save_ps_directory_cache
+
+    date_iso = target_dt.isoformat() if target_dt else req_date
+    date_ps_cache_path = data_dir / f"ps_directory_cache_{date_iso}.json"
+    target_date_dir = load_ps_directory_cache(date_ps_cache_path) if date_ps_cache_path.exists() else {}
+
+    # 2. Download files for this target date if missing or force_fresh requested
+    need_raw = not raw_path or not raw_path.exists() or force_fresh
+    need_postings = (not presentees_bytes and not target_date_dir) or force_fresh
+
+    if need_raw or need_postings:
         if not _is_bot_alive(bot):
             bot = ensure_active_bot(session)
         if not _is_bot_alive(bot):
@@ -608,59 +649,63 @@ def _generate_server_state_format_impl(
                 "e-Panchayat browser session is not active or has closed. Please complete Department Login & OTP again."
             )
 
-        logger.info("[%s] Downloading GM-R 1.2.7 for State Format date %s...", sid[:6], portal_date_fmt)
-        try:
-            raw_path = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
-        except Exception as exc:
-            logger.error("[%s] State Format GM-R 1.2.7 download failed: %s", sid[:6], exc)
-            raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR raw data from portal for date '{portal_date_fmt}': {exc}") from exc
+        if need_raw:
+            logger.info("[%s] Downloading GM-R 1.2.7 for State Format date %s...", sid[:6], portal_date_fmt)
+            try:
+                raw_path = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
+            except Exception as exc:
+                logger.error("[%s] State Format GM-R 1.2.7 download failed: %s", sid[:6], exc)
+                raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR raw data from portal for date '{portal_date_fmt}': {exc}") from exc
 
-        # Download optional presentees & absentees
-        try:
-            p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
-            if p_f and p_f.exists() and p_f.stat().st_size > 0:
-                presentees_bytes = p_f.read_bytes()
-                presentees_name = p_f.name
-        except Exception as e:
-            logger.warning("[%s] Could not download GM-R 1.2.11 Presentees: %s", sid[:6], e)
+        # Download presentees & absentees for the EXACT same user input date
+        if need_postings:
+            logger.info("[%s] Downloading GM-R 1.2.11 Presentees for target date %s...", sid[:6], portal_date_fmt)
+            try:
+                p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
+                if p_f and p_f.exists() and p_f.stat().st_size > 0:
+                    presentees_bytes = p_f.read_bytes()
+                    presentees_name = p_f.name
+            except Exception as e:
+                logger.warning("[%s] Could not download GM-R 1.2.11 Presentees for date %s: %s", sid[:6], portal_date_fmt, e)
 
-        try:
-            a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
-            if a_f and a_f.exists() and a_f.stat().st_size > 0:
-                absentees_bytes = a_f.read_bytes()
-                absentees_name = a_f.name
-        except Exception as e:
-            logger.warning("[%s] Could not download GM-R 1.2.10 Absentees: %s", sid[:6], e)
+            logger.info("[%s] Downloading GM-R 1.2.10 Absentees for target date %s...", sid[:6], portal_date_fmt)
+            try:
+                a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
+                if a_f and a_f.exists() and a_f.stat().st_size > 0:
+                    absentees_bytes = a_f.read_bytes()
+                    absentees_name = a_f.name
+            except Exception as e:
+                logger.warning("[%s] Could not download GM-R 1.2.10 Absentees for date %s: %s", sid[:6], portal_date_fmt, e)
 
     if not raw_path or not raw_path.exists() or raw_path.stat().st_size == 0:
         raise FileNotFoundError(f"No DSR attendance report was returned by e-Panchayat portal for date '{portal_date_fmt}'.")
 
-    # 3. Load or merge PS directory cache
-    try:
-        from dsr.pdf_generator import load_ps_directory_cache, merge_ps_directories, parse_ps_directory_file, save_ps_directory_cache
-    except (ImportError, ModuleNotFoundError):
-        from report_generator import load_ps_directory_cache, merge_ps_directories, parse_ps_directory_file, save_ps_directory_cache
-
-    data_dir = ROOT_DIR / "data"
+    # 3. Load or build PS directory specifically for this target date
     ps_cache_path = data_dir / "ps_directory_cache.json"
     cached_ps_dir = load_ps_directory_cache(ps_cache_path)
 
     if presentees_bytes or absentees_bytes:
-        new_dir: dict[str, dict[str, str]] = {}
+        fresh_date_dir: dict[str, dict[str, str]] = {}
         if presentees_bytes:
-            new_dir = merge_ps_directories(new_dir, parse_ps_directory_file(presentees_name, presentees_bytes))
+            fresh_date_dir = merge_ps_directories(fresh_date_dir, parse_ps_directory_file(presentees_name, presentees_bytes))
         if absentees_bytes:
-            new_dir = merge_ps_directories(new_dir, parse_ps_directory_file(absentees_name, absentees_bytes))
-        if new_dir:
-            cached_ps_dir = merge_ps_directories(cached_ps_dir, new_dir)
+            fresh_date_dir = merge_ps_directories(fresh_date_dir, parse_ps_directory_file(absentees_name, absentees_bytes))
+        if fresh_date_dir:
+            target_date_dir = merge_ps_directories(target_date_dir, fresh_date_dir)
+            save_ps_directory_cache(target_date_dir, date_ps_cache_path)
+            # Also merge into master fallback cache
+            cached_ps_dir = merge_ps_directories(cached_ps_dir, target_date_dir)
             save_ps_directory_cache(cached_ps_dir, ps_cache_path)
+
+    # Active directory is built from date-specific postings for the user input date
+    active_ps_dir = merge_ps_directories(cached_ps_dir, target_date_dir) if target_date_dir else cached_ps_dir
 
     # 4. Parse State Format Data
     from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
     st_report = parse_state_format_data(
         raw_path.read_bytes(),
         raw_path.name,
-        ps_directory=cached_ps_dir,
+        ps_directory=active_ps_dir,
         exclude_incharge=exclude_incharge,
     )
 

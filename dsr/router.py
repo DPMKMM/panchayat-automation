@@ -1137,19 +1137,26 @@ def upload_state_format_manual(
         a_bytes = _read_upload(absentees, MAX_UPLOAD_BYTES)
         new_dir = report_generator.merge_ps_directories(new_dir, report_generator.parse_ps_directory_file(absentees.filename, a_bytes))
 
+    active_dir = None
     if new_dir:
         cached_ps_dir = report_generator.merge_ps_directories(cached_ps_dir, new_dir)
         report_generator.save_ps_directory_cache(cached_ps_dir, ps_cache_path)
+        active_dir = cached_ps_dir
 
     try:
         st_report = parse_state_format_data(
             raw_bytes,
             filename,
-            ps_directory=cached_ps_dir,
+            ps_directory=active_dir,
             exclude_incharge=is_exclude_incharge,
         )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # If new presentees/absentees files were supplied, save a date-specific cache for this report date
+    if new_dir:
+        date_cache_path = data_dir / f"ps_directory_cache_{st_report.report_date.isoformat()}.json"
+        report_generator.save_ps_directory_cache(new_dir, date_cache_path)
 
     clean_dist = re.sub(r"[^A-Za-z0-9_-]", "_", st_report.district_name)
     now_dt = datetime.now()

@@ -151,11 +151,6 @@ def parse_state_format_data(
     generated_at_override: datetime | None = None,
 ) -> StateFormatReport:
     """Parse raw attendance file and compute 14-column State Format metrics."""
-    # Ensure directory is loaded
-    if not ps_directory:
-        cache_file = Path("data/ps_directory_cache.json")
-        ps_directory = load_ps_directory_cache(cache_file)
-
     df = read_source_file(filename, raw_bytes)
     df["Panchayat LGD"] = df["Panchayat LGD"].map(_clean_lgd)
     df["Mandal Name"] = df["Mandal Name"].map(_clean_string)
@@ -198,6 +193,16 @@ def parse_state_format_data(
     date_str = rep_date.strftime("%d %B %Y")
     time_str = now_dt.strftime("%I:%M %p")
     subtitle = f"{date_str} - @ {time_str}"
+
+    # Ensure directory is loaded: prioritize date-specific cache for this exact target date
+    if not ps_directory:
+        date_iso = rep_date.isoformat()
+        date_cache_file = Path(f"data/ps_directory_cache_{date_iso}.json")
+        if date_cache_file.exists():
+            ps_directory = load_ps_directory_cache(date_cache_file)
+        if not ps_directory:
+            cache_file = Path("data/ps_directory_cache.json")
+            ps_directory = load_ps_directory_cache(cache_file)
 
     # Deduplicate by Panchayat LGD (one record per GP)
     unique_gps: list[dict[str, Any]] = []
