@@ -1702,6 +1702,10 @@
       formData.append('sort_by', sortBy);
       formData.append('page_layout', pageLayout);
       formData.append('include_sections', includeSections);
+      var chkExcludeIncharge = document.getElementById('auto-exclude-incharge');
+      if (chkExcludeIncharge && chkExcludeIncharge.checked) {
+        formData.append('exclude_incharge', 'true');
+      }
       var chkFresh = document.getElementById('chk-force-fresh');
       if (chkFresh && chkFresh.checked) {
         formData.append('force_fresh', 'true');
@@ -4289,6 +4293,298 @@
         btn.disabled = false;
         btn.textContent = '🔄 Sync Code Now';
       }
+    }
+  };
+
+  // -------------------------------------------------------------
+  // State Format Attendance & DSR Station Logic
+  // -------------------------------------------------------------
+  var stateFormatTimer = null;
+  var stateFormatStartTime = 0;
+
+  window.openStateFormatRobot = async function (options) {
+    var opts = options || {};
+    if (!opts.skipAuthCheck && typeof window.ensureDepartmentSession === 'function') {
+      var ok = await window.ensureDepartmentSession('state-format', {
+        autoGenerate: opts.autoGenerate === true,
+        params: opts.params,
+      });
+      if (!ok) return;
+    }
+
+    if (typeof window.hideAllStations === 'function') {
+      window.hideAllStations();
+    }
+    var stEl = document.getElementById('state-format-station');
+    if (stEl) {
+      stEl.style.display = 'block';
+      stEl.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    var dateInp = document.getElementById('state-format-date');
+    if (dateInp && !dateInp.value) {
+      var d = new Date();
+      dateInp.value = d.toISOString().split('T')[0];
+    }
+
+    // Always reset view so previous run is not shown until Run is clicked
+    var resEl = document.getElementById('state-format-results');
+    if (resEl) resEl.style.display = 'none';
+    var progCard = document.getElementById('state-format-progress-card');
+    if (progCard) progCard.style.display = 'none';
+
+    if (opts.autoGenerate) {
+      window.runStateFormatRobot();
+    }
+  };
+
+  window.toggleStateFormatManualUpload = function () {
+    var drawer = document.getElementById('state-format-manual-drawer');
+    if (drawer) {
+      drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
+    }
+  };
+
+  function startStateFormatTimer() {
+    stopStateFormatTimer();
+    stateFormatStartTime = Date.now();
+    var timerEl = document.getElementById('state-format-progress-timer');
+    stateFormatTimer = setInterval(function () {
+      if (!timerEl) return;
+      var sec = Math.floor((Date.now() - stateFormatStartTime) / 1000);
+      var m = String(Math.floor(sec / 60)).padStart(2, '0');
+      var s = String(sec % 60).padStart(2, '0');
+      timerEl.textContent = m + ':' + s;
+    }, 1000);
+  }
+
+  function stopStateFormatTimer() {
+    if (stateFormatTimer) {
+      clearInterval(stateFormatTimer);
+      stateFormatTimer = null;
+    }
+  }
+
+  window.runStateFormatRobot = async function () {
+    var dateVal = (document.getElementById('state-format-date') && document.getElementById('state-format-date').value) || '';
+    if (!dateVal) {
+      showNotice('Please select a report date before running the State Format Robot.', 'error');
+      return;
+    }
+
+    var chkEx = document.getElementById('state-format-exclude-incharge');
+    var excludeIncharge = chkEx && chkEx.checked ? 'true' : 'false';
+
+    var progCard = document.getElementById('state-format-progress-card');
+    var barEl = document.getElementById('state-format-progress-bar');
+    var pctEl = document.getElementById('state-format-progress-pct');
+    var statEl = document.getElementById('state-format-progress-status');
+    var resEl = document.getElementById('state-format-results');
+    var btn = document.getElementById('btn-run-state-format');
+
+    if (resEl) resEl.style.display = 'none';
+    if (progCard) progCard.style.display = 'block';
+    if (barEl) barEl.style.width = '15%';
+    if (pctEl) pctEl.textContent = '15%';
+    if (statEl) statEl.textContent = 'Connecting to e-Panchayat portal & downloading GM-R 1.2.7 raw data...';
+    if (btn) btn.disabled = true;
+
+    startStateFormatTimer();
+
+    var timer1 = setTimeout(function () {
+      if (barEl) barEl.style.width = '45%';
+      if (pctEl) pctEl.textContent = '45%';
+      if (statEl) statEl.textContent = 'Extracting attendance timestamps and hourly arrival time buckets...';
+    }, 1500);
+
+    var timer2 = setTimeout(function () {
+      if (barEl) barEl.style.width = '75%';
+      if (pctEl) pctEl.textContent = '75%';
+      if (statEl) statEl.textContent = 'Calculating % before 9 AM, full-time working PS counts, and compiling reports...';
+    }, 3000);
+
+    try {
+      var formData = new FormData();
+      formData.append('date', dateVal);
+      formData.append('exclude_incharge', excludeIncharge);
+
+      var resp = await fetch('/api/dsr/state-format/generate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        var errJson = await resp.json().catch(function () { return {}; });
+        throw new Error(errJson.detail || ('State Format generation failed (HTTP ' + resp.status + ')'));
+      }
+
+      var data = await resp.json();
+
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      if (barEl) barEl.style.width = '100%';
+      if (pctEl) pctEl.textContent = '100%';
+      if (statEl) statEl.textContent = '✓ State Format Report successfully generated and compiled!';
+
+      setTimeout(function () {
+        if (progCard) progCard.style.display = 'none';
+        window.renderStateFormatTable(data);
+      }, 500);
+
+    } catch (err) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      if (statEl) statEl.textContent = '❌ Generation failed: ' + err.message;
+      if (pctEl) pctEl.textContent = 'Error';
+      showNotice(err.message, 'error');
+    } finally {
+      stopStateFormatTimer();
+      if (btn) btn.disabled = false;
+    }
+  };
+
+  window.uploadStateFormatFiles = async function () {
+    var fileRaw = document.getElementById('state-format-file-raw');
+    if (!fileRaw || !fileRaw.files || !fileRaw.files[0]) {
+      showNotice('Please select the GM-R 1.2.7 Raw Data File to upload.', 'error');
+      return;
+    }
+
+    var chkEx = document.getElementById('state-format-exclude-incharge');
+    var excludeIncharge = chkEx && chkEx.checked ? 'true' : 'false';
+
+    var filePres = document.getElementById('state-format-file-pres');
+    var fileAbs = document.getElementById('state-format-file-abs');
+
+    var formData = new FormData();
+    formData.append('file', fileRaw.files[0]);
+    if (filePres && filePres.files && filePres.files[0]) {
+      formData.append('presentees', filePres.files[0]);
+    }
+    if (fileAbs && fileAbs.files && fileAbs.files[0]) {
+      formData.append('absentees', fileAbs.files[0]);
+    }
+    formData.append('exclude_incharge', excludeIncharge);
+
+    var progCard = document.getElementById('state-format-progress-card');
+    var barEl = document.getElementById('state-format-progress-bar');
+    var pctEl = document.getElementById('state-format-progress-pct');
+    var statEl = document.getElementById('state-format-progress-status');
+
+    if (progCard) progCard.style.display = 'block';
+    if (barEl) barEl.style.width = '50%';
+    if (pctEl) pctEl.textContent = '50%';
+    if (statEl) statEl.textContent = 'Processing uploaded raw data and generating State Format reports...';
+
+    try {
+      var resp = await fetch('/api/web/state-format/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!resp.ok) {
+        var errJson = await resp.json().catch(function () { return {}; });
+        throw new Error(errJson.detail || ('Upload processing failed (HTTP ' + resp.status + ')'));
+      }
+
+      var data = await resp.json();
+      if (barEl) barEl.style.width = '100%';
+      if (pctEl) pctEl.textContent = '100%';
+      if (statEl) statEl.textContent = '✓ Report generated successfully!';
+
+      setTimeout(function () {
+        if (progCard) progCard.style.display = 'none';
+        window.renderStateFormatTable(data);
+      }, 400);
+
+    } catch (err) {
+      if (statEl) statEl.textContent = '❌ Failed: ' + err.message;
+      showNotice(err.message, 'error');
+    }
+  };
+
+  window.renderStateFormatTable = function (data) {
+    if (!data) return;
+
+    var subEl = document.getElementById('state-format-subtitle-disp');
+    if (subEl) subEl.textContent = data.subtitle || '';
+
+    var pdfBtn = document.getElementById('btn-state-format-dl-pdf');
+    if (pdfBtn) {
+      pdfBtn.href = data.pdf_download_url || '/api/dsr/state-format/download-pdf';
+      pdfBtn.download = data.pdf_filename || 'State_Format_Attendance_Report.pdf';
+    }
+
+    var xlsBtn = document.getElementById('btn-state-format-dl-excel');
+    if (xlsBtn) {
+      xlsBtn.href = data.excel_download_url || '/api/dsr/state-format/download-excel';
+      xlsBtn.download = data.excel_filename || 'State_Format_Attendance_Report.xlsx';
+    }
+
+    var tbody = document.getElementById('state-format-tbody');
+    if (tbody) {
+      var rowsHtml = '';
+      (data.rows || []).forEach(function (r) {
+        var pct = Number(r.pct_before_9 || 0);
+        var pctBg = '#ffffff';
+        var pctColor = '#0f172a';
+        if (pct >= 90) {
+          pctBg = '#dcfce7'; pctColor = '#15803d';
+        } else if (pct >= 75) {
+          pctBg = '#fef9c3'; pctColor = '#854d0e';
+        } else if (pct >= 50) {
+          pctBg = '#ffedd5'; pctColor = '#c2410c';
+        } else if (pct > 0) {
+          pctBg = '#fee2e2'; pctColor = '#b91c1c';
+        }
+
+        rowsHtml += '<tr style="border-bottom:1px solid #cbd5e1;">' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.sl_no || '') + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:left; font-weight:700;">' + (r.mandal_name || '') + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.total_gps || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600;">' + (r.full_time_working || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_6_9 || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_9_10 || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_10_11 || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_11_12 || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.b_after_12 || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:800; background:' + pctBg + '; color:' + pctColor + ';">' + pct.toFixed(2) + '%</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + (r.total_attended || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.meeting_training || 0) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + (r.on_leave || 0) + '</td>' +
+          '<td style="padding:6px 4px;">' + (r.not_reported || 0) + '</td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = rowsHtml;
+    }
+
+    var tfoot = document.getElementById('state-format-tfoot');
+    if (tfoot && data.total_row) {
+      var tot = data.total_row;
+      var totPct = Number(tot.pct_before_9 || 0);
+      var totHtml = '<tr>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;"></td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 8px; text-align:left; font-weight:800; font-size:0.9rem;">Total</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.total_gps || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.full_time_working || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_6_9 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_9_10 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_10_11 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_11_12 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.b_after_12 || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px; font-weight:900; background:#e0f2fe; color:#0369a1;">' + totPct.toFixed(2) + '%</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.total_attended || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.meeting_training || 0) + '</td>' +
+        '<td style="border-right:1px solid #334155; padding:8px 4px;">' + (tot.on_leave || 0) + '</td>' +
+        '<td style="padding:8px 4px;">' + (tot.not_reported || 0) + '</td>' +
+        '</tr>';
+      tfoot.innerHTML = totHtml;
+    }
+
+    var resCard = document.getElementById('state-format-results');
+    if (resCard) {
+      resCard.style.display = 'block';
+      resCard.scrollIntoView({ behavior: 'smooth' });
     }
   };
 })();

@@ -498,6 +498,7 @@
       'tax-dcb-station',
       'inspections-station',
       'auto-multi-dsr-station',
+      'state-format-station',
       'results-section',
       'btn-back-dashboard-wrap',
     ].forEach(function (id) {
@@ -1654,6 +1655,8 @@
       if (typeof window.openGpInspectionsStation === 'function') await window.openGpInspectionsStation();
     } else if (target === 'auto-multi-dsr' || target === 'auto-multiday' || target === 'auto-multi') {
       if (typeof window.openAutoMultiDsrStation === 'function') await window.openAutoMultiDsrStation();
+    } else if (target === 'state-format' || target === 'state_format') {
+      if (typeof window.openStateFormatRobot === 'function') await window.openStateFormatRobot();
     } else if (target === 'admin' && window.isAdminRouteOrHost() && portalUser && portalUser.is_admin) {
       if (typeof window.openAdminDashboardStation === 'function') window.openAdminDashboardStation();
     } else if (target === 'balance' || target === 'balance-station') {

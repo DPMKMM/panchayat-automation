@@ -98,6 +98,7 @@ def generate_server_report(
     include_pmagy: bool = False,
     page_layout: str = "individual",
     include_sections: Any = None,
+    exclude_incharge: bool = False,
 ) -> dict[str, Any]:
     """Generate report for this specific user session in its isolated browser and directory."""
     session = get_or_create_session(session_id)
@@ -114,6 +115,7 @@ def generate_server_report(
             include_pmagy,
             page_layout,
             include_sections,
+            exclude_incharge,
         )
 
 
@@ -127,6 +129,7 @@ def _generate_server_report_impl(
     include_pmagy: bool = False,
     page_layout: str = "individual",
     include_sections: Any = None,
+    exclude_incharge: bool = False,
 ) -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
     if not is_auth:
@@ -242,7 +245,7 @@ def _generate_server_report_impl(
     norm_sections = normalize_dsr_sections(include_sections)
     norm_sections_key = "all" if len(norm_sections) == len(ALL_DSR_SECTIONS) else "+".join(norm_sections)
 
-    cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by, cache_level, target_mandal_norm, norm_layout, norm_sections_key)
+    cache_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by, cache_level, target_mandal_norm, norm_layout, norm_sections_key, exclude_incharge)
     legacy_district_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by)
 
     with _DSR_CACHE_LOCK:
@@ -349,6 +352,7 @@ def _generate_server_report_impl(
         absentees_source=absentees_data,
         cutoff_time=cutoff_time,
         sort_by=sort_by,
+        exclude_incharge=exclude_incharge,
     )
 
     now = datetime.now()
