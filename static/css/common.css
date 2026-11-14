@@ -1165,6 +1165,9 @@ body.state-manual-page {
 body.state-tools-page {
   background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 45%, #f5f3ff 100%);
 }
+body.state-softwares-page {
+  background: linear-gradient(180deg, #f0f9ff 0%, #f8fafc 45%, #e0f2fe 100%);
+}
 body.state-auth-resolving #portal-hero-card {
   display: none !important;
 }
@@ -1175,6 +1178,7 @@ body.state-admin-page {
 body.state-workspace-hub #global-browser-status-bar,
 body.state-manual-page #global-browser-status-bar,
 body.state-tools-page #global-browser-status-bar,
+body.state-softwares-page #global-browser-status-bar,
 body.state-admin-page #global-browser-status-bar {
   background: #ffffff;
   border-color: #cbd5e1;
@@ -1183,22 +1187,26 @@ body.state-admin-page #global-browser-status-bar {
 body.state-workspace-hub #telemetry-engine-bar-left,
 body.state-manual-page #telemetry-engine-bar-left,
 body.state-tools-page #telemetry-engine-bar-left,
+body.state-softwares-page #telemetry-engine-bar-left,
 body.state-admin-page #telemetry-engine-bar-left,
 body.state-workspace-hub #browser-status-officer,
 body.state-manual-page #browser-status-officer,
 body.state-tools-page #browser-status-officer,
+body.state-softwares-page #browser-status-officer,
 body.state-admin-page #browser-status-officer {
   display: none !important;
 }
 body.state-workspace-hub #workspace-hub-brand-left,
 body.state-manual-page #workspace-hub-brand-left,
 body.state-tools-page #workspace-hub-brand-left,
+body.state-softwares-page #workspace-hub-brand-left,
 body.state-admin-page #workspace-hub-brand-left {
   display: flex !important;
 }
 body.state-workspace-hub #global-browser-status-bar .nav-link,
 body.state-manual-page #global-browser-status-bar .nav-link,
 body.state-tools-page #global-browser-status-bar .nav-link,
+body.state-softwares-page #global-browser-status-bar .nav-link,
 body.state-admin-page #global-browser-status-bar .nav-link {
   color: #334155;
   background: #f8fafc;
@@ -1207,6 +1215,7 @@ body.state-admin-page #global-browser-status-bar .nav-link {
 body.state-workspace-hub #global-browser-status-bar .nav-link:hover,
 body.state-manual-page #global-browser-status-bar .nav-link:hover,
 body.state-tools-page #global-browser-status-bar .nav-link:hover,
+body.state-softwares-page #global-browser-status-bar .nav-link:hover,
 body.state-admin-page #global-browser-status-bar .nav-link:hover {
   background: #e2e8f0;
   color: #0f172a;
@@ -1214,6 +1223,7 @@ body.state-admin-page #global-browser-status-bar .nav-link:hover {
 body.state-workspace-hub #nav-officer-profile-bar,
 body.state-manual-page #nav-officer-profile-bar,
 body.state-tools-page #nav-officer-profile-bar,
+body.state-softwares-page #nav-officer-profile-bar,
 body.state-admin-page #nav-officer-profile-bar {
   background: #f1f5f9 !important;
   border-color: #cbd5e1 !important;
@@ -1221,24 +1231,28 @@ body.state-admin-page #nav-officer-profile-bar {
 body.state-workspace-hub #nav-user-name,
 body.state-manual-page #nav-user-name,
 body.state-tools-page #nav-user-name,
+body.state-softwares-page #nav-user-name,
 body.state-admin-page #nav-user-name {
   color: #0f172a !important;
 }
 body.state-workspace-hub #nav-user-role,
 body.state-manual-page #nav-user-role,
 body.state-tools-page #nav-user-role,
+body.state-softwares-page #nav-user-role,
 body.state-admin-page #nav-user-role {
   color: #0369a1 !important;
 }
 body.state-workspace-hub #nav-user-gmail,
 body.state-manual-page #nav-user-gmail,
 body.state-tools-page #nav-user-gmail,
+body.state-softwares-page #nav-user-gmail,
 body.state-admin-page #nav-user-gmail {
   color: #475569 !important;
 }
 body.state-workspace-hub #nav-btn-portal-logout,
 body.state-manual-page #nav-btn-portal-logout,
 body.state-tools-page #nav-btn-portal-logout,
+body.state-softwares-page #nav-btn-portal-logout,
 body.state-admin-page #nav-btn-portal-logout {
   color: #b91c1c !important;
   background: #fef2f2 !important;
@@ -1278,6 +1292,13 @@ body.state-tools-page #dash-welcome-hero-card {
   background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 55%, #4f46e5 100%);
   border: 1px solid #6366f1;
   box-shadow: 0 10px 28px rgba(67, 56, 202, 0.22);
+}
+
+/* Softwares Hub Hero Differentiation */
+body.state-softwares-page #dash-welcome-hero-card {
+  background: linear-gradient(135deg, #0c4a6e 0%, #0369a1 55%, #0284c7 100%);
+  border: 1px solid #38bdf8;
+  box-shadow: 0 10px 28px rgba(2, 132, 199, 0.22);
 }
 
 /* State 3: Midnight Space-Indigo & Electric Violet Automation Command Center */

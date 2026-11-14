@@ -99,6 +99,8 @@ def create_app() -> FastAPI:
         "https://www.manualreports.panchayatautomation.in",
         "https://tools.panchayatautomation.in",
         "https://www.tools.panchayatautomation.in",
+        "https://softwares.panchayatautomation.in",
+        "https://www.softwares.panchayatautomation.in",
         "https://admin.panchayatautomation.in",
         "https://www.admin.panchayatautomation.in",
         "https://reports.panchayatautomation.in",
@@ -211,7 +213,7 @@ def create_app() -> FastAPI:
             "platform": PLATFORM_NAME,
             "console": CONSOLE_NAME,
             "tagline": TAGLINE,
-            "modules": "DSR, DCB, GP_BALANCE, MAS, TOOLS",
+            "modules": "DSR, DCB, GP_BALANCE, MAS, TOOLS, SOFTWARES",
             "version": "4.0.0",
         }
 

@@ -68,17 +68,24 @@
     return host.indexOf('tools.') === 0 || host.indexOf('www.tools.') === 0;
   };
 
+  window.isSoftwaresHost = function () {
+    var host = (window.location.hostname || '').toLowerCase();
+    return host.indexOf('softwares.') === 0 || host.indexOf('www.softwares.') === 0 || host.indexOf('software.') === 0 || host.indexOf('www.software.') === 0;
+  };
+
   window.getDedicatedPageSection = function () {
     if (window.isAdminRouteOrHost()) return 'admin';
     if (window.isReportsHost()) return 'automated';
     if (window.isManualHost()) return 'manual';
     if (window.isToolsHost()) return 'tools';
+    if (window.isSoftwaresHost()) return 'softwares';
     var path = (window.location.pathname || '').toLowerCase();
     if (path === '/autoreports' || path === '/eptauto' || path === '/naresh' || path.indexOf('/reports') === 0 || path === '/mas') {
       return 'automated';
     }
     if (path === '/manualreports') return 'manual';
     if (path === '/tools' || path.indexOf('/tools/') === 0) return 'tools';
+    if (path === '/softwares' || path.indexOf('/softwares/') === 0 || path === '/software') return 'softwares';
     return null;
   };
 
@@ -88,11 +95,13 @@
       if (s === 'automated') return 'https://autoreports.panchayatautomation.in/';
       if (s === 'manual') return 'https://manualreports.panchayatautomation.in/';
       if (s === 'tools') return 'https://tools.panchayatautomation.in/';
+      if (s === 'softwares' || s === 'software') return 'https://softwares.panchayatautomation.in/';
       return 'https://panchayatautomation.in/';
     }
     if (s === 'automated') return '/autoreports?site=console';
     if (s === 'manual') return '/manualreports';
     if (s === 'tools') return '/tools';
+    if (s === 'softwares' || s === 'software') return '/softwares';
     return '/';
   };
 
@@ -511,11 +520,13 @@
     var onReports = window.isReportsHost();
     var onManual = window.isManualHost();
     var onTools = window.isToolsHost();
+    var onSoftwares = window.isSoftwaresHost();
     var dedSection = window.getDedicatedPageSection();
     var isCon = window.isConsoleScope();
     var consoleDest = window.getSectionUrl('automated');
     var manualDest = window.getSectionUrl('manual');
     var toolsDest = window.getSectionUrl('tools');
+    var softwaresDest = window.getSectionUrl('softwares');
     var switchLink = document.getElementById('login-switch-platform-link');
     var navConsoleSwitch = document.getElementById('nav-btn-console-switch');
     var heroCrossLink = document.getElementById('dash-hero-cross-link');
@@ -1027,9 +1038,11 @@
       window.selectWorkspaceMode('manual', { skipScroll: true, fromInit: true });
     } else if (reqMode === 'tools') {
       window.selectWorkspaceMode('tools', { skipScroll: true, fromInit: true });
+    } else if (reqMode === 'softwares' || reqMode === 'software' || target === 'softwares' || target === 'software') {
+      window.selectWorkspaceMode('softwares', { skipScroll: true, fromInit: true });
     } else if (dedSection) {
       window.selectWorkspaceMode(dedSection, { skipScroll: true, fromInit: true });
-    } else if (savedMode === 'manual' || savedMode === 'automated' || savedMode === 'tools') {
+    } else if (savedMode === 'manual' || savedMode === 'automated' || savedMode === 'tools' || savedMode === 'softwares') {
       window.selectWorkspaceMode(savedMode, { skipScroll: true, fromInit: true });
     } else {
       window.showWorkspaceModeSelector();
@@ -1099,6 +1112,7 @@
       'state-workspace-hub',
       'state-manual-page',
       'state-tools-page',
+      'state-softwares-page',
       'state-automation-page',
       'state-admin-page'
     );
@@ -1130,9 +1144,9 @@
           : 'Select Your Reporting & Utility Workspace';
       }
       if (taglineEl) taglineEl.textContent = 'Unified Panchayat Administration Hub — Choose a Workspace Below to Continue.';
-      if (subEl) subEl.textContent = 'Pick Manual Excel Reports (offline), Automated Reports (live portal robots), or Tools & Utility Studios.';
+      if (subEl) subEl.textContent = 'Pick Manual Excel Reports (offline), Automated Reports (live portal robots), Document Tools, or Softwares.';
       if (hubBarTitle) hubBarTitle.textContent = PLATFORM_NAME + ' · Workspace Selector';
-      if (hubBarSub) hubBarSub.textContent = 'Signed in and ready — select Manual Reports, Automated Reports, or Tools.';
+      if (hubBarSub) hubBarSub.textContent = 'Signed in and ready — select Manual Reports, Automated Reports, Tools, or Softwares.';
     } else if (resolved === 'state-manual-page') {
       if (eyebrow) eyebrow.textContent = '📊 MANUAL EXCEL REPORTS STUDIO';
       if (titleEl) titleEl.textContent = PLATFORM_NAME + ' · Manual Reporting Workspace';
@@ -1147,6 +1161,13 @@
       if (subEl) subEl.textContent = 'Launch spreadsheet converters, cleaners, banking formatters, and PDF utilities directly inside your workspace.';
       if (hubBarTitle) hubBarTitle.textContent = PLATFORM_NAME + ' · Tools Studio';
       if (hubBarSub) hubBarSub.textContent = 'Spreadsheet manipulation and PDF document tools workspace.';
+    } else if (resolved === 'state-softwares-page') {
+      if (eyebrow) eyebrow.textContent = '💻 OFFICIAL SOFTWARES & DRIVERS';
+      if (titleEl) titleEl.textContent = PLATFORM_NAME + ' · Official Softwares & Drivers Hub';
+      if (taglineEl) taglineEl.textContent = 'Biometric Drivers, Java DSC Token Environments, Telugu Typing & Government Utilities.';
+      if (subEl) subEl.textContent = 'Download official device drivers, biometric RD services, Java DSC environments, Telugu typing software, and government desktop utilities.';
+      if (hubBarTitle) hubBarTitle.textContent = PLATFORM_NAME + ' · Softwares Hub';
+      if (hubBarSub) hubBarSub.textContent = 'Official desktop software, biometric drivers & government utilities.';
     } else if (resolved === 'state-automation-page') {
       if (eyebrow) eyebrow.textContent = '⚡ AUTOMATION COMMAND CENTER';
       if (titleEl) titleEl.textContent = CONSOLE_NAME;
@@ -1208,6 +1229,7 @@
       var modeSel = document.getElementById('workspace-mode-selector');
       var btnSwitchMode = document.getElementById('btn-switch-workspace-mode');
       var toolsSec = document.getElementById('tools-modules-section');
+      var softwaresSec = document.getElementById('softwares-modules-section');
       if (!profileDone) {
         if (btnDeptLogin) btnDeptLogin.style.display = 'none';
         if (btnDisconn) btnDisconn.style.display = 'none';
@@ -1218,6 +1240,7 @@
         if (portalSec) portalSec.style.display = 'none';
         if (consoleSec) consoleSec.style.display = 'none';
         if (toolsSec) toolsSec.style.display = 'none';
+        if (softwaresSec) softwaresSec.style.display = 'none';
         if (dcbSec) dcbSec.style.display = 'none';
         if (dash) dash.style.display = 'none';
         window.applyScreenVisualState('state-home-login', user);
@@ -1230,6 +1253,7 @@
           if (portalSec) portalSec.style.display = 'none';
           if (consoleSec) consoleSec.style.display = 'none';
           if (toolsSec) toolsSec.style.display = 'none';
+          if (softwaresSec) softwaresSec.style.display = 'none';
           if (dcbSec) dcbSec.style.display = 'none';
           if (btnSwitchMode) btnSwitchMode.style.display = 'none';
           if (btnDeptLogin) btnDeptLogin.style.display = 'none';
@@ -1241,6 +1265,7 @@
           if (portalSec) portalSec.style.display = 'block';
           if (consoleSec) consoleSec.style.display = 'none';
           if (toolsSec) toolsSec.style.display = 'none';
+          if (softwaresSec) softwaresSec.style.display = 'none';
           if (dcbSec) dcbSec.style.display = 'block';
           if (btnSwitchMode) btnSwitchMode.style.display = 'inline-flex';
           if (btnDeptLogin) btnDeptLogin.style.display = sessionStorage.getItem('epts_portal_auth') === 'true' ? 'inline-flex' : 'none';
@@ -1251,6 +1276,7 @@
           if (portalSec) portalSec.style.display = 'none';
           if (consoleSec) consoleSec.style.display = 'block';
           if (toolsSec) toolsSec.style.display = 'none';
+          if (softwaresSec) softwaresSec.style.display = 'none';
           if (dcbSec) dcbSec.style.display = 'block';
           if (btnSwitchMode) btnSwitchMode.style.display = 'inline-flex';
           if (btnDeptLogin) btnDeptLogin.style.display = 'inline-flex';
@@ -1266,16 +1292,29 @@
           if (portalSec) portalSec.style.display = 'none';
           if (consoleSec) consoleSec.style.display = 'none';
           if (toolsSec) toolsSec.style.display = 'block';
+          if (softwaresSec) softwaresSec.style.display = 'none';
           if (dcbSec) dcbSec.style.display = 'none';
           if (btnSwitchMode) btnSwitchMode.style.display = 'inline-flex';
           if (btnDeptLogin) btnDeptLogin.style.display = sessionStorage.getItem('epts_portal_auth') === 'true' ? 'inline-flex' : 'none';
           if (dashBadge) dashBadge.textContent = '🧰 Tools & Utilities Studio';
           window.applyScreenVisualState('state-tools-page', user);
+        } else if (activeMode === 'softwares') {
+          if (modeSel) modeSel.style.display = 'none';
+          if (portalSec) portalSec.style.display = 'none';
+          if (consoleSec) consoleSec.style.display = 'none';
+          if (toolsSec) toolsSec.style.display = 'none';
+          if (softwaresSec) softwaresSec.style.display = 'block';
+          if (dcbSec) dcbSec.style.display = 'none';
+          if (btnSwitchMode) btnSwitchMode.style.display = 'inline-flex';
+          if (btnDeptLogin) btnDeptLogin.style.display = sessionStorage.getItem('epts_portal_auth') === 'true' ? 'inline-flex' : 'none';
+          if (dashBadge) dashBadge.textContent = '💻 Official Softwares & Drivers';
+          window.applyScreenVisualState('state-softwares-page', user);
         } else {
           if (modeSel) modeSel.style.display = 'block';
           if (portalSec) portalSec.style.display = 'none';
           if (consoleSec) consoleSec.style.display = 'none';
           if (toolsSec) toolsSec.style.display = 'none';
+          if (softwaresSec) softwaresSec.style.display = 'none';
           if (dcbSec) dcbSec.style.display = 'none';
           if (btnSwitchMode) btnSwitchMode.style.display = 'none';
           if (btnDeptLogin) btnDeptLogin.style.display = sessionStorage.getItem('epts_portal_auth') === 'true' ? 'inline-flex' : 'none';
@@ -1290,9 +1329,11 @@
       var modeSelOut = document.getElementById('workspace-mode-selector');
       var btnSwitchOut = document.getElementById('btn-switch-workspace-mode');
       var toolsOut = document.getElementById('tools-modules-section');
+      var softwaresOut = document.getElementById('softwares-modules-section');
       if (modeSelOut) modeSelOut.style.display = 'none';
       if (btnSwitchOut) btnSwitchOut.style.display = 'none';
       if (toolsOut) toolsOut.style.display = 'none';
+      if (softwaresOut) softwaresOut.style.display = 'none';
       if (heroCard) heroCard.style.display = 'flex';
       if (btnHome) btnHome.style.display = 'none';
       if (btnStudio) btnStudio.style.display = 'none';
@@ -1361,7 +1402,7 @@
       }
       return true;
     }
-    var m = rawMode === 'automated' ? 'automated' : (rawMode === 'tools' ? 'tools' : 'manual');
+    var m = rawMode === 'automated' ? 'automated' : (rawMode === 'tools' ? 'tools' : (rawMode === 'softwares' || rawMode === 'software' ? 'softwares' : 'manual'));
 
     if (m === 'automated') {
       var flags = window.currentAccessPolicy || {};
@@ -1379,7 +1420,8 @@
     if (isDirectClick && window.isProdCustomDomain()) {
       if ((m === 'manual' && !window.isManualHost()) ||
           (m === 'automated' && !window.isReportsHost()) ||
-          (m === 'tools' && !window.isToolsHost())) {
+          (m === 'tools' && !window.isToolsHost()) ||
+          (m === 'softwares' && !window.isSoftwaresHost())) {
         window.location.href = window.getSectionUrl(m);
         return true;
       }
@@ -1707,7 +1749,7 @@
 
     var dedSection = window.getDedicatedPageSection();
     if (dedSection && (!target || !(window.DeptSessionManager && urlParams.get('pending_module')))) {
-      if (dedSection === 'admin' || dedSection === 'manual' || dedSection === 'tools') {
+      if (dedSection === 'admin' || dedSection === 'manual' || dedSection === 'tools' || dedSection === 'softwares') {
         window.selectWorkspaceMode(dedSection, { skipScroll: true, fromInit: true });
       } else if (dedSection === 'automated' && !urlParams.get('mode') && !target) {
         window.selectWorkspaceMode('automated', { skipScroll: true, fromInit: true });

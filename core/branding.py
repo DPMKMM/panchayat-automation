@@ -14,6 +14,7 @@ REPORT_FOOTER_TAGLINE = "Panchayat-Automation — Simplifying Panchayat Administ
 
 MANUAL_SECTION_NAME = "e-Panchayat Manual Reports"
 TOOLS_SECTION_NAME = "e-Panchayat Tools & Utilities Studio"
+SOFTWARES_SECTION_NAME = "e-Panchayat Official Softwares & Utilities"
 ADMIN_SECTION_NAME = "e-Panchayat Admin Control Center"
 
 
@@ -44,6 +45,18 @@ def is_tools_host_request(request: Any = None) -> bool:
     """Return True when the request targets tools subdomain."""
     host, _ = _request_host_and_path(request)
     return host.startswith("tools.") or host.startswith("www.tools.")
+
+
+def is_softwares_host_request(request: Any = None) -> bool:
+    """Return True when the request targets softwares subdomain or /softwares route."""
+    host, path = _request_host_and_path(request)
+    return (
+        host.startswith("softwares.")
+        or host.startswith("www.softwares.")
+        or host.startswith("software.")
+        or host.startswith("www.software.")
+        or path in ("/softwares", "/software")
+    )
 
 
 def is_reports_console_request(request: Any = None) -> bool:
@@ -248,6 +261,45 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                 (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
                     f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{PLATFORM_NAME} · Tools &amp; Utility Studios</h1>',
+                ),
+            ),
+        )
+
+    if is_softwares_host_request(request):
+        return _replace_pairs(
+            html,
+            (
+                (
+                    '<title id="doc-page-title">e-Panchayat Automation</title>',
+                    f'<title id="doc-page-title">Official Softwares | {PLATFORM_NAME}</title>',
+                ),
+                (
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{SOFTWARES_SECTION_NAME}</h1>',
+                ),
+                (
+                    '<span id="hero-console-chip" style="display:none;',
+                    '<span id="hero-console-chip" style="display:inline-flex;',
+                ),
+                (
+                    '>e-Panchayat Automation Console</span>',
+                    '>Official Softwares &amp; Drivers</span>',
+                ),
+                (
+                    '<div id="login-console-badge" style="display:none;',
+                    '<div id="login-console-badge" style="display:inline-flex;',
+                ),
+                (
+                    '>e-Panchayat Automation Console</div>',
+                    '>Softwares Hub</div>',
+                ),
+                (
+                    'id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation<',
+                    f'id="login-panel-subtitle">Sign in with your Google account to access {SOFTWARES_SECTION_NAME}<',
+                ),
+                (
+                    '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
+                    f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{PLATFORM_NAME} · Official Softwares &amp; Drivers</h1>',
                 ),
             ),
         )

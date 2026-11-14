@@ -126,6 +126,16 @@ MODULE_CATALOG: list[dict[str, Any]] = [
         "default_visible": True,
     },
     {
+        "id": "module_softwares_hub",
+        "name": "Official Softwares & Drivers Hub",
+        "icon": "💻",
+        "category": "Utility Studios",
+        "description": "Official device drivers, biometric RD services, Java DSC environments, Telugu typing software, and government desktop utilities.",
+        "card_selector": "#card-choose-softwares",
+        "default_enabled": True,
+        "default_visible": True,
+    },
+    {
         "id": "module_citizen_services",
         "name": "Citizen Services Monitoring",
         "icon": "👥",
@@ -166,6 +176,7 @@ DEFAULT_POLICY: dict[str, bool] = {
     "module_auto_multi_dsr": True,
     "module_excel_studio": True,
     "module_pdf_studio": True,
+    "module_softwares_hub": True,
     "module_citizen_services": True,
     "module_trade_licences": True,
 
@@ -181,6 +192,7 @@ DEFAULT_POLICY: dict[str, bool] = {
     "visible_module_auto_multi_dsr": True,
     "visible_module_excel_studio": True,
     "visible_module_pdf_studio": True,
+    "visible_module_softwares_hub": True,
     "visible_module_citizen_services": True,
     "visible_module_trade_licences": True,
 }
@@ -202,6 +214,7 @@ POLICY_DESCRIPTIONS: dict[str, str] = {
     "module_auto_multi_dsr": "Console Automation: Automated Multiple Days DSR & PS Attendance Robot",
     "module_excel_studio": "Utility Studio: Excel & Data Studio (70+ Tools)",
     "module_pdf_studio": "Utility Studio: All-in-One PDF Studio (14 Tools)",
+    "module_softwares_hub": "Utility Studio: Official Softwares & Drivers Hub",
     "module_citizen_services": "Upcoming Services: Citizen Applications & Certificates Monitoring",
     "module_trade_licences": "Upcoming Services: Trade Licences Issuance & Renewals Tracking",
 
@@ -216,6 +229,7 @@ POLICY_DESCRIPTIONS: dict[str, str] = {
     "visible_module_auto_multi_dsr": "Display Visibility: Automated Multi-Days DSR Robot",
     "visible_module_excel_studio": "Display Visibility: Excel & Data Studio",
     "visible_module_pdf_studio": "Display Visibility: All-in-One PDF Studio",
+    "visible_module_softwares_hub": "Display Visibility: Official Softwares & Drivers Hub",
     "visible_module_citizen_services": "Display Visibility: Citizen Services",
     "visible_module_trade_licences": "Display Visibility: Trade Licences",
 }

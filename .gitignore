@@ -36,6 +36,11 @@ browser_profile/
 *.jpg
 *.jpeg
 *.zip
+!static/softwares/*.zip
+!static/softwares/
+# Exclude large software packages (>50MB) from git repository (hosted via GitHub Releases)
+static/softwares/jdk-*.zip
+static/softwares/AdbeRdr*.zip
 otp.txt
 command.txt
 latest_public_url.txt

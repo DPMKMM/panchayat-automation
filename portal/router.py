@@ -102,6 +102,8 @@ def _firebase_client_payload() -> dict[str, Any]:
 @router.get("/autoreports", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/manualreports", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/tools", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/softwares", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/software", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/eptauto", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/naresh", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/reports", response_class=HTMLResponse, include_in_schema=False)

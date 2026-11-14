@@ -159,6 +159,7 @@
               <a href="/autoreports?site=console" id="login-link-autoreports" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#065f46; border-color:#a7f3d0; background:#ecfdf5; text-decoration:none;">⚡ Auto Reports</a>
               <a href="/manualreports" id="login-link-manualreports" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#92400e; border-color:#fde68a; background:#fffbeb; text-decoration:none;">📂 Manual Reports</a>
               <a href="/tools" id="login-link-tools" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#3730a3; border-color:#c7d2fe; background:#eef2ff; text-decoration:none;">🧰 Tools Studio</a>
+              <a href="/softwares" id="login-link-softwares" class="btn btn-outline btn-sm" style="font-size:0.75rem; padding:4px 10px; color:#0369a1; border-color:#bae6fd; background:#f0f9ff; text-decoration:none;">💻 Softwares</a>
             </div>
           </div>
         </div>
@@ -401,7 +402,7 @@
               🟢 Choose Reporting Mode
             </span>
             <button type="button" id="btn-switch-workspace-mode" onclick="showWorkspaceModeSelector()" class="btn btn-gold btn-sm" style="display:none; font-size:0.78rem; padding:5px 12px;">
-              ⇄ Switch Section (Auto / Manual / Tools)
+              ⇄ Switch Section (Auto / Manual / Tools / Softwares)
             </button>
           </div>
         </div>
@@ -488,6 +489,27 @@
               <div style="margin-top:auto;">
                 <button type="button" id="btn-choose-tools" class="btn btn-primary" style="width:100%; text-align:center; background:linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);" onclick="selectWorkspaceMode('tools')">
                   🧰 Open Tools →
+                </button>
+              </div>
+            </div>
+
+            <div class="module-card featured" id="card-choose-softwares" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.12);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">💻</div>
+                  <span class="badge-pill-live" id="badge-softwares-mode">● Official Softwares &amp; Drivers</span>
+                </div>
+                <h3>Softwares</h3>
+                <p>
+                  Essential government utilities, biometric device drivers (Mantra / Morpho / Startek), Java DSC token environments, Telugu typing software, and digital signature signers for Panchayat Raj administration.
+                </p>
+                <div style="font-size:0.78rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; padding:8px 10px; margin-bottom:14px; font-weight:600;">
+                  👆 Biometric Drivers &bull; 🔑 DSC &amp; Java JRE &bull; ✍️ PDF Signer &bull; ⌨️ Telugu Fonts
+                </div>
+              </div>
+              <div style="margin-top:auto;">
+                <button type="button" id="btn-choose-softwares" class="btn btn-primary" style="width:100%; text-align:center; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);" onclick="selectWorkspaceMode('softwares')">
+                  💻 Open Softwares →
                 </button>
               </div>
             </div>
@@ -859,6 +881,373 @@
                 <a href="/tools/pdf" id="btn-open-tool-pdf" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
                   📄 Open All-in-One PDF Studio →
                 </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PLATFORM SOFTWARES WORKSPACE (Official Softwares, Drivers & Utilities) -->
+      <div id="softwares-modules-section" style="display:none; margin-top:20px;">
+        <div class="modules-section" style="margin-top:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+            <div>
+              <div class="modules-section-title">
+                <span>💻</span>
+                <span>Official Softwares &amp; Drivers Hub</span>
+              </div>
+              <div class="modules-section-subtitle" style="margin-bottom:0;">
+                Official device drivers, biometric RD services, Java DSC environments, Telugu typing software, and government desktop utilities.
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="color:var(--text); border-color:var(--border);" onclick="showWorkspaceModeSelector()">
+              ← Back to Reporting Workspace
+            </button>
+          </div>
+
+          <!-- Search & Category Filters Bar -->
+          <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:12px 16px; margin-bottom:18px; box-shadow:0 2px 8px rgba(0,0,0,0.04); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div style="display:flex; align-items:center; gap:8px; flex:1 1 260px;">
+              <span style="font-size:1.1rem; color:#64748b;">🔍</span>
+              <input type="text" id="software-search-input" placeholder="Search software, drivers, tokens, fonts..." onkeyup="filterSoftwaresGrid()" style="width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:8px 12px; font-size:0.86rem; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='#0284c7'" onblur="this.style.borderColor='#cbd5e1'">
+            </div>
+            <div id="software-category-filters" style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-sm btn-primary active-cat-btn" data-cat="all" onclick="filterSoftwaresCategory('all', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; background:#0284c7; border-color:#0284c7; color:#fff;">All (13)</button>
+              <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="dsc" onclick="filterSoftwaresCategory('dsc', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">🔑 DSC &amp; Java (5)</button>
+              <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="telugu" onclick="filterSoftwaresCategory('telugu', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">⌨️ Telugu Typing (2)</button>
+              <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="system" onclick="filterSoftwaresCategory('system', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">🛠️ System &amp; Remote IT (2)</button>
+              <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="biometric" onclick="filterSoftwaresCategory('biometric', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">👆 Biometrics (4)</button>
+            </div>
+          </div>
+
+          <div class="modules-grid" id="softwares-grid">
+            <!-- 1. Java Runtime Environment 8 (JRE) -->
+            <div class="module-card featured software-card" data-category="dsc" data-keywords="java jre 8 runtime environment dsc digital signature pfms egramswaraj 32bit 64bit x86 x64 i586 jdk-8u351 jdk-8u191" style="border-color:#ea580c; box-shadow:0 6px 20px rgba(234,88,12,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fff7ed; color:#ea580c;">☕</div>
+                  <span class="badge-pill-live" style="background:#fff7ed; color:#c2410c; border-color:#ffedd5;">● DSC Token Essential</span>
+                </div>
+                <h3>Java Runtime Environment 8 (JRE)</h3>
+                <div style="font-size:0.74rem; color:#ea580c; background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  Offline Standalone &bull; 32-Bit (8u351) &amp; 64-Bit (8u191) &bull; DSC
+                </div>
+                <p>
+                  Mandatory Java Runtime Environment required for browser applets, token middleware, and digital signature token verification on e-GramSwaraj, PFMS, and e-Panchayat payment portals.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                  <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u351-windows-x32bit.zip" download="jdk-8u351-windows-x32bit.zip" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="text-align:center; padding:9px 6px; font-size:0.78rem; font-weight:800; display:inline-block; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%);">
+                    📥 Java 32-Bit ZIP ⬇
+                  </a>
+                  <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u191-windows-x64.zip" download="jdk-8u191-windows-x64.zip" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" style="text-align:center; padding:9px 6px; font-size:0.78rem; font-weight:800; display:inline-block; background:linear-gradient(135deg, #c2410c 0%, #9a3412 100%);">
+                    📥 Java 64-Bit ZIP ⬇
+                  </a>
+                </div>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('java')" style="color:#ea580c; border-color:#fed7aa; background:#fff7ed;">
+                  📖 Java Exception Sites &amp; DSC Setup Steps
+                </button>
+              </div>
+            </div>
+
+            <!-- 6. ePass2003 / HYP2003 PKI Token Driver -->
+            <div class="module-card featured software-card" data-category="dsc" data-keywords="epass2003 hyp2003 epass2003auto pki client token driver dsc digital signature dongle fips140-3 vsign" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fdf2f8; color:#db2777;">🔑</div>
+                  <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● DSC Token Middleware</span>
+                </div>
+                <h3>ePass2003 / HYP2003 PKI Client</h3>
+                <div style="font-size:0.74rem; color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  FIPS 140-3 &bull; PKI Client &bull; All Windows Versions
+                </div>
+                <p>
+                  Official setup installer and cryptographic middleware for ePass2003 / HYP2003 cryptographic USB dongles. Enables digital certificate recognition in Chrome, Edge, and Java for Panchayat payment vouchers.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://www.vsign.in/vsign/repository/HYP2003-Setup-FIPS140-3.zip" download="HYP2003-Setup-FIPS140-3.zip" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #db2777 0%, #be185d 100%);">
+                  📥 1-Click Download HYP2003 (FIPS 140-3) ZIP ⬇
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('epass')" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8;">
+                  📖 ePass2003 / HYP2003 Setup Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 7. WatchData ProxKey Token Driver -->
+            <div class="module-card featured software-card" data-category="dsc" data-keywords="watchdata proxkey token driver dsc digital signature pfms egramswaraj fips140-3 vsign" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fdf2f8; color:#db2777;">🔑</div>
+                  <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● DSC Token Middleware</span>
+                </div>
+                <h3>WatchData ProxKey Token Driver</h3>
+                <div style="font-size:0.74rem; color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  FIPS 140-3 &bull; WD ProxKey &bull; Cryptographic CSP Suite
+                </div>
+                <p>
+                  Official CSP &amp; PKI driver suite for WatchData ProxKey USB tokens utilized by Panchayat Secretaries and Sarpanches for PFMS payment authorizations and DSC sign-offs.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://www.vsign.in/vsign/repository/WD_PROXKey-FIPS140-3.zip" download="WD_PROXKey-FIPS140-3.zip" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #db2777 0%, #be185d 100%);">
+                  📥 1-Click Download WD ProxKey (FIPS 140-3) ZIP ⬇
+                </a>
+                <a href="https://proxkey.com/" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8; text-align:center; text-decoration:none;">
+                  🌐 Official ProxKey Vendor Portal ↗
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('proxkey')" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8;">
+                  📖 ProxKey Configuration Steps
+                </button>
+              </div>
+            </div>
+
+            <!-- 8. NIC nicDSign Component (eGramSwaraj DSC) -->
+            <div class="module-card featured software-card" data-category="dsc" data-keywords="nicdsign nic dsign egramswaraj dsc digital signature component zip token signer fto voucher" style="border-color:#ea580c; box-shadow:0 6px 20px rgba(234,88,12,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fff7ed; color:#ea580c;">🔑</div>
+                  <span class="badge-pill-live" style="background:#fff7ed; color:#c2410c; border-color:#ffedd5;">● eGramSwaraj DSC Signer</span>
+                </div>
+                <h3>NIC nicDSign Component (eGramSwaraj)</h3>
+                <div style="font-size:0.74rem; color:#ea580c; background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  Official eGramSwaraj &bull; nicDSign.zip &bull; 32 &amp; 64-bit
+                </div>
+                <p>
+                  Official Digital Signature component (nicDSign) required by eGramSwaraj for digital certificate signing, maker/checker voucher approvals, and FTO DSC authorisations across Gram Panchayats.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://egramswaraj.gov.in/FileRedirect.jsp?FD=nicDSign&name=nicDSign.zip" download="nicDSign.zip" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #ea580c 0%, #c2410c 100%);">
+                  📥 1-Click Download nicDSign.zip (eGramSwaraj) ⬇
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('nicdsign')" style="color:#ea580c; border-color:#fed7aa; background:#fff7ed;">
+                  📖 nicDSign Setup &amp; Service Restart Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 10. NIC DigiSigner Component (UBD_newdigisigncomp.zip) -->
+            <div class="module-card featured software-card" data-category="dsc" data-keywords="nic digisigner new-nic-ap-digisigner ubd_newdigisigncomp msi dsc digital signature certificate signer epanchayat" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fdf2f8; color:#db2777;">✍️</div>
+                  <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● UBD Drivers</span>
+                </div>
+                <h3>UBD NIC DigiSigner Component</h3>
+                <div style="font-size:0.74rem; color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  NEW-NIC-AP-DIGISIGNER &bull; MSI Installer &bull; UBD Component
+                </div>
+                <p>
+                  Official NIC DigiSigner client component (UBD_newdigisigncomp.zip / NEW-NIC-AP-DIGISIGNER.msi) required for biometric &amp; digital certificate signature operations on Panchayat Raj departmental applications.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="/static/softwares/UBD_newdigisigncomp.zip" download="UBD_newdigisigncomp.zip" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #db2777 0%, #be185d 100%);">
+                  📥 1-Click Download UBD_newdigisigncomp.zip ⬇
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('digisigner')" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8;">
+                  📖 DigiSigner Setup Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 11. Google Input Tools Telugu -->
+            <div class="module-card featured software-card" data-category="telugu" data-keywords="google input tools telugu typing ime offline phonetic keyboard googleinputtelugu" style="border-color:#16a34a; box-shadow:0 6px 20px rgba(22,163,74,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#f0fdf4; color:#16a34a;">⌨️</div>
+                  <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● Telugu Typing IME</span>
+                </div>
+                <h3>Google Input Tools Telugu (Offline Installer)</h3>
+                <div style="font-size:0.74rem; color:#16a34a; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  100% Offline Standalone &bull; Phonetic IME
+                </div>
+                <p>
+                  Complete standalone offline installer for Google Telugu Input IME. Allows officers to type Telugu phonetically (English characters into Telugu script) directly inside Word, Excel, and browsers without active internet.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="/static/softwares/GoogleInputTelugu.zip" download="GoogleInputTelugu.zip" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #16a34a 0%, #15803d 100%);">
+                  📥 1-Click Download GoogleInputTelugu.zip ⬇
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('telugu_ime')" style="color:#16a34a; border-color:#bbf7d0; background:#f0fdf4;">
+                  📖 Offline Telugu IME Setup &amp; Shortcuts
+                </button>
+              </div>
+            </div>
+
+            <!-- 12. Official Telugu Fonts Pack -->
+            <div class="module-card featured software-card" data-category="telugu" data-keywords="telugu fonts pothana2000 gautami unicode vani suranna ttf download" style="border-color:#16a34a; box-shadow:0 6px 20px rgba(22,163,74,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#f0fdf4; color:#16a34a;">🔤</div>
+                  <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● Unicode Fonts Pack</span>
+                </div>
+                <h3>Official Telugu Fonts Pack (Pothana &amp; Gautami)</h3>
+                <div style="font-size:0.74rem; color:#16a34a; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  TrueType (.ttf) &bull; Official Govt Unicode Fonts
+                </div>
+                <p>
+                  Complete collection of official Telugu Unicode fonts including Pothana2000, Gautami, Vani, Suranna, and Ramaraja. Essential for properly viewing government G.O.s and official notices.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <button type="button" class="btn btn-primary" onclick="openSoftwareHelpModal('fonts')" style="width:100%; text-align:center; background:linear-gradient(135deg, #16a34a 0%, #15803d 100%);">
+                  📖 Font Installation &amp; Windows Setup Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 13. Adobe Acrobat Reader DC -->
+            <div class="module-card featured software-card" data-category="system" data-keywords="adobe acrobat reader dc adberdr11007 pdf dsc green tick signature verify certificate" style="border-color:#dc2626; box-shadow:0 6px 20px rgba(220,38,38,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#fef2f2; color:#dc2626;">📄</div>
+                  <span class="badge-pill-live" style="background:#fef2f2; color:#b91c1c; border-color:#fecaca;">● PDF &amp; DSC Verification</span>
+                </div>
+                <h3>Adobe Acrobat Reader DC</h3>
+                <div style="font-size:0.74rem; color:#dc2626; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  Offline Standalone &bull; v11.0.07 &bull; Green Tick Verification
+                </div>
+                <p>
+                  Industry-standard PDF reader required for validating digital signatures on Panchayat G.O.s, sanction orders, and generating green tick checkmarks on government certificates.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip" download="AdbeRdr11007_en_US.zip" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);">
+                  📥 1-Click Download AdbeRdr11007_en_US.zip ⬇
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('acrobat')" style="color:#dc2626; border-color:#fecaca; background:#fef2f2;">
+                  📖 Digital Signature Green Tick Setup Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 14. Open Internet Explorer Utility (OpenInternetExplorer.zip) -->
+            <div class="module-card featured software-card" data-category="system" data-keywords="open internet explorer openinternetexplorer ie mode legacy activex java windows 10 windows 11 desktop utility" style="border-color:#2563eb; box-shadow:0 6px 20px rgba(37,99,235,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#eff6ff; color:#2563eb;">🌐</div>
+                  <span class="badge-pill-live" style="background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">● Legacy Browser Utility</span>
+                </div>
+                <h3>Open Internet Explorer Utility (Windows 10 / 11)</h3>
+                <div style="font-size:0.74rem; color:#2563eb; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  Portable Standalone &bull; Windows 10 &amp; 11 IE Mode
+                </div>
+                <p>
+                  Lightweight utility to directly open standalone Microsoft Internet Explorer on Windows 10 and Windows 11. Essential for legacy government portals that mandate native ActiveX controls, older Java applets, or Treasury DSC plugins.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="/static/softwares/OpenInternetExplorer.zip" download="OpenInternetExplorer.zip" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);">
+                  📥 1-Click Download OpenInternetExplorer.zip ⬇
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('open_ie')" style="color:#2563eb; border-color:#bfdbfe; background:#eff6ff;">
+                  📖 Internet Explorer Utility Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 11. Mantra MFS100 -->
+            <div class="module-card featured software-card" data-category="biometric" data-keywords="mantra mfs100 rd service driver biometric fingerprint aadhaar ekyc" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                </div>
+                <h3>Mantra MFS100 RD Service &amp; Driver</h3>
+                <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  Windows 7 / 8 / 10 / 11 &bull; Driver v9.2.0.0 &bull; RD v1.0.8
+                </div>
+                <p>
+                  Official driver suite and Registered Device (RD) service for Mantra MFS100 optical fingerprint scanners used across Telangana Gram Panchayats for biometric attendance and Aadhaar eKYC.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://download.mantratecapp.com/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+                  📥 Official Mantra Download Portal ↗
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('mantra')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
+                  📖 Installation &amp; Service Restart Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 12. Morpho Safran MSO 1300 -->
+            <div class="module-card featured software-card" data-category="biometric" data-keywords="morpho safran mso 1300 e2 e3 idemia rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                </div>
+                <h3>Morpho Safran MSO 1300 E2/E3 RD Service</h3>
+                <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  Windows 10 / 11 &bull; IDEMIA Certified &bull; v2.0.1.52
+                </div>
+                <p>
+                  Certified RD Service driver and USB client software for IDEMIA MorphoSmart 1300 Series fingerprint devices used for e-Panchayat biometric logins and government DBT authentication.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://rdserviceonline.com/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+                  📥 Official IDEMIA RD Online ↗
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('morpho')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
+                  📖 Morpho Setup &amp; Test Steps
+                </button>
+              </div>
+            </div>
+
+            <!-- 13. Startek FM220 -->
+            <div class="module-card featured software-card" data-category="biometric" data-keywords="startek acpl fm220 fm220u rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                </div>
+                <h3>Startek FM220 / FM220U RD Service</h3>
+                <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  ACPL Certified &bull; Windows 7 / 8 / 10 / 11
+                </div>
+                <p>
+                  Device drivers and registered biometric service for Startek / Access Computech (ACPL) FM220 and FM220U USB fingerprint scanners used in rural administration and DBT schemes.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://acpl.ind.in/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+                  📥 Official ACPL Portal ↗
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('startek')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
+                  📖 Startek Setup Guide
+                </button>
+              </div>
+            </div>
+
+            <!-- 14. SecuGen Hamster Pro 20 -->
+            <div class="module-card featured software-card" data-category="biometric" data-keywords="secugen hamster pro 20 rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+              <div>
+                <div class="module-card-header">
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                </div>
+                <h3>SecuGen Hamster Pro 20 RD Service</h3>
+                <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  SecuGen India &bull; UIDAI L0 Certified
+                </div>
+                <p>
+                  Official USB driver and Aadhaar RD service for SecuGen Hamster Pro 20 optical fingerprint scanners utilized in departmental authentication workflows.
+                </p>
+              </div>
+              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+                <a href="https://secugenindia.com/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+                  📥 Official SecuGen Portal ↗
+                </a>
+                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('secugen')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
+                  📖 SecuGen Setup Guide
+                </button>
               </div>
             </div>
           </div>
@@ -2939,6 +3328,26 @@
         </div>
       </div>
     </div>
+
+    <!-- Software Setup & Instructions Modal -->
+    <div id="software-help-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+      <div style="background:#ffffff; border-radius:16px; padding:28px 30px; max-width:620px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:0 25px 50px rgba(0,0,0,0.3); color:#1e293b; position:relative;">
+        <button type="button" onclick="closeSoftwareHelpModal()" style="position:absolute; right:16px; top:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:#94a3b8; padding:4px; line-height:1;" title="Close">&times;</button>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:12px; border-bottom:1.5px solid #e2e8f0;">
+          <div id="soft-modal-icon" style="width:42px; height:42px; border-radius:10px; background:#e0f2fe; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">💻</div>
+          <div>
+            <h3 id="soft-modal-title" style="margin:0; font-size:1.15rem; font-weight:800; color:#0f172a;">Software Guide</h3>
+            <p id="soft-modal-sub" style="margin:2px 0 0; font-size:0.8rem; color:#64748b;">Step-by-step setup instructions for Panchayat officers</p>
+          </div>
+        </div>
+        <div id="soft-modal-body" style="font-size:0.88rem; line-height:1.6; color:#334155;">
+          <!-- Content injected dynamically via JS -->
+        </div>
+        <div style="margin-top:20px; padding-top:14px; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="closeSoftwareHelpModal()">Close Guide</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer>
@@ -2953,5 +3362,226 @@
   <script src="/static/js/auth.js?v=28"></script>
   <script src="/static/js/console.js?v=25"></script>
   <script src="/static/js/admin.js?v=8"></script>
+  <script>
+    window.filterSoftwaresCategory = function (category, btn) {
+      var cards = document.querySelectorAll('.software-card');
+      cards.forEach(function (card) {
+        if (category === 'all' || card.getAttribute('data-category') === category) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+      var btns = document.querySelectorAll('#software-category-filters button');
+      btns.forEach(function (b) {
+        b.style.background = 'transparent';
+        b.style.color = '#475569';
+        b.style.borderColor = '#cbd5e1';
+      });
+      if (btn) {
+        btn.style.background = '#0284c7';
+        btn.style.color = '#ffffff';
+        btn.style.borderColor = '#0284c7';
+      }
+    };
+
+    window.filterSoftwaresGrid = function () {
+      var input = document.getElementById('software-search-input');
+      var query = (input ? input.value : '').toLowerCase().trim();
+      var cards = document.querySelectorAll('.software-card');
+      cards.forEach(function (card) {
+        var text = (card.innerText || '').toLowerCase();
+        var kw = (card.getAttribute('data-keywords') || '').toLowerCase();
+        if (!query || text.indexOf(query) !== -1 || kw.indexOf(query) !== -1) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    };
+
+    window.openSoftwareHelpModal = function (softKey) {
+      var modal = document.getElementById('software-help-modal');
+      var title = document.getElementById('soft-modal-title');
+      var sub = document.getElementById('soft-modal-sub');
+      var icon = document.getElementById('soft-modal-icon');
+      var body = document.getElementById('soft-modal-body');
+      if (!modal || !body) return;
+
+      var guides = {
+        mantra: {
+          icon: '👆',
+          title: 'Mantra MFS100 RD Service Installation Guide',
+          sub: 'Troubleshooting and setting up Mantra biometric scanner',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Download Driver:</strong> Download Mantra MFS100 Driver v9.2.0.0 and Mantra RD Service v1.0.8 from the official Mantra download portal.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Install as Administrator:</strong> Right-click the setup file and select <em>Run as administrator</em>. Follow prompts and finish installation.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Plug In Device:</strong> Connect your Mantra MFS100 USB cable to your computer. Wait for Windows notification: <em>Device attached / Ready to use</em>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Restart Service if Not Detected:</strong> Press <kbd>Win + R</kbd>, type <code>services.msc</code>, locate <strong>Mantra AVDM</strong> in the list, right-click and click <strong>Restart</strong>.</li>' +
+                '<li><strong>Test in Browser:</strong> Open the e-Panchayat portal or Aadhaar test page. Device status will display <em>Ready / Device Connected (Error Code 0)</em>.</li>' +
+                '</ol>'
+        },
+        morpho: {
+          icon: '👆',
+          title: 'Morpho Safran MSO 1300 Setup Guide',
+          sub: 'Installing IDEMIA MorphoSmart drivers & L0 RD Service',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Uninstall Old Versions:</strong> Go to Control Panel &gt; Programs &gt; Uninstall a program. Remove any older Morpho RD Service or Safran drivers.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Install New Driver:</strong> Run Morpho RD Service v2.0.1.52 installer as administrator.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Check Communication Port:</strong> Open <code>C:\\MorphoRdServiceL0Soft\\Config.ini</code>. Verify <code>Communication_Type=0</code>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Restart Morpho Service:</strong> In <code>services.msc</code>, right-click <strong>Morpho RD Service</strong> and click <strong>Restart</strong>.</li>' +
+                '<li><strong>Device Initialization:</strong> Plug in your Morpho scanner. Wait for message: <em>Telemetry from server checked successfully. Device ready for use.</em></li>' +
+                '</ol>'
+        },
+        startek: {
+          icon: '👆',
+          title: 'Startek FM220 / FM220U Setup Guide',
+          sub: 'Access Computech biometric driver & RD configuration',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Download Package:</strong> Download Startek FM220 Windows Driver &amp; ACPL RD Service setup package from official ACPL site.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Run Installer:</strong> Right-click <code>ACPL_FM220_RDService.exe</code> and run as administrator.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Connect Scanner:</strong> Plug into a direct USB port on your PC (avoid USB extension cables or unpowered hubs).</li>' +
+                '<li><strong>Verify in Services:</strong> Ensure <strong>ACPL FM220 RD Service</strong> is running in <code>services.msc</code>.</li>' +
+                '</ol>'
+        },
+        secugen: {
+          icon: '👆',
+          title: 'SecuGen Hamster Pro 20 Setup Guide',
+          sub: 'Official SecuGen RD Service setup instructions',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Install Driver First:</strong> Install the SecuGen WDU06 USB Driver, then install the SecuGen India RD Service.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Connect Device:</strong> Connect your Hamster Pro 20 scanner to your PC.</li>' +
+                '<li><strong>Check Device Manager:</strong> In Device Manager under <em>Universal Serial Bus controllers</em>, verify <strong>SecuGen USB FP Sensor</strong> is listed without warnings.</li>' +
+                '</ol>'
+        },
+        java: {
+          icon: '☕',
+          title: 'Java 8 JRE Configuration for DSC Signing',
+          sub: 'Configuring Java 32-bit & 64-bit for PFMS & e-Panchayat',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>1-Click Downloads:</strong><br>' +
+                '• <a href="/static/softwares/jdk-8u351-windows-x32bit.zip" download="jdk-8u351-windows-x32bit.zip" style="color:#ea580c; font-weight:800; text-decoration:underline;">Download Java 8 32-Bit ZIP (167 MB) ⬇</a><br>' +
+                '• <a href="/static/softwares/jdk-8u191-windows-x64.zip" download="jdk-8u191-windows-x64.zip" style="color:#c2410c; font-weight:800; text-decoration:underline;">Download Java 8 64-Bit ZIP (215 MB) ⬇</a></li>' +
+                '<li style="margin-bottom:8px;"><strong>Install 32-bit &amp; 64-bit:</strong> Extract and run each installer as administrator. Many government DSC browser applets require 32-bit Java, while modern Windows 10/11 services require 64-bit Java.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Open Java Control Panel:</strong> Search for <em>Configure Java</em> in Windows Start Menu.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Add Security Exceptions:</strong> Click the <strong>Security</strong> tab &gt; click <strong>Edit Site List...</strong> &gt; click <strong>Add</strong> and paste government portal URLs: <code>https://epanchayat.telangana.gov.in</code>, <code>https://pfms.nic.in</code>, <code>https://egramswaraj.gov.in</code>.</li>' +
+                '<li><strong>Apply &amp; OK:</strong> Click Apply, then restart your browser. When prompted by Java applet, check <em>Do not show again</em> and click <strong>Run</strong>.</li>' +
+                '</ol>'
+        },
+        epass: {
+          icon: '🔑',
+          title: 'ePass2003 / HYP2003 Token Driver & DSC Setup',
+          sub: 'Configuring cryptographic USB dongle for PFMS / e-GramSwaraj',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Download Installer:</strong> <a href="https://www.vsign.in/vsign/repository/HYP2003-Setup-FIPS140-3.zip" target="_blank" rel="noopener noreferrer" style="color:#db2777; font-weight:800; text-decoration:underline;">Click here to download HYP2003 (FIPS 140-3) ZIP ⬇</a>. Extract the zip archive to your PC.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Plug in Token &amp; Install:</strong> Insert your ePass2003 / HYP2003 USB token into computer and run the setup installer as administrator.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Select CSP Option:</strong> During installation, select <strong>Microsoft CSP</strong> (standard for government DSC web signing).</li>' +
+                '<li style="margin-bottom:8px;"><strong>Verify Certificate:</strong> Open <strong>ePass2003 Token Manager</strong> from desktop or system tray. Enter User PIN to view the digital signature certificate details and validity date.</li>' +
+                '<li><strong>Register in Portal:</strong> In e-GramSwaraj or PFMS, navigate to <em>Master Configuration &gt; DSC Management &gt; Register DSC</em> and authorize using the token PIN.</li>' +
+                '</ol>'
+        },
+        proxkey: {
+          icon: '🔑',
+          title: 'WatchData ProxKey Driver Setup',
+          sub: 'Installing WD ProxKey PKI Client for Panchayat signing',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Download Installer:</strong> <a href="https://www.vsign.in/vsign/repository/WD_PROXKey-FIPS140-3.zip" target="_blank" rel="noopener noreferrer" style="color:#db2777; font-weight:800; text-decoration:underline;">Click here to download WD ProxKey (FIPS 140-3) ZIP ⬇</a>. Extract the zip archive to your PC.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Plug in ProxKey:</strong> Connect the ProxKey token to USB port. Double-click the installer setup file to launch.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Install PKI Middleware:</strong> Follow wizard steps and complete installation.</li>' +
+                '<li><strong>Token PIN:</strong> Open WatchData ProxKey tool from tray. Check that the certificate is loaded and change the default PIN if prompted.</li>' +
+                '</ol>'
+        },
+        nicdsign: {
+          icon: '🔑',
+          title: 'eGramSwaraj nicDSign Setup Guide',
+          sub: 'Setting up nicDSign component for digital voucher signing',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>1-Click Download:</strong> <a href="https://egramswaraj.gov.in/FileRedirect.jsp?FD=nicDSign&name=nicDSign.zip" download="nicDSign.zip" style="color:#ea580c; font-weight:800; text-decoration:underline;">Click here to 1-Click Download nicDSign.zip (eGramSwaraj) ⬇</a>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Extract &amp; Install:</strong> Extract <code>nicDSign.zip</code> into a local directory (e.g. <code>C:\\nicDSign</code>). Run the installer setup as administrator.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Start nicDSign Service:</strong> Ensure the nicDSign service is running from the Windows System Tray or Windows Services (<code>services.msc</code>).</li>' +
+                '<li style="margin-bottom:8px;"><strong>Java Exception List:</strong> In Java Control Panel &gt; Security &gt; Edit Site List, add <code>https://egramswaraj.gov.in</code>.</li>' +
+                '<li><strong>Sign Voucher:</strong> Connect your DSC USB token (ePass2003 / ProxKey), log in to eGramSwaraj, and approve payment vouchers.</li>' +
+                '</ol>'
+        },
+        digisigner: {
+          icon: '✍️',
+          title: 'UBD NIC DigiSigner Component Setup Guide',
+          sub: 'Installing NEW-NIC-AP-DIGISIGNER for Panchayat portals',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>1-Click Download:</strong> <a href="/static/softwares/UBD_newdigisigncomp.zip" download="UBD_newdigisigncomp.zip" style="color:#db2777; font-weight:800; text-decoration:underline;">Click here to 1-Click Download UBD_newdigisigncomp.zip ⬇</a>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Extract ZIP:</strong> Extract the archive to find <code>NEW-NIC-AP-DIGISIGNER.msi</code>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Install MSI:</strong> Double-click <code>NEW-NIC-AP-DIGISIGNER.msi</code> and complete the installation wizard as Administrator.</li>' +
+                '<li><strong>Restart Browser:</strong> Restart your browser and reconnect your DSC token to perform digital signing on Panchayat portals.</li>' +
+                '</ol>'
+        },
+        telugu_ime: {
+          icon: '⌨️',
+          title: 'Google Input Tools Telugu (Offline) Setup',
+          sub: 'Type Telugu phonetically anywhere in Windows',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>1-Click Download:</strong> <a href="/static/softwares/GoogleInputTelugu.zip" download="GoogleInputTelugu.zip" style="color:#16a34a; font-weight:800; text-decoration:underline;">Click here to 1-Click Download GoogleInputTelugu.zip (Offline Setup) ⬇</a>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Run Installer:</strong> Extract and run the Google Input Tools Telugu offline setup files (<code>GoogleInputTools.exe</code> then <code>GoogleInputTelugu.exe</code>). Complete installation.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Switch Language Shortcut:</strong> Press <kbd>Alt + Shift</kbd> or <kbd>Win + Space</kbd> to toggle between English and Telugu input.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Phonetic Typing:</strong> Type English letters (e.g. <code>namaskaram</code>) and press Spacebar to automatically convert to Telugu (<code>నమస్కారం</code>).</li>' +
+                '<li><strong>Works In All Software:</strong> Works seamlessly in MS Word, Excel, Notepad, browsers, and WhatsApp Web without active internet.</li>' +
+                '</ol>'
+        },
+        fonts: {
+          icon: '🔤',
+          title: 'Installing Official Telugu Fonts in Windows',
+          sub: 'Steps to install Pothana2000, Gautami & Unicode Fonts',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>Unzip Fonts Folder:</strong> Extract the downloaded Telugu fonts archive to a folder.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Select All Font Files:</strong> Select all <code>.ttf</code> font files (Pothana2000, Gautami, Vani, Suranna).</li>' +
+                '<li style="margin-bottom:8px;"><strong>Install for All Users:</strong> Right-click the selected font files and choose <strong>Install for all users</strong>.</li>' +
+                '<li><strong>Verify in MS Word / Excel:</strong> Open Microsoft Word. In the font selector dropdown, you will now see <em>Pothana2000</em> and <em>Gautami</em> ready for selection.</li>' +
+                '</ol>'
+        },
+        acrobat: {
+          icon: '📄',
+          title: 'Adobe Acrobat Digital Signature Green Tick Setup',
+          sub: 'How to validate digital signatures with green checkmark',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>1-Click Download:</strong> <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip" download="AdbeRdr11007_en_US.zip" target="_blank" rel="noopener noreferrer" style="color:#dc2626; font-weight:800; text-decoration:underline;">Click here to 1-Click Download Adobe Reader (AdbeRdr11007_en_US.zip) ⬇</a>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Extract &amp; Install:</strong> Extract the archive and run <code>AdbeRdr11007_en_US.exe</code> as administrator. Complete the setup.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Open Signed PDF:</strong> Open the signed government PDF in Adobe Acrobat Reader.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Click on Signature:</strong> Click on the signature panel or yellow question mark. Click <strong>Signature Properties...</strong></li>' +
+                '<li style="margin-bottom:8px;"><strong>Show Signer Certificate:</strong> Click <strong>Show Signer\'s Certificate...</strong> &gt; go to <strong>Trust</strong> tab.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Add to Trusted Certificates:</strong> Click <strong>Add to Trusted Certificates...</strong> &gt; click OK. Check the boxes for <em>Certified documents</em> and <em>Dynamic content</em>.</li>' +
+                '<li><strong>Validate Signature:</strong> Click OK and click <strong>Validate Signature</strong>. The yellow question mark will turn into a green checkmark: <em>Signature is valid</em>.</li>' +
+                '</ol>'
+        },
+        open_ie: {
+          icon: '🌐',
+          title: 'Open Internet Explorer Utility Guide',
+          sub: 'Running native Internet Explorer on Windows 10 & 11',
+          html: '<ol style="padding-left:20px; margin:0 0 14px 0;">' +
+                '<li style="margin-bottom:8px;"><strong>1-Click Download:</strong> <a href="/static/softwares/OpenInternetExplorer.zip" download="OpenInternetExplorer.zip" style="color:#2563eb; font-weight:800; text-decoration:underline;">Click here to 1-Click Download OpenInternetExplorer.zip ⬇</a>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Extract Archive:</strong> Extract the zip archive to your PC. You will find <code>OpenInternetExplorer.exe</code>.</li>' +
+                '<li style="margin-bottom:8px;"><strong>Run Standalone:</strong> Double-click <code>OpenInternetExplorer.exe</code>. It directly invokes native Internet Explorer COM interface without redirecting to Edge.</li>' +
+                '<li><strong>Access Legacy Portals:</strong> Use this standalone IE window to open legacy treasury, CFMS, or e-Panchayat applets requiring ActiveX controls or Java applets.</li>' +
+                '</ol>'
+        }
+      };
+
+      var g = guides[softKey] || {
+        icon: '💻',
+        title: 'Software Information',
+        sub: 'Official Panchayat software documentation',
+        html: '<p>Please refer to official departmental guidelines or contact the district IT coordinator for assistance.</p>'
+      };
+
+      icon.textContent = g.icon;
+      title.textContent = g.title;
+      sub.textContent = g.sub;
+      body.innerHTML = g.html;
+      modal.style.display = 'flex';
+    };
+
+    window.closeSoftwareHelpModal = function () {
+      var modal = document.getElementById('software-help-modal');
+      if (modal) modal.style.display = 'none';
+    };
+  </script>
 </body>
 </html>
