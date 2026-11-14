@@ -398,13 +398,14 @@ def naresh_login(
     password: str = Form(...),
 ) -> dict[str, Any]:
     console_user = enforce_console_api_access(request)
+    c_uid = str(console_user["user_id"]) if console_user else ""
     sid = _get_sid(request)
     u = (username or "").strip()
     p = (password or "").strip()
     if not u or not p:
         raise HTTPException(status_code=400, detail="Please enter both User ID and Password.")
     try:
-        result = automation_service.start_server_login(u, p, headless=True, session_id=sid)
+        result = automation_service.start_server_login(u, p, headless=True, session_id=sid, owner_user_id=c_uid)
         if console_user:
             log_usage(user_id=console_user["user_id"], platform_scope="console", module="epts_auth", action="login_init")
         return result
@@ -423,12 +424,13 @@ def naresh_verify_otp(
     otp: str = Form(...),
 ) -> dict[str, Any]:
     console_user = enforce_console_api_access(request)
+    c_uid = str(console_user["user_id"]) if console_user else ""
     sid = _get_sid(request)
     clean_otp = re.sub(r"\D", "", (otp or "").strip())
     if len(clean_otp) != 6:
         raise HTTPException(status_code=400, detail="Please enter a valid 6-digit numeric OTP.")
     try:
-        result = automation_service.verify_server_otp(clean_otp, session_id=sid)
+        result = automation_service.verify_server_otp(clean_otp, session_id=sid, owner_user_id=c_uid)
         if console_user:
             log_usage(user_id=console_user["user_id"], platform_scope="console", module="epts_auth", action="verify_otp")
         return result

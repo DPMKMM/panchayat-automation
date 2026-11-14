@@ -125,6 +125,7 @@ def _execute_job_thread(job_id: str, session_id: str, include_time_matrix: bool)
         total_w = len(working_days)
 
         for idx, w_iso in enumerate(working_days, start=1):
+            session["last_activity"] = time.time()
             disp = format_display_date(parse_date_input(w_iso))
             portal_str = format_portal_date(parse_date_input(w_iso))
 
@@ -169,8 +170,13 @@ def _execute_job_thread(job_id: str, session_id: str, include_time_matrix: bool)
             with _LOCK:
                 job.progress_pct = int((idx / total_w) * 80)
 
+    sess_lock = session.get("lock")
     try:
-        automation_service.run_in_session_thread(session, _run_in_bot_page)
+        if sess_lock:
+            with sess_lock:
+                automation_service.run_in_session_thread(session, _run_in_bot_page)
+        else:
+            automation_service.run_in_session_thread(session, _run_in_bot_page)
 
         if not downloaded_files:
             raise RuntimeError(
@@ -274,11 +280,6 @@ def _execute_job_thread(job_id: str, session_id: str, include_time_matrix: bool)
             job.status = "failed"
             job.error = str(exc)
             job.completed_at = time.time()
-        try:
-            from core.session_manager import mark_session_expired
-            mark_session_expired(session_id, str(exc))
-        except Exception:
-            pass
     except Exception as exc:
         logger.exception("[Auto-Multi-DSR] Pipeline failed for job %s: %s", job_id, exc)
         with _LOCK:

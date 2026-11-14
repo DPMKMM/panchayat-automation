@@ -94,66 +94,100 @@ def download_daily_gmr127_raw(
 
         page.on("dialog", on_dialog)
         try:
-            logger.info("[*] [Attempt %d/%d] Selecting 'GP Monitoring' for date %s (%s)...", attempt, max_retries, disp_date, date_formatted)
-            if hasattr(bot, "select_menu"):
-                bot.select_menu("GP Monitoring")
-            else:
-                menu_loc = page.locator("//a[normalize-space(.)='GP Monitoring'] | //input[@value='GP Monitoring']").first
-                menu_loc.click()
-            time.sleep(2.2)
+            logger.info("[*] [Attempt %d/%d] Preparing GM-R 1.2.7 for date %s (%s)...", attempt, max_retries, disp_date, date_formatted)
+
+            dl_selectors = [
+                "input[value='Download']",
+                "input[value='Download Excel']",
+                "input[value*='Download' i]",
+                "button:has-text('Download')",
+                "button:has-text('Download Excel')",
+                "input[id*='btnExport' i]",
+                "input[id*='btnDownload' i]",
+            ]
 
             iframe = _get_my_iframe(page)
-            if not iframe:
-                time.sleep(1.8)
-                iframe = _get_my_iframe(page)
-            if not iframe:
-                raise RuntimeError("Could not locate 'my-iframe' in portal after clicking GP Monitoring.")
 
-            try:
-                iframe.wait_for_load_state("domcontentloaded", timeout=10000)
-            except Exception:
-                pass
-
-            # Click 'Enlarge All'
-            try:
-                enlarge_btn = iframe.locator("text='Enlarge All'").first
-                if enlarge_btn.is_visible(timeout=2500):
-                    enlarge_btn.click()
-                    time.sleep(1.0)
-            except Exception as e:
-                logger.debug("Enlarge All note: %s", e)
-
-            # Expand 'DSR REPORTS' section
-            try:
-                dsr_header = iframe.locator("text='DSR REPORTS'").first
-                if dsr_header.is_visible(timeout=2500):
-                    dsr_header.click()
-                    time.sleep(1.2)
-            except Exception as e:
-                logger.debug("DSR REPORTS click note: %s", e)
-
-            # Locate GM-R 1.2.7 link (Raw Data)
-            selectors = [
-                "a:has-text('1.2.7')",
-                "a:has-text('Raw Data')",
-                "//a[contains(., '1.2.7') or contains(., 'Raw Data')]",
-            ]
-            link = None
-            for sel in selectors:
-                cand = iframe.locator(sel).first
+            # Check if iframe is already loaded directly on GM-R 1.2.7 report form
+            already_on_form = False
+            if iframe:
                 try:
-                    if cand.is_visible(timeout=1500):
-                        link = cand
-                        break
+                    cand_btn = iframe.locator(", ".join(dl_selectors)).first
+                    cand_txt = iframe.locator("input[type='text'], input[name*='Date' i], input[id*='Date' i]").first
+                    if cand_btn.is_visible(timeout=1000) and cand_txt.is_visible(timeout=1000):
+                        already_on_form = True
+                        logger.info("[*] Iframe is already on GM-R 1.2.7 report form. Reusing form for %s.", disp_date)
+                except Exception:
+                    already_on_form = False
+
+            if not already_on_form:
+                logger.info("[*] Navigating menu to GM-R 1.2.7 for date %s...", disp_date)
+                if hasattr(bot, "select_menu"):
+                    bot.select_menu("GP Monitoring")
+                else:
+                    menu_loc = page.locator("//a[normalize-space(.)='GP Monitoring'] | //input[@value='GP Monitoring']").first
+                    menu_loc.click()
+                time.sleep(2.0)
+
+                iframe = _get_my_iframe(page)
+                if not iframe:
+                    time.sleep(1.8)
+                    iframe = _get_my_iframe(page)
+                if not iframe:
+                    raise RuntimeError("Could not locate 'my-iframe' in portal after clicking GP Monitoring.")
+
+                try:
+                    iframe.wait_for_load_state("domcontentloaded", timeout=10000)
                 except Exception:
                     pass
 
-            if not link:
-                link = iframe.locator("a:has-text('1.2.7')").first
-                link.wait_for(state="visible", timeout=10000)
+                # Click 'Enlarge All'
+                try:
+                    enlarge_btn = iframe.locator("text='Enlarge All'").first
+                    if enlarge_btn.is_visible(timeout=2500):
+                        enlarge_btn.click()
+                        time.sleep(1.0)
+                except Exception as e:
+                    logger.debug("Enlarge All note: %s", e)
 
-            link.click()
-            time.sleep(2.0)
+                # Expand 'DSR REPORTS' section
+                try:
+                    dsr_header = iframe.locator("text='DSR REPORTS'").first
+                    if dsr_header.is_visible(timeout=2500):
+                        dsr_header.click()
+                        time.sleep(1.2)
+                except Exception as e:
+                    logger.debug("DSR REPORTS click note: %s", e)
+
+                # Locate GM-R 1.2.7 link (Raw Data)
+                selectors = [
+                    "a:has-text('1.2.7')",
+                    "a:has-text('Raw Data')",
+                    "//a[contains(., '1.2.7') or contains(., 'Raw Data')]",
+                ]
+                link = None
+                for sel in selectors:
+                    cand = iframe.locator(sel).first
+                    try:
+                        if cand.is_visible(timeout=1500):
+                            link = cand
+                            break
+                    except Exception:
+                        pass
+
+                if not link:
+                    link = iframe.locator("a:has-text('1.2.7')").first
+                    link.wait_for(state="visible", timeout=10000)
+
+                link.click()
+                time.sleep(1.5)
+
+            # Ensure date input is visible and ready
+            txt_loc = iframe.locator("input[type='text'], input[name*='Date' i], input[id*='Date' i]").first
+            try:
+                txt_loc.wait_for(state="visible", timeout=8000)
+            except Exception:
+                pass
 
             # Fill Date filter in iframe with DD-MMM-YYYY
             iframe.evaluate(
@@ -172,34 +206,24 @@ def download_daily_gmr127_raw(
                 }}""",
                 date_formatted,
             )
-            time.sleep(0.4)
+            time.sleep(0.3)
 
             # Also fill via Playwright locator to trigger ASP.NET handlers
             try:
-                txt_loc = iframe.locator("input[type='text']:visible").first
                 if txt_loc.is_visible(timeout=1500):
                     txt_loc.evaluate("el => el.removeAttribute('readonly')")
                     txt_loc.fill(date_formatted)
                     txt_loc.press("Tab")
-                    time.sleep(0.4)
+                    time.sleep(0.3)
             except Exception:
                 pass
 
             # Locate and click Download button
-            dl_selectors = [
-                "input[value='Download']",
-                "input[value='Download Excel']",
-                "input[value*='Download' i]",
-                "button:has-text('Download')",
-                "button:has-text('Download Excel')",
-                "input[id*='btnExport' i]",
-                "input[id*='btnDownload' i]",
-            ]
             dl_btn = iframe.locator(", ".join(dl_selectors)).first
             dl_btn.wait_for(state="visible", timeout=15000)
 
             dialog_messages.clear()
-            with page.expect_download(timeout=18000) as dl_info:
+            with page.expect_download(timeout=22000) as dl_info:
                 dl_btn.click()
 
             download = dl_info.value
@@ -217,7 +241,8 @@ def download_daily_gmr127_raw(
         except Exception as exc:
             last_error = exc
             for m in dialog_messages:
-                if "no data found" in m.lower():
+                m_low = m.lower()
+                if "no data" in m_low or "no record" in m_low or "not found" in m_low or "no detail" in m_low:
                     raise FileNotFoundError(
                         f"e-Panchayat portal returned no DSR attendance records for date '{disp_date}' ({m})."
                     ) from exc

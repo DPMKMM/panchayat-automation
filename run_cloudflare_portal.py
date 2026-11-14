@@ -144,11 +144,13 @@ def main():
     # 1. Clean up any stale uvicorn process and start fresh
     kill_stale_uvicorn()
     print(f"[*] Starting fresh Uvicorn server on port {PORT}...")
+    log_file = BASE_DIR / "portal.log"
+    log_fp = open(log_file, "a", encoding="utf-8")
     uvicorn_proc = subprocess.Popen(
         [str(PYTHON_EXE), "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(PORT)],
         cwd=str(BASE_DIR),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=log_fp,
+        stderr=subprocess.STDOUT,
     )
     # Wait up to 5 seconds for server port to open
     for _ in range(10):

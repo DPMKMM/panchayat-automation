@@ -159,13 +159,17 @@
     }
   }
 
-  function clearEptsMetadata() {
+  function clearEptsMetadata(keepSessionId) {
     EPTS_META_KEYS.forEach(function (k) {
       try { sessionStorage.removeItem(k); } catch (e) {}
       try { localStorage.removeItem(k); } catch (e) {}
     });
-    try { sessionStorage.removeItem('epts_session_id'); } catch (e) {}
-    try { localStorage.removeItem('epts_session_id'); } catch (e) {}
+    // Never wipe epts_session_id during routine metadata sync or unauthenticated polling.
+    // epts_session_id is the browser's persistent session key for login & OTP verification.
+    if (keepSessionId === false) {
+      try { sessionStorage.removeItem('epts_session_id'); } catch (e) {}
+      try { localStorage.removeItem('epts_session_id'); } catch (e) {}
+    }
     if (typeof window !== 'undefined') {
       window.reportData = null;
       window.currentMandalName = '';
@@ -327,6 +331,18 @@
           };
         }
         if (!res.ok) {
+          if (res.status >= 500) {
+            return {
+              ok: false,
+              httpStatus: res.status,
+              stage1Required: false,
+              authenticated: true,
+              expired: false,
+              status: 'busy',
+              user_id: '',
+              data: data || {},
+            };
+          }
           clearEptsMetadata();
           return {
             ok: false,
@@ -353,10 +369,11 @@
         }
         var isAuth = Boolean(data && data.authenticated);
         var isExpired = Boolean(data && (data.expired || data.status === 'expired'));
+        var isAwaitingOtp = Boolean(data && (data.status === 'awaiting_otp' || data.step === 'otp_required'));
         if (isAuth) {
           syncEptsMetadata(data);
-        } else {
-          clearEptsMetadata();
+        } else if (!isAwaitingOtp) {
+          clearEptsMetadata(true);
         }
         return {
           ok: true,

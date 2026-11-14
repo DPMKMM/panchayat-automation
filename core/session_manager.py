@@ -306,14 +306,14 @@ def get_or_create_session(session_id: str = "", owner_user_id: str = "") -> dict
         return session
 
 
-def run_in_session_thread(session: dict[str, Any], func, *args, **kwargs):
+def run_in_session_thread(session: dict[str, Any], func, *args, timeout: Optional[float] = None, **kwargs):
     """Execute a callable inside the session's dedicated single-thread bot executor."""
     executor = session.get("executor")
     if not executor:
         raise RuntimeError("Session executor is not active.")
     session["last_activity"] = time.time()
     future = executor.submit(func, *args, **kwargs)
-    return future.result()
+    return future.result(timeout=timeout)
 
 
 def run_in_bot_thread(func, *args, **kwargs):
@@ -451,9 +451,9 @@ def ensure_active_bot(session: dict[str, Any]) -> Any:
     return None
 
 
-def start_server_login(username: str, password: str, headless: bool = True, session_id: str = "") -> dict[str, Any]:
+def start_server_login(username: str, password: str, headless: bool = True, session_id: str = "", owner_user_id: str = "") -> dict[str, Any]:
     """Initiate server-side browser login to e-Panchayat portal within the user's isolated session."""
-    session = get_or_create_session(session_id)
+    session = get_or_create_session(session_id, owner_user_id=owner_user_id)
     return run_in_session_thread(session, _start_server_login_impl, session, username, password, headless)
 
 
@@ -618,9 +618,21 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
     }
 
 
-def verify_server_otp(otp_code: str, session_id: str = "") -> dict[str, Any]:
+def verify_server_otp(otp_code: str, session_id: str = "", owner_user_id: str = "") -> dict[str, Any]:
     """Validate entered OTP on the user's isolated e-Panchayat session."""
-    session = get_or_create_session(session_id)
+    clean_owner = str(owner_user_id or "").strip()
+    session = get_or_create_session(session_id, owner_user_id=clean_owner)
+    if session.get("status") != "awaiting_otp":
+        with _sessions_lock:
+            for s_cand in _sessions.values():
+                if s_cand.get("status") == "awaiting_otp":
+                    cand_owner = str(s_cand.get("owner_user_id") or "").strip()
+                    if clean_owner and cand_owner == clean_owner:
+                        session = s_cand
+                        break
+                    elif not clean_owner and (time.time() - s_cand.get("last_activity", 0) < 300):
+                        session = s_cand
+                        break
     return run_in_session_thread(session, _verify_server_otp_impl, session, otp_code)
 
 
@@ -933,7 +945,73 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
 def get_session_status(session_id: str = "", owner_user_id: str = "") -> dict[str, Any]:
     """Return current background session status for this specific user."""
     session = get_or_create_session(session_id, owner_user_id=owner_user_id)
-    return run_in_session_thread(session, _get_session_status_impl, session)
+
+    # Fast path: If the bot worker is currently locked running an automation job,
+    # return active status immediately so status polling never hangs or times out.
+    sess_lock = session.get("lock")
+    if sess_lock and sess_lock.locked() and session.get("status") == "authenticated":
+        user_id = session.get("user_id") or ""
+        return {
+            "success": True,
+            "session_id": session["session_id"],
+            "authenticated": True,
+            "expired": False,
+            "status": "authenticated",
+            "user_id": user_id,
+            "user_level": session.get("user_level", "district"),
+            "mandal_name": session.get("mandal_name", ""),
+            "district_name": session.get("district_name", ""),
+            "division_name": session.get("division_name", ""),
+            "office_name": session.get("office_name", ""),
+            "mode": session.get("mode", "live_portal"),
+            "bot_alive": True,
+            "session_age_seconds": int(time.time() - (session.get("authenticated_at") or time.time())),
+            "session_duration": session.get("session_duration", SESSION_DEFAULT_DURATION),
+            "no_expiry": True,
+            "expires_in": 999999,
+            "can_extend": False,
+            "extended": True,
+            "max_duration": session.get("session_duration", SESSION_DEFAULT_DURATION),
+            "latest_pdf_available": False,
+            "otp_message": "",
+            "mobile_number": "",
+            "message": f"Officer {user_id} active. Task in progress.",
+            "busy": True,
+        }
+
+    try:
+        return run_in_session_thread(session, _get_session_status_impl, session, timeout=2.5)
+    except Exception:
+        # Executor is busy executing an automation job; return active status if authenticated
+        user_id = session.get("user_id") or ""
+        is_auth = (session.get("status") == "authenticated")
+        return {
+            "success": True,
+            "session_id": session["session_id"],
+            "authenticated": is_auth,
+            "expired": False,
+            "status": session.get("status", "authenticated" if is_auth else "idle"),
+            "user_id": user_id,
+            "user_level": session.get("user_level", "district"),
+            "mandal_name": session.get("mandal_name", ""),
+            "district_name": session.get("district_name", ""),
+            "division_name": session.get("division_name", ""),
+            "office_name": session.get("office_name", ""),
+            "mode": session.get("mode", "live_portal"),
+            "bot_alive": is_auth,
+            "session_age_seconds": int(time.time() - (session.get("authenticated_at") or time.time())),
+            "session_duration": session.get("session_duration", SESSION_DEFAULT_DURATION),
+            "no_expiry": True,
+            "expires_in": 999999 if is_auth else 0,
+            "can_extend": False,
+            "extended": True,
+            "max_duration": session.get("session_duration", SESSION_DEFAULT_DURATION),
+            "latest_pdf_available": False,
+            "otp_message": "",
+            "mobile_number": "",
+            "message": f"Officer {user_id} active. Task in progress." if is_auth else "Session is busy.",
+            "busy": True,
+        }
 
 
 def _expire_session_impl(session: dict[str, Any]) -> dict[str, Any]:

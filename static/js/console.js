@@ -96,7 +96,7 @@
       if (el) el.style.display = 'none';
     });
     if (window.DeptSessionManager && typeof window.DeptSessionManager.clearEptsMetadata === 'function') {
-      window.DeptSessionManager.clearEptsMetadata();
+      window.DeptSessionManager.clearEptsMetadata(true);
       return;
     }
     var keys = [
@@ -107,7 +107,6 @@
       'epts_mandal_name',
       'epts_district_name',
       'epts_office_name',
-      'epts_session_id',
     ];
     keys.forEach(function (k) {
       try { sessionStorage.removeItem(k); } catch (e) {}
@@ -554,6 +553,10 @@
           headers: mySid ? { 'X-Session-ID': mySid } : {},
         });
         if (!res.ok) {
+          if (res.status >= 500) {
+            // Transient 5xx or gateway busy during heavy downloads - do NOT drop authentication
+            return false;
+          }
           setAuthenticated(false, '', null, false);
           return false;
         }
