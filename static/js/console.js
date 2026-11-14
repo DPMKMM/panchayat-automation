@@ -4512,7 +4512,9 @@
   };
 
   window.renderStateFormatTable = function (data) {
-    if (!data || !data.mandals) return;
+    if (!data) return;
+    var mandals = data.mandals || (data.data && data.data.mandals);
+    if (!mandals) return;
 
     var resultsCard = document.getElementById('state-format-results');
     var subEl = document.getElementById('state-format-subtitle-disp');
@@ -4524,77 +4526,117 @@
     if (btnDlPdf) btnDlPdf.href = '/api/state-format/download-pdf?_ts=' + Date.now();
     if (btnDlExcel) btnDlExcel.href = '/api/state-format/download-excel?_ts=' + Date.now();
 
+    var dStr = data.date_str || (data.data && data.data.date_str) || data.date || '';
+    var tStr = data.time_str || (data.data && data.data.time_str) || data.time || '';
     if (subEl) {
-      var dStr = data.date_str || '';
-      var tStr = data.time_str ? ' - @ ' + data.time_str : '';
-      subEl.textContent = dStr + tStr;
+      subEl.textContent = dStr + (tStr ? ' - @ ' + tStr : '');
     }
 
     if (tbody) {
       var rowsHtml = '';
-      data.mandals.forEach(function (m) {
-        var pctFormatted = typeof m.pct_reported_before_9_am === 'number'
-          ? m.pct_reported_before_9_am.toFixed(2) + '%'
-          : String(m.pct_reported_before_9_am);
+      mandals.forEach(function (m) {
+        var sNo = (m.sl_no !== undefined ? m.sl_no : m.s_no) || '';
+        var mandalName = m.mandal_name || '';
+        var totGps = (m.tot_gps !== undefined ? m.tot_gps : (m.total_gps !== undefined ? m.total_gps : 0));
+        var fullTime = (m.full_time !== undefined ? m.full_time : (m.full_time_working_ps !== undefined ? m.full_time_working_ps : 0));
+        var b69 = (m.b_6_9 !== undefined ? m.b_6_9 : (m.reported_6_9_am !== undefined ? m.reported_6_9_am : 0));
+        var b910 = (m.b_9_10 !== undefined ? m.b_9_10 : (m.reported_9_10_am !== undefined ? m.reported_9_10_am : 0));
+        var b1011 = (m.b_10_11 !== undefined ? m.b_10_11 : (m.reported_10_11_am !== undefined ? m.reported_10_11_am : 0));
+        var b1112 = (m.b_11_12 !== undefined ? m.b_11_12 : (m.reported_11_12_noon !== undefined ? m.reported_11_12_noon : 0));
+        var bAfter12 = (m.b_after_12 !== undefined ? m.b_after_12 : (m.reported_after_12_noon !== undefined ? m.reported_after_12_noon : 0));
+        
+        var rawPct = (m.pct_before_9 !== undefined ? m.pct_before_9 : m.pct_reported_before_9_am);
+        var pctFormatted = typeof rawPct === 'number'
+          ? rawPct.toFixed(2) + '%'
+          : (rawPct !== undefined && rawPct !== null && rawPct !== '' ? String(rawPct) : '0.00%');
+
+        var attGp = (m.attended_gp !== undefined ? m.attended_gp : (m.total_attended_gp !== undefined ? m.total_attended_gp : 0));
+        var mtg = (m.mtg_trng !== undefined ? m.mtg_trng : (m.reported_meeting_training !== undefined ? m.reported_meeting_training : 0));
+        var lev = (m.leave !== undefined ? m.leave : (m.on_leave !== undefined ? m.on_leave : 0));
+        var notRep = (m.not_reported !== undefined && m.not_reported !== null) ? m.not_reported : 0;
 
         rowsHtml += '<tr style="border-bottom:1px solid #e2e8f0; height:34px;">' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600;">' + m.s_no + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:left; font-weight:700; color:#1e293b;">' + escapeHtml(m.mandal_name) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.total_gps + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + m.full_time_working_ps + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_6_9_am + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_9_10_am + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_10_11_am + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_11_12_noon + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_after_12_noon + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600;">' + sNo + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:left; font-weight:700; color:#1e293b;">' + escapeHtml(mandalName) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + totGps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + fullTime + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b69 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b910 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b1011 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b1112 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + bAfter12 + '</td>' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fef2f2; color:#b91c1c; font-weight:800;">' + pctFormatted + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.total_attended_gp + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_meeting_training + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.on_leave + '</td>' +
-          '<td style="padding:6px 4px;">' + m.not_reported + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + attGp + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + mtg + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + lev + '</td>' +
+          '<td style="padding:6px 4px;">' + notRep + '</td>' +
         '</tr>';
       });
       tbody.innerHTML = rowsHtml;
     }
 
-    if (tfoot && data.totals && data.percentages) {
-      var t = data.totals;
-      var p = data.percentages;
-
+    var t = data.totals || (data.data && data.data.totals);
+    var p = data.percentages || (data.data && data.data.percentages);
+    if (tfoot && t && p) {
       var fmtPct = function (val) {
         return typeof val === 'number' ? val.toFixed(2) + '%' : (val || '0.00%');
       };
 
+      var tTotGps = (t.tot_gps !== undefined ? t.tot_gps : (t.total_gps !== undefined ? t.total_gps : 0));
+      var tFullTime = (t.full_time !== undefined ? t.full_time : (t.full_time_working_ps !== undefined ? t.full_time_working_ps : 0));
+      var tB69 = (t.b_6_9 !== undefined ? t.b_6_9 : (t.reported_6_9_am !== undefined ? t.reported_6_9_am : 0));
+      var tB910 = (t.b_9_10 !== undefined ? t.b_9_10 : (t.reported_9_10_am !== undefined ? t.reported_9_10_am : 0));
+      var tB1011 = (t.b_10_11 !== undefined ? t.b_10_11 : (t.reported_10_11_am !== undefined ? t.reported_10_11_am : 0));
+      var tB1112 = (t.b_11_12 !== undefined ? t.b_11_12 : (t.reported_11_12_noon !== undefined ? t.reported_11_12_noon : 0));
+      var tBAfter12 = (t.b_after_12 !== undefined ? t.b_after_12 : (t.reported_after_12_noon !== undefined ? t.reported_after_12_noon : 0));
+      var tPct = (t.pct_before_9 !== undefined ? t.pct_before_9 : t.pct_reported_before_9_am);
+      var tAttGp = (t.attended_gp !== undefined ? t.attended_gp : (t.total_attended_gp !== undefined ? t.total_attended_gp : 0));
+      var tMtg = (t.mtg_trng !== undefined ? t.mtg_trng : (t.reported_meeting_training !== undefined ? t.reported_meeting_training : 0));
+      var tLev = (t.leave !== undefined ? t.leave : (t.on_leave !== undefined ? t.on_leave : 0));
+      var tNotRep = (t.not_reported !== undefined ? t.not_reported : 0);
+
+      var pB69 = (p.b_6_9 !== undefined ? p.b_6_9 : p.reported_6_9_am);
+      var pB910 = (p.b_9_10 !== undefined ? p.b_9_10 : p.reported_9_10_am);
+      var pB1011 = (p.b_10_11 !== undefined ? p.b_10_11 : p.reported_10_11_am);
+      var pB1112 = (p.b_11_12 !== undefined ? p.b_11_12 : p.reported_11_12_noon);
+      var pBAfter12 = (p.b_after_12 !== undefined ? p.b_after_12 : p.reported_after_12_noon);
+      var pPct = (p.pct_before_9 !== undefined ? p.pct_before_9 : p.pct_reported_before_9_am);
+      if (pPct === undefined || pPct === '') pPct = tPct;
+      var pAttGp = (p.attended_gp !== undefined ? p.attended_gp : p.total_attended_gp);
+      var pMtg = (p.mtg_trng !== undefined ? p.mtg_trng : p.reported_meeting_training);
+      var pLev = (p.leave !== undefined ? p.leave : p.on_leave);
+      var pNotRep = (p.not_reported !== undefined ? p.not_reported : 0);
+
       var tfootHtml =
         '<tr style="background:#f8fafc; font-weight:800; border-top:1.5px solid #1e293b; border-bottom:1px solid #cbd5e1; height:36px;">' +
           '<td colspan="2" style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:800; color:#0f172a;">Total</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.total_gps + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.full_time_working_ps + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_6_9_am + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_9_10_am + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_10_11_am + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_11_12_noon + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_after_12_noon + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(p.pct_reported_before_9_am) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.total_attended_gp + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_meeting_training + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.on_leave + '</td>' +
-          '<td style="padding:6px 4px;">' + t.not_reported + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tTotGps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tFullTime + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB69 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB910 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB1011 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB1112 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tBAfter12 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(tPct) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tAttGp + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tMtg + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tLev + '</td>' +
+          '<td style="padding:6px 4px;">' + tNotRep + '</td>' +
         '</tr>' +
         '<tr style="background:#f1f5f9; font-weight:800; border-bottom:2px double #1e293b; height:36px;">' +
           '<td colspan="2" style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:800; color:#0f172a;">%</td>' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">-</td>' +
           '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">-</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_6_9_am) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_9_10_am) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_10_11_am) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_11_12_noon) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_after_12_noon) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(p.pct_reported_before_9_am) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.total_attended_gp) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_meeting_training) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.on_leave) + '</td>' +
-          '<td style="padding:6px 4px;">' + fmtPct(p.not_reported) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB69) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB910) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB1011) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB1112) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pBAfter12) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(tPct) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pAttGp) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pMtg) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pLev) + '</td>' +
+          '<td style="padding:6px 4px;">' + fmtPct(pNotRep) + '</td>' +
         '</tr>';
 
       tfoot.innerHTML = tfootHtml;

@@ -58,34 +58,58 @@ def compute_mandal_metrics(
     if enriched_df.empty:
         empty_tot = {
             "sl_no": "Total",
+            "s_no": "Total",
             "mandal_name": "Total",
             "tot_gps": 0,
+            "total_gps": 0,
             "full_time": 0,
+            "full_time_working_ps": 0,
             "b_6_9": 0,
+            "reported_6_9_am": 0,
             "b_9_10": 0,
+            "reported_9_10_am": 0,
             "b_10_11": 0,
+            "reported_10_11_am": 0,
             "b_11_12": 0,
+            "reported_11_12_noon": 0,
             "b_after_12": 0,
+            "reported_after_12_noon": 0,
             "pct_before_9": 0.0,
+            "pct_reported_before_9_am": 0.0,
             "attended_gp": 0,
+            "total_attended_gp": 0,
             "mtg_trng": 0,
+            "reported_meeting_training": 0,
             "leave": 0,
+            "on_leave": 0,
             "not_reported": 0,
         }
         empty_pct = {
             "sl_no": "Percentage",
+            "s_no": "Percentage",
             "mandal_name": "Percentage",
             "tot_gps": "",
+            "total_gps": "",
             "full_time": "",
+            "full_time_working_ps": "",
             "b_6_9": 0.0,
+            "reported_6_9_am": 0.0,
             "b_9_10": 0.0,
+            "reported_9_10_am": 0.0,
             "b_10_11": 0.0,
+            "reported_10_11_am": 0.0,
             "b_11_12": 0.0,
+            "reported_11_12_noon": 0.0,
             "b_after_12": 0.0,
+            "reported_after_12_noon": 0.0,
             "pct_before_9": "",
+            "pct_reported_before_9_am": "",
             "attended_gp": 0.0,
+            "total_attended_gp": 0.0,
             "mtg_trng": 0.0,
+            "reported_meeting_training": 0.0,
             "leave": 0.0,
+            "on_leave": 0.0,
             "not_reported": 0.0,
         }
         return StateFormatReport(
@@ -179,16 +203,27 @@ def compute_mandal_metrics(
         raw_mandal_rows.append({
             "mandal_name": mandal_name,
             "tot_gps": tot_gps,
+            "total_gps": tot_gps,
             "full_time": full_time,
+            "full_time_working_ps": full_time,
             "b_6_9": b_6_9,
+            "reported_6_9_am": b_6_9,
             "b_9_10": b_9_10,
+            "reported_9_10_am": b_9_10,
             "b_10_11": b_10_11,
+            "reported_10_11_am": b_10_11,
             "b_11_12": b_11_12,
+            "reported_11_12_noon": b_11_12,
             "b_after_12": b_after_12,
+            "reported_after_12_noon": b_after_12,
             "pct_before_9": pct_before_9,
+            "pct_reported_before_9_am": pct_before_9,
             "attended_gp": attended_gp,
+            "total_attended_gp": attended_gp,
             "mtg_trng": mtg_trng,
+            "reported_meeting_training": mtg_trng,
             "leave": leave,
+            "on_leave": leave,
             "not_reported": not_reported,
         })
 
@@ -198,9 +233,10 @@ def compute_mandal_metrics(
         key=lambda r: (-r["pct_before_9"], r["mandal_name"]),
     )
 
-    # Assign sequential Sl. No. (1..N)
+    # Assign sequential Sl. No. (1..N) with both 'sl_no' and 's_no'
     for idx, r in enumerate(sorted_mandals, start=1):
         r["sl_no"] = idx
+        r["s_no"] = idx
 
     # Calculate District Total Row
     tot_gps_sum = sum(r["tot_gps"] for r in sorted_mandals)
@@ -221,18 +257,30 @@ def compute_mandal_metrics(
 
     total_row = {
         "sl_no": "Total",
+        "s_no": "Total",
         "mandal_name": "Total",
         "tot_gps": tot_gps_sum,
+        "total_gps": tot_gps_sum,
         "full_time": full_time_sum,
+        "full_time_working_ps": full_time_sum,
         "b_6_9": b_6_9_sum,
+        "reported_6_9_am": b_6_9_sum,
         "b_9_10": b_9_10_sum,
+        "reported_9_10_am": b_9_10_sum,
         "b_10_11": b_10_11_sum,
+        "reported_10_11_am": b_10_11_sum,
         "b_11_12": b_11_12_sum,
+        "reported_11_12_noon": b_11_12_sum,
         "b_after_12": b_after_12_sum,
+        "reported_after_12_noon": b_after_12_sum,
         "pct_before_9": dist_pct_before_9,
+        "pct_reported_before_9_am": dist_pct_before_9,
         "attended_gp": attended_gp_sum,
+        "total_attended_gp": attended_gp_sum,
         "mtg_trng": mtg_trng_sum,
+        "reported_meeting_training": mtg_trng_sum,
         "leave": leave_sum,
+        "on_leave": leave_sum,
         "not_reported": not_reported_sum,
     }
 
@@ -241,18 +289,30 @@ def compute_mandal_metrics(
 
     percentage_row = {
         "sl_no": "Percentage",
+        "s_no": "Percentage",
         "mandal_name": "Percentage",
         "tot_gps": "",
+        "total_gps": "",
         "full_time": "",
+        "full_time_working_ps": "",
         "b_6_9": round((b_6_9_sum / denom * 100.0), 2),
+        "reported_6_9_am": round((b_6_9_sum / denom * 100.0), 2),
         "b_9_10": round((b_9_10_sum / denom * 100.0), 2),
+        "reported_9_10_am": round((b_9_10_sum / denom * 100.0), 2),
         "b_10_11": round((b_10_11_sum / denom * 100.0), 2),
+        "reported_10_11_am": round((b_10_11_sum / denom * 100.0), 2),
         "b_11_12": round((b_11_12_sum / denom * 100.0), 2),
+        "reported_11_12_noon": round((b_11_12_sum / denom * 100.0), 2),
         "b_after_12": round((b_after_12_sum / denom * 100.0), 2),
+        "reported_after_12_noon": round((b_after_12_sum / denom * 100.0), 2),
         "pct_before_9": "",
+        "pct_reported_before_9_am": "",
         "attended_gp": round((attended_gp_sum / denom * 100.0), 2),
+        "total_attended_gp": round((attended_gp_sum / denom * 100.0), 2),
         "mtg_trng": round((mtg_trng_sum / denom * 100.0), 2),
+        "reported_meeting_training": round((mtg_trng_sum / denom * 100.0), 2),
         "leave": round((leave_sum / denom * 100.0), 2),
+        "on_leave": round((leave_sum / denom * 100.0), 2),
         "not_reported": round((not_reported_sum / denom * 100.0), 2),
     }
 
