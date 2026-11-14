@@ -527,11 +527,9 @@ def naresh_generate(
     force_fresh: str = Form(default="false"),
     page_layout: str = Form(default="individual"),
     include_sections: str = Form(default="all"),
-    exclude_incharge: str = Form(default="false"),
 ) -> dict[str, Any]:
     console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() in ("true", "1", "yes", "on")
-    is_exclude_incharge = str(exclude_incharge).strip().lower() in ("true", "1", "yes", "on")
     try:
         res = automation_service.generate_server_report(
             module=module,
@@ -542,7 +540,6 @@ def naresh_generate(
             force_fresh=is_force_fresh,
             page_layout=page_layout,
             include_sections=include_sections,
-            exclude_incharge=is_exclude_incharge,
         )
         if console_user:
             log_usage(user_id=console_user["user_id"], platform_scope="console", module="dsr_automation", action="generate_report")
@@ -1021,160 +1018,4 @@ def auto_load_web_report(
     resp_data = completed.public_dict()
     resp_data["download_filename"] = _record_report_filename(completed)
     return JSONResponse(resp_data)
-
-
-# -------------------------------------------------------------
-# State Government Format Attendance & DSR Endpoints
-# -------------------------------------------------------------
-
-@router.post("/api/dsr/state-format/generate", include_in_schema=False)
-def generate_state_format(
-    request: Request,
-    date: str = Form(default=""),
-    exclude_incharge: str = Form(default="true"),
-    force_fresh: str = Form(default="true"),
-) -> dict[str, Any]:
-    console_user, sid = enforce_department_api_access(request, always_require=True)
-    is_force_fresh = str(force_fresh).strip().lower() not in ("false", "0", "no", "off")
-    is_exclude_incharge = str(exclude_incharge).strip().lower() not in ("false", "0", "no", "off")
-
-    try:
-        res = automation_service.generate_server_state_format_report(
-            session_id=sid,
-            date_str=date,
-            exclude_incharge=is_exclude_incharge,
-            force_fresh=is_force_fresh,
-        )
-        if console_user:
-            log_usage(user_id=console_user["user_id"], platform_scope="console", module="state_format", action="generate_report")
-        return res
-    except PermissionError as exc:
-        try:
-            from core.session_manager import mark_session_expired
-            mark_session_expired(sid, str(exc))
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=401,
-            detail=str(exc),
-            headers={"X-Dept-Auth-Required": "true"},
-        ) from None
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from None
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("generate_state_format failed for date=%s sid=%s: %s", date, sid, exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@router.get("/api/dsr/state-format/download-pdf", include_in_schema=False)
-def download_state_format_pdf(request: Request) -> Response:
-    _, sid = enforce_department_api_access(request)
-    session = automation_service.get_or_create_session(sid)
-    pdf_path_str = session.get("state_format_pdf")
-    pdf_filename = session.get("state_format_pdf_filename") or "State_Format_Attendance_Report.pdf"
-
-    if pdf_path_str and Path(pdf_path_str).exists():
-        return Response(
-            content=Path(pdf_path_str).read_bytes(),
-            media_type="application/pdf",
-            headers={
-                "Content-Disposition": f'attachment; filename="{pdf_filename}"',
-                "Access-Control-Expose-Headers": "Content-Disposition",
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-            },
-        )
-    raise HTTPException(status_code=404, detail="No generated State Format PDF found. Please run the State Format Robot first.")
-
-
-@router.get("/api/dsr/state-format/download-excel", include_in_schema=False)
-def download_state_format_excel(request: Request) -> Response:
-    _, sid = enforce_department_api_access(request)
-    session = automation_service.get_or_create_session(sid)
-    excel_path_str = session.get("state_format_excel")
-    excel_filename = session.get("state_format_excel_filename") or "State_Format_Attendance_Report.xlsx"
-
-    if excel_path_str and Path(excel_path_str).exists():
-        return Response(
-            content=Path(excel_path_str).read_bytes(),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{excel_filename}"',
-                "Access-Control-Expose-Headers": "Content-Disposition",
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-            },
-        )
-    raise HTTPException(status_code=404, detail="No generated State Format Excel found. Please run the State Format Robot first.")
-
-
-@router.post("/api/web/state-format/upload", include_in_schema=False)
-def upload_state_format_manual(
-    request: Request,
-    file: UploadFile = File(...),
-    presentees: UploadFile | None = File(None),
-    absentees: UploadFile | None = File(None),
-    exclude_incharge: str = Form(default="false"),
-) -> dict[str, Any]:
-    console_user, sid = enforce_department_api_access(request)
-    is_exclude_incharge = str(exclude_incharge).strip().lower() in ("true", "1", "yes", "on")
-
-    from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
-
-    raw_bytes = _read_upload(file, MAX_UPLOAD_BYTES)
-    filename = _clean_filename(file.filename)
-
-    data_dir = get_data_dir()
-    reports_dir = get_reports_dir()
-
-    # Build active directory strictly from uploaded files (no fallback to stale offline master cache)
-    active_dir: dict[str, dict[str, str]] = {}
-    if presentees and presentees.filename:
-        p_bytes = _read_upload(presentees, MAX_UPLOAD_BYTES)
-        active_dir = report_generator.merge_ps_directories(active_dir, report_generator.parse_ps_directory_file(presentees.filename, p_bytes))
-    if absentees and absentees.filename:
-        a_bytes = _read_upload(absentees, MAX_UPLOAD_BYTES)
-        active_dir = report_generator.merge_ps_directories(active_dir, report_generator.parse_ps_directory_file(absentees.filename, a_bytes))
-
-    try:
-        st_report = parse_state_format_data(
-            raw_bytes,
-            filename,
-            ps_directory=active_dir,
-            exclude_incharge=is_exclude_incharge,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    # If new presentees/absentees files were supplied, save a date-specific cache for this report date
-    if active_dir:
-        date_cache_path = data_dir / f"ps_directory_cache_{st_report.report_date.isoformat()}.json"
-        report_generator.save_ps_directory_cache(active_dir, date_cache_path)
-
-    clean_dist = re.sub(r"[^A-Za-z0-9_-]", "_", st_report.district_name)
-    now_dt = datetime.now()
-    gen_time_file = now_dt.strftime("%I-%M-%p")
-    pdf_filename = f"{clean_dist}_Mandal_Wise_PS_Attendance_State_Format_{st_report.report_date:%d-%b-%Y}_{gen_time_file}.pdf"
-    excel_filename = f"{clean_dist}_Mandal_Wise_PS_Attendance_State_Format_{st_report.report_date:%d-%b-%Y}_{gen_time_file}.xlsx"
-
-    pdf_out = reports_dir / pdf_filename
-    excel_out = reports_dir / excel_filename
-
-    generate_state_format_pdf(st_report, pdf_out)
-    generate_state_format_excel(st_report, excel_out)
-
-    session = automation_service.get_or_create_session(sid)
-    session["state_format_pdf"] = str(pdf_out)
-    session["state_format_excel"] = str(excel_out)
-    session["state_format_pdf_filename"] = pdf_filename
-    session["state_format_excel_filename"] = excel_filename
-
-    resp = st_report.to_dict()
-    resp["status"] = "ok"
-    resp["pdf_filename"] = pdf_filename
-    resp["excel_filename"] = excel_filename
-    resp["pdf_download_url"] = "/api/dsr/state-format/download-pdf"
-    resp["excel_download_url"] = "/api/dsr/state-format/download-excel"
-    return resp
-
 

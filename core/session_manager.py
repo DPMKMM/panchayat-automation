@@ -473,10 +473,6 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
     session["latest_pdf_path"] = ""
     session["latest_report_date"] = ""
     session["download_filename"] = ""
-    session["state_format_pdf"] = ""
-    session["state_format_excel"] = ""
-    session["state_format_pdf_filename"] = ""
-    session["state_format_excel_filename"] = ""
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
     session["auto_multi_dsr_job_id"] = None
@@ -790,10 +786,6 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
                 session["latest_pdf_path"] = ""
                 session["latest_report_date"] = ""
                 session["download_filename"] = ""
-                session["state_format_pdf"] = ""
-                session["state_format_excel"] = ""
-                session["state_format_pdf_filename"] = ""
-                session["state_format_excel_filename"] = ""
                 session["auto_multi_dsr_payload"] = None
                 session["auto_multi_dsr_result"] = None
                 session["auto_multi_dsr_job_id"] = None
@@ -881,10 +873,6 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     session["latest_pdf_path"] = ""
     session["latest_report_date"] = ""
     session["download_filename"] = ""
-    session["state_format_pdf"] = ""
-    session["state_format_excel"] = ""
-    session["state_format_pdf_filename"] = ""
-    session["state_format_excel_filename"] = ""
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
     session["auto_multi_dsr_job_id"] = None
@@ -964,10 +952,6 @@ def _expire_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["latest_pdf_path"] = ""
     session["latest_report_date"] = ""
     session["download_filename"] = ""
-    session["state_format_pdf"] = ""
-    session["state_format_excel"] = ""
-    session["state_format_pdf_filename"] = ""
-    session["state_format_excel_filename"] = ""
     session["report_data"] = {}
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
@@ -1155,10 +1139,6 @@ def _logout_server_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["latest_pdf_path"] = ""
     session["latest_report_date"] = ""
     session["download_filename"] = ""
-    session["state_format_pdf"] = ""
-    session["state_format_excel"] = ""
-    session["state_format_pdf_filename"] = ""
-    session["state_format_excel_filename"] = ""
     session["report_data"] = {}
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None

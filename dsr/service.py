@@ -98,7 +98,6 @@ def generate_server_report(
     include_pmagy: bool = False,
     page_layout: str = "individual",
     include_sections: Any = None,
-    exclude_incharge: bool = False,
 ) -> dict[str, Any]:
     """Generate report for this specific user session in its isolated browser and directory."""
     session = get_or_create_session(session_id)
@@ -115,7 +114,6 @@ def generate_server_report(
             include_pmagy,
             page_layout,
             include_sections,
-            exclude_incharge,
         )
 
 
@@ -129,7 +127,6 @@ def _generate_server_report_impl(
     include_pmagy: bool = False,
     page_layout: str = "individual",
     include_sections: Any = None,
-    exclude_incharge: bool = False,
 ) -> dict[str, Any]:
     is_auth = session.get("status") == "authenticated"
     if not is_auth:
@@ -258,7 +255,6 @@ def _generate_server_report_impl(
         target_mandal_norm,
         norm_layout,
         norm_sections_key,
-        exclude_incharge,
     )
     legacy_district_key = (module, portal_date_fmt, dist_name, cutoff_time, sort_by)
 
@@ -368,7 +364,6 @@ def _generate_server_report_impl(
         absentees_source=absentees_data,
         cutoff_time=cutoff_time,
         sort_by=sort_by,
-        exclude_incharge=exclude_incharge,
     )
 
     now = datetime.now()
@@ -531,256 +526,3 @@ def _generate_server_report_impl(
         }
 
     return res_payload
-
-
-def generate_server_state_format_report(
-    session_id: str = "",
-    date_str: str = "",
-    exclude_incharge: bool = True,
-    force_fresh: bool = True,
-) -> dict[str, Any]:
-    """Generate official 14-column State Format Attendance report for the session."""
-    session = get_or_create_session(session_id)
-    with session["lock"]:
-        return run_in_session_thread(
-            session,
-            _generate_server_state_format_impl,
-            session,
-            date_str,
-            exclude_incharge,
-            force_fresh,
-        )
-
-
-def _generate_server_state_format_impl(
-    session: dict[str, Any],
-    date_str: str = "",
-    exclude_incharge: bool = True,
-    force_fresh: bool = True,
-) -> dict[str, Any]:
-    is_auth = session.get("status") == "authenticated"
-    if not is_auth:
-        raise PermissionError(
-            "e-Panchayat session is not logged in. Please complete Login & OTP verification first before generating reports."
-        )
-
-    bot = session.get("bot")
-    sid = session["session_id"]
-    req_date = date_str.strip() if date_str else datetime.now().strftime("%Y-%m-%d")
-
-    try:
-        from dsr.auto_download import download_single_report_with_menu, format_portal_date
-    except (ImportError, ModuleNotFoundError):
-        from dsr_auto_download import download_single_report_with_menu, format_portal_date
-
-    portal_date_fmt = format_portal_date(req_date)
-    dl_dir: Path = session["downloads_dir"]
-    reports_dir = ROOT_DIR / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    data_dir = ROOT_DIR / "data"
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    # Determine target date object and pattern variants for exact file matching
-    target_dt = None
-    try:
-        target_dt = datetime.strptime(req_date, "%Y-%m-%d").date()
-    except Exception:
-        try:
-            target_dt = datetime.strptime(portal_date_fmt, "%d-%b-%Y").date()
-        except Exception:
-            pass
-
-    date_patterns = [portal_date_fmt.lower()]
-    if target_dt:
-        date_patterns.extend([
-            target_dt.strftime("%d_%m_%Y").lower(),
-            target_dt.strftime("%d-%m-%Y").lower(),
-            target_dt.strftime("%d_%b_%Y").lower(),
-            target_dt.strftime("%d-%b-%Y").lower(),
-            target_dt.strftime("%Y-%m-%d").lower(),
-        ])
-
-    def _matches_target_date(fname: str) -> bool:
-        fn = fname.lower()
-        return any(pat in fn for pat in date_patterns)
-
-    raw_path: Path | None = None
-    presentees_bytes: bytes | None = None
-    presentees_name: str = ""
-    absentees_bytes: bytes | None = None
-    absentees_name: str = ""
-
-    # 1. Search for existing downloaded files for this EXACT target date
-    if not force_fresh and dl_dir.exists():
-        for f in dl_dir.iterdir():
-            if f.is_file() and f.suffix.lower() in (".xls", ".xlsx") and _matches_target_date(f.name):
-                fname_lower = f.name.lower()
-                if ("1.2.7" in fname_lower or "attendencestatus" in fname_lower) and "present" not in fname_lower and "absent" not in fname_lower:
-                    if f.stat().st_size > 500:
-                        raw_path = f
-                elif "present" in fname_lower or "1.2.11" in fname_lower:
-                    if f.stat().st_size > 500:
-                        presentees_bytes = f.read_bytes()
-                        presentees_name = f.name
-                elif "absent" in fname_lower or "1.2.10" in fname_lower:
-                    if f.stat().st_size > 500:
-                        absentees_bytes = f.read_bytes()
-                        absentees_name = f.name
-
-    # Check for date-specific directory cache on disk
-    try:
-        from dsr.pdf_generator import load_ps_directory_cache, merge_ps_directories, parse_ps_directory_file, save_ps_directory_cache
-    except (ImportError, ModuleNotFoundError):
-        from report_generator import load_ps_directory_cache, merge_ps_directories, parse_ps_directory_file, save_ps_directory_cache
-
-    date_iso = target_dt.isoformat() if target_dt else req_date
-    date_ps_cache_path = data_dir / f"ps_directory_cache_{date_iso}.json"
-    target_date_dir = load_ps_directory_cache(date_ps_cache_path) if date_ps_cache_path.exists() else {}
-
-    # 2. Download files for this target date if missing or force_fresh requested:
-    # =========================================================================
-    # Step 1: Download Required Raw Data from e-Panchayat Portal
-    # 1. DSR RAW DATA (GM-R 1.2.7)
-    # 2. PRESENTES DATA (GM-R 1.2.11)
-    # 3. ABSENTEES DATA (GM-R 1.2.10) (Handled gracefully without error if 0 absentees)
-    # =========================================================================
-    need_raw = not raw_path or not raw_path.exists() or force_fresh
-    need_presentees = not presentees_bytes or force_fresh
-    need_absentees = not absentees_bytes or force_fresh
-
-    if need_raw or need_presentees or need_absentees:
-        if not _is_bot_alive(bot):
-            bot = ensure_active_bot(session)
-        if not _is_bot_alive(bot):
-            raise PermissionError(
-                "e-Panchayat browser session is not active or has closed. Please complete Department Login & OTP again."
-            )
-
-        if need_raw:
-            logger.info("[%s] Step 1.1: Downloading GM-R 1.2.7 DSR Raw Data for date %s...", sid[:6], portal_date_fmt)
-            try:
-                raw_path = download_single_report_with_menu(bot, "1.2.7", portal_date_fmt)
-            except Exception as exc:
-                logger.error("[%s] GM-R 1.2.7 DSR raw download failed: %s", sid[:6], exc)
-                raise RuntimeError(f"Failed to download GM-R 1.2.7 DSR raw data from portal for date '{portal_date_fmt}': {exc}") from exc
-
-        if need_presentees:
-            logger.info("[%s] Step 1.2: Downloading GM-R 1.2.11 Presentees for target date %s...", sid[:6], portal_date_fmt)
-            try:
-                p_f = download_single_report_with_menu(bot, "1.2.11", portal_date_fmt)
-                if p_f and p_f.exists() and p_f.stat().st_size > 0:
-                    if not _matches_target_date(p_f.name):
-                        logger.warning(
-                            "[%s] Portal GM-R 1.2.11 download '%s' does not match requested date '%s'. Searching for date-matched file...",
-                            sid[:6], p_f.name, portal_date_fmt,
-                        )
-                        dl_candidates = list(Path("C:/Users/dpmkm/Downloads").glob("Report_on_Presenties*.xls*")) + list(dl_dir.glob("Report_on_Presenties*.xls*"))
-                        matched_dl = next((c for c in dl_candidates if _matches_target_date(c.name) and c.stat().st_size > 500), None)
-                        if matched_dl:
-                            logger.info("[%s] Found date-matched Presenties file in Downloads: %s", sid[:6], matched_dl.name)
-                            presentees_bytes = matched_dl.read_bytes()
-                            presentees_name = matched_dl.name
-                        elif target_date_dir:
-                            logger.info("[%s] Using verified target date cache for %s (%d regulars)", sid[:6], portal_date_fmt, sum(1 for v in target_date_dir.values() if v.get("nature_of_posting") == "Regular"))
-                        else:
-                            presentees_bytes = p_f.read_bytes()
-                            presentees_name = p_f.name
-                    else:
-                        presentees_bytes = p_f.read_bytes()
-                        presentees_name = p_f.name
-            except Exception as e:
-                logger.warning("[%s] Could not download GM-R 1.2.11 Presentees for date %s: %s", sid[:6], portal_date_fmt, e)
-
-        if need_absentees:
-            logger.info("[%s] Step 1.3: Downloading GM-R 1.2.10 Absentees for target date %s...", sid[:6], portal_date_fmt)
-            try:
-                a_f = download_single_report_with_menu(bot, "1.2.10", portal_date_fmt)
-                if a_f and a_f.exists() and a_f.stat().st_size > 0:
-                    if not _matches_target_date(a_f.name):
-                        dl_candidates = list(Path("C:/Users/dpmkm/Downloads").glob("*Absent*.xls*")) + list(dl_dir.glob("*Absent*.xls*"))
-                        matched_dl = next((c for c in dl_candidates if _matches_target_date(c.name) and c.stat().st_size > 500), None)
-                        if matched_dl:
-                            absentees_bytes = matched_dl.read_bytes()
-                            absentees_name = matched_dl.name
-                        elif not target_date_dir:
-                            absentees_bytes = a_f.read_bytes()
-                            absentees_name = a_f.name
-                    else:
-                        absentees_bytes = a_f.read_bytes()
-                        absentees_name = a_f.name
-            except Exception as e:
-                # If all Panchayat Secretaries are present, the Absentees file may not be available.
-                # Handle this scenario gracefully without errors.
-                logger.info(
-                    "[%s] GM-R 1.2.10 Absentees file not available or 0 absentees for date %s: %s (continuing with presentees only)",
-                    sid[:6], portal_date_fmt, e,
-                )
-
-    if not raw_path or not raw_path.exists() or raw_path.stat().st_size == 0:
-        raise FileNotFoundError(f"No DSR attendance report was returned by e-Panchayat portal for date '{portal_date_fmt}'.")
-
-    # =========================================================================
-    # Step 2: Consolidate Attendance Data
-    # - Consolidate PRESENTES and ABSENTEES into a single attendance dataset.
-    # - If ABSENTEES is unavailable, consider all available PRESENTES records.
-    # - Ensure attendance records are not duplicated (deduplicated by LGD code).
-    # =========================================================================
-    online_ps_dir: dict[str, dict[str, str]] = {}
-    if presentees_bytes:
-        logger.info("[%s] Step 2.1: Consolidating GM-R 1.2.11 Presenties (%d bytes)...", sid[:6], len(presentees_bytes))
-        online_ps_dir = merge_ps_directories(
-            online_ps_dir,
-            parse_ps_directory_file(presentees_name, presentees_bytes)
-        )
-    if absentees_bytes:
-        logger.info("[%s] Step 2.2: Consolidating GM-R 1.2.10 Absentees (%d bytes)...", sid[:6], len(absentees_bytes))
-        online_ps_dir = merge_ps_directories(
-            online_ps_dir,
-            parse_ps_directory_file(absentees_name, absentees_bytes)
-        )
-
-    # Use online_ps_dir if available, else date-specific target_date_dir
-    active_ps_dir = online_ps_dir if online_ps_dir else target_date_dir
-    if online_ps_dir:
-        save_ps_directory_cache(online_ps_dir, date_ps_cache_path)
-
-    # =========================================================================
-    # Step 3 & Step 4: Identify Regular PS & Prepare the Final Report
-    # - Uses LGD Code available in DSR RAW DATA as primary key.
-    # - Matches with consolidated PRESENTES and ABSENTEES dataset to retrieve Regular status.
-    # - Excludes Non-Regular secretaries from calculations if exclude_incharge=True.
-    # - Produces official 14-column report, PDF and Excel exports.
-    # =========================================================================
-    from dsr.state_format import parse_state_format_data, generate_state_format_pdf, generate_state_format_excel
-    st_report = parse_state_format_data(
-        raw_path.read_bytes(),
-        raw_path.name,
-        ps_directory=active_ps_dir,
-        exclude_incharge=exclude_incharge,
-    )
-
-    clean_dist = re.sub(r"[^A-Za-z0-9_-]", "_", st_report.district_name)
-    now_dt = datetime.now()
-    gen_time_file = now_dt.strftime("%I-%M-%p")
-    incharge_tag = "_RegularOnly" if exclude_incharge else ""
-    pdf_filename = f"{clean_dist}_Mandal_Wise_PS_Attendance_State_Format_{portal_date_fmt}_{gen_time_file}{incharge_tag}.pdf"
-    excel_filename = f"{clean_dist}_Mandal_Wise_PS_Attendance_State_Format_{portal_date_fmt}_{gen_time_file}{incharge_tag}.xlsx"
-
-    pdf_out = reports_dir / pdf_filename
-    excel_out = reports_dir / excel_filename
-
-    generate_state_format_pdf(st_report, pdf_out)
-    generate_state_format_excel(st_report, excel_out)
-
-    session["state_format_pdf"] = str(pdf_out)
-    session["state_format_excel"] = str(excel_out)
-    session["state_format_pdf_filename"] = pdf_filename
-    session["state_format_excel_filename"] = excel_filename
-
-    resp = st_report.to_dict()
-    resp["status"] = "ok"
-    resp["pdf_filename"] = pdf_filename
-    resp["excel_filename"] = excel_filename
-    resp["pdf_download_url"] = "/api/dsr/state-format/download-pdf"
-    resp["excel_download_url"] = "/api/dsr/state-format/download-excel"
-    return resp

@@ -164,7 +164,6 @@ class ReportData:
     cutoff_time_str: str = "09:00"
     cutoff_label: str = "9 AM"
     sort_by: str = "before_9"
-    exclude_incharge: bool = False
     generated_at: datetime | None = None
     generated_time_str: str = ""
 
@@ -601,7 +600,6 @@ def analyze_attendance(
     ps_directory: dict[str, dict[str, str]] | None = None,
     cutoff_time: str | time | None = None,
     sort_by: str = "before_9",
-    exclude_incharge: bool = False,
 ) -> ReportData:
     """Validate and aggregate one unique record per nonblank Panchayat LGD."""
     frame, missing = _canonicalize_columns(frame.copy())
@@ -706,13 +704,6 @@ def analyze_attendance(
         })
 
     records = pd.DataFrame(unique_rows)
-    if exclude_incharge and "nature_of_posting" in records.columns:
-        records = records.loc[
-            ~records["nature_of_posting"].astype(str).str.casefold().str.contains("incharge", na=False)
-            & ~records["nature_of_posting"].astype(str).str.casefold().str.contains("additional charge", na=False)
-        ].copy()
-        if records.empty:
-            raise InputValidationError("All GP records were classified as Incharge; no Regular GPs remaining after exclusion.")
     records["submitted"] = records["status"].ne("")
 
     # Parse user-selected attendance cutoff time (defaults to 09:00 AM)
@@ -946,7 +937,6 @@ def analyze_attendance(
         cutoff_time_str=cutoff_time_str,
         cutoff_label=cutoff_label,
         sort_by=sort_by_norm,
-        exclude_incharge=exclude_incharge,
     )
 
 
@@ -958,7 +948,6 @@ def process_attendance_file(
     ps_directory: dict[str, dict[str, str]] | None = None,
     cutoff_time: str | time | None = None,
     sort_by: str = "before_9",
-    exclude_incharge: bool = False,
 ) -> ReportData:
     """Read and analyze an uploaded file, merging optional Presentees/Absentees PS details."""
     sources: list[tuple[str, bytes]] = []
@@ -978,7 +967,6 @@ def process_attendance_file(
         ps_directory=combined_dir,
         cutoff_time=cutoff_time,
         sort_by=sort_by,
-        exclude_incharge=exclude_incharge,
     )
 
 

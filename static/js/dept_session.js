@@ -170,7 +170,7 @@
       window.reportData = null;
       window.currentMandalName = '';
       window.currentUserLevel = 'district';
-      ['results-section', 'state-format-results', 'auto-multi-results-section', 'inspections-results-card', 'balance-results-card'].forEach(function (id) {
+      ['results-section', 'auto-multi-dsr-station', 'auto-multi-results-section', 'inspections-results-card', 'balance-results-card'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.style.display = 'none';
       });
