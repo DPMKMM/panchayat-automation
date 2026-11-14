@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="doc-page-title">e-Panchayat Automation</title>
   <link rel="stylesheet" href="/static/css/common.css?v=15">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1398778605171697"
+     crossorigin="anonymous"></script>
 </head>
 <body class="state-home-login">
   <script>
@@ -753,7 +755,7 @@
               </div>
             </div>
 
-            <div class="module-card">
+            <div class="module-card" id="card-policy-module_citizen_services">
               <div>
                 <div class="module-card-header">
                   <div class="module-icon" style="background:#ecfdf5; color:#047857;">👥</div>
@@ -771,7 +773,7 @@
               </div>
             </div>
 
-            <div class="module-card">
+            <div class="module-card" id="card-policy-module_trade_licences">
               <div>
                 <div class="module-card-header">
                   <div class="module-icon" style="background:#fef3c7; color:#92400e;">🏷️</div>
@@ -924,6 +926,7 @@
         <button type="button" class="admin-tab-btn" id="admin-tab-users" onclick="switchAdminTab('users')">👥 Users (<span id="adm-tab-users-badge">0</span>)</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-subscriptions" onclick="switchAdminTab('subscriptions')">💳 Subscriptions &amp; Razorpay</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-policy" onclick="switchAdminTab('policy')">🎛️ Access Policy</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-visibility" onclick="switchAdminTab('visibility')">👁️ Module Visibility (Hide / View)</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-feedback" onclick="switchAdminTab('feedback')">💬 Feedback Inbox</button>
       </div>
 
@@ -1214,7 +1217,55 @@
         <div id="admin-policy-grid" class="policy-grid"></div>
       </div>
 
-      <!-- Tab 6: Feedback Inbox -->
+      <!-- Tab 6: Module Visibility (Hide / View) -->
+      <div id="admin-pane-visibility" style="display:none;">
+        <div class="admin-section-card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px; background:linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%); border-left:4px solid #10b981;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:1.4rem;">👁️</span>
+              <strong style="color:#064e3b; font-size:1.05rem;">Officer Workspace Module Visibility Manager</strong>
+            </div>
+            <div style="font-size:0.84rem; color:#475569; margin-top:4px;">
+              Instantly toggle any module between <strong>Visible</strong> and <strong>Hidden</strong> on the Officer Dashboard &amp; Automation Station. Hidden modules are completely removed from officer view without disabling backend features.
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="setAllModulesVisibility(true)" style="border-color:#10b981; color:#065f46; background:#ffffff;">👁️ View All Modules</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="setAllModulesVisibility(false)" style="border-color:#ef4444; color:#991b1b; background:#ffffff;">🙈 Hide All Modules</button>
+            <button type="button" class="btn btn-gold btn-sm" onclick="saveAdminModuleVisibility()">💾 Apply Visibility Changes</button>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <label style="font-size:0.82rem; font-weight:600; color:#475569;">Category:</label>
+            <select id="adm-visibility-filter-category" onchange="filterModuleVisibilityCards()" style="padding:5px 8px; font-size:0.82rem; border-radius:6px; border:1px solid #cbd5e1; background:#fff;">
+              <option value="ALL">All Categories (13)</option>
+              <option value="Manual Reports (DSR)">Manual Reports (DSR)</option>
+              <option value="Automated Reports Robots">Automated Reports Robots</option>
+              <option value="Live DCB Analytics">Live DCB Analytics</option>
+              <option value="Office Utilities & Tools">Office Utilities & Tools</option>
+              <option value="Citizen & Trade Services">Citizen & Trade Services</option>
+            </select>
+
+            <label style="font-size:0.82rem; font-weight:600; color:#475569; margin-left:6px;">Status:</label>
+            <select id="adm-visibility-filter-status" onchange="filterModuleVisibilityCards()" style="padding:5px 8px; font-size:0.82rem; border-radius:6px; border:1px solid #cbd5e1; background:#fff;">
+              <option value="ALL">All Status</option>
+              <option value="VISIBLE">👁️ Visible Only</option>
+              <option value="HIDDEN">🙈 Hidden Only</option>
+            </select>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="text" id="adm-visibility-search" placeholder="Search modules..." oninput="filterModuleVisibilityCards()" style="padding:6px 12px; font-size:0.82rem; border-radius:6px; border:1px solid #cbd5e1; width:210px; background:#fff;">
+            <span class="badge" id="adm-visibility-count-badge" style="background:#0f766e; color:#fff; font-size:0.75rem; padding:4px 10px; border-radius:12px; font-weight:700;">13 Modules</span>
+          </div>
+        </div>
+
+        <div id="admin-module-visibility-grid" class="modules-grid" style="grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; margin-bottom:18px;"></div>
+      </div>
+
+      <!-- Tab 7: Feedback Inbox -->
       <div id="admin-pane-feedback" style="display:none;">
         <div class="table-card">
           <div class="table-header">
@@ -2917,8 +2968,8 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=6"></script>
-  <script src="/static/js/auth.js?v=27"></script>
+  <script src="/static/js/auth.js?v=28"></script>
   <script src="/static/js/console.js?v=25"></script>
-  <script src="/static/js/admin.js?v=7"></script>
+  <script src="/static/js/admin.js?v=8"></script>
 </body>
 </html>

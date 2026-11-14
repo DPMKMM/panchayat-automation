@@ -203,6 +203,56 @@ async def admin_update_policy(
     }
 
 
+@router.post("/modules/visibility", include_in_schema=False)
+async def admin_set_module_visibility(
+    request: Request,
+    admin_user: dict[str, Any] = Depends(require_admin_user),
+) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON request body.")
+
+    updates: dict[str, Any] = {}
+    if "module_id" in data:
+        m_id = str(data["module_id"]).strip()
+        vis_key = f"visible_{m_id}" if not m_id.startswith("visible_") else m_id
+        if vis_key in DEFAULT_POLICY:
+            updates[vis_key] = bool(data.get("visible", True))
+        elif m_id in DEFAULT_POLICY:
+            updates[m_id] = bool(data.get("visible", True))
+    elif "visibility" in data and isinstance(data["visibility"], dict):
+        for m_id, vis_val in data["visibility"].items():
+            vis_key = f"visible_{m_id}" if not m_id.startswith("visible_") else m_id
+            if vis_key in DEFAULT_POLICY:
+                updates[vis_key] = bool(vis_val)
+            elif m_id in DEFAULT_POLICY:
+                updates[m_id] = bool(vis_val)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="No recognized module visibility keys provided.")
+
+    try:
+        updated_policy = update_access_policy(updates, updated_by=str(admin_user["user_id"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    scope = resolve_platform_scope(request)
+    log_usage(
+        user_id=str(admin_user["user_id"]),
+        platform_scope=scope,
+        module="admin",
+        action="update_module_visibility",
+        details=",".join(f"{k}={v}" for k, v in sorted(updates.items())),
+    )
+    return {
+        "success": True,
+        "message": "Module visibility updated successfully.",
+        **updated_policy,
+    }
+
+
 @router.get("/feedback", include_in_schema=False)
 def admin_feedback(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
     rows = get_recent_feedback(limit=limit)

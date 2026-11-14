@@ -124,7 +124,7 @@
   };
 
   window.switchAdminTab = function (tab) {
-    var tabs = ['overview', 'tools', 'users', 'subscriptions', 'policy', 'feedback'];
+    var tabs = ['overview', 'tools', 'users', 'subscriptions', 'policy', 'visibility', 'feedback'];
     activeAdminTab = tabs.indexOf(tab) !== -1 ? tab : 'overview';
 
     tabs.forEach(function (t) {
@@ -139,6 +139,7 @@
     else if (activeAdminTab === 'users') window.loadAdminUsers();
     else if (activeAdminTab === 'subscriptions') window.loadAdminSubscriptions();
     else if (activeAdminTab === 'policy') window.loadAdminPolicy();
+    else if (activeAdminTab === 'visibility') window.loadAdminModuleVisibility();
     else if (activeAdminTab === 'feedback') window.loadAdminFeedback();
   };
 
@@ -773,6 +774,150 @@
       }).join('');
     } catch (err) {
       showAdminAlert('Failed to load feedback inbox: ' + err.message, 'error');
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Module Visibility Management (Hide / View Modules in Officer Workspace)
+  // ---------------------------------------------------------------------------
+
+  window.cachedModuleCatalog = [];
+
+  window.loadAdminModuleVisibility = async function () {
+    try {
+      var res = await window.safeFetchJson('/api/admin/policy');
+      var flags = res.flags || {};
+      window.currentAccessPolicy = flags;
+      var catalog = Array.isArray(res.modules_catalog) ? res.modules_catalog : [];
+      window.cachedModuleCatalog = catalog.map(function (m) {
+        var visKey = m.visibility_key || ('visible_' + m.id);
+        var isVis = Object.prototype.hasOwnProperty.call(flags, visKey)
+          ? flags[visKey] !== false
+          : (m.visible !== false && flags[m.id] !== false);
+        return Object.assign({}, m, { visible: isVis });
+      });
+      window.renderAdminModuleVisibility();
+    } catch (err) {
+      showAdminAlert('Failed to load module visibility catalog: ' + err.message, 'error');
+    }
+  };
+
+  window.renderAdminModuleVisibility = function () {
+    var grid = document.getElementById('admin-module-visibility-grid');
+    if (!grid) return;
+
+    var catFilter = (document.getElementById('adm-visibility-filter-category') || {}).value || 'ALL';
+    var statusFilter = (document.getElementById('adm-visibility-filter-status') || {}).value || 'ALL';
+    var searchVal = ((document.getElementById('adm-visibility-search') || {}).value || '').trim().toLowerCase();
+
+    var filtered = window.cachedModuleCatalog.filter(function (m) {
+      if (catFilter !== 'ALL' && m.category !== catFilter) return false;
+      if (statusFilter === 'VISIBLE' && !m.visible) return false;
+      if (statusFilter === 'HIDDEN' && m.visible) return false;
+      if (searchVal) {
+        var haystack = (m.name + ' ' + (m.description || '') + ' ' + m.id + ' ' + (m.category || '')).toLowerCase();
+        if (haystack.indexOf(searchVal) === -1) return false;
+      }
+      return true;
+    });
+
+    var countBadge = document.getElementById('adm-visibility-count-badge');
+    if (countBadge) {
+      countBadge.textContent = filtered.length + ' of ' + window.cachedModuleCatalog.length + ' Modules';
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div style="grid-column:1/-1; padding:32px; text-align:center; color:#64748b; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px;">No modules match the selected filter criteria.</div>';
+      return;
+    }
+
+    grid.innerHTML = filtered.map(function (m) {
+      var isVis = Boolean(m.visible);
+      var cardBorder = isVis ? '1.5px solid #10b981' : '1.5px dashed #f87171';
+      var cardBg = isVis ? '#ffffff' : '#fef2f2';
+      var icon = m.icon || '📦';
+      
+      var badgeHtml = isVis
+        ? '<span style="display:inline-flex; align-items:center; gap:5px; font-weight:700; color:#065f46; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:12px; padding:3px 10px; font-size:0.75rem;">● 👁️ Visible to Officers</span>'
+        : '<span style="display:inline-flex; align-items:center; gap:5px; font-weight:700; color:#991b1b; background:#fee2e2; border:1px solid #fecaca; border-radius:12px; padding:3px 10px; font-size:0.75rem;">● 🙈 Hidden from Officers</span>';
+
+      var toggleBtnHtml = isVis
+        ? '<button type="button" class="btn btn-outline btn-sm" onclick="toggleModuleVisibility(\'' + esc(m.id) + '\')" style="border-color:#ef4444; color:#991b1b; background:#ffffff; font-size:0.78rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">🙈 Hide Module</button>'
+        : '<button type="button" class="btn btn-primary btn-sm" onclick="toggleModuleVisibility(\'' + esc(m.id) + '\')" style="background:#059669; border-color:#059669; color:#ffffff; font-size:0.78rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">👁️ Show Module</button>';
+
+      return (
+        '<div class="module-card" style="border:' + cardBorder + '; background:' + cardBg + '; border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 2px 8px rgba(0,0,0,0.04); transition:all 0.2s ease;">' +
+          '<div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:8px;">' +
+              '<div style="display:flex; align-items:center; gap:8px;">' +
+                '<span style="font-size:1.5rem; line-height:1;">' + esc(icon) + '</span>' +
+                '<div>' +
+                  '<div style="font-weight:800; font-size:0.95rem; color:#0f172a; line-height:1.25;">' + esc(m.name) + '</div>' +
+                  '<div style="font-size:0.73rem; color:#64748b; margin-top:2px;">Category: <span style="font-weight:600; color:#0f766e;">' + esc(m.category || 'General') + '</span> &middot; <code>' + esc(m.id) + '</code></div>' +
+                '</div>' +
+              '</div>' +
+              '<label style="display:inline-flex; align-items:center; cursor:pointer;" title="Click to toggle visibility">' +
+                '<input type="checkbox" onchange="toggleModuleVisibility(\'' + esc(m.id) + '\')"' + (isVis ? ' checked' : '') + ' style="width:18px; height:18px; accent-color:#059669; cursor:pointer;">' +
+              '</label>' +
+            '</div>' +
+            '<p style="font-size:0.8rem; color:#475569; margin:6px 0 12px 0; line-height:1.45; min-height:42px;">' + esc(m.description || '') + '</p>' +
+          '</div>' +
+          '<div style="border-top:1px solid #e2e8f0; padding-top:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">' +
+            '<div>' + badgeHtml + '</div>' +
+            '<div>' + toggleBtnHtml + '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  };
+
+  window.toggleModuleVisibility = function (moduleId) {
+    var mod = (window.cachedModuleCatalog || []).find(function (m) { return m.id === moduleId; });
+    if (mod) {
+      mod.visible = !mod.visible;
+      window.renderAdminModuleVisibility();
+    }
+  };
+
+  window.setAllModulesVisibility = function (visibleBool) {
+    (window.cachedModuleCatalog || []).forEach(function (m) {
+      m.visible = Boolean(visibleBool);
+    });
+    window.renderAdminModuleVisibility();
+    showAdminAlert(visibleBool ? 'All modules marked VISIBLE. Click "Apply Visibility Changes" to save and publish.' : 'All modules marked HIDDEN. Click "Apply Visibility Changes" to save and publish.', 'info');
+  };
+
+  window.filterModuleVisibilityCards = function () {
+    window.renderAdminModuleVisibility();
+  };
+
+  window.saveAdminModuleVisibility = async function () {
+    if (!window.cachedModuleCatalog || !window.cachedModuleCatalog.length) {
+      showAdminAlert('No modules available to update.', 'warning');
+      return;
+    }
+    var visibilityMap = {};
+    window.cachedModuleCatalog.forEach(function (m) {
+      visibilityMap[m.id] = Boolean(m.visible);
+    });
+
+    try {
+      var res = await window.safeFetchJson('/api/admin/modules/visibility', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibility: visibilityMap }),
+      });
+      window.currentAccessPolicy = res.flags || window.currentAccessPolicy;
+      if (typeof window.applyAccessPolicyUi === 'function') {
+        window.applyAccessPolicyUi(res);
+      }
+      showAdminAlert(res.message || 'Officer Workspace module visibility updated successfully.', 'success');
+      if (typeof window.showPortalNotice === 'function') {
+        window.showPortalNotice('Officer Workspace module visibility updated.', 'success');
+      }
+      await window.loadAdminModuleVisibility();
+    } catch (err) {
+      showAdminAlert('Failed to update module visibility: ' + err.message, 'error');
     }
   };
 })();

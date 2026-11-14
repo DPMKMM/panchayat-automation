@@ -676,14 +676,36 @@
   // Dynamic Access Policy Enforcement on Cards & Pills
   // ---------------------------------------------------------------------------
 
+  var MODULE_CARD_MAP = {
+    module_dsr_excel: ['card-policy-module_dsr_excel'],
+    module_dsr_multiday: ['card-policy-module_dsr_multiday'],
+    module_dsr_automation: ['card-policy-module_dsr_automation'],
+    module_state_format: ['card-policy-module_state_format'],
+    module_gp_balance_automation: ['card-policy-module_gp_balance_automation'],
+    module_mas_automation: ['card-policy-module_mas_automation'],
+    module_gp_inspections: ['card-console-gp-inspections', 'card-policy-module_gp_inspections'],
+    module_auto_multi_dsr: ['card-console-auto-multi-dsr', 'card-policy-module_auto_multi_dsr'],
+    module_citizen_services: ['card-policy-module_citizen_services'],
+    module_trade_licences: ['card-policy-module_trade_licences'],
+    module_dcb_live: ['card-policy-module_dcb_live', 'console-tax-card'],
+    module_excel_studio: ['card-tool-excel', 'card-policy-module_excel_studio'],
+    module_pdf_studio: ['card-tool-pdf', 'card-policy-module_pdf_studio']
+  };
+
   var DEFAULT_BADGE_LABELS = {
     module_dsr_excel: '',
     module_dsr_multiday: '● Live',
     module_dcb_live: '● Live Analytics',
     module_dsr_automation: '● Active Robot',
+    module_state_format: '● State Format',
     module_gp_balance_automation: '● Active Robot',
     module_mas_automation: '● Live',
     module_auto_multi_dsr: '● Active Robot',
+    module_gp_inspections: '● Live',
+    module_excel_studio: '● Live Studio',
+    module_pdf_studio: '● Live Studio',
+    module_citizen_services: '',
+    module_trade_licences: ''
   };
 
   var UPCOMING_BADGE_LABELS = {};
@@ -691,6 +713,55 @@
   window.applyAccessPolicyUi = function (policy) {
     var flags = policy && policy.flags ? policy.flags : policy || {};
     window.currentAccessPolicy = Object.assign({}, flags);
+
+    // Apply Module Visibility (Hide / Show) across Officer Workspace
+    Object.keys(MODULE_CARD_MAP).forEach(function (mKey) {
+      var visKey = 'visible_' + mKey;
+      var isVisible = true;
+      if (Object.prototype.hasOwnProperty.call(flags, visKey)) {
+        isVisible = flags[visKey] !== false;
+      } else if (Object.prototype.hasOwnProperty.call(flags, mKey)) {
+        isVisible = flags[mKey] !== false;
+      }
+
+      var cardIds = MODULE_CARD_MAP[mKey];
+      cardIds.forEach(function (cid) {
+        var cardEl = document.getElementById(cid);
+        if (cardEl) {
+          if (!isVisible) {
+            cardEl.style.display = 'none';
+            cardEl.setAttribute('data-admin-hidden', 'true');
+          } else {
+            cardEl.style.display = '';
+            cardEl.removeAttribute('data-admin-hidden');
+          }
+        }
+      });
+    });
+
+    ['portal-modules-section', 'console-modules-section', 'tools-utilities-section'].forEach(function (secId) {
+      var secEl = document.getElementById(secId);
+      if (!secEl) return;
+      var allCards = secEl.querySelectorAll('.module-card');
+      if (allCards.length > 0) {
+        var hiddenCount = secEl.querySelectorAll('.module-card[data-admin-hidden="true"]').length;
+        var placeholder = secEl.querySelector('.admin-all-modules-hidden-notice');
+        if (hiddenCount >= allCards.length) {
+          if (!placeholder) {
+            placeholder = document.createElement('div');
+            placeholder.className = 'admin-all-modules-hidden-notice';
+            placeholder.style.cssText = 'padding:24px; text-align:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; color:#64748b; font-size:0.88rem; margin:10px 0;';
+            placeholder.innerHTML = '🔒 All modules in this section are currently set to hidden by Administrator.';
+            var grid = secEl.querySelector('.modules-grid');
+            if (grid) grid.parentNode.insertBefore(placeholder, grid.nextSibling);
+            else secEl.appendChild(placeholder);
+          }
+          placeholder.style.display = 'block';
+        } else if (placeholder) {
+          placeholder.style.display = 'none';
+        }
+      }
+    });
 
     var policyKeys = Object.keys(DEFAULT_BADGE_LABELS).concat(Object.keys(UPCOMING_BADGE_LABELS));
     policyKeys.forEach(function (key) {
