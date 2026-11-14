@@ -498,3 +498,55 @@ def test_nat_type_safety_handling():
     assert len(report.mandal_rows) == 1
     assert report.total_row["full_time"] == 3
     assert report.total_row["b_6_9"] == 2  # Sec 1 (8:15 AM) + Sec 2 (Leave with unparsed/NaT time defaults to 6-9 AM)
+
+
+def test_real_world_06_nov_dataset():
+    """Verify processing of real-world 06-Nov-2026 3-report portal files."""
+    fixture_dir = ROOT / "tests" / "fixtures" / "state_format_06_nov"
+    raw_path = fixture_dir / "raw_dsr_06_nov.xls"
+    pres_path = fixture_dir / "presentees_06_nov.xls"
+    abs_path = fixture_dir / "absentees_06_nov.xls"
+
+    if not raw_path.exists() or not pres_path.exists() or not abs_path.exists():
+        pytest.skip("06-Nov-2026 fixtures not found")
+
+    session = get_or_create_session("test_06_nov_fixture_session")
+    res = state_format_service.process_and_generate_reports(
+        raw_bytes=raw_path.read_bytes(),
+        raw_filename=raw_path.name,
+        presentees_bytes=pres_path.read_bytes(),
+        presentees_filename=pres_path.name,
+        absentees_bytes=abs_path.read_bytes(),
+        absentees_filename=abs_path.name,
+        session=session,
+    )
+
+    assert res["success"] is True
+    assert res["district"] == "Khammam"
+    assert res["date"] == "06-Nov-2026"
+
+    totals = res["totals"]
+    assert totals["tot_gps"] == 571
+    assert totals["total_gps"] == 571
+    assert totals["full_time"] == 505
+    assert totals["full_time_working_ps"] == 505
+    assert totals["b_6_9"] == 477
+    assert totals["b_9_10"] == 27
+    assert totals["b_after_12"] == 1
+    assert totals["attended_gp"] == 486
+    assert totals["mtg_trng"] == 4
+    assert totals["leave"] == 15
+    assert totals["not_reported"] == 0
+    assert totals["pct_before_9"] == 94.46
+
+    # Verify abstract sum rules
+    assert totals["b_6_9"] + totals["b_9_10"] + totals["b_10_11"] + totals["b_11_12"] + totals["b_after_12"] + totals["not_reported"] == totals["full_time"]
+    assert totals["attended_gp"] + totals["mtg_trng"] + totals["leave"] + totals["not_reported"] == totals["full_time"]
+
+    # Verify mandals count
+    mandals = res["mandals"]
+    assert len(mandals) == 20
+    assert mandals[0]["mandal_name"] == "Bonakal"
+    assert mandals[0]["full_time"] == 17
+    assert mandals[0]["pct_before_9"] == 100.0
+
