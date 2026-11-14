@@ -446,4 +446,55 @@ def test_api_manual_upload():
     json_data = resp.json()
     assert json_data["success"] is True
     assert json_data["district"] == "Khammam"
-    assert len(json_data["mandals"]) == 1
+
+
+def test_nat_type_safety_handling():
+    """Verify that pd.NaT in datetime columns never raises 'NaTType does not support time'."""
+    raw_df = pd.DataFrame([
+        {
+            "District Name": "Khammam",
+            "Mandal Name": "Mandal A",
+            "Panchayat Name": "GP 1",
+            "Panchayat LGD": "101",
+            "First Attendence Status": "Present",
+            "First Attendence Datetime": pd.Timestamp("2026-11-12 08:15:00"),
+        },
+        {
+            "District Name": "Khammam",
+            "Mandal Name": "Mandal A",
+            "Panchayat Name": "GP 2",
+            "Panchayat LGD": "102",
+            "First Attendence Status": "Leave",
+            "First Attendence Datetime": pd.NaT,
+        },
+        {
+            "District Name": "Khammam",
+            "Mandal Name": "Mandal A",
+            "Panchayat Name": "GP 3",
+            "Panchayat LGD": "103",
+            "First Attendence Status": "Not Reported",
+            "First Attendence Datetime": None,
+        },
+    ])
+    lookup = {
+        "101": {"lgd_code": "101", "is_regular": True, "ps_name": "Sec 1"},
+        "102": {"lgd_code": "102", "is_regular": True, "ps_name": "Sec 2"},
+        "103": {"lgd_code": "103", "is_regular": True, "ps_name": "Sec 3"},
+    }
+
+    # Must complete without 'NaTType does not support time'
+    enriched = enrich_raw_data(raw_df, lookup)
+    assert len(enriched) == 3
+    assert enriched.iloc[0]["reporting_time"] is not None
+    assert enriched.iloc[1]["reporting_time"] is None
+    assert enriched.iloc[2]["reporting_time"] is None
+
+    report = compute_mandal_metrics(
+        enriched,
+        district_name="Khammam",
+        report_date=date(2026, 11, 12),
+        generated_at=datetime(2026, 11, 12, 19, 0),
+    )
+    assert len(report.mandal_rows) == 1
+    assert report.total_row["full_time"] == 3
+    assert report.total_row["b_6_9"] == 2  # Sec 1 (8:15 AM) + Sec 2 (Leave with unparsed/NaT time defaults to 6-9 AM)

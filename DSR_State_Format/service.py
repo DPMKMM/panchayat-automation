@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+import pandas as pd
 
 from dsr.auto_download import download_single_report_with_menu, format_portal_date
 from dsr.service import (
@@ -242,7 +243,15 @@ def process_and_generate_reports(
 def report_date_from_df(df: pd.DataFrame, fallback_now: datetime) -> Any:
     """Extract report date from reporting_datetime or fallback to now."""
     if "reporting_datetime" in df.columns:
-        valid_dts = df["reporting_datetime"].dropna()
-        if not valid_dts.empty:
-            return valid_dts.iloc[0].date()
+        valid_dts = [
+            d for d in df["reporting_datetime"]
+            if d is not None and not pd.isna(d) and hasattr(d, "date")
+        ]
+        for dt_val in valid_dts:
+            try:
+                res_d = dt_val.date()
+                if res_d is not None and not pd.isna(res_d):
+                    return res_d
+            except Exception:
+                continue
     return fallback_now.date()

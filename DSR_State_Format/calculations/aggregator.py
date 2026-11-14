@@ -151,7 +151,13 @@ def compute_mandal_metrics(
                 not_reported += 1
 
             # Time classification (applies to anyone who reported in the app)
-            if status != "Not Reported" and r_time is not None:
+            has_valid_time = (
+                r_time is not None
+                and not pd.isna(r_time)
+                and hasattr(r_time, "hour")
+                and isinstance(getattr(r_time, "hour", None), int)
+            )
+            if status != "Not Reported" and has_valid_time:
                 h = r_time.hour
                 if h < 9:
                     b_6_9 += 1
@@ -163,7 +169,7 @@ def compute_mandal_metrics(
                     b_11_12 += 1
                 else:
                     b_after_12 += 1
-            elif status != "Not Reported" and r_time is None:
+            elif status != "Not Reported" and not has_valid_time:
                 # Reported status exists but timestamp unparsed; default to 6-9 AM window
                 b_6_9 += 1
 

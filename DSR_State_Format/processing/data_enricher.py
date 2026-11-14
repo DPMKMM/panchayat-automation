@@ -16,11 +16,17 @@ from DSR_State_Format.consolidation.lookup_builder import clean_lgd, clean_name,
 
 
 def parse_timestamp(value: Any) -> datetime | None:
-    """Parse portal datetime string into Python datetime object."""
+    """Parse portal datetime string or Timestamp into Python datetime object."""
     if pd.isna(value) or value is None:
         return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, pd.Timestamp):
+        if pd.isna(value):
+            return None
+        return value.to_pydatetime()
     text = str(value).strip()
-    if not text or text.lower() in {"nan", "none", "null", "-", ""}:
+    if not text or text.lower() in {"nan", "none", "null", "-", "", "nat"}:
         return None
     # Common portal formats: "12-Nov-2026 08:47", "12-Nov-2026 08:47:12", "12/11/2026 08:47"
     for fmt in (
@@ -150,22 +156,37 @@ def enrich_raw_data(
     df["emp_id"] = emp_ids
     df["designation"] = designations
 
-    # Parse reporting datetimes
-    dt_first = df["first_datetime"].apply(parse_timestamp) if "first_datetime" in df.columns else pd.Series([None] * len(df))
-    dt_second = df["second_datetime"].apply(parse_timestamp) if "second_datetime" in df.columns else pd.Series([None] * len(df))
+    # Parse reporting datetimes as pure Python lists to prevent pandas from auto-converting None to NaT
+    raw_first = df["first_datetime"].tolist() if "first_datetime" in df.columns else [None] * len(df)
+    raw_second = df["second_datetime"].tolist() if "second_datetime" in df.columns else [None] * len(df)
+
+    dt_first = [parse_timestamp(v) for v in raw_first]
+    dt_second = [parse_timestamp(v) for v in raw_second]
 
     # Effective reporting datetime: primary is first, fallback is second
-    effective_dt = []
+    effective_dt: list[datetime | None] = []
     for f_dt, s_dt in zip(dt_first, dt_second):
-        if f_dt is not None:
+        if f_dt is not None and not pd.isna(f_dt) and isinstance(f_dt, datetime):
             effective_dt.append(f_dt)
-        elif s_dt is not None:
+        elif s_dt is not None and not pd.isna(s_dt) and isinstance(s_dt, datetime):
             effective_dt.append(s_dt)
         else:
             effective_dt.append(None)
 
     df["reporting_datetime"] = effective_dt
-    df["reporting_time"] = [dt.time() if dt is not None else None for dt in effective_dt]
+
+    # Safe extraction of time: never invoke .time() on NaT or non-datetime objects
+    reporting_times = []
+    for dt in effective_dt:
+        if dt is not None and not pd.isna(dt) and hasattr(dt, "time") and not isinstance(dt, pd._libs.tslibs.nattype.NaTType):
+            try:
+                reporting_times.append(dt.time())
+            except Exception:
+                reporting_times.append(None)
+        else:
+            reporting_times.append(None)
+
+    df["reporting_time"] = reporting_times
 
     # Standardize attendance status
     stat_first = df["first_status"].apply(standardize_status) if "first_status" in df.columns else pd.Series(["Not Reported"] * len(df))
