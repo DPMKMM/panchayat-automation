@@ -361,6 +361,8 @@ def extract_epts_session_id(request: Request, user_id: str = "") -> str:
     sid = (
         request.headers.get("X-Session-ID")
         or request.headers.get("x-session-id")
+        or request.headers.get("X-EPTS-Session-ID")
+        or request.headers.get("x-epts-session-id")
         or request.query_params.get("session_id", "")
         or request.cookies.get("epts_session_id")
         or request.cookies.get("ept_session_id")

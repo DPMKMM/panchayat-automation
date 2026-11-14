@@ -673,6 +673,9 @@
       var eEl = document.getElementById('auto-multi-end-date');
       if (sEl && sEl.value) merged.start_date = sEl.value;
       if (eEl && eEl.value) merged.end_date = eEl.value;
+    } else if (mod === 'state-format' || mod === 'state_format' || mod === 'dsr_state_format') {
+      var sfDateEl = document.getElementById('state-format-date');
+      if (sfDateEl && sfDateEl.value) merged.date = sfDateEl.value;
     }
     if (overrideParams && typeof overrideParams === 'object') {
       Object.keys(overrideParams).forEach(function (k) {
@@ -831,6 +834,14 @@
     }
     if (mod === 'auto-multi-dsr' || mod === 'auto-multiday' || mod === 'auto-multi') {
       await window.openAutoMultiDsrStation({
+        skipAuthCheck: true,
+        autoGenerate: autoGen,
+        params: params,
+      });
+      return true;
+    }
+    if (mod === 'state-format' || mod === 'state_format' || mod === 'dsr_state_format') {
+      await window.openStateFormatRobot({
         skipAuthCheck: true,
         autoGenerate: autoGen,
         params: params,
@@ -4294,6 +4305,304 @@
           return '<td>' + esc(String(val === undefined || val === null ? '' : val)) + '</td>';
         }).join('') + '</tr>';
       }).join('') || '<tr><td colspan="' + cols.length + '" style="text-align:center; padding:18px; color:#64748b;">No matching records.</td></tr>';
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // State Format DSR Report Robot Station (#state-format-station)
+  // ---------------------------------------------------------------------------
+
+  window.openStateFormatRobot = async function (options) {
+    var opts = options || {};
+    if (!opts.skipAuthCheck && typeof window.ensureDepartmentSession === 'function') {
+      var ok = await window.ensureDepartmentSession('state-format', {
+        autoGenerate: opts.autoGenerate === true,
+        params: opts.params,
+      });
+      if (!ok) return;
+    }
+
+    if (typeof window.hideAllStations === 'function') {
+      window.hideAllStations();
+    }
+    var stEl = document.getElementById('state-format-station');
+    if (stEl) {
+      stEl.style.display = 'block';
+      stEl.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    var dateInput = document.getElementById('state-format-date');
+    if (dateInput && !dateInput.value) {
+      dateInput.value = localDateStr();
+    }
+    if (opts.params && opts.params.date && dateInput) {
+      dateInput.value = opts.params.date;
+    }
+
+    if (opts.autoGenerate === true) {
+      await window.runStateFormatRobot();
+    }
+  };
+
+  window.toggleStateFormatManualUpload = function () {
+    var el = document.getElementById('state-format-manual-drawer');
+    if (!el) return;
+    el.style.display = el.style.display === 'none' || !el.style.display ? 'block' : 'none';
+  };
+
+  var stateFormatTimerInterval = null;
+
+  function startStateFormatProgress() {
+    var card = document.getElementById('state-format-progress-card');
+    var pctEl = document.getElementById('state-format-progress-pct');
+    var barEl = document.getElementById('state-format-progress-bar');
+    var timerEl = document.getElementById('state-format-progress-timer');
+    var statusEl = document.getElementById('state-format-progress-status');
+    var btnRun = document.getElementById('btn-run-state-format');
+
+    if (card) card.style.display = 'block';
+    if (btnRun) btnRun.disabled = true;
+
+    var startTime = Date.now();
+    var phases = [
+      { atSec: 0, pct: 10, status: 'Connecting to e-Panchayat portal session...' },
+      { atSec: 4, pct: 25, status: 'Navigating GP Monitoring & resetting ASP.NET iframe...' },
+      { atSec: 10, pct: 45, status: 'Downloading GM-R 1.2.7 DSR Raw Data...' },
+      { atSec: 22, pct: 65, status: 'Downloading GM-R 1.2.11 Presentees Attendance Data...' },
+      { atSec: 32, pct: 80, status: 'Downloading GM-R 1.2.10 Absentees Attendance Data...' },
+      { atSec: 40, pct: 90, status: 'Enriching LGD codes & calculating hourly arrival time buckets...' },
+      { atSec: 48, pct: 95, status: 'Generating State Format Landscape PDF & Excel workbooks...' },
+    ];
+
+    if (pctEl) pctEl.textContent = '5%';
+    if (barEl) barEl.style.width = '5%';
+    if (timerEl) timerEl.textContent = '00:00';
+    if (statusEl) statusEl.textContent = 'Initializing State Format Robot...';
+
+    if (stateFormatTimerInterval) clearInterval(stateFormatTimerInterval);
+    stateFormatTimerInterval = setInterval(function () {
+      var elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+      var mm = String(Math.floor(elapsedSec / 60)).padStart(2, '0');
+      var ss = String(elapsedSec % 60).padStart(2, '0');
+      if (timerEl) timerEl.textContent = mm + ':' + ss;
+
+      var currentPhase = phases[0];
+      for (var i = 0; i < phases.length; i++) {
+        if (elapsedSec >= phases[i].atSec) {
+          currentPhase = phases[i];
+        }
+      }
+      var targetPct = Math.min(98, Math.max(currentPhase.pct, Math.min(98, 5 + elapsedSec * 1.5)));
+      if (pctEl) pctEl.textContent = Math.round(targetPct) + '%';
+      if (barEl) barEl.style.width = targetPct + '%';
+      if (statusEl) statusEl.textContent = currentPhase.status;
+    }, 1000);
+  }
+
+  function stopStateFormatProgress(success) {
+    if (stateFormatTimerInterval) {
+      clearInterval(stateFormatTimerInterval);
+      stateFormatTimerInterval = null;
+    }
+    var card = document.getElementById('state-format-progress-card');
+    var pctEl = document.getElementById('state-format-progress-pct');
+    var barEl = document.getElementById('state-format-progress-bar');
+    var btnRun = document.getElementById('btn-run-state-format');
+
+    if (btnRun) btnRun.disabled = false;
+
+    if (success) {
+      if (pctEl) pctEl.textContent = '100%';
+      if (barEl) barEl.style.width = '100%';
+      setTimeout(function () {
+        if (card) card.style.display = 'none';
+      }, 700);
+    } else {
+      if (card) card.style.display = 'none';
+    }
+  }
+
+  window.runStateFormatRobot = async function () {
+    var dateEl = document.getElementById('state-format-date');
+    var dateVal = (dateEl && dateEl.value ? dateEl.value : localDateStr()).trim();
+
+    var resultsCard = document.getElementById('state-format-results');
+    if (resultsCard) resultsCard.style.display = 'none';
+
+    startStateFormatProgress();
+
+    try {
+      var formData = new FormData();
+      formData.append('date', dateVal);
+      formData.append('force_fresh', 'true');
+
+      var res = await window.safeFetchJson('/api/state-format/generate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res) throw new Error('No response received from State Format Robot.');
+
+      if (res.status === 401 || (res.detail && String(res.detail).toLowerCase().includes('session'))) {
+        stopStateFormatProgress(false);
+        if (typeof window.handleDepartmentSessionExpired === 'function') {
+          window.handleDepartmentSessionExpired('state-format');
+        } else {
+          showNotice('Portal session expired. Please re-authenticate via Department Login.', 'error');
+        }
+        return;
+      }
+
+      if (!res.success || !res.data) {
+        throw new Error(res.error || res.detail || 'State Format Report generation failed.');
+      }
+
+      stopStateFormatProgress(true);
+      window.renderStateFormatTable(res.data);
+      showNotice('State Format DSR Report generated successfully!', 'success');
+    } catch (err) {
+      stopStateFormatProgress(false);
+      showNotice(err.message || 'Error executing State Format Robot.', 'error');
+    }
+  };
+
+  window.uploadStateFormatFiles = async function () {
+    var fileRaw = document.getElementById('state-format-file-raw');
+    var filePres = document.getElementById('state-format-file-pres');
+    var fileAbs = document.getElementById('state-format-file-abs');
+
+    if (!fileRaw || !fileRaw.files || fileRaw.files.length === 0) {
+      showNotice('Please select the GM-R 1.2.7 DSR Raw Data file.', 'error');
+      return;
+    }
+
+    var formData = new FormData();
+    formData.append('file', fileRaw.files[0]);
+    if (filePres && filePres.files && filePres.files.length > 0) {
+      formData.append('presentees', filePres.files[0]);
+    }
+    if (fileAbs && fileAbs.files && fileAbs.files.length > 0) {
+      formData.append('absentees', fileAbs.files[0]);
+    }
+
+    var resultsCard = document.getElementById('state-format-results');
+    if (resultsCard) resultsCard.style.display = 'none';
+
+    startStateFormatProgress();
+    var statusEl = document.getElementById('state-format-progress-status');
+    if (statusEl) statusEl.textContent = 'Processing uploaded portal files and compiling State Format Report...';
+
+    try {
+      var res = await window.safeFetchJson('/api/state-format/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res || !res.success || !res.data) {
+        throw new Error((res && (res.error || res.detail)) || 'Manual upload report processing failed.');
+      }
+
+      stopStateFormatProgress(true);
+      window.renderStateFormatTable(res.data);
+      showNotice('State Format DSR Report compiled from uploaded files successfully!', 'success');
+    } catch (err) {
+      stopStateFormatProgress(false);
+      showNotice(err.message || 'Failed to process uploaded files.', 'error');
+    }
+  };
+
+  window.renderStateFormatTable = function (data) {
+    if (!data || !data.mandals) return;
+
+    var resultsCard = document.getElementById('state-format-results');
+    var subEl = document.getElementById('state-format-subtitle-disp');
+    var tbody = document.getElementById('state-format-tbody');
+    var tfoot = document.getElementById('state-format-tfoot');
+    var btnDlPdf = document.getElementById('btn-state-format-dl-pdf');
+    var btnDlExcel = document.getElementById('btn-state-format-dl-excel');
+
+    if (btnDlPdf) btnDlPdf.href = '/api/state-format/download-pdf?_ts=' + Date.now();
+    if (btnDlExcel) btnDlExcel.href = '/api/state-format/download-excel?_ts=' + Date.now();
+
+    if (subEl) {
+      var dStr = data.date_str || '';
+      var tStr = data.time_str ? ' - @ ' + data.time_str : '';
+      subEl.textContent = dStr + tStr;
+    }
+
+    if (tbody) {
+      var rowsHtml = '';
+      data.mandals.forEach(function (m) {
+        var pctFormatted = typeof m.pct_reported_before_9_am === 'number'
+          ? m.pct_reported_before_9_am.toFixed(2) + '%'
+          : String(m.pct_reported_before_9_am);
+
+        rowsHtml += '<tr style="border-bottom:1px solid #e2e8f0; height:34px;">' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600;">' + m.s_no + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:left; font-weight:700; color:#1e293b;">' + escapeHtml(m.mandal_name) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.total_gps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + m.full_time_working_ps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_6_9_am + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_9_10_am + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_10_11_am + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_11_12_noon + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_after_12_noon + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fef2f2; color:#b91c1c; font-weight:800;">' + pctFormatted + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.total_attended_gp + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.reported_meeting_training + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + m.on_leave + '</td>' +
+          '<td style="padding:6px 4px;">' + m.not_reported + '</td>' +
+        '</tr>';
+      });
+      tbody.innerHTML = rowsHtml;
+    }
+
+    if (tfoot && data.totals && data.percentages) {
+      var t = data.totals;
+      var p = data.percentages;
+
+      var fmtPct = function (val) {
+        return typeof val === 'number' ? val.toFixed(2) + '%' : (val || '0.00%');
+      };
+
+      var tfootHtml =
+        '<tr style="background:#f8fafc; font-weight:800; border-top:1.5px solid #1e293b; border-bottom:1px solid #cbd5e1; height:36px;">' +
+          '<td colspan="2" style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:800; color:#0f172a;">Total</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.total_gps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.full_time_working_ps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_6_9_am + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_9_10_am + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_10_11_am + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_11_12_noon + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_after_12_noon + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(p.pct_reported_before_9_am) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.total_attended_gp + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.reported_meeting_training + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + t.on_leave + '</td>' +
+          '<td style="padding:6px 4px;">' + t.not_reported + '</td>' +
+        '</tr>' +
+        '<tr style="background:#f1f5f9; font-weight:800; border-bottom:2px double #1e293b; height:36px;">' +
+          '<td colspan="2" style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:800; color:#0f172a;">%</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">-</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">-</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_6_9_am) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_9_10_am) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_10_11_am) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_11_12_noon) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_after_12_noon) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(p.pct_reported_before_9_am) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.total_attended_gp) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.reported_meeting_training) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(p.on_leave) + '</td>' +
+          '<td style="padding:6px 4px;">' + fmtPct(p.not_reported) + '</td>' +
+        '</tr>';
+
+      tfoot.innerHTML = tfootHtml;
+    }
+
+    if (resultsCard) {
+      resultsCard.style.display = 'block';
+      resultsCard.scrollIntoView({ behavior: 'smooth' });
     }
   };
 

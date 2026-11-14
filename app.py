@@ -26,6 +26,7 @@ from core.firebase_store import log_usage
 from dcb.router import router as dcb_router
 from dsr import service as automation_service
 from dsr.router import router as dsr_router
+from DSR_State_Format.router import router as state_format_router
 from gp_balance.router import router as gp_balance_router
 from inspections.router import router as inspections_router
 from mas.router import mas_alias_router, mas_upper_router, router as mas_router, web_router as mas_web_router
@@ -219,6 +220,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(billing_router)
     app.include_router(dsr_router)
+    app.include_router(state_format_router)
     app.include_router(dcb_router)
     app.include_router(gp_balance_router)
     app.include_router(inspections_router)

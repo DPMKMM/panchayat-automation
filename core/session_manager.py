@@ -476,6 +476,10 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
     session["auto_multi_dsr_job_id"] = None
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
     session["user_level"] = "district"
     session["mandal_name"] = ""
     session["division_name"] = ""
@@ -876,6 +880,10 @@ def _verify_server_otp_impl(session: dict[str, Any], otp_code: str) -> dict[str,
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
     session["auto_multi_dsr_job_id"] = None
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
 
     dl_dir = session.get("downloads_dir")
     if dl_dir and dl_dir.exists():
@@ -956,6 +964,10 @@ def _expire_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
     session["auto_multi_dsr_job_id"] = None
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
     session["authenticated_at"] = 0.0
     session["_last_epts_ping_at"] = 0.0
     session["_keepalive_fail_count"] = 0
@@ -1143,6 +1155,10 @@ def _logout_server_session_impl(session: dict[str, Any]) -> dict[str, Any]:
     session["auto_multi_dsr_payload"] = None
     session["auto_multi_dsr_result"] = None
     session["auto_multi_dsr_job_id"] = None
+    session["state_format_pdf"] = ""
+    session["state_format_excel"] = ""
+    session["state_format_pdf_filename"] = ""
+    session["state_format_excel_filename"] = ""
     session["authenticated_at"] = 0.0
     session["_last_epts_ping_at"] = 0.0
     session["_keepalive_fail_count"] = 0
