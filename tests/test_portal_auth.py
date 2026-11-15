@@ -543,7 +543,7 @@ def test_authenticated_module_load_hides_login_card_ssr(monkeypatch):
 
 
 def test_top_fixed_ribbon_and_4_modules_switcher():
-    """Verify the fixed top ribbon (#00A2E8 cyan stripe, #ED1C24 red bar), 4 modules switcher, and user level removal."""
+    """Verify the fixed top ribbon (professional government forest emerald #064e3b + accent stripe), 4 modules switcher, and user level removal."""
     res = client.get("/", headers={"Host": "panchayatautomation.in"})
     assert res.status_code == 200
     html = res.text
@@ -553,8 +553,8 @@ def test_top_fixed_ribbon_and_4_modules_switcher():
     assert 'class="site-top-ribbon"' in html
     assert 'class="ribbon-cyan-stripe"' in html
     assert 'class="ribbon-main-bar"' in html
-    assert '#00A2E8' in html
-    assert '#ED1C24' in html
+    assert '#064e3b' in html
+    assert '#ED1C24' not in html
 
     # 2. 4 Modules Switcher Buttons
     assert 'id="ribbon-mod-manual"' in html
