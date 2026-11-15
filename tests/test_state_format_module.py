@@ -551,24 +551,19 @@ def test_real_world_06_nov_dataset():
     assert mandals[0]["pct_before_9"] == 100.0
 
 
-def test_state_format_fixed_to_current_date_and_no_date_picker(monkeypatch):
-    """Verify State Format DSR Report is fixed to current date only and date selection option is removed."""
+def test_state_format_date_selection_enabled(monkeypatch):
+    """Verify State Format DSR Report supports user date selection and defaults to current date if omitted."""
     portal_html = (ROOT / "templates" / "portal_shell.html").read_text(encoding="utf-8")
     console_js = (ROOT / "static" / "js" / "console.js").read_text(encoding="utf-8")
 
-    # 1. UI: Date selection picker is removed and replaced by fixed current date card
-    assert '<input type="date" id="state-format-date"' not in portal_html
-    assert 'type="date"' not in portal_html.split('id="state-format-station"')[1].split('id="state-format-progress-card"')[0]
-    assert 'id="state-format-fixed-date-label"' in portal_html
-    assert 'Report Date (Fixed)' in portal_html
-    assert '<input type="hidden" id="state-format-date"' in portal_html
+    # 1. UI: Date selection picker is present
+    assert '<input type="date" id="state-format-date"' in portal_html
+    assert 'for="state-format-date"' in portal_html
 
-    # 2. console.js: State format date is strictly bound to localDateStr() (current date)
-    assert "State Format DSR Report is strictly fixed to current date only" in console_js
-    assert "dateVal = localDateStr()" in console_js
-    assert "state-format-fixed-date-label" in console_js
+    # 2. console.js: State format date is read from date input with localDateStr() fallback
+    assert "dateVal = (dateEl && dateEl.value ? dateEl.value : localDateStr()).trim()" in console_js
 
-    # 3. Router: /api/state-format/generate forces current date even if client sends a different date
+    # 3. Router: /api/state-format/generate respects user-selected date
     called_args: dict[str, Any] = {}
 
     def mock_generate_report(session_id: str, date_str: str, force_fresh: bool):
@@ -579,19 +574,28 @@ def test_state_format_fixed_to_current_date_and_no_date_picker(monkeypatch):
 
     monkeypatch.setattr(state_format_service, "generate_state_format_report", mock_generate_report)
 
-    sid = "test_fixed_date_sid"
+    sid = "test_custom_date_sid"
     monkeypatch.setattr(
         "DSR_State_Format.router.enforce_department_api_access",
         lambda req, always_require=False: ({"user_id": "test_u1"}, sid),
     )
 
-    # Send a past date in form data to ensure router overrides it with current date
-    r = client.post(
+    # A: User selects a specific date
+    r1 = client.post(
         "/api/state-format/generate",
         headers={"X-Session-ID": sid},
-        data={"date": "2020-01-01", "force_fresh": "true"},
+        data={"date": "2026-11-10", "force_fresh": "true"},
     )
-    assert r.status_code == 200
+    assert r1.status_code == 200
+    assert called_args["date_str"] == "2026-11-10"
+
+    # B: User submits without date -> defaults to current date
+    r2 = client.post(
+        "/api/state-format/generate",
+        headers={"X-Session-ID": sid},
+        data={"date": "", "force_fresh": "true"},
+    )
+    assert r2.status_code == 200
     expected_today = datetime.now().strftime("%Y-%m-%d")
     assert called_args["date_str"] == expected_today
 

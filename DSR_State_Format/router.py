@@ -43,13 +43,12 @@ def generate_state_format(
     console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() not in ("false", "0", "no", "off")
 
-    # State Format DSR Report is strictly fixed to current date only
-    current_date_str = datetime.now().strftime("%Y-%m-%d")
+    target_date = date.strip() if date and date.strip() else datetime.now().strftime("%Y-%m-%d")
 
     try:
         res = state_format_service.generate_state_format_report(
             session_id=sid,
-            date_str=current_date_str,
+            date_str=target_date,
             force_fresh=is_force_fresh,
         )
         if console_user:
