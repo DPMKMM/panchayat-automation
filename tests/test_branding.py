@@ -77,7 +77,7 @@ def _assert_canonical_footer(html: str) -> None:
 def test_branding_constants_and_host_detection():
     assert PLATFORM_NAME == "e-Panchayat Automation"
     assert CONSOLE_NAME == "e-Panchayat Automation Console"
-    assert WELCOME_MESSAGE == "Welcome to e-Panchayat Automation"
+    assert WELCOME_MESSAGE == "Welcome to Panchayat Automation"
     assert TAGLINE == "Simplifying Panchayat Administration through Smart Reporting and Automation."
 
     assert is_reports_console_request(_make_req("panchayatautomation.in", "/")) is False
@@ -135,7 +135,7 @@ def test_apex_homepage_and_google_login_branding():
         assert 'id="hero-console-chip" style="display:none;' in html
         assert 'id="login-console-badge" style="display:none;' in html
         assert '<header class="navbar"' not in html
-        assert '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>' in html
+        assert '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>' in html
         assert "gov-brand-subbadge" not in html
         assert 'id="hero-welcome-message"' not in html
 

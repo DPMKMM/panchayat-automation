@@ -333,7 +333,7 @@ def get_services_page_html() -> str:
 
   <section class="hero-banner">
     <div style="font-size:0.82rem; font-weight:800; color:#fde68a; letter-spacing:0.4px; text-transform:uppercase; margin-bottom:6px;">
-      Welcome to e-Panchayat Automation
+      Welcome to Panchayat Automation
     </div>
     <h1 class="hero-title">Services &amp; Modules Hub</h1>
     <p class="hero-subtitle" style="font-weight:700; color:#ffffff; margin-bottom:8px;">

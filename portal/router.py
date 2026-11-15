@@ -132,7 +132,11 @@ def portal_home_page(request: Request) -> HTMLResponse:
     if user is not None:
         html = html.replace(
             '<body class="state-home-login">',
-            '<body class="state-home-login state-auth-resolving">',
+            '<body class="state-logged-in state-auth-resolving">',
+            1,
+        ).replace(
+            '<header id="site-top-ribbon" class="site-top-ribbon" style="display:none;">',
+            '<header id="site-top-ribbon" class="site-top-ribbon" style="display:block;">',
             1,
         ).replace(
             '<div id="portal-hero-card" class="gov-login-wrapper" style="margin-bottom: 24px;">',

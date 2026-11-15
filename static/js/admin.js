@@ -1085,7 +1085,7 @@
 
     if (!feedbackId) return;
     if (!reply) {
-      alert('Please enter an official response before publishing.');
+      showAdminAlert('Please enter an official response before publishing.', 'warning');
       return;
     }
 
@@ -1105,10 +1105,10 @@
         showAdminAlert('✓ Official admin reply published successfully!', 'success');
         await window.loadAdminFeedback();
       } else {
-        alert((res && res.message) || 'Failed to publish admin reply.');
+        showAdminAlert((res && res.message) || 'Failed to publish admin reply.', 'error');
       }
     } catch (err) {
-      alert('Error publishing admin reply: ' + err.message);
+      showAdminAlert('Error publishing admin reply: ' + err.message, 'error');
     } finally {
       if (btn) {
         btn.disabled = false;

@@ -744,22 +744,24 @@
   };
 
   var DEFAULT_BADGE_LABELS = {
-    module_dsr_excel: '',
+    module_dsr_excel: '● Live',
     module_dsr_multiday: '● Live',
-    module_dcb_live: '● Live Analytics',
-    module_dsr_automation: '● Active Robot',
-    module_state_format: '● State Format',
-    module_gp_balance_automation: '● Active Robot',
+    module_dcb_live: '● Live',
+    module_dsr_automation: '● Live',
+    module_state_format: '● Live',
+    module_gp_balance_automation: '● Live',
     module_mas_automation: '● Live',
-    module_auto_multi_dsr: '● Active Robot',
+    module_auto_multi_dsr: '● Live',
     module_gp_inspections: '● Live',
-    module_excel_studio: '● Live Studio',
-    module_pdf_studio: '● Live Studio',
+    module_excel_studio: '● Live',
+    module_pdf_studio: '● Live',
     module_citizen_services: '',
-    module_trade_licences: ''
+    module_trade_licences: 'Upcoming'
   };
 
-  var UPCOMING_BADGE_LABELS = {};
+  var UPCOMING_BADGE_LABELS = {
+    module_trade_licences: 'Upcoming'
+  };
 
   window.applyAccessPolicyUi = function (policy) {
     var flags = policy && policy.flags ? policy.flags : policy || {};
@@ -816,7 +818,7 @@
 
     var policyKeys = Object.keys(DEFAULT_BADGE_LABELS).concat(Object.keys(UPCOMING_BADGE_LABELS));
     policyKeys.forEach(function (key) {
-      var isUpcoming = Object.prototype.hasOwnProperty.call(UPCOMING_BADGE_LABELS, key);
+      var isUpcoming = Object.prototype.hasOwnProperty.call(UPCOMING_BADGE_LABELS, key) || key === 'module_trade_licences';
       var enabled = flags[key] !== false;
       var card = document.getElementById('card-policy-' + key);
       var badge = document.getElementById('badge-policy-' + key);
@@ -843,18 +845,18 @@
         if (!enabled) {
           badge.style.display = 'inline-flex';
           badge.className = 'badge-pill-soon';
-          badge.textContent = '⏸ Paused by Admin';
+          badge.innerHTML = '⏸ Paused by Admin';
         } else if (isUpcoming) {
           badge.style.display = 'inline-flex';
-          badge.className = 'badge-pill-soon';
-          badge.textContent = UPCOMING_BADGE_LABELS[key];
+          badge.className = 'badge-pill-soon auto-soon-pill';
+          badge.innerHTML = 'Upcoming';
         } else if (DEFAULT_BADGE_LABELS[key]) {
           badge.style.display = 'inline-flex';
-          badge.className = 'badge-pill-live';
-          badge.textContent = DEFAULT_BADGE_LABELS[key];
+          badge.className = 'badge-pill-live auto-live-pill';
+          badge.innerHTML = '<span class="auto-pill-dot"></span> Live';
         } else {
           badge.style.display = 'none';
-          badge.textContent = '';
+          badge.innerHTML = '';
         }
       }
     });
@@ -1431,10 +1433,10 @@
           window.showPortalNotice('Official designation updated to ' + desig + ' successfully!', 'success');
         }
       } else {
-        alert((res && res.message) || 'Failed to update designation.');
+        window.showPortalNotice((res && res.message) || 'Failed to update designation.', 'error');
       }
     } catch (err) {
-      alert('Error updating designation: ' + err.message);
+      window.showPortalNotice('Error updating designation: ' + err.message, 'error');
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = 'Save Designation'; }
     }
@@ -1454,6 +1456,15 @@
     );
     var resolved = stateName || 'state-home-login';
     body.classList.add(resolved);
+
+    var ribbonEl = document.getElementById('site-top-ribbon');
+    if (resolved === 'state-home-login') {
+      body.classList.remove('state-logged-in');
+      if (ribbonEl) ribbonEl.style.display = 'none';
+    } else {
+      body.classList.add('state-logged-in');
+      if (ribbonEl) ribbonEl.style.display = 'block';
+    }
 
     var eyebrow = document.getElementById('dash-welcome-eyebrow');
     var titleEl = document.getElementById('dash-hero-title');
@@ -1565,7 +1576,13 @@
     var mobQuickOfficer = document.getElementById('ribbon-mobile-quick-officer');
     var mobQuickSignin = document.getElementById('ribbon-mobile-quick-signin');
 
+    var ribEl = document.getElementById('site-top-ribbon');
     if (isAuth && profileDone) {
+      if (ribEl) ribEl.style.display = 'block';
+      if (document.body) {
+        document.body.classList.add('state-logged-in');
+        document.body.classList.remove('state-home-login');
+      }
       if (ribPill) ribPill.style.display = 'inline-flex';
       if (ribLogout) ribLogout.style.display = 'inline-flex';
       if (ribSignin) ribSignin.style.display = 'none';
@@ -1592,6 +1609,11 @@
       if (mobQuickOfficer) mobQuickOfficer.style.display = 'inline-flex';
       if (mobQuickSignin) mobQuickSignin.style.display = 'none';
     } else {
+      if (ribEl) ribEl.style.display = 'none';
+      if (document.body) {
+        document.body.classList.remove('state-logged-in');
+        document.body.classList.add('state-home-login');
+      }
       if (ribPill) ribPill.style.display = 'none';
       if (ribLogout) ribLogout.style.display = 'none';
       if (ribSignin) ribSignin.style.display = 'inline-flex';
@@ -2194,7 +2216,7 @@
     var btn = document.getElementById('btn-inline-submit-' + feedbackId);
     var reply = txtEl ? txtEl.value.trim() : '';
     if (!reply) {
-      alert('Please enter an official reply message before publishing.');
+      window.showPortalNotice('Please enter an official reply message before publishing.', 'warning');
       return;
     }
     if (btn) {
@@ -2214,10 +2236,10 @@
           window.showPortalNotice('Official admin reply published successfully!', 'success');
         }
       } else {
-        alert((data && data.message) || 'Failed to publish reply.');
+        window.showPortalNotice((data && data.message) || 'Failed to publish reply.', 'error');
       }
     } catch (err) {
-      alert('Error publishing reply: ' + err.message);
+      window.showPortalNotice('Error publishing reply: ' + err.message, 'error');
     } finally {
       if (btn) {
         btn.disabled = false;

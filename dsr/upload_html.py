@@ -389,7 +389,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
     <!-- VIEW 1: Home Dashboard -->
     <div id="view-home" class="page-view active">
       <section class="hero-banner">
-        <span class="hero-badge">Welcome to e-Panchayat Automation · e-Panchayat Automation Console</span>
+        <span class="hero-badge">Welcome to Panchayat Automation · e-Panchayat Automation Console</span>
         <h1 class="hero-title">e-Panchayat Automation Console · Monitoring &amp; Reports</h1>
         <p style="margin:0 0 10px; font-size:1rem; font-weight:700; color:#fde68a;">
           Simplifying Panchayat Administration through Smart Reporting and Automation.

@@ -127,10 +127,12 @@ class _InMemoryDocRef:
         store: dict[str, dict[str, Any]],
         doc_id: str,
         on_change: Optional[Callable[[], None]] = None,
+        col_name: str = "",
     ) -> None:
         self._store = store
         self.id = doc_id
         self._on_change = on_change
+        self._col_name = col_name
 
     def get(self) -> _InMemoryDocSnapshot:
         with _MEM_LOCK:
@@ -147,6 +149,8 @@ class _InMemoryDocRef:
                 self._store[self.id] = payload
             if self._on_change:
                 self._on_change()
+            if self._col_name == COL_USERS:
+                _update_cached_user_sessions(self.id, self._store.get(self.id, {}))
 
     def update(self, data: dict[str, Any]) -> None:
         with _MEM_LOCK:
@@ -155,6 +159,8 @@ class _InMemoryDocRef:
             self._store[self.id] = merged
             if self._on_change:
                 self._on_change()
+            if self._col_name == COL_USERS:
+                _update_cached_user_sessions(self.id, merged)
 
     def delete(self) -> None:
         with _MEM_LOCK:
@@ -208,14 +214,16 @@ class _InMemoryCollection:
     def __init__(
         self,
         store: dict[str, dict[str, Any]],
+        col_name: str = "",
         on_change: Optional[Callable[[], None]] = None,
     ) -> None:
         self._store = store
+        self._col_name = col_name
         self._on_change = on_change
 
     def document(self, doc_id: Optional[str] = None) -> _InMemoryDocRef:
         key = doc_id or f"auto_{secrets.token_hex(8)}"
-        return _InMemoryDocRef(self._store, key, on_change=self._on_change)
+        return _InMemoryDocRef(self._store, key, on_change=self._on_change, col_name=self._col_name)
 
     def where(
         self,
@@ -268,7 +276,7 @@ class _InMemoryFirestoreClient:
         with _MEM_LOCK:
             bucket = self._collections.setdefault(name, {})
         on_change = self._save_to_disk if self._persist_path is not None else None
-        return _InMemoryCollection(bucket, on_change=on_change)
+        return _InMemoryCollection(bucket, col_name=name, on_change=on_change)
 
     def reset(self) -> None:
         with _MEM_LOCK:

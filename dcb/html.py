@@ -1028,7 +1028,7 @@ TAX_PAGE_HTML = """<!doctype html>
     <!-- Hero Banner -->
     <section class="hero-strip">
       <div class="hero-info">
-        <span class="hero-badge">Welcome to e-Panchayat Automation · e-Panchayat Automation Console</span>
+        <span class="hero-badge">Welcome to Panchayat Automation · e-Panchayat Automation Console</span>
         <h1>Gram Panchayat Wise DCB Status Report</h1>
         <p style="font-weight:700; color:#fde68a; margin-bottom:4px;">Simplifying Panchayat Administration through Smart Reporting and Automation.</p>
         <p>Consolidated Demand, Collection, and Balance (DCB) for House Tax across all Mandals and Gram Panchayats</p>

@@ -6,7 +6,7 @@ from typing import Any
 
 PLATFORM_NAME = "e-Panchayat Automation"
 CONSOLE_NAME = "e-Panchayat Automation Console"
-WELCOME_MESSAGE = "Welcome to e-Panchayat Automation"
+WELCOME_MESSAGE = "Welcome to Panchayat Automation"
 TAGLINE = "Simplifying Panchayat Administration through Smart Reporting and Automation."
 GOV_SUBTITLE = "Independent Panchayat Administration & Reporting Companion"
 REPORT_FOOTER_TAGLINE = "Panchayat-Automation — Simplifying Panchayat Administration through Smart Reporting and Automation"
@@ -126,7 +126,7 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     f'<title id="doc-page-title">{CONSOLE_NAME} | {PLATFORM_NAME}</title>',
                 ),
                 (
-                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>',
                     f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{CONSOLE_NAME}</h1>',
                 ),
                 (
@@ -153,7 +153,7 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     f'<title id="doc-page-title">Manual Reports | {PLATFORM_NAME}</title>',
                 ),
                 (
-                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>',
                     f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{MANUAL_SECTION_NAME}</h1>',
                 ),
                 (
@@ -188,7 +188,7 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     f'<title id="doc-page-title">Admin Control Center | {PLATFORM_NAME}</title>',
                 ),
                 (
-                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>',
                     f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{ADMIN_SECTION_NAME}</h1>',
                 ),
                 (
@@ -227,7 +227,7 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     f'<title id="doc-page-title">Tools Studio | {PLATFORM_NAME}</title>',
                 ),
                 (
-                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>',
                     f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{TOOLS_SECTION_NAME}</h1>',
                 ),
                 (
@@ -262,7 +262,7 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     f'<title id="doc-page-title">Official Softwares | {PLATFORM_NAME}</title>',
                 ),
                 (
-                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>',
+                    '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>',
                     f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{SOFTWARES_SECTION_NAME}</h1>',
                 ),
                 (

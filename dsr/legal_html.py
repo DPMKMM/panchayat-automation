@@ -171,7 +171,7 @@ def get_privacy_legal_html() -> str:
     <div class="policy-card">
       <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
         <div>
-          <div style="font-size:0.78rem; font-weight:800; color:#047857; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">Welcome to e-Panchayat Automation</div>
+          <div style="font-size:0.78rem; font-weight:800; color:#047857; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px;">Welcome to Panchayat Automation</div>
           <h1>Privacy Policy &amp; Terms of Service</h1>
           <p style="color:#065f46; font-size:0.9rem; font-weight:700; margin-bottom:4px;">
             Simplifying Panchayat Administration through Smart Reporting and Automation.

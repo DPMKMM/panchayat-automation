@@ -371,7 +371,7 @@ def test_login_screen_layout_and_navigation_bar():
     assert '<header class="navbar"' not in html
     assert 'id="hero-welcome-message"' not in html
     assert "gov-brand-subbadge" not in html
-    assert '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to e-Panchayat Automation</h1>' in html
+    assert '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>' in html
 
     assert "Services" in html
     assert "Privacy &amp; Legal" in html or "Privacy & Legal" in html

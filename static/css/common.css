@@ -31,6 +31,30 @@ body {
   padding-top: 56px !important;
 }
 
+body.state-home-login #site-top-ribbon,
+body:not(.state-logged-in) #site-top-ribbon {
+  display: none !important;
+}
+
+body.state-home-login,
+body:not(.state-logged-in) {
+  padding-top: 24px !important;
+}
+
+body.state-logged-in {
+  padding-top: 56px !important;
+}
+
+@media (max-width: 860px) {
+  body.state-logged-in {
+    padding-top: 54px !important;
+  }
+  body.state-home-login,
+  body:not(.state-logged-in) {
+    padding-top: 16px !important;
+  }
+}
+
 /* ============================================================================
    Fixed Top Navigation Ribbon: Executive Government Forest Emerald (#064e3b)
    ============================================================================ */
@@ -2242,29 +2266,66 @@ body.state-automation-page #browser-status-action {
 .auto-packet.delay-1 { animation-delay: 0.65s; }
 .auto-packet.delay-2 { animation-delay: 1.3s; }
 
-/* Active Robot Cards Glow & Entrance */
-body.state-automation-page #console-modules-section .module-card {
-  animation: autoCardEnter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-body.state-automation-page #console-modules-section .module-card:nth-child(2) { animation-delay: 0.06s; }
-body.state-automation-page #console-modules-section .module-card:nth-child(3) { animation-delay: 0.12s; }
-body.state-automation-page #console-modules-section .auto-robot-card {
+/* ============================================================================
+   Universal Module Card Animations: Sweeping Glowing Beam & Hover Dynamics
+   Applies universally to ALL cards across the platform and any future modules
+   ============================================================================ */
+.module-card {
   position: relative;
   overflow: hidden;
-  border-width: 1.5px;
-  border-color: rgba(139, 92, 246, 0.75) !important;
-  box-shadow: 0 10px 28px rgba(139, 92, 246, 0.22);
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), border-color 0.25s ease;
 }
-body.state-automation-page #console-modules-section .auto-robot-card::before {
+
+.module-card::before {
   content: "";
   position: absolute;
   top: 0;
   left: -45%;
   width: 45%;
   height: 3px;
-  background: linear-gradient(90deg, transparent, #38bdf8, #c084fc, transparent);
+  background: linear-gradient(90deg, transparent, #38bdf8, #10b981, #c084fc, transparent);
   animation: autoBeamSweep 2.8s linear infinite;
+  z-index: 2;
+  pointer-events: none;
 }
+
+.module-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(12, 56, 41, 0.15);
+  border-color: #10b981;
+}
+
+.module-card:hover::before {
+  height: 3.5px;
+  background: linear-gradient(90deg, transparent, #38bdf8, #34d399, #a855f7, transparent);
+}
+
+/* Staggered entrance animations across all module grids */
+.modules-grid .module-card {
+  animation: autoCardEnter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.modules-grid .module-card:nth-child(1) { animation-delay: 0.02s; }
+.modules-grid .module-card:nth-child(2) { animation-delay: 0.06s; }
+.modules-grid .module-card:nth-child(3) { animation-delay: 0.10s; }
+.modules-grid .module-card:nth-child(4) { animation-delay: 0.14s; }
+.modules-grid .module-card:nth-child(5) { animation-delay: 0.18s; }
+.modules-grid .module-card:nth-child(6) { animation-delay: 0.22s; }
+.modules-grid .module-card:nth-child(7) { animation-delay: 0.26s; }
+.modules-grid .module-card:nth-child(8) { animation-delay: 0.30s; }
+.modules-grid .module-card:nth-child(n+9) { animation-delay: 0.34s; }
+
+/* Enhanced Glow for Automated Reports Console on dark background */
+body.state-automation-page #console-modules-section .module-card {
+  border-width: 1.5px;
+  border-color: rgba(139, 92, 246, 0.75) !important;
+  box-shadow: 0 10px 28px rgba(139, 92, 246, 0.22);
+}
+body.state-automation-page #console-modules-section .module-card:hover {
+  border-color: rgba(167, 139, 250, 0.95) !important;
+  box-shadow: 0 14px 36px rgba(139, 92, 246, 0.38);
+}
+
+/* Common Status Pills: Live and Upcoming */
 .auto-live-pill {
   display: inline-flex;
   align-items: center;
@@ -2274,8 +2335,15 @@ body.state-automation-page #console-modules-section .auto-robot-card::before {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #7c3aed;
+  background: #10b981;
   animation: pulse 1.2s ease-in-out infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.auto-soon-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 @keyframes autoGridDrift {
