@@ -172,6 +172,8 @@ def test_generate_lookup_excel_workbook():
 
 
 def test_generate_lookup_pdf_report():
+    from pypdf import PdfReader
+
     meta = {"district": "Khammam", "mandal": "Madhira", "gram_panchayat": "Allinagaram"}
     pending = [
         {"sl_no": 1, "assessment_number": "103", "house_number": "1-3", "owner_name": "C", "remarks": "Pending"},
@@ -179,6 +181,18 @@ def test_generate_lookup_pdf_report():
     pdf_buf = generate_lookup_pdf_report(meta, pending, total_demand=2, total_updated=1)
     raw = pdf_buf.getvalue()
     assert raw.startswith(b"%PDF-")
+
+    reader = PdfReader(io.BytesIO(raw))
+    page = reader.pages[0]
+    # Verify Portrait orientation: width < height (A4 Portrait: ~595 x ~842)
+    assert float(page.mediabox.width) < float(page.mediabox.height)
+    assert abs(float(page.mediabox.width) - 595.27) < 2.0
+    assert abs(float(page.mediabox.height) - 841.89) < 2.0
+
+    pdf_text = "\n".join(p.extract_text() for p in reader.pages)
+    assert "PENDING MOBILE NUMBER ASSESSMENTS (LOOKUP)" in pdf_text
+    assert "ALLINAGARAM GP" in pdf_text
+    assert "Assessment Number" in pdf_text
 
 
 def test_api_pending_mobile_assessments_flow():

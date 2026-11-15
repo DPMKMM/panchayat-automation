@@ -622,11 +622,11 @@ def generate_lookup_pdf_report(
     total_demand: int,
     total_updated: int,
 ) -> io.BytesIO:
-    """Generates an executive Landscape PDF for Pending Mobile Number Assessments."""
+    """Generates an executive Portrait A4 PDF for Pending Mobile Number Assessments."""
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf,
-        pagesize=landscape(A4),
+        pagesize=A4,
         leftMargin=24,
         rightMargin=24,
         topMargin=24,
@@ -637,24 +637,58 @@ def generate_lookup_pdf_report(
     title_style = ParagraphStyle(
         "DocTitle",
         fontName="Helvetica-Bold",
-        fontSize=15,
-        leading=18,
+        fontSize=13,
+        leading=16,
         textColor=colors.HexColor("#064E3B"),
         alignment=1,
     )
     subtitle_style = ParagraphStyle(
         "DocSubtitle",
-        fontName="Helvetica",
-        fontSize=9,
-        leading=12,
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=11,
         textColor=colors.HexColor("#4B5563"),
         alignment=1,
     )
-    kpi_title_style = ParagraphStyle("KPITitle", fontName="Helvetica-Bold", fontSize=8, textColor=colors.HexColor("#4B5563"), alignment=1)
-    kpi_val_style = ParagraphStyle("KPIVal", fontName="Helvetica-Bold", fontSize=14, textColor=colors.HexColor("#064E3B"), alignment=1)
-    th_style = ParagraphStyle("TH", fontName="Helvetica-Bold", fontSize=8, textColor=colors.white, alignment=1)
-    td_style = ParagraphStyle("TD", fontName="Helvetica", fontSize=8, textColor=colors.HexColor("#1F2937"))
-    td_center = ParagraphStyle("TDC", fontName="Helvetica", fontSize=8, alignment=1, textColor=colors.HexColor("#1F2937"))
+    kpi_title_style = ParagraphStyle(
+        "KPITitle",
+        fontName="Helvetica-Bold",
+        fontSize=7,
+        leading=9,
+        textColor=colors.HexColor("#4B5563"),
+        alignment=1,
+    )
+    kpi_val_style = ParagraphStyle(
+        "KPIVal",
+        fontName="Helvetica-Bold",
+        fontSize=13,
+        leading=15,
+        textColor=colors.HexColor("#064E3B"),
+        alignment=1,
+    )
+    th_style = ParagraphStyle(
+        "TH",
+        fontName="Helvetica-Bold",
+        fontSize=8,
+        leading=10,
+        textColor=colors.white,
+        alignment=1,
+    )
+    td_style = ParagraphStyle(
+        "TD",
+        fontName="Helvetica",
+        fontSize=7.5,
+        leading=9.5,
+        textColor=colors.HexColor("#1F2937"),
+    )
+    td_center = ParagraphStyle(
+        "TDC",
+        fontName="Helvetica",
+        fontSize=7.5,
+        leading=9.5,
+        alignment=1,
+        textColor=colors.HexColor("#1F2937"),
+    )
 
     story = []
 
@@ -662,38 +696,38 @@ def generate_lookup_pdf_report(
     mandal = metadata.get("mandal") or "Mandal"
     district = metadata.get("district") or "District"
 
-    story.append(Paragraph(f"TELANGANA PANCHAYAT RAJ &amp; RURAL EMPLOYMENT", title_style))
+    story.append(Paragraph("TELANGANA PANCHAYAT RAJ &amp; RURAL DEVELOPMENT", title_style))
     story.append(Spacer(1, 2))
     story.append(Paragraph(f"PENDING MOBILE NUMBER ASSESSMENTS (LOOKUP) · {gp.upper()} GP, {mandal.upper()} MANDAL, {district.upper()} DISTRICT", subtitle_style))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
 
-    # KPI Summary Cards Table
+    # KPI Summary Cards Table (Width: 136 + 137 + 137 + 137 = 547 pt)
     kpis = [
         [
-            Paragraph("Total Demand Register Assessments", kpi_title_style),
-            Paragraph("Mobile Numbers Updated", kpi_title_style),
-            Paragraph("Pending Mobile Assessments", kpi_title_style),
+            Paragraph("Demand Register Total", kpi_title_style),
+            Paragraph("Mobile Updated", kpi_title_style),
+            Paragraph("Pending Assessments", kpi_title_style),
             Paragraph("Coverage %", kpi_title_style),
         ],
         [
-            Paragraph(str(total_demand), kpi_val_style),
-            Paragraph(str(total_updated), ParagraphStyle("K1", parent=kpi_val_style, textColor=colors.HexColor("#15803D"))),
-            Paragraph(str(len(pending_records)), ParagraphStyle("K2", parent=kpi_val_style, textColor=colors.HexColor("#B91C1C"))),
+            Paragraph(f"{total_demand:,}", kpi_val_style),
+            Paragraph(f"{total_updated:,}", ParagraphStyle("K1", parent=kpi_val_style, textColor=colors.HexColor("#15803D"))),
+            Paragraph(f"{len(pending_records):,}", ParagraphStyle("K2", parent=kpi_val_style, textColor=colors.HexColor("#B91C1C"))),
             Paragraph(f"{round((total_updated / total_demand * 100), 1) if total_demand else 0.0}%", ParagraphStyle("K3", parent=kpi_val_style, textColor=colors.HexColor("#0D9488"))),
         ],
     ]
-    t_kpis = Table(kpis, colWidths=[195, 195, 195, 195])
+    t_kpis = Table(kpis, colWidths=[136, 137, 137, 137])
     t_kpis.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
         ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#CBD5E1")),
         ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
     story.append(t_kpis)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
-    # Pending Records Table
+    # Pending Records Table (Width: 32 + 95 + 250 + 95 + 75 = 547 pt)
     table_data = [[
         Paragraph("S.No", th_style),
         Paragraph("Assessment Number", th_style),
@@ -703,13 +737,13 @@ def generate_lookup_pdf_report(
     ]]
 
     if pending_records:
-        for p in pending_records[:150]:
+        for p in pending_records:
             rem_p = Paragraph("<font color='#B91C1C'><b>Pending</b></font>", td_center)
             table_data.append([
-                Paragraph(str(p["sl_no"]), td_center),
-                Paragraph(str(p["assessment_number"]), td_center),
-                Paragraph(str(p["owner_name"]), td_style),
-                Paragraph(str(p["house_number"]), td_center),
+                Paragraph(str(p.get("sl_no", "")), td_center),
+                Paragraph(str(p.get("assessment_number", "")), td_center),
+                Paragraph(str(p.get("owner_name", "")), td_style),
+                Paragraph(str(p.get("house_number", "")), td_center),
                 rem_p,
             ])
     else:
@@ -721,7 +755,7 @@ def generate_lookup_pdf_report(
             Paragraph("<font color='#15803D'><b>Complete</b></font>", td_center),
         ])
 
-    col_widths = [40, 160, 360, 110, 110]
+    col_widths = [32, 95, 250, 95, 75]
     t_records = Table(table_data, colWidths=col_widths, repeatRows=1)
     t_records.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#064E3B")),
