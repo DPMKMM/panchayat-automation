@@ -15,8 +15,9 @@ import os
 import re
 import secrets
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from core.branding import CONSOLE_NAME, PLATFORM_NAME, TAGLINE
@@ -234,6 +235,27 @@ def create_app() -> FastAPI:
     app.include_router(mas_upper_router)
     app.include_router(tools_excel_router)
     app.include_router(tools_pdf_router)
+
+    # High-speed static software package downloads & release CDN fallback
+    RELEASE_CDN_FALLBACK: dict[str, str] = {
+        "jdk-8u351-windows-x32bit.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u351-windows-x32bit.zip",
+        "jdk-8u191-windows-x64.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u191-windows-x64.zip",
+        "Office_ProPlus_2010w_SP2_W32_English_August_2016.iso": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso",
+        "AdbeRdr11007_en_US.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip",
+    }
+
+    @app.get("/static/softwares/{file_name}", include_in_schema=False)
+    def static_software_package_download(file_name: str):
+        local_file = BASE_DIR / "static" / "softwares" / file_name
+        if local_file.is_file():
+            return FileResponse(
+                path=str(local_file),
+                filename=file_name,
+                media_type="application/octet-stream",
+            )
+        if file_name in RELEASE_CDN_FALLBACK:
+            return RedirectResponse(RELEASE_CDN_FALLBACK[file_name], status_code=307)
+        raise HTTPException(status_code=404, detail="Software file not found.")
 
     # Mount static files directory
     static_dir = BASE_DIR / "static"

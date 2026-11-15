@@ -174,3 +174,11 @@ def test_biometrics_cards_and_category_order_last():
         "SecuGen Hamster Pro 20 RD Service",
     ]
 
+
+def test_static_software_cdn_redirect_fallback():
+    """Verify that when a large archive without local git-tracking is requested, it redirects to GitHub Release CDN."""
+    resp = client.get("/static/softwares/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso", follow_redirects=False)
+    assert resp.status_code == 307
+    assert "releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso" in resp.headers["location"]
+
+
