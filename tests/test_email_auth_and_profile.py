@@ -232,9 +232,23 @@ def test_api_auth_register_and_login_flow():
     upd_data = update_resp.json()
     assert upd_data["success"] is True
     assert upd_data["user"]["name"] == "Naresh Parala"
+    assert upd_data["user"]["full_name"] == "Naresh Parala"
     assert upd_data["user"]["designation"] == "OTHER"
     assert upd_data["user"]["designation_other"] == "Project Director"
     assert upd_data["user"]["effective_designation"] == "Project Director"
+
+    # 4. Verify /api/auth/me immediately reflects updated profile details
+    me_resp = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me_resp.status_code == 200
+    me_data = me_resp.json()
+    assert me_data["authenticated"] is True
+    assert me_data["user"]["name"] == "Naresh Parala"
+    assert me_data["user"]["full_name"] == "Naresh Parala"
+    assert me_data["user"]["designation"] == "OTHER"
+    assert me_data["user"]["designation_other"] == "Project Director"
+    assert me_data["user"]["district"] == "Khammam"
+    assert me_data["user"]["mandal"] == "Khammam Rural"
+    assert me_data["user"]["village_gp"] == "Mallepally"
 
 
 def test_register_with_full_name_and_manual_jurisdiction():

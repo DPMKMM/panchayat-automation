@@ -340,8 +340,13 @@ class _ResilientDocRef:
                 snap = self._live_ref.get()
                 if getattr(snap, "exists", False):
                     d = snap.to_dict() or {}
-                    self._local_ref.set(d)
-                return snap
+                    local_snap = self._local_ref.get()
+                    local_d = local_snap.to_dict() if getattr(local_snap, "exists", False) else {}
+                    merged = copy.deepcopy(d)
+                    if local_d and str(local_d.get("updated_at") or "") > str(d.get("updated_at") or ""):
+                        merged.update(local_d)
+                    self._local_ref.set(merged)
+                    return snap
             except Exception as exc:
                 logger.warning("Firestore doc.get() fallback to local for %s/%s: %s", self.col_name, self.id, exc)
         return self._local_ref.get()
@@ -865,9 +870,18 @@ def complete_user_profile(
             "updated_at": _utc_now_iso(),
         }
     )
-    updated = _normalize_user_doc(target_doc_id, col.document(target_doc_id).get().to_dict())
+    doc_dict = col.document(target_doc_id).get().to_dict() or {}
+    doc_dict.update({
+        "name": clean_name,
+        "designation": clean_desig,
+        "role": clean_role,
+        "mobile_number": digits,
+        "profile_completed": True,
+    })
+    updated = _normalize_user_doc(target_doc_id, doc_dict)
     if updated is None:
         raise RuntimeError("Failed to read updated officer profile from Cloud Firestore.")
+    _update_cached_user_sessions(clean_uid, updated)
     return updated
 
 
@@ -1143,9 +1157,36 @@ def update_user_profile_details(
 
     col = _db().collection(COL_USERS)
     target_doc_id = _resolve_user_doc_id(col, clean_uid) or clean_uid
-    col.document(target_doc_id).update(updates)
+    try:
+        col.document(target_doc_id).update(updates)
+    except Exception as exc:
+        logger.warning("Notice on direct update for %s: %s; applying merge set...", target_doc_id, exc)
+        try:
+            col.document(target_doc_id).set(updates, merge=True)
+        except Exception:
+            pass
 
-    updated = _normalize_user_doc(target_doc_id, col.document(target_doc_id).get().to_dict())
+    doc_dict = {}
+    try:
+        snap = col.document(target_doc_id).get()
+        if getattr(snap, "exists", False):
+            doc_dict = snap.to_dict() or {}
+    except Exception:
+        pass
+
+    # Ensure all update fields are strictly included even under eventual consistency/latency
+    doc_dict.update(updates)
+    try:
+        col.document(target_doc_id).set(doc_dict, merge=True)
+    except Exception:
+        pass
+
+    updated = _normalize_user_doc(target_doc_id, doc_dict)
+    if updated is None:
+        fallback_merged = copy.deepcopy(existing)
+        fallback_merged.update(updates)
+        updated = _normalize_user_doc(target_doc_id, fallback_merged)
+
     if updated is None:
         raise RuntimeError("Failed to read updated profile from database.")
 
@@ -1161,23 +1202,45 @@ _AUTH_SESSIONS_LOCK = threading.Lock()
 
 
 def _update_cached_user_sessions(user_id: str, updated_user: dict[str, Any]) -> None:
+    clean_id = str(user_id or "").strip()
+    user_gmail = str(updated_user.get("gmail") or updated_user.get("email") or "").strip().lower()
+    user_fuid = str(updated_user.get("firebase_uid") or updated_user.get("google_uid") or "").strip()
+
+    def matches_user(usr_dict: dict[str, Any]) -> bool:
+        if not usr_dict:
+            return False
+        uid = str(usr_dict.get("user_id") or "").strip()
+        fuid = str(usr_dict.get("firebase_uid") or usr_dict.get("google_uid") or "").strip()
+        gmail = str(usr_dict.get("gmail") or usr_dict.get("email") or "").strip().lower()
+        if clean_id and (uid == clean_id or fuid == clean_id):
+            return True
+        if user_fuid and (uid == user_fuid or fuid == user_fuid):
+            return True
+        if user_gmail and gmail == user_gmail:
+            return True
+        return False
+
     for tok, (usr, exp) in list(_SESSION_CACHE.items()):
-        if str(usr.get("user_id") or "") == str(user_id):
+        if matches_user(usr):
             usr_copy = dict(usr)
             usr_copy.update(updated_user)
             _SESSION_CACHE[tok] = (usr_copy, exp)
+
     try:
         with _AUTH_SESSIONS_LOCK:
             sessions = _load_disk_sessions()
             changed = False
             for tok, entry in list(sessions.items()):
-                if str(entry.get("user", {}).get("user_id") or "") == str(user_id):
-                    entry["user"].update(updated_user)
+                usr = entry.get("user", {})
+                sess = entry.get("sess", {})
+                if matches_user(usr) or matches_user(sess):
+                    entry.setdefault("user", {}).update(updated_user)
                     changed = True
             if changed:
+                _AUTH_SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
                 tmp = _AUTH_SESSIONS_FILE.with_suffix(".tmp")
                 with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(sessions, f)
+                    json.dump(sessions, f, ensure_ascii=False)
                 tmp.replace(_AUTH_SESSIONS_FILE)
     except Exception as exc:
         logger.warning("Could not update cached disk sessions: %s", exc)
@@ -1319,7 +1382,11 @@ def get_session_user(token: str, app_scope: Optional[str] = None) -> Optional[di
         if not sess.get("revoked"):
             exp_ts = float(sess.get("expires_at_ts") or 0)
             if exp_ts > now:
-                user = entry.get("user") or get_user_by_id(str(sess.get("user_id") or ""))
+                cached_user = entry.get("user") or {}
+                db_user = get_user_by_id(str(sess.get("user_id") or ""))
+                user = dict(cached_user)
+                if db_user:
+                    user.update(db_user)
                 if user and user.get("account_status") == "Active":
                     _SESSION_CACHE[clean_tok] = (dict(user), exp_ts)
                     return dict(user)

@@ -186,6 +186,7 @@
   };
 
   window.setScopedUser = function (user, scope) {
+    window.currentUser = user || null;
     var sc = scope || window.getPlatformScope();
     try {
       if (user) {
@@ -1662,7 +1663,7 @@
   window.openUserProfileModal = function (isFirstLoginPrompt) {
     var modal = document.getElementById('user-profile-modal');
     if (!modal) return;
-    var u = window.currentUser || {};
+    var u = window.currentUser || (typeof window.getScopedUser === 'function' ? window.getScopedUser() : null) || {};
 
     var welcomeBanner = document.getElementById('profile-modal-welcome-banner');
     if (welcomeBanner) {
@@ -1797,9 +1798,32 @@
 
       if (res && res.success) {
         window.currentUser = res.user;
+        if (typeof window.setScopedUser === 'function') {
+          window.setScopedUser(res.user);
+        }
         if (typeof window.updateHeaderUserInfo === 'function') {
           window.updateHeaderUserInfo(res.user);
         }
+
+        // Keep modal form inputs fresh with newly saved values
+        var fNameEl = document.getElementById('profile-field-full-name');
+        var mobEl = document.getElementById('profile-field-mobile');
+        var distEl = document.getElementById('profile-field-district');
+        var mandEl = document.getElementById('profile-field-mandal');
+        var villEl = document.getElementById('profile-field-village');
+        var desigEl = document.getElementById('profile-field-designation');
+        var desigOtherEl = document.getElementById('profile-field-designation-other');
+        if (fNameEl) fNameEl.value = res.user.full_name || res.user.name || '';
+        if (mobEl) mobEl.value = res.user.mobile_number || res.user.phone || '';
+        if (distEl) distEl.value = res.user.district || '';
+        if (mandEl) mandEl.value = res.user.mandal || '';
+        if (villEl) villEl.value = res.user.village_gp || res.user.village || '';
+        if (desigEl && res.user.designation) {
+          desigEl.value = res.user.designation;
+          window.handleDesignationSelectChange(desigEl, 'profile-field-designation-other-wrap');
+        }
+        if (desigOtherEl) desigOtherEl.value = res.user.designation_other || '';
+
         window.closeUserProfileModal();
         if (typeof window.showPortalNotice === 'function') {
           window.showPortalNotice(res.message || 'Profile updated successfully!', 'success');
@@ -1960,6 +1984,7 @@
     var mobDept = document.getElementById('mobile-btn-dept-login');
     var mobDisconn = document.getElementById('mobile-btn-disconnect-epts');
     var mobQuickOfficer = document.getElementById('ribbon-mobile-quick-officer');
+    var mobQuickLogout = document.getElementById('ribbon-mobile-quick-logout');
     var mobQuickSignin = document.getElementById('ribbon-mobile-quick-signin');
 
     var ribEl = document.getElementById('site-top-ribbon');
@@ -1993,6 +2018,7 @@
       if (mobDept) mobDept.style.display = (window.currentWorkspaceMode === 'automated' || deptActive) ? 'flex' : 'none';
       if (mobDisconn) mobDisconn.style.display = deptActive ? 'flex' : 'none';
       if (mobQuickOfficer) mobQuickOfficer.style.display = 'inline-flex';
+      if (mobQuickLogout) mobQuickLogout.style.display = 'inline-flex';
       if (mobQuickSignin) mobQuickSignin.style.display = 'none';
     } else {
       if (ribEl) ribEl.style.display = 'none';
@@ -2015,6 +2041,7 @@
       if (mobDept) mobDept.style.display = 'none';
       if (mobDisconn) mobDisconn.style.display = 'none';
       if (mobQuickOfficer) mobQuickOfficer.style.display = 'none';
+      if (mobQuickLogout) mobQuickLogout.style.display = 'none';
       if (mobQuickSignin) mobQuickSignin.style.display = 'inline-flex';
     }
 

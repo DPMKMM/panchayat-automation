@@ -75,8 +75,9 @@ def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
     desig_other = str(user.get("designation_other") or "").strip()
     effective_desig = desig_other if (desig == "OTHER" and desig_other) else (desig or "CITIZEN" if desig == "CITIZEN" else "OFFICER")
     name = str(user.get("name") or "").strip()
+    full_name = str(user.get("full_name") or name or user.get("display_name") or "").strip()
     surname = str(user.get("surname") or "").strip()
-    display_name = str(user.get("display_name") or user.get("username") or name or "Officer").strip()
+    display_name = str(user.get("display_name") or user.get("username") or full_name or name or "Officer").strip()
 
     prev_ll = str(user.get("previous_last_login") or user.get("last_login") or "").strip()
     curr_ll = str(user.get("last_login") or "").strip()
@@ -84,7 +85,8 @@ def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
     return {
         "user_id": user.get("user_id"),
         "firebase_uid": user.get("firebase_uid") or user.get("google_uid") or "",
-        "name": name,
+        "full_name": full_name,
+        "name": name or full_name,
         "surname": surname,
         "display_name": display_name,
         "username": str(user.get("username") or display_name or user.get("user_id") or "").strip(),
