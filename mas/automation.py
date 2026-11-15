@@ -127,7 +127,7 @@ def _click_gp_monitoring_menu(page) -> None:
     cur_url = str(getattr(page, "url", "") or "").lower()
     if "deptloginverified" not in cur_url:
         logger.info("[*] Navigating to authenticated dashboard deptLoginVerified before opening MAS...")
-        page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=30000)
+        page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=45000)
         time.sleep(1.0)
         _assert_session_not_redirected(page)
         if "deptloginverified" not in str(getattr(page, "url", "") or "").lower():
@@ -140,7 +140,7 @@ def _click_gp_monitoring_menu(page) -> None:
         gp_menu.wait_for(state="visible", timeout=12000)
     except Exception:
         logger.info("[*] Reloading deptLoginVerified so top 'GP Monitoring' menu is visible...")
-        page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=30000)
+        page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=45000)
         time.sleep(1.0)
         _assert_session_not_redirected(page)
         gp_menu = _find_visible_gp_monitoring_link(page)

@@ -88,7 +88,7 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             raise RuntimeError(f"Could not locate 'my-iframe' after selecting GP Monitoring for {code}.")
 
         try:
-            iframe.wait_for_load_state("domcontentloaded", timeout=10000)
+            iframe.wait_for_load_state("domcontentloaded", timeout=20000)
         except Exception:
             pass
 
@@ -211,13 +211,13 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             "input[id*='btnDownload' i]",
         ]
         dl_btn = iframe.locator(", ".join(dl_selectors)).first
-        dl_btn.wait_for(state="visible", timeout=15000)
+        dl_btn.wait_for(state="visible", timeout=25000)
 
         print(f"[*] Triggering download for {code}...", flush=True)
         portal_dialog_messages.clear()
 
         try:
-            with page.expect_download(timeout=15000) as dl_info:
+            with page.expect_download(timeout=35000) as dl_info:
                 dl_btn.click()
 
             download = dl_info.value

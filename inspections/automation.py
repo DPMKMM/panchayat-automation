@@ -230,7 +230,7 @@ def _click_gp_monitoring_top_menu(bot) -> None:
     cur_url = str(getattr(page, "url", "") or "").lower()
     if "deptloginverified" not in cur_url:
         try:
-            page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=25000)
+            page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=45000)
             time.sleep(1.0)
             _assert_session_active(page)
         except PermissionError:

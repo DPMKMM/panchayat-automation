@@ -1399,7 +1399,7 @@ def _keepalive_ping(session: dict[str, Any]):
         session["_last_epts_ping_at"] = now
         req_ctx = getattr(getattr(bot, "context", None), "request", None)
         if req_ctx is not None:
-            resp = req_ctx.get("https://epanchayat.telangana.gov.in/deptLoginVerified", timeout=15000)
+            resp = req_ctx.get("https://epanchayat.telangana.gov.in/deptLoginVerified", timeout=30000)
             body = resp.text() if getattr(resp, "ok", False) else ""
             if body and "Office ID:" in body:
                 session["_keepalive_fail_count"] = 0

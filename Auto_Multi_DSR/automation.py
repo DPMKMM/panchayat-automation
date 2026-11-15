@@ -220,10 +220,10 @@ def download_daily_gmr127_raw(
 
             # Locate and click Download button
             dl_btn = iframe.locator(", ".join(dl_selectors)).first
-            dl_btn.wait_for(state="visible", timeout=15000)
+            dl_btn.wait_for(state="visible", timeout=25000)
 
             dialog_messages.clear()
-            with page.expect_download(timeout=22000) as dl_info:
+            with page.expect_download(timeout=35000) as dl_info:
                 dl_btn.click()
 
             download = dl_info.value

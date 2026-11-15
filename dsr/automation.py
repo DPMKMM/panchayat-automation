@@ -173,7 +173,22 @@ class EPTSAutomation:
     def is_logged_in(self):
         try:
             print("[*] Checking if active session already exists...", flush=True)
-            self.page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=15000)
+            cur_url = str(getattr(self.page, "url", "") or "")
+            if "deptloginverified" in cur_url.lower():
+                try:
+                    if "Office ID:" in self.page.content():
+                        print("[+] Active session verified from current page! Already logged in.", flush=True)
+                        if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
+                            self.page.screenshot(path=str(DASHBOARD_SCREENSHOT))
+                        return True
+                except Exception:
+                    pass
+
+            try:
+                self.page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=45000)
+            except PlaywrightTimeoutError as te:
+                print(f"[-] Navigation timeout on deptLoginVerified ({te}), checking loaded DOM...", flush=True)
+
             if "deptLoginVerified" in self.page.url and "Office ID:" in self.page.content():
                 print("[+] Active session verified! Already logged in.", flush=True)
                 if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
@@ -186,7 +201,12 @@ class EPTSAutomation:
     def navigate_home(self):
         url = "https://epanchayat.telangana.gov.in/cs"
         print(f"[*] Navigating to {url} ...", flush=True)
-        self.page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        try:
+            self.page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        except PlaywrightTimeoutError:
+            print("[-] Timeout navigating to home, checking URL...", flush=True)
+            if "/cs" not in str(getattr(self.page, "url", "") or ""):
+                self.page.goto(url, timeout=45000)
 
     def open_department_login_modal(self):
         print("[*] Opening 'Department Login' modal...", flush=True)
@@ -537,10 +557,24 @@ class EPTSAutomation:
             return None
 
     def _find_visible_menu_item(self, menu_name: str):
-        for sel in (f"text='{menu_name}'", f"a:has-text('{menu_name}')"):
+        try:
+            self.page.evaluate("() => window.scrollTo(0, 0)")
+        except Exception:
+            pass
+
+        selectors = [
+            f"xpath=//a[normalize-space(.)='{menu_name}']",
+            f"xpath=//input[@value='{menu_name}']",
+            f"xpath=//button[normalize-space(.)='{menu_name}']",
+            f"text='{menu_name}'",
+            f"a:has-text('{menu_name}')",
+            f"xpath=//a[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{menu_name.lower()}')]",
+            f"xpath=//input[contains(translate(@value, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '{menu_name.lower()}')]",
+        ]
+        for sel in selectors:
             loc = self.page.locator(sel).first
             try:
-                if loc.is_visible(timeout=1500):
+                if loc.is_visible(timeout=2500):
                     return loc
             except Exception:
                 pass
@@ -563,15 +597,44 @@ class EPTSAutomation:
         self._assert_authenticated_portal_page()
         target = self._find_visible_menu_item(menu_name)
         if target is None:
-            print(f"[*] Menu '{menu_name}' not visible on current view; refreshing deptLoginVerified...", flush=True)
-            self.page.goto("https://epanchayat.telangana.gov.in/deptLoginVerified", wait_until="domcontentloaded", timeout=15000)
-            time.sleep(1.0)
-            self._assert_authenticated_portal_page()
-            target = self._find_visible_menu_item(menu_name)
+            print(f"[*] Menu '{menu_name}' not visible on current view; checking/navigating deptLoginVerified...", flush=True)
+            cur_url = str(getattr(self.page, "url", "") or "")
+            if "deptloginverified" in cur_url.lower():
+                time.sleep(1.5)
+                target = self._find_visible_menu_item(menu_name)
+
+            if target is None:
+                nav_timeout_ms = 45000
+                try:
+                    self.page.goto(
+                        "https://epanchayat.telangana.gov.in/deptLoginVerified",
+                        wait_until="domcontentloaded",
+                        timeout=nav_timeout_ms,
+                    )
+                except PlaywrightTimeoutError as te:
+                    print(f"[!] Navigation timeout after {nav_timeout_ms}ms to deptLoginVerified: {te}. Checking if DOM content loaded...", flush=True)
+                    cur = str(getattr(self.page, "url", "") or "").lower()
+                    has_office_id = False
+                    try:
+                        has_office_id = "Office ID:" in self.page.content()
+                    except Exception:
+                        pass
+                    if not ("deptloginverified" in cur or has_office_id):
+                        print("[*] Attempting page reload fallback...", flush=True)
+                        try:
+                            self.page.reload(wait_until="domcontentloaded", timeout=30000)
+                        except Exception as re_exc:
+                            print(f"[-] Reload note: {re_exc}", flush=True)
+
+                time.sleep(1.0)
+                self._assert_authenticated_portal_page()
+                target = self._find_visible_menu_item(menu_name)
 
         if target is None:
-            target = self.page.locator(f"a:has-text('{menu_name}')").first
-            target.wait_for(state="visible", timeout=10000)
+            target = self.page.locator(
+                f"xpath=//a[normalize-space(.)='{menu_name}'] | //input[@value='{menu_name}'] | text='{menu_name}'"
+            ).first
+            target.wait_for(state="visible", timeout=15000)
 
         target.hover()
         time.sleep(0.5)

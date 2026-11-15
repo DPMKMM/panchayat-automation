@@ -369,7 +369,7 @@ def test_keepalive_storage_state_restore_and_missing_bot_401(monkeypatch):
     class _FakeReq:
         def __init__(self, body_txt: str):
             self._txt = body_txt
-        def get(self, url, timeout=15000):
+        def get(self, url, timeout=30000, **kwargs):
             ping_calls.append(url)
             return _FakeResp(self._txt)
 
