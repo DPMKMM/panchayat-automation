@@ -39,8 +39,19 @@
   };
 
   window.isAdminRouteOrHost = function () {
+    var host = (window.location.hostname || '').toLowerCase();
+    var isLocal = host === 'localhost' || host === '127.0.0.1' || host === 'testserver';
     var path = (window.location.pathname || '').toLowerCase();
-    return window.isAdminHost() || path === '/admin';
+    return window.isAdminHost() || (isLocal && path === '/admin');
+  };
+
+  window.isAllowedAdminUIHost = function () {
+    var host = (window.location.hostname || '').toLowerCase();
+    var isLocal = host === 'localhost' || host === '127.0.0.1' || host === 'testserver';
+    var path = (window.location.pathname || '').toLowerCase();
+    if (window.isAdminHost()) return true;
+    if (isLocal && (path === '/admin' || window.__testForceAdminUI === true)) return true;
+    return false;
   };
 
   window.isProdCustomDomain = function () {
@@ -1179,6 +1190,12 @@
 
   window.handleMobileAdmin = function () {
     window.toggleMobileNavMenu(false);
+    if (!window.isAllowedAdminUIHost()) {
+      if (typeof window.isProdCustomDomain === 'function' && window.isProdCustomDomain()) {
+        window.location.href = 'https://admin.panchayatautomation.in/';
+        return;
+      }
+    }
     if (typeof window.openAdminDashboardStation === 'function') {
       window.openAdminDashboardStation();
     }
@@ -1552,7 +1569,11 @@
       if (ribPill) ribPill.style.display = 'inline-flex';
       if (ribLogout) ribLogout.style.display = 'inline-flex';
       if (ribSignin) ribSignin.style.display = 'none';
-      if (ribAdmin) ribAdmin.style.display = (user && user.is_admin) ? 'inline-flex' : 'none';
+
+      // Admin option is exclusively restricted to admin.panchayatautomation.in
+      var showAdminInNav = Boolean(window.isAllowedAdminUIHost() && user && user.is_admin);
+      if (ribAdmin) ribAdmin.style.display = showAdminInNav ? 'inline-flex' : 'none';
+
       var deptActive = sessionStorage.getItem('epts_portal_auth') === 'true' || window.isDeptAuthenticated === true;
       if (ribDept) {
         ribDept.style.display = (window.currentWorkspaceMode === 'automated' || deptActive) ? 'inline-flex' : 'none';
@@ -1565,7 +1586,7 @@
       if (mobAuthBox) mobAuthBox.style.display = 'block';
       if (mobSignin) mobSignin.style.display = 'none';
       if (mobLogout) mobLogout.style.display = 'flex';
-      if (mobAdmin) mobAdmin.style.display = (user && user.is_admin) ? 'flex' : 'none';
+      if (mobAdmin) mobAdmin.style.display = showAdminInNav ? 'flex' : 'none';
       if (mobDept) mobDept.style.display = (window.currentWorkspaceMode === 'automated' || deptActive) ? 'flex' : 'none';
       if (mobDisconn) mobDisconn.style.display = deptActive ? 'flex' : 'none';
       if (mobQuickOfficer) mobQuickOfficer.style.display = 'inline-flex';
@@ -1605,7 +1626,7 @@
       if (btnServices) btnServices.style.display = 'none';
       if (btnPrivacy) btnPrivacy.style.display = 'none';
       if (btnFeedback) btnFeedback.style.display = 'none';
-      if (btnAdmin) btnAdmin.style.display = (window.isAdminRouteOrHost() && profileDone && user && user.is_admin) ? 'inline-flex' : 'none';
+      if (btnAdmin) btnAdmin.style.display = showAdminInNav ? 'inline-flex' : 'none';
       if (btnStudio) btnStudio.style.display = profileDone ? 'inline-flex' : 'none';
       if (btnConsoleSwitch) btnConsoleSwitch.style.display = 'none';
 
@@ -1777,6 +1798,12 @@
     var u = window.getScopedUser();
     var rawMode = String(mode || '').trim().toLowerCase();
     if (rawMode === 'admin') {
+      if (!window.isAllowedAdminUIHost()) {
+        if (typeof window.isProdCustomDomain === 'function' && window.isProdCustomDomain()) {
+          window.location.href = 'https://admin.panchayatautomation.in/';
+          return true;
+        }
+      }
       window.currentWorkspaceMode = 'admin';
       if (u && u.is_admin && typeof window.openAdminDashboardStation === 'function') {
         window.openAdminDashboardStation();

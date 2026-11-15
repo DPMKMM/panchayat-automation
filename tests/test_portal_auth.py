@@ -594,3 +594,26 @@ def test_top_fixed_ribbon_and_4_modules_switcher():
     assert "window.handleMobileModuleSelect" in auth_js
 
 
+def test_admin_option_exclusively_restricted_to_admin_host():
+    """Verify Admin option is never visible on public portal (panchayatautomation.in) and strictly kept only at admin.panchayatautomation.in."""
+    # 1. On main domain (panchayatautomation.in), GET /admin redirects directly to https://admin.panchayatautomation.in/
+    res_redirect = client.get("/admin", headers={"Host": "panchayatautomation.in"}, follow_redirects=False)
+    assert res_redirect.status_code == 307
+    assert res_redirect.headers.get("location") == "https://admin.panchayatautomation.in/"
+
+    # 2. On admin host (admin.panchayatautomation.in), GET /admin serves the Admin Control Center
+    res_admin_host = client.get("/admin", headers={"Host": "admin.panchayatautomation.in"})
+    assert res_admin_host.status_code == 200
+    assert "Admin Control Center" in res_admin_host.text
+
+    # 3. Verify client-side host gate in static/js/auth.js
+    auth_js = client.get("/static/js/auth.js").text
+    assert "window.isAllowedAdminUIHost" in auth_js
+    assert "var showAdminInNav = Boolean(window.isAllowedAdminUIHost() && user && user.is_admin);" in auth_js
+
+    # 4. Verify admin station redirection in static/js/admin.js
+    admin_js = client.get("/static/js/admin.js").text
+    assert "https://admin.panchayatautomation.in/" in admin_js
+
+
+

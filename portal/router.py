@@ -7,7 +7,7 @@ import os
 from typing import Any
 
 from fastapi import APIRouter, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from core.access_policy import can_user_access_automated_reports, get_access_policy, is_platform_enabled
 from core.branding import WELCOME_MESSAGE, apply_portal_branding, apply_subpage_console_branding
@@ -99,9 +99,18 @@ def _firebase_client_payload() -> dict[str, Any]:
 # Web Shell & Informational Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/admin", include_in_schema=False)
+def portal_admin_page(request: Request) -> Response:
+    """Admin access is strictly separated onto https://admin.panchayatautomation.in."""
+    raw_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip().lower()
+    host = raw_host.split(":")[0]
+    if host == "panchayatautomation.in" or (host.endswith(".panchayatautomation.in") and not host.startswith("admin.")):
+        return RedirectResponse("https://admin.panchayatautomation.in/", status_code=307)
+    return portal_home_page(request)
+
+
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
-@router.get("/admin", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/autoreports", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/manualreports", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/tools", response_class=HTMLResponse, include_in_schema=False)

@@ -97,6 +97,10 @@
 
   window.openAdminDashboardStation = function () {
     if (!currentUserIsAdmin()) {
+      if (typeof window.isProdCustomDomain === 'function' && window.isProdCustomDomain() && (!window.isAdminHost || !window.isAdminHost())) {
+        window.location.href = 'https://admin.panchayatautomation.in/';
+        return;
+      }
       if (typeof window.showPortalNotice === 'function') {
         window.showPortalNotice('Administrator access is hosted separately at https://admin.panchayatautomation.in.', 'error');
       }
