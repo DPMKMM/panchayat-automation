@@ -67,7 +67,7 @@ def generate_inspections_api(
     from_month: str = Form(default=""),
     to_month: str = Form(default=""),
     target_override: Optional[int] = Form(default=None),
-    counting_mode: str = Form(default="monday"),
+    counting_mode: str = Form(default="attendance"),
 ) -> dict[str, Any]:
     """Iterate selected weeks (by week range or Monday-month range) in GM-R 39.1 and consolidate abstract."""
     console_user, sid = enforce_department_api_access(request, always_require=True)
@@ -118,7 +118,7 @@ async def upload_consolidate_inspections(
     to_week: str = Form(default=""),
     district_name: str = Form(default=""),
     target_override: Optional[int] = Form(default=None),
-    counting_mode: str = Form(default="monday"),
+    counting_mode: str = Form(default="attendance"),
 ) -> dict[str, Any]:
     """Consolidate manually uploaded GM-R 39.1 weekly Excel downloads into abstract, PDF & Excel."""
     sid = _get_sid(request)

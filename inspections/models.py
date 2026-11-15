@@ -191,7 +191,7 @@ def extract_attendance_date(
 
 def assign_record_to_month(
     rec: Any,
-    counting_mode: str = "monday",
+    counting_mode: str = "attendance",
 ) -> tuple[int, int] | None:
     """Assign an inspection record to (year, month) based on user's chosen counting_mode.
 
@@ -200,7 +200,7 @@ def assign_record_to_month(
     - 'monday': Strictly assigns to the calendar month of the week's Monday start date.
       (E.g., for week 28-Sep-2026 to 03-Oct-2026, Monday is 28-Sep so it is counted in September).
     """
-    mode = str(counting_mode or "monday").strip().lower()
+    mode = str(counting_mode or "attendance").strip().lower()
     if mode in ("attendance", "attendance_date", "datetime"):
         att_dt = extract_attendance_date(
             getattr(rec, "attendance_datetime", "") or "",
@@ -368,7 +368,7 @@ class MonthInspectionSection:
     raw_row_count: int = 0
     submitted_row_count: int = 0
     excluded_non_submitted_count: int = 0
-    counting_mode: str = "monday"
+    counting_mode: str = "attendance"
     submitted_records: list[InspectionRecord] = field(default_factory=list)
 
 
@@ -398,7 +398,7 @@ class InspectionReport:
     excluded_non_submitted_count: int = 0
     week_download_logs: list[dict[str, Any]] = field(default_factory=list)
     monthly_sections: list[MonthInspectionSection] = field(default_factory=list)
-    counting_mode: str = "monday"
+    counting_mode: str = "attendance"
 
     @property
     def counting_mode_label(self) -> str:

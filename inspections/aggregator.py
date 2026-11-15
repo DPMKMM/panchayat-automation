@@ -62,7 +62,7 @@ def consolidate_inspection_files(
     district_name: str = "",
     known_units: list[str] | None = None,
     target_override: int | None = None,
-    counting_mode: str = "monday",
+    counting_mode: str = "attendance",
 ) -> InspectionReport:
     """Consolidate 1+ weekly Excel downloads into a unified InspectionReport.
 

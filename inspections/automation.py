@@ -500,7 +500,7 @@ def resolve_month_week_slice(
     available_weeks: list[dict[str, str]],
     from_month: str = "",
     to_month: str = "",
-    counting_mode: str = "monday",
+    counting_mode: str = "attendance",
 ) -> list[dict[str, str]]:
     """Return all available weeks matching [from_month .. to_month].
 
@@ -705,7 +705,7 @@ def download_inspection_weeks(
     downloads_dir: Path,
     from_month: str = "",
     to_month: str = "",
-    counting_mode: str = "monday",
+    counting_mode: str = "attendance",
     on_progress: Optional[Callable[[str, int, int], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Iterate selected weeks in GM-R 39.1, click Submit then Excel icon, and save weekly files."""

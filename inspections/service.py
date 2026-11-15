@@ -299,7 +299,7 @@ def generate_live_inspection_report(
     from_month: str = "",
     to_month: str = "",
     target_override: int | None = None,
-    counting_mode: str = "monday",
+    counting_mode: str = "attendance",
 ) -> dict[str, Any]:
     """Download each selected week (by week range or Monday-month range) from GM-R 39.1 and consolidate."""
     from dsr import service as automation_service
@@ -429,7 +429,7 @@ def consolidate_uploaded_inspection_files(
     to_week: str = "",
     district_name: str = "",
     target_override: int | None = None,
-    counting_mode: str = "monday",
+    counting_mode: str = "attendance",
 ) -> dict[str, Any]:
     """Consolidate manually uploaded GM-R 39.1 weekly Excel files into the same abstract + PDF + Excel."""
     if not files_payload:

@@ -715,7 +715,7 @@ def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
     assert aug_group["week_count"] == 5
     assert aug_group["to_week"] == "2026-08-31 to 2026-09-05"
 
-    aug_only = resolve_month_week_slice(avail_weeks, from_month="2026-08", to_month="2026-08")
+    aug_only = resolve_month_week_slice(avail_weeks, from_month="2026-08", to_month="2026-08", counting_mode="monday")
     assert [w["text"] for w in aug_only] == [
         "2026-08-03 to 2026-08-08",
         "2026-08-10 to 2026-08-15",
@@ -744,6 +744,7 @@ def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
             {"week_label": "2026-09-07 to 2026-09-12", "filename": "s1.xls", "raw_bytes": wf_sep1},
         ],
         designation="MPO",
+        counting_mode="monday",
     )
     secs = {s.month_key: s for s in rep.monthly_sections}
     assert list(secs.keys()) == ["2026-07", "2026-08", "2026-09"]
@@ -1007,5 +1008,74 @@ def test_inspection_live_progress_and_processing_week_status(monkeypatch):
     assert "Processing Week" in console_js
     assert "window.updateInspectionWeekSelectionStatus" in console_js
     assert "/api/inspections/progress" in console_js
+
+
+def test_inspection_default_counting_mode_is_attendance(monkeypatch):
+    """Verify that GM-R 39.1 defaults to Attendence Date-Time counting mode across HTML, API, aggregator, and models."""
+    from datetime import datetime
+    from inspections.models import InspectionReport, MonthInspectionSection
+    from inspections.aggregator import consolidate_inspection_files
+
+    portal_html = (ROOT / "templates" / "portal_shell.html").read_text(encoding="utf-8")
+    assert '<option value="attendance" selected>' in portal_html
+    assert "Attendence Date-Time (Active)" in portal_html
+
+    # Dataclass defaults
+    rep = InspectionReport(
+        designation="MPO",
+        designation_title="Mandal Panchayat Officer",
+        group_level="mandal",
+        group_label="Mandal",
+        district_name="Khammam",
+        from_week="w1",
+        to_week="w1",
+        weeks_selected=["w1"],
+        target_per_unit=4,
+        target_rule_desc="Weekly 4",
+        generated_at=datetime.now(),
+    )
+    assert rep.counting_mode == "attendance"
+    assert rep.counting_mode_label == "Attendence Date-Time"
+
+    sec = MonthInspectionSection(
+        month_key="2026-10",
+        month_label="Oct 2026",
+        year=2026,
+        month=10,
+        weeks_included=["w1"],
+        week_count=4,
+        target_per_unit=16,
+        target_rule_desc="4 * 4",
+    )
+    assert sec.counting_mode == "attendance"
+
+    # Aggregator default
+    w1_html = _make_week_xls_html([
+        {"mandal": "Bonakal", "gp": "GP_Oct3", "date": "03-10-2026 10:30 AM", "status": "Submitted"},
+    ])
+    rep_agg = consolidate_inspection_files(
+        week_files=[{"week_label": "28-09-2026 to 03-10-2026", "filename": "w1.xls", "raw_bytes": w1_html}],
+        designation="MPO",
+    )
+    assert rep_agg.counting_mode == "attendance"
+    assert rep_agg.counting_mode_label == "Attendence Date-Time"
+
+    # API default when counting_mode omitted
+    client = TestClient(create_app())
+    tok = _console_login(client, monkeypatch, "insp_def")
+    sid = "sess_default_mode"
+    up_res = client.post(
+        "/api/inspections/upload-consolidate",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid},
+        data={"designation": "MPO", "district_name": "Khammam"},
+        files=[
+            ("files", ("w1.xls", w1_html, "application/vnd.ms-excel")),
+        ],
+    )
+    assert up_res.status_code == 200
+    res_data = up_res.json()
+    assert res_data["counting_mode"] == "attendance"
+    assert res_data["counting_mode_label"] == "Attendence Date-Time"
+
 
 

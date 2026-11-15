@@ -3466,7 +3466,7 @@
   }
 
   window.onInspectionCountingModeChanged = function () {
-    var mode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
+    var mode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'attendance';
     var iconEl = document.getElementById('insp-counting-mode-icon');
     var descEl = document.getElementById('insp-counting-mode-desc');
     if (mode === 'attendance') {
@@ -3503,7 +3503,7 @@
     if (!prev) return;
     var fm = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
     var tm = (document.getElementById('insp-to-month') && document.getElementById('insp-to-month').value) || fm;
-    var mode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
+    var mode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'attendance';
     var prefix = mode === 'attendance' ? 'Included Weeks (Date Spanning)' : 'Monday-Allocated Weeks';
     if (!fm || !inspMonthsCache.length) {
       prev.textContent = 'Click "Fetch Portal Weeks" to group weeks into calendar months automatically.';
@@ -3597,7 +3597,7 @@
   window.runInspectionsRobot = async function () {
     var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
     var mode = (document.getElementById('insp-period-mode') && document.getElementById('insp-period-mode').value) || 'weeks';
-    var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
+    var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'attendance';
     var fromWeek = (document.getElementById('insp-from-week') && document.getElementById('insp-from-week').value) || '';
     var toWeek = (document.getElementById('insp-to-week') && document.getElementById('insp-to-week').value) || fromWeek;
     var fromMonth = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
@@ -3671,7 +3671,7 @@
     if (actionsWrap) actionsWrap.style.display = 'none';
 
     var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
-    var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
+    var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'attendance';
     var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
     var syncEl = document.getElementById('insp-sync-time');
 
