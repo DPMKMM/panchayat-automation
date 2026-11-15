@@ -48,7 +48,10 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
             "gp_name": rec.gp_name,
             "officer_name": rec.officer_name,
             "inspection_date": rec.inspection_date,
+            "attendance_datetime": rec.attendance_datetime,
             "final_submit_status": rec.final_submit_status,
+            "month_key": rec.month_key,
+            "month_label": rec.month_label,
         })
 
     rows_payload = []
@@ -66,11 +69,28 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
     monthly_payload = []
     for sec in report.monthly_sections or []:
         m_rows = []
+        sec_recs_by_unit: dict[str, list[dict[str, str]]] = {}
+        src_recs = sec.submitted_records or [
+            r for r in report.submitted_records
+            if (r.month_key and r.month_key == sec.month_key) or r.week_label in sec.weeks_included
+        ]
+        for rec in src_recs:
+            sec_recs_by_unit.setdefault(rec.unit_name.casefold(), []).append({
+                "week": rec.week_label,
+                "designation": rec.designation,
+                "district": rec.district_name,
+                "division": rec.division_name,
+                "mandal": rec.mandal_name,
+                "gp_name": rec.gp_name,
+                "officer_name": rec.officer_name,
+                "inspection_date": rec.inspection_date,
+                "attendance_datetime": rec.attendance_datetime,
+                "final_submit_status": rec.final_submit_status,
+                "month_key": rec.month_key or sec.month_key,
+                "month_label": rec.month_label or sec.month_label,
+            })
+
         for r in sec.abstract_rows:
-            m_recs = [
-                d for d in records_by_unit.get(r.unit_name.casefold(), [])
-                if d.get("week") in sec.weeks_included
-            ]
             m_rows.append({
                 "sl_no": r.serial,
                 "unit_name": r.unit_name,
@@ -78,7 +98,7 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
                 "completed": r.completed,
                 "balance": r.balance,
                 "pct_completed": r.pct_completed,
-                "details": m_recs,
+                "details": sec_recs_by_unit.get(r.unit_name.casefold(), []),
             })
         monthly_payload.append({
             "year": sec.year,
@@ -89,6 +109,7 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
             "week_count": sec.week_count,
             "target_per_unit": sec.target_per_unit,
             "target_rule_desc": sec.target_rule_desc,
+            "counting_mode": sec.counting_mode,
             "totals": {
                 "units_count": len(sec.abstract_rows),
                 "target": sec.total_target,
@@ -117,6 +138,8 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
         "weeks_count": len(report.weeks_selected),
         "target_per_unit": report.target_per_unit,
         "target_rule_desc": report.target_rule_desc,
+        "counting_mode": report.counting_mode,
+        "counting_mode_label": report.counting_mode_label,
         "generated_at": report.generated_time_str,
         "totals": {
             "units_count": len(report.abstract_rows),
@@ -225,6 +248,7 @@ def generate_live_inspection_report(
     from_month: str = "",
     to_month: str = "",
     target_override: int | None = None,
+    counting_mode: str = "monday",
 ) -> dict[str, Any]:
     """Download each selected week (by week range or Monday-month range) from GM-R 39.1 and consolidate."""
     from dsr import service as automation_service
@@ -249,6 +273,7 @@ def generate_live_inspection_report(
                 "from_week": from_week,
                 "to_week": to_week,
                 "downloads_dir": session["downloads_dir"],
+                "counting_mode": counting_mode,
             }
             if from_month.strip():
                 dl_kwargs["from_month"] = from_month
@@ -264,6 +289,7 @@ def generate_live_inspection_report(
                 weeks_selected=week_labels,
                 district_name=dist_name,
                 target_override=target_override,
+                counting_mode=counting_mode,
             )
 
             # Restrict to officer's own mandal if logged in as a single Mandal officer
@@ -297,6 +323,7 @@ def consolidate_uploaded_inspection_files(
     to_week: str = "",
     district_name: str = "",
     target_override: int | None = None,
+    counting_mode: str = "monday",
 ) -> dict[str, Any]:
     """Consolidate manually uploaded GM-R 39.1 weekly Excel files into the same abstract + PDF + Excel."""
     if not files_payload:
@@ -323,6 +350,7 @@ def consolidate_uploaded_inspection_files(
         weeks_selected=explicit_weeks or None,
         district_name=district_name,
         target_override=target_override,
+        counting_mode=counting_mode,
     )
     return _persist_artifacts_for_session(session_id, report)
 

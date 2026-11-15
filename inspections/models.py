@@ -164,6 +164,69 @@ def assign_week_to_month(week_label: str) -> tuple[int, int] | None:
     return (mon.year, mon.month)
 
 
+def extract_attendance_date(
+    attendance_str: str,
+    fallback_date_str: str = "",
+    fallback_week_label: str = "",
+) -> date | None:
+    """Extract calendar date from Attendence Date-Time, falling back to inspection_date then week_label."""
+    for text in (attendance_str, fallback_date_str):
+        if not text:
+            continue
+        s = str(text).strip()
+        for regex, fmts in _DATE_PATTERNS:
+            m = re.search(regex, s)
+            if m:
+                token = m.group(1)
+                for fmt in fmts:
+                    try:
+                        return datetime.strptime(token, fmt).date()
+                    except ValueError:
+                        continue
+    if fallback_week_label:
+        s_dt, e_dt = extract_week_dates(fallback_week_label)
+        return s_dt or e_dt
+    return None
+
+
+def assign_record_to_month(
+    rec: Any,
+    counting_mode: str = "monday",
+) -> tuple[int, int] | None:
+    """Assign an inspection record to (year, month) based on user's chosen counting_mode.
+
+    - 'attendance': Strictly assigns to the calendar month of Attendence Date-Time.
+      (E.g., attendance on 31-Oct-2026 belongs to October; attendance on 03-Oct-2026 belongs to October).
+    - 'monday': Strictly assigns to the calendar month of the week's Monday start date.
+      (E.g., for week 28-Sep-2026 to 03-Oct-2026, Monday is 28-Sep so it is counted in September).
+    """
+    mode = str(counting_mode or "monday").strip().lower()
+    if mode in ("attendance", "attendance_date", "datetime"):
+        att_dt = extract_attendance_date(
+            getattr(rec, "attendance_datetime", "") or "",
+            getattr(rec, "inspection_date", "") or "",
+            getattr(rec, "week_label", "") or "",
+        )
+        if att_dt:
+            return (att_dt.year, att_dt.month)
+    # Default 'monday' mode
+    return assign_week_to_month(getattr(rec, "week_label", "") or "") or assign_week_to_month(getattr(rec, "inspection_date", "") or "")
+
+
+def week_overlaps_month(week_label: str, ym: tuple[int, int]) -> bool:
+    """Check whether a week date range overlaps with calendar month (year, month)."""
+    s_dt, e_dt = extract_week_dates(week_label)
+    if not s_dt or not e_dt:
+        w_ym = assign_week_to_month(week_label)
+        return w_ym == ym
+    first_of_month = date(ym[0], ym[1], 1)
+    if ym[1] == 12:
+        last_of_month = date(ym[0], 12, 31)
+    else:
+        last_of_month = date(ym[0], ym[1] + 1, 1) - timedelta(days=1)
+    return s_dt <= last_of_month and e_dt >= first_of_month
+
+
 def get_calendar_month_mondays(year: int, month: int) -> list[tuple[date, date]]:
     """Return all (Monday, Sunday) weeks for a calendar month starting at its first Monday."""
     first_day = date(int(year), int(month), 1)
@@ -269,6 +332,8 @@ class InspectionRecord:
     inspection_from_date: str = ""
     inspection_to_date: str = ""
     checklist_entered: str = ""
+    month_key: str = ""
+    month_label: str = ""
 
 
 @dataclass
@@ -285,7 +350,7 @@ class InspectionAbstractRow:
 
 @dataclass
 class MonthInspectionSection:
-    """Single calendar month abstract calculated using strict Monday-start week allocation rules."""
+    """Single calendar month abstract calculated using Monday-start or Attendance Date-Time allocation."""
 
     year: int
     month: int
@@ -303,6 +368,8 @@ class MonthInspectionSection:
     raw_row_count: int = 0
     submitted_row_count: int = 0
     excluded_non_submitted_count: int = 0
+    counting_mode: str = "monday"
+    submitted_records: list[InspectionRecord] = field(default_factory=list)
 
 
 @dataclass
@@ -331,6 +398,11 @@ class InspectionReport:
     excluded_non_submitted_count: int = 0
     week_download_logs: list[dict[str, Any]] = field(default_factory=list)
     monthly_sections: list[MonthInspectionSection] = field(default_factory=list)
+    counting_mode: str = "monday"
+
+    @property
+    def counting_mode_label(self) -> str:
+        return "Attendence Date-Time" if self.counting_mode == "attendance" else "Week Monday Selection"
 
     @property
     def generated_time_str(self) -> str:

@@ -527,12 +527,20 @@ def generate_monthwise_inspections_pdf(report: InspectionReport, output_path: st
         cons_unit_tbl,
     ]
 
-    # Page 2: Month-Wise Summary Page (Monday-Start Week Allocation Rules)
+    # Page 2: Month-Wise Summary Page
+    is_att = getattr(report, "counting_mode", "monday") == "attendance"
+    mode_sub = "Attendence Date-Time Allocation" if is_att else "Monday-Start Week Allocation"
+    mode_rule = (
+        "Counting Basis: Attendence Date-Time (Inspections allocated strictly by actual attendance timestamp; e.g. attendance on 31st Oct belongs to October)."
+        if is_att
+        else "Week Allocation Rule: First Monday starts month; each Mon–Sun week is assigned strictly to its Monday's month."
+    )
+
     story.append(PageBreak())
     mw_banner_tbl = Table(
         [
             [Paragraph(f"{_safe_xml(dist_heading.upper())} — {report.designation}s MONTH-WISE INSPECTIONS SUMMARY", styles["InspBannerTitle"])],
-            [Paragraph(f"{_safe_xml(report.designation_title)}  •  Monday-Start Week Allocation", styles["InspBannerSub"])],
+            [Paragraph(f"{_safe_xml(report.designation_title)}  •  {mode_sub}", styles["InspBannerSub"])],
         ],
         colWidths=[avail_w],
     )
@@ -551,7 +559,7 @@ def generate_monthwise_inspections_pdf(report: InspectionReport, output_path: st
                 f"Period: <b>{_safe_xml(month_range or 'Selected Period')}</b> | "
                 f"Months: <b>{len(sections)}</b> | Total Weeks: <b>{len(report.weeks_selected)}</b> | "
                 f"Report Generated On: <b>{_safe_xml(report.generated_time_str)}</b><br/>"
-                "Week Allocation Rule: First Monday starts month; each Mon–Sun week is assigned strictly to its Monday's month.",
+                f"{mode_rule}",
                 styles["InspMeta"],
             )
         ]],
@@ -717,16 +725,20 @@ def generate_monthwise_inspections_excel(report: InspectionReport, output_path: 
     ws["A1"].font = Font(name="Calibri", size=13, bold=True, color="064E3B")
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
 
+    is_att = getattr(report, "counting_mode", "monday") == "attendance"
+    mode_title = "Attendence Date-Time Allocation" if is_att else "Monday-Start Week Allocation"
+    col4_hdr = "Included Weeks" if is_att else "Monday-Allocated Weeks"
+
     ws.merge_cells("A2:I2")
     ws["A2"] = (
         f"Designation: {report.designation} | Period: {month_range or 'Selected'} | "
-        f"Monday-Start Week Allocation | Report Generated On: {report.generated_time_str}"
+        f"{mode_title} | Report Generated On: {report.generated_time_str}"
     )
     ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="334155")
     ws["A2"].alignment = Alignment(horizontal="center", vertical="center")
 
     sum_headers = [
-        "Sl No", "Month", "Weeks Count", "Monday-Allocated Weeks",
+        "Sl No", "Month", "Weeks Count", col4_hdr,
         "Target / Unit", "Total Target", "Completed", "Balance", "% Completed",
     ]
     ws.append([])

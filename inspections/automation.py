@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -499,8 +500,13 @@ def resolve_month_week_slice(
     available_weeks: list[dict[str, str]],
     from_month: str = "",
     to_month: str = "",
+    counting_mode: str = "monday",
 ) -> list[dict[str, str]]:
-    """Return all available weeks whose Monday falls within [from_month .. to_month] chronologically."""
+    """Return all available weeks matching [from_month .. to_month].
+
+    In 'monday' mode: matches weeks whose Monday falls in [from_month .. to_month].
+    In 'attendance' mode: matches weeks whose date range overlaps with [from_month .. to_month].
+    """
     if not available_weeks:
         return []
     m1 = parse_month_key(from_month)
@@ -513,16 +519,41 @@ def resolve_month_week_slice(
         m2 = m1
     lo_m, hi_m = min(m1, m2), max(m1, m2)  # type: ignore[type-var]
 
+    canon_mode = "attendance" if str(counting_mode or "").lower() in ("attendance", "attendance_date", "datetime") else "monday"
+
     matched: list[tuple[Any, dict[str, str]]] = []
     for item in available_weeks:
         txt = item.get("text") or item.get("value") or ""
-        ym = assign_week_to_month(txt)
-        if ym is not None and lo_m <= ym <= hi_m:
-            s_dt, _ = extract_week_dates(txt)
-            matched.append((s_dt, item))
+        if canon_mode == "attendance":
+            s_dt, e_dt = extract_week_dates(txt)
+            first_dt = date(lo_m[0], lo_m[1], 1)
+            last_dt = (
+                date(hi_m[0], hi_m[1] + 1, 1) - timedelta(days=1)
+                if hi_m[1] < 12
+                else date(hi_m[0], 12, 31)
+            )
+            if s_dt and e_dt:
+                if s_dt <= last_dt and e_dt >= first_dt:
+                    matched.append((s_dt, item))
+            else:
+                ym = assign_week_to_month(txt)
+                if ym is not None and lo_m <= ym <= hi_m:
+                    matched.append((date(ym[0], ym[1], 1), item))
+        else:
+            ym = assign_week_to_month(txt)
+            if ym is not None and lo_m <= ym <= hi_m:
+                s_dt, _ = extract_week_dates(txt)
+                matched.append((s_dt, item))
 
-    matched.sort(key=lambda pair: (pair[0] or 0, pair[1].get("text") or ""))
-    return [pair[1] for pair in matched]
+    matched.sort(key=lambda pair: (pair[0] or date.min, pair[1].get("text") or ""))
+    seen_vals: set[str] = set()
+    result: list[dict[str, str]] = []
+    for _, it in matched:
+        v = it.get("value") or it.get("text") or ""
+        if v not in seen_vals:
+            seen_vals.add(v)
+            result.append(it)
+    return result
 
 
 def fetch_inspection_metadata(bot, designation: str | None = None) -> dict[str, Any]:
@@ -674,6 +705,7 @@ def download_inspection_weeks(
     downloads_dir: Path,
     from_month: str = "",
     to_month: str = "",
+    counting_mode: str = "monday",
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Iterate selected weeks in GM-R 39.1, click Submit then Excel icon, and save weekly files."""
     page = bot.page
@@ -725,7 +757,12 @@ def download_inspection_weeks(
             )
 
         if from_month.strip():
-            selected_weeks = resolve_month_week_slice(available_weeks, from_month=from_month, to_month=to_month)
+            selected_weeks = resolve_month_week_slice(
+                available_weeks,
+                from_month=from_month,
+                to_month=to_month,
+                counting_mode=counting_mode,
+            )
             if not selected_weeks:
                 raise FileNotFoundError(
                     f"No portal weeks found whose Monday start date falls in '{from_month}'"

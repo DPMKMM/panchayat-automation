@@ -3507,10 +3507,17 @@
             </select>
           </div>
           <div>
+            <label for="insp-counting-mode" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Report Counting Basis *</label>
+            <select id="insp-counting-mode" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onInspectionCountingModeChanged()">
+              <option value="monday" selected>🗓️ Monday Selection (Week-Based)</option>
+              <option value="attendance">📱 Attendence Date-Time (Date-Based)</option>
+            </select>
+          </div>
+          <div>
             <label for="insp-period-mode" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Selection Mode</label>
             <select id="insp-period-mode" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;" onchange="onInspectionPeriodModeChanged()">
               <option value="weeks" selected>Week Range (From–To Week)</option>
-              <option value="months">Month-Wise Range (Monday Rule)</option>
+              <option value="months">Month-Wise Range</option>
             </select>
           </div>
           <div id="insp-from-week-wrap">
@@ -3543,6 +3550,10 @@
           </div>
         </div>
         <div id="insp-month-weeks-preview" style="display:none; margin-top:10px; padding:8px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; font-size:0.8rem; color:#1e3a8a; font-weight:600;"></div>
+        <div id="insp-counting-mode-hint" style="margin-top:10px; padding:9px 13px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; font-size:0.83rem; color:#334155; font-weight:600; display:flex; align-items:center; gap:8px;">
+          <span id="insp-counting-mode-icon">🗓️</span>
+          <span id="insp-counting-mode-desc"><strong>Monday Selection (Active):</strong> Inspections are grouped based on the week's Monday start date. If October starts Monday on the 5th, attendance marked on October 3rd is counted in September.</span>
+        </div>
 
         <div id="insp-target-rule-banner" style="margin-top:12px; padding:10px 14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:0.84rem; color:#065f46; font-weight:700; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <span id="insp-target-rule-text">MPOs Inspection Target: Weekly 4 • Filter: Final Submit Status = Submitted Only</span>

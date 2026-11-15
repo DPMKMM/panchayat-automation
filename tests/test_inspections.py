@@ -373,7 +373,7 @@ def test_inspections_api_rbac_session_isolation_live_and_upload(monkeypatch):
     monkeypatch.setattr(
         insp_service,
         "download_inspection_weeks",
-        lambda bot, designation, from_week, to_week, downloads_dir: (
+        lambda bot, designation, from_week, to_week, downloads_dir, **kwargs: (
             [{"week_label": "02-11-2026 to 07-11-2026", "filename": "live.xls", "raw_bytes": w1, "status": "downloaded"}],
             ["02-11-2026 to 07-11-2026"],
         ),
@@ -823,3 +823,138 @@ def test_inspections_ui_fresh_entry_and_download_options_reveal_only_after_run()
     run_fn = console_js.split("window.runInspectionsRobot = async function")[1].split("window.uploadConsolidateInspections")[0]
     assert "actionsWrap.style.display = 'none'" in run_fn
     assert "window.renderInspectionsReport(data)" in run_fn
+
+
+def test_inspection_counting_mode_monday_vs_attendance(tmp_path, monkeypatch):
+    from datetime import date
+    from inspections.models import (
+        extract_attendance_date,
+        assign_record_to_month,
+        week_overlaps_month,
+        InspectionRecord,
+    )
+    from inspections.reports import (
+        generate_monthwise_inspections_pdf,
+        generate_monthwise_inspections_excel,
+    )
+
+    # 1. Test extract_attendance_date on various formats
+    d1 = extract_attendance_date("03-10-2026 10:30 AM")
+    assert d1 == date(2026, 10, 3)
+    d2 = extract_attendance_date("31-10-2026 11:45:00")
+    assert d2 == date(2026, 10, 31)
+    d3 = extract_attendance_date("2026-10-03")
+    assert d3 == date(2026, 10, 3)
+    d4 = extract_attendance_date(None, fallback_date_str="03-10-2026")
+    assert d4 == date(2026, 10, 3)
+
+    # 2. Test assign_record_to_month
+    rec_oct3 = InspectionRecord(
+        week_label="28-09-2026 to 03-10-2026",
+        designation="MPO",
+        district_name="Khammam",
+        division_name="Madhira",
+        mandal_name="Bonakal",
+        gp_name="Allinagaram",
+        officer_name="Officer A",
+        inspection_date="03-10-2026",
+        final_submit_status="Submitted",
+        unit_name="Bonakal",
+        attendance_datetime="03-10-2026 10:30 AM",
+    )
+    # Under Monday selection: week starts on Monday 28-Sep-2026 -> September (2026-09)
+    assert assign_record_to_month(rec_oct3, counting_mode="monday") == (2026, 9)
+    # Under Attendence Date-Time: attendance is 03-Oct-2026 -> October (2026-10)
+    assert assign_record_to_month(rec_oct3, counting_mode="attendance") == (2026, 10)
+
+    rec_oct31 = InspectionRecord(
+        week_label="26-10-2026 to 31-10-2026",
+        designation="MPO",
+        district_name="Khammam",
+        division_name="Madhira",
+        mandal_name="Bonakal",
+        gp_name="Chinnakoduru",
+        officer_name="Officer A",
+        inspection_date="31-10-2026",
+        final_submit_status="Submitted",
+        unit_name="Bonakal",
+        attendance_datetime="31-10-2026 04:15 PM",
+    )
+    # Both modes place 31-Oct in October (2026-10)
+    assert assign_record_to_month(rec_oct31, counting_mode="monday") == (2026, 10)
+    assert assign_record_to_month(rec_oct31, counting_mode="attendance") == (2026, 10)
+
+    # 3. Test consolidate_inspection_files in both modes
+    # Week 1: 28-Sep to 03-Oct (starts Monday 28-Sep). Has an inspection on 03-10-2026.
+    # Week 2: 26-Oct to 31-Oct (starts Monday 26-Oct). Has an inspection on 31-10-2026.
+    w1_html = _make_week_xls_html([
+        {"mandal": "Bonakal", "gp": "GP_Oct3", "date": "03-10-2026 10:30 AM", "status": "Submitted"},
+    ])
+    w2_html = _make_week_xls_html([
+        {"mandal": "Bonakal", "gp": "GP_Oct31", "date": "31-10-2026 04:15 PM", "status": "Submitted"},
+    ])
+
+    files = [
+        {"week_label": "28-09-2026 to 03-10-2026", "filename": "w1.xls", "raw_bytes": w1_html},
+        {"week_label": "26-10-2026 to 31-10-2026", "filename": "w2.xls", "raw_bytes": w2_html},
+    ]
+
+    # Mode A: Monday Selection (default)
+    rep_monday = consolidate_inspection_files(
+        week_files=files,
+        designation="MPO",
+        counting_mode="monday",
+    )
+    assert rep_monday.counting_mode == "monday"
+    assert rep_monday.counting_mode_label == "Week Monday Selection"
+    sec_keys_m = {s.month_key: s for s in rep_monday.monthly_sections}
+    assert "2026-09" in sec_keys_m and "2026-10" in sec_keys_m
+    # In Monday mode: Oct 3rd record was counted in September (2026-09)
+    assert len(sec_keys_m["2026-09"].submitted_records) == 1
+    assert sec_keys_m["2026-09"].submitted_records[0].gp_name == "GP_Oct3"
+    # October only has 1 record (GP_Oct31)
+    assert len(sec_keys_m["2026-10"].submitted_records) == 1
+    assert sec_keys_m["2026-10"].submitted_records[0].gp_name == "GP_Oct31"
+
+    # Mode B: Attendence Date-Time
+    rep_attendance = consolidate_inspection_files(
+        week_files=files,
+        designation="MPO",
+        counting_mode="attendance",
+    )
+    assert rep_attendance.counting_mode == "attendance"
+    assert rep_attendance.counting_mode_label == "Attendence Date-Time"
+    sec_keys_a = {s.month_key: s for s in rep_attendance.monthly_sections}
+    # In Attendance mode: BOTH Oct 3rd and Oct 31st records belong to October (2026-10)!
+    assert "2026-09" not in sec_keys_a
+    assert "2026-10" in sec_keys_a
+    assert len(sec_keys_a["2026-10"].submitted_records) == 2
+    gp_names = {r.gp_name for r in sec_keys_a["2026-10"].submitted_records}
+    assert gp_names == {"GP_Oct3", "GP_Oct31"}
+
+    # 4. Verify monthwise PDF generation works for attendance mode without error
+    pdf_path = tmp_path / "mw_att.pdf"
+    generate_monthwise_inspections_pdf(rep_attendance, pdf_path)
+    txt = "\n".join(p.extract_text() for p in PdfReader(str(pdf_path)).pages)
+    assert "Attendence Date-Time Allocation" in txt
+
+    # 5. Verify API accepts counting_mode via upload-consolidate
+    client = TestClient(create_app())
+    tok = _console_login(client, monkeypatch, "insp_mode")
+    sid = "sess_mode_test"
+    up_res = client.post(
+        "/api/inspections/upload-consolidate",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid},
+        data={"designation": "MPO", "district_name": "Khammam", "counting_mode": "attendance"},
+        files=[
+            ("files", ("w1.xls", w1_html, "application/vnd.ms-excel")),
+            ("files", ("w2.xls", w2_html, "application/vnd.ms-excel")),
+        ],
+    )
+    assert up_res.status_code == 200
+    res_data = up_res.json()
+    assert res_data["counting_mode"] == "attendance"
+    assert res_data["counting_mode_label"] == "Attendence Date-Time"
+    oct_sec = next(s for s in res_data["monthly_sections"] if s["month_key"] == "2026-10")
+    assert oct_sec["rows"][0]["completed"] == 2
+

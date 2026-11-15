@@ -3364,6 +3364,21 @@
     return Math.max(1, cnt);
   }
 
+  window.onInspectionCountingModeChanged = function () {
+    var mode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
+    var iconEl = document.getElementById('insp-counting-mode-icon');
+    var descEl = document.getElementById('insp-counting-mode-desc');
+    if (mode === 'attendance') {
+      if (iconEl) iconEl.textContent = '📱';
+      if (descEl) descEl.innerHTML = '<strong>Attendence Date-Time (Active):</strong> Inspections are grouped strictly by actual attendance timestamp. If attendance was marked on 31-Oct, it is added to October; attendance marked on 03-Oct is added to October.';
+    } else {
+      if (iconEl) iconEl.textContent = '🗓️';
+      if (descEl) descEl.innerHTML = '<strong>Monday Selection (Active):</strong> Inspections are grouped based on the week\'s Monday start date. If October starts Monday on the 5th, attendance marked on October 3rd is counted in September.';
+    }
+    window.updateInspectionMonthPreview();
+    window.resetInspectionsView();
+  };
+
   window.onInspectionPeriodModeChanged = function () {
     var mode = (document.getElementById('insp-period-mode') && document.getElementById('insp-period-mode').value) || 'weeks';
     var isMonths = mode === 'months';
@@ -3386,8 +3401,10 @@
     if (!prev) return;
     var fm = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
     var tm = (document.getElementById('insp-to-month') && document.getElementById('insp-to-month').value) || fm;
+    var mode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
+    var prefix = mode === 'attendance' ? 'Included Weeks (Date Spanning)' : 'Monday-Allocated Weeks';
     if (!fm || !inspMonthsCache.length) {
-      prev.textContent = 'Monday-Start Rule: Click "Fetch Portal Weeks" to group weeks into calendar months automatically.';
+      prev.textContent = 'Click "Fetch Portal Weeks" to group weeks into calendar months automatically.';
       return;
     }
     var lo = fm <= tm ? fm : tm;
@@ -3397,7 +3414,7 @@
     var summary = matched.map(function (m) {
       return m.label + ' (' + m.week_count + 'w: ' + m.from_week + (m.to_week && m.to_week !== m.from_week ? ' -> ' + m.to_week : '') + ')';
     }).join(' | ');
-    prev.textContent = 'Monday-Allocated Weeks (' + totalW + ' total): ' + (summary || 'None');
+    prev.textContent = prefix + ' (' + totalW + ' total): ' + (summary || 'None');
   };
 
   window.onInspectionDesignationChanged = function () {
@@ -3474,6 +3491,7 @@
   window.runInspectionsRobot = async function () {
     var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
     var mode = (document.getElementById('insp-period-mode') && document.getElementById('insp-period-mode').value) || 'weeks';
+    var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
     var fromWeek = (document.getElementById('insp-from-week') && document.getElementById('insp-from-week').value) || '';
     var toWeek = (document.getElementById('insp-to-week') && document.getElementById('insp-to-week').value) || fromWeek;
     var fromMonth = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
@@ -3500,6 +3518,7 @@
     try {
       var fd = new FormData();
       fd.append('designation', desig);
+      fd.append('counting_mode', countingMode);
       if (mode === 'months' && fromMonth) {
         fd.append('from_month', fromMonth);
         fd.append('to_month', toMonth || fromMonth);
@@ -3538,6 +3557,7 @@
     if (actionsWrap) actionsWrap.style.display = 'none';
 
     var desig = (document.getElementById('insp-designation') && document.getElementById('insp-designation').value) || 'MPO';
+    var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
     var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
     var syncEl = document.getElementById('insp-sync-time');
     if (syncEl) syncEl.textContent = 'Consolidating ' + fileList.length + ' uploaded GM-R 39.1 Excel file(s) (Final Submit Status = Submitted only)...';
@@ -3548,6 +3568,7 @@
         fd.append('files', fileList[i]);
       }
       fd.append('designation', desig);
+      fd.append('counting_mode', countingMode);
       if (overrideVal && parseInt(overrideVal, 10) > 0) {
         fd.append('target_override', String(parseInt(overrideVal, 10)));
       }
@@ -3613,7 +3634,10 @@
     el = document.getElementById('insp-col-unit-header'); if (el) el.textContent = levelLabel;
     el = document.getElementById('insp-search-unit-label'); if (el) el.textContent = levelLabel;
     el = document.getElementById('insp-target-rule-text');
-    if (el) el.textContent = (data.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only';
+    if (el) {
+      var modeTxt = data.counting_mode_label ? (' • Counting: ' + data.counting_mode_label) : '';
+      el.textContent = (data.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only' + modeTxt;
+    }
 
     var actionsWrap = document.getElementById('insp-actions-wrap');
     if (actionsWrap) actionsWrap.style.display = 'flex';
@@ -3623,6 +3647,7 @@
       ? (data.from_week + ' -> ' + data.to_week)
       : (data.from_week || '');
     var monthPart = data.month_period ? (data.month_period + ' • ') : '';
+    var countingModePart = data.counting_mode_label ? (' • Mode: ' + data.counting_mode_label) : '';
     var genPart = data.generated_at ? (' • Report Generated On: ' + data.generated_at) : '';
     var syncEl = document.getElementById('insp-sync-time');
     if (syncEl) {
@@ -3636,7 +3661,7 @@
         'Compiled ' + (data.designation || 'MPO') + ' (' + monthPart + (data.weeks_count || 1) + ' week(s): ' +
         periodTxt + ') • Submitted Considered: ' +
         (totals.submitted_row_count || 0) + ' / Raw: ' + (totals.raw_row_count || 0) +
-        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')' + genPart + logNote;
+        ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')' + countingModePart + genPart + logNote;
     }
 
     el = document.getElementById('insp-table-title');
@@ -3658,13 +3683,19 @@
         if (foundSec) {
           rows = foundSec.rows || [];
           var ruleEl = document.getElementById('insp-target-rule-text');
-          if (ruleEl) ruleEl.textContent = foundSec.month_label + ': ' + (foundSec.target_rule_desc || '') + ' • Weeks (' + foundSec.week_count + '): ' + (foundSec.weeks_included || []).join(', ');
+          if (ruleEl) {
+            var sModeTxt = (inspCurrentReport && inspCurrentReport.counting_mode_label) ? (' • ' + inspCurrentReport.counting_mode_label) : '';
+            ruleEl.textContent = foundSec.month_label + ': ' + (foundSec.target_rule_desc || '') + ' • Weeks (' + foundSec.week_count + '): ' + (foundSec.weeks_included || []).join(', ') + sModeTxt;
+          }
         }
       }
       if (!rows.length && inspActiveMonthKey === 'all') {
         rows = inspCurrentReport.rows || [];
         var ruleEl2 = document.getElementById('insp-target-rule-text');
-        if (ruleEl2) ruleEl2.textContent = (inspCurrentReport.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only';
+        if (ruleEl2) {
+          var aModeTxt = (inspCurrentReport && inspCurrentReport.counting_mode_label) ? (' • Counting: ' + inspCurrentReport.counting_mode_label) : '';
+          ruleEl2.textContent = (inspCurrentReport.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only' + aModeTxt;
+        }
       }
     }
     var searchEl = document.getElementById('insp-search-input');
@@ -3757,22 +3788,26 @@
     var details = row.details || [];
     if (title) title.textContent = row.unit_name + ' ' + levelLabel + ' — Submitted GP Inspections';
     if (sub) {
+      var modeBadge = (inspCurrentReport && inspCurrentReport.counting_mode_label)
+        ? (' | Mode: ' + inspCurrentReport.counting_mode_label)
+        : '';
       sub.textContent =
         'Target: ' + row.target + ' | Completed (Submitted): ' + row.completed +
-        ' | Balance: ' + row.balance + ' | ' + Number(row.pct_completed || 0).toFixed(2) + '%';
+        ' | Balance: ' + row.balance + ' | ' + Number(row.pct_completed || 0).toFixed(2) + '%' + modeBadge;
     }
 
     if (!details.length) {
       content.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-weight:600;">No Final Submit Status = Submitted records found for ' + esc(row.unit_name) + ' in the selected weeks.</div>';
     } else {
       var trs = details.map(function (rec, idx) {
+        var attDt = rec.attendance_datetime || rec.inspection_date || '—';
         return (
           '<tr style="border-bottom:1px solid #f1f5f9;">' +
             '<td style="padding:8px 10px; text-align:center; font-weight:700; color:#64748b;">' + (idx + 1) + '</td>' +
             '<td style="padding:8px 10px; font-weight:600; color:#0f172a;">' + esc(rec.week || '—') + '</td>' +
             '<td style="padding:8px 10px; font-weight:700; color:#0f172a;">' + esc(rec.gp_name || rec.mandal || row.unit_name) + '</td>' +
             '<td style="padding:8px 10px; color:#334155;">' + esc(rec.officer_name || rec.designation || '—') + '</td>' +
-            '<td style="padding:8px 10px; text-align:center; color:#475569;">' + esc(rec.inspection_date || '—') + '</td>' +
+            '<td style="padding:8px 10px; text-align:center; color:#0f172a; font-weight:600;">' + esc(attDt) + '</td>' +
             '<td style="padding:8px 10px; text-align:center;"><span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Submitted</span></td>' +
           '</tr>'
         );
@@ -3785,7 +3820,7 @@
               '<th style="padding:8px 10px;">Week</th>' +
               '<th style="padding:8px 10px;">Gram Panchayat</th>' +
               '<th style="padding:8px 10px;">Officer</th>' +
-              '<th style="padding:8px 10px; text-align:center;">Date</th>' +
+              '<th style="padding:8px 10px; text-align:center;">Attendence Date-Time</th>' +
               '<th style="padding:8px 10px; text-align:center;">Status</th>' +
             '</tr></thead>' +
             '<tbody>' + trs + '</tbody>' +

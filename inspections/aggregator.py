@@ -10,11 +10,13 @@ from inspections.models import (
     InspectionRecord,
     InspectionReport,
     MonthInspectionSection,
+    assign_record_to_month,
     assign_week_to_month,
     compute_designation_target,
     extract_week_dates,
     format_month_key_label,
     get_designation_spec,
+    week_overlaps_month,
 )
 from inspections.parser import parse_inspection_file
 
@@ -60,6 +62,7 @@ def consolidate_inspection_files(
     district_name: str = "",
     known_units: list[str] | None = None,
     target_override: int | None = None,
+    counting_mode: str = "monday",
 ) -> InspectionReport:
     """Consolidate 1+ weekly Excel downloads into a unified InspectionReport.
 
@@ -71,6 +74,7 @@ def consolidate_inspection_files(
     """
     spec = get_designation_spec(designation)
     canon_desig = spec["designation"]
+    canon_mode = "attendance" if str(counting_mode or "").lower() in ("attendance", "attendance_date", "datetime") else "monday"
 
     all_submitted: list[InspectionRecord] = []
     seen_record_keys: set[tuple[str, str, str, str, str, str]] = set()
@@ -190,25 +194,50 @@ def consolidate_inspection_files(
         target_per_unit,
     )
 
-    # Group weeks and records into MonthInspectionSection strictly using Monday-start week allocation
-    weeks_by_ym: dict[tuple[int, int], list[str]] = {}
-    for w_lbl in effective_weeks:
-        ym = assign_week_to_month(w_lbl)
-        if ym is not None:
-            weeks_by_ym.setdefault(ym, [])
-            if w_lbl not in weeks_by_ym[ym]:
-                weeks_by_ym[ym].append(w_lbl)
-
+    # Group records into months based on counting_mode:
+    # - 'attendance': strictly based on Attendence Date-Time (e.g. 31-Oct in October, 03-Oct in October)
+    # - 'monday': strictly based on week's Monday start date (e.g. 28-Sep to 03-Oct has Monday in September)
     records_by_ym: dict[tuple[int, int], list[InspectionRecord]] = {}
     for rec in all_submitted:
-        ym = assign_week_to_month(rec.week_label) or assign_week_to_month(rec.inspection_date)
+        ym = assign_record_to_month(rec, counting_mode=canon_mode)
         if ym is not None:
-            weeks_by_ym.setdefault(ym, [])
+            rec.month_key = f"{ym[0]:04d}-{ym[1]:02d}"
+            rec.month_label = format_month_key_label(ym)
             records_by_ym.setdefault(ym, []).append(rec)
+
+    weeks_by_ym: dict[tuple[int, int], list[str]] = {}
+    if canon_mode == "attendance":
+        for ym in records_by_ym.keys():
+            weeks_by_ym.setdefault(ym, [])
+            for w_lbl in effective_weeks:
+                if week_overlaps_month(w_lbl, ym):
+                    if w_lbl not in weeks_by_ym[ym]:
+                        weeks_by_ym[ym].append(w_lbl)
+            for rec in records_by_ym[ym]:
+                if rec.week_label and rec.week_label not in weeks_by_ym[ym]:
+                    weeks_by_ym[ym].append(rec.week_label)
+        assigned_weeks = {w for w_list in weeks_by_ym.values() for w in w_list}
+        for w_lbl in effective_weeks:
+            if w_lbl not in assigned_weeks:
+                w_ym = assign_week_to_month(w_lbl)
+                if w_ym is not None:
+                    weeks_by_ym.setdefault(w_ym, [])
+                    if w_lbl not in weeks_by_ym[w_ym]:
+                        weeks_by_ym[w_ym].append(w_lbl)
+    else:
+        for w_lbl in effective_weeks:
+            ym = assign_week_to_month(w_lbl)
+            if ym is not None:
+                weeks_by_ym.setdefault(ym, [])
+                if w_lbl not in weeks_by_ym[ym]:
+                    weeks_by_ym[ym].append(w_lbl)
+        for ym in records_by_ym.keys():
+            weeks_by_ym.setdefault(ym, [])
 
     raw_by_ym: dict[tuple[int, int], tuple[int, int]] = {}
     for wl in week_logs:
-        ym = assign_week_to_month(wl.get("week", ""))
+        w_txt = wl.get("week", "")
+        ym = assign_week_to_month(w_txt)
         if ym is not None:
             prev_r, prev_e = raw_by_ym.get(ym, (0, 0))
             raw_by_ym[ym] = (prev_r + int(wl.get("raw_rows", 0) or 0), prev_e + int(wl.get("excluded_rows", 0) or 0))
@@ -255,6 +284,8 @@ def consolidate_inspection_files(
                 raw_row_count=m_raw,
                 submitted_row_count=len(m_recs),
                 excluded_non_submitted_count=m_excl,
+                counting_mode=canon_mode,
+                submitted_records=m_recs,
             )
         )
 
@@ -281,4 +312,5 @@ def consolidate_inspection_files(
         excluded_non_submitted_count=excluded_total,
         week_download_logs=week_logs,
         monthly_sections=monthly_sections,
+        counting_mode=canon_mode,
     )
