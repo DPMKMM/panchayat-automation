@@ -104,6 +104,16 @@ MODULE_CATALOG: list[dict[str, Any]] = [
         "default_visible": True,
     },
     {
+        "id": "module_mobile_updation",
+        "name": "Updation of Mobile Numbers to Assessments",
+        "icon": "📱",
+        "category": "Manual Offline Reports",
+        "description": "Upload assessment spreadsheets to validate and format 10-digit mobile numbers, match with property assessments, detect pending or invalid contacts, and export clean Excel & PDF reports.",
+        "card_selector": "#card-policy-module_mobile_updation",
+        "default_enabled": True,
+        "default_visible": True,
+    },
+    {
         "id": "module_dcb_live",
         "name": "Live House Tax DCB Analytics",
         "icon": "🏛️",
@@ -175,6 +185,7 @@ DEFAULT_POLICY: dict[str, bool] = {
     # Module Availability Toggles (Enabled / Paused)
     "module_dsr_excel": True,
     "module_dsr_multiday": True,
+    "module_mobile_updation": True,
     "module_dcb_live": True,
     "module_dsr_automation": True,
     "module_state_format": True,
@@ -191,6 +202,7 @@ DEFAULT_POLICY: dict[str, bool] = {
     # Module Visibility Toggles (Hide / View)
     "visible_module_dsr_excel": True,
     "visible_module_dsr_multiday": True,
+    "visible_module_mobile_updation": True,
     "visible_module_dcb_live": True,
     "visible_module_dsr_automation": True,
     "visible_module_state_format": True,
@@ -213,6 +225,7 @@ POLICY_DESCRIPTIONS: dict[str, str] = {
 
     "module_dsr_excel": "Manual Reports: Daily PS Attendance & DSR Excel Upload",
     "module_dsr_multiday": "Manual Reports: Multiple Days DSR & Attendance Consolidation",
+    "module_mobile_updation": "Manual Reports: Updation of Mobile Numbers to Assessments",
     "module_dcb_live": "Live House Tax DCB Analytics",
     "module_dsr_automation": "Console Automation: Daily PS Attendance & DSR Robot",
     "module_state_format": "Console Automation: State Format DSR Report (14-Column Matrix)",
@@ -228,6 +241,7 @@ POLICY_DESCRIPTIONS: dict[str, str] = {
 
     "visible_module_dsr_excel": "Display Visibility: Daily PS Attendance & DSR (Manual)",
     "visible_module_dsr_multiday": "Display Visibility: Multi-Day DSR (Manual)",
+    "visible_module_mobile_updation": "Display Visibility: Updation of Mobile Numbers to Assessments",
     "visible_module_dcb_live": "Display Visibility: Live House Tax DCB Analytics",
     "visible_module_dsr_automation": "Display Visibility: PS Attendance & DSR Robot",
     "visible_module_state_format": "Display Visibility: State Format DSR Report Robot",

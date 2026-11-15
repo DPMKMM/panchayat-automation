@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pending Mobile Number Assessments (Lookup) | {{PLATFORM_NAME}}</title>
+  <link rel="stylesheet" href="/static/css/common.css?v=15">
+  <style>
+    :root {
+      --mu-primary: #064e3b;
+      --mu-primary-hover: #04382a;
+      --mu-primary-light: #ecfdf5;
+      --mu-emerald: #059669;
+      --mu-gold: #d97706;
+      --mu-danger: #dc2626;
+      --mu-danger-bg: #fee2e2;
+      --mu-danger-text: #991b1b;
+      --mu-bg: #f3f6f4;
+      --mu-surface: #ffffff;
+      --mu-border: #d1dcd5;
+      --mu-text: #111827;
+      --mu-muted: #4b5563;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--mu-bg);
+      color: var(--mu-text);
+      line-height: 1.5;
+    }
+    .mu-topbar {
+      background: linear-gradient(135deg, #04382a 0%, #064e3b 100%);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      box-shadow: 0 2px 10px rgba(4, 56, 42, 0.2);
+    }
+    .mu-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .mu-brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mu-brand-sub {
+      font-size: 0.8rem;
+      color: #a7f3d0;
+    }
+    .mu-nav-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .mu-nav-btn {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      text-decoration: none;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mu-nav-btn:hover {
+      background: rgba(255, 255, 255, 0.24);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+    .mu-container {
+      max-width: 1280px;
+      margin: 24px auto;
+      padding: 0 20px 48px;
+    }
+    .mu-card {
+      background: var(--mu-surface);
+      border: 1px solid var(--mu-border);
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 4px 16px rgba(10, 37, 27, 0.05);
+      margin-bottom: 24px;
+    }
+    .mu-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 18px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 16px;
+    }
+    .mu-title {
+      margin: 0 0 6px;
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--mu-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mu-desc {
+      margin: 0;
+      color: var(--mu-muted);
+      font-size: 0.94rem;
+      max-width: 900px;
+    }
+    .mu-pill-live {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    /* Upload Grid */
+    .mu-upload-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      margin-bottom: 22px;
+    }
+    .mu-dropzone-box {
+      border: 2px dashed #93c5b5;
+      background: #f8fcfa;
+      border-radius: 12px;
+      padding: 24px 20px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 180px;
+    }
+    .mu-dropzone-box:hover, .mu-dropzone-box.dragover {
+      border-color: var(--mu-emerald);
+      background: #edf8f3;
+      transform: translateY(-1px);
+    }
+    .mu-dropzone-box.has-file {
+      border-color: #059669;
+      background: #f0fdf4;
+      border-style: solid;
+    }
+    .mu-drop-icon {
+      font-size: 2.2rem;
+      margin-bottom: 8px;
+      line-height: 1;
+    }
+    .mu-drop-label {
+      font-weight: 700;
+      font-size: 0.98rem;
+      color: var(--mu-primary);
+      margin-bottom: 4px;
+    }
+    .mu-drop-hint {
+      font-size: 0.8rem;
+      color: var(--mu-muted);
+      margin-bottom: 8px;
+    }
+    .mu-file-status {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: #065f46;
+      word-break: break-all;
+      background: #d1fae5;
+      padding: 4px 10px;
+      border-radius: 6px;
+      margin-top: 6px;
+      display: none;
+    }
+    input[type="file"].mu-file-input {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    /* Action & Alerts */
+    .mu-action-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      margin-top: 10px;
+    }
+    .mu-btn-primary {
+      background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+      color: #ffffff;
+      border: none;
+      padding: 13px 28px;
+      border-radius: 9px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(6, 78, 59, 0.25);
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mu-btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #04382a 0%, #065f46 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(6, 78, 59, 0.35);
+    }
+    .mu-btn-primary:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+      box-shadow: none;
+      opacity: 0.7;
+    }
+    .mu-alert {
+      display: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-weight: 600;
+      margin-top: 16px;
+    }
+    .mu-alert-danger {
+      background: var(--mu-danger-bg);
+      color: var(--mu-danger-text);
+      border: 1px solid #fca5a5;
+    }
+    .mu-alert-success {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #86efac;
+    }
+
+    /* KPI Summary Cards */
+    .mu-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .mu-kpi-card {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .mu-kpi-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #9ca3af;
+    }
+    .mu-kpi-card.kpi-total::before { background: #0284c7; }
+    .mu-kpi-card.kpi-updated::before { background: #10b981; }
+    .mu-kpi-card.kpi-pending::before { background: #ef4444; }
+    .mu-kpi-card.kpi-rate::before { background: #f59e0b; }
+
+    .mu-kpi-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--mu-muted);
+    }
+    .mu-kpi-value {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: var(--mu-text);
+      line-height: 1.1;
+    }
+    .mu-kpi-card.kpi-updated .mu-kpi-value { color: #047857; }
+    .mu-kpi-card.kpi-pending .mu-kpi-value { color: #b91c1c; }
+    .mu-kpi-sub {
+      font-size: 0.78rem;
+      color: #6b7280;
+    }
+
+    /* Results Header Bar */
+    .mu-results-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+    .mu-meta-pill {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .mu-meta-tag {
+      background: #e2e8f0;
+      color: #1e293b;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+    }
+    .mu-download-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .mu-btn-dl {
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .mu-btn-excel {
+      background: #047857;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(4, 120, 87, 0.25);
+    }
+    .mu-btn-excel:hover {
+      background: #065f46;
+      color: #ffffff;
+    }
+    .mu-btn-pdf {
+      background: #b91c1c;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(185, 28, 28, 0.25);
+    }
+    .mu-btn-pdf:hover {
+      background: #991b1b;
+      color: #ffffff;
+    }
+
+    /* Search & Table */
+    .mu-search-bar {
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .mu-search-input {
+      padding: 9px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      width: 320px;
+      max-width: 100%;
+    }
+    .mu-search-input:focus {
+      outline: none;
+      border-color: var(--mu-emerald);
+      box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15);
+    }
+    .mu-count-badge {
+      font-size: 0.85rem;
+      color: var(--mu-muted);
+      font-weight: 600;
+    }
+    .mu-table-wrapper {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      overflow-x: auto;
+      background: #ffffff;
+    }
+    .mu-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      text-align: left;
+    }
+    .mu-table th {
+      background: var(--mu-primary);
+      color: #ffffff;
+      padding: 11px 14px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .mu-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #1f2937;
+    }
+    .mu-table tr:nth-child(even) {
+      background: #f8fafc;
+    }
+    .mu-table tr:hover {
+      background: #f1f5f9;
+    }
+    .mu-badge-pending {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      display: inline-block;
+    }
+    .mu-zero-banner {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      color: #166534;
+      font-weight: 700;
+      font-size: 1.05rem;
+      margin-top: 10px;
+    }
+
+    /* Spinner */
+    .mu-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: mu-spin 0.8s linear infinite;
+    }
+    @keyframes mu-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="mu-topbar">
+    <div class="mu-brand">
+      <div class="mu-brand-title">
+        <span>🏛️</span>
+        <span>{{PLATFORM_NAME}}</span>
+      </div>
+      <div class="mu-brand-sub">Telangana e-Panchayat (EPTS) Automation Portal</div>
+    </div>
+    <div class="mu-nav-links">
+      <a class="mu-nav-btn" href="/manualreports">
+        <span>←</span>
+        <span>Back to Manual Reports</span>
+      </a>
+      <a class="mu-nav-btn" href="/autoreports">
+        <span>⚡</span>
+        <span>Automated Console</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="mu-container">
+    <div class="mu-card">
+      <div class="mu-header-row">
+        <div>
+          <h1 class="mu-title">
+            <span>📱</span>
+            <span>Pending Mobile Number Assessments (Lookup)</span>
+          </h1>
+          <p class="mu-desc">
+            Reconcile your Gram Panchayat <strong>House Tax Demand Register</strong> (.xls / .xlsx) against the official <strong>Mobile Numbers Updated Report</strong> (.xlsx) to immediately generate the pending property assessment list, verify owner contact coverage, and download styled Excel and landscape PDF audit reports.
+          </p>
+        </div>
+        <span class="mu-pill-live">● Live Offline Lookup Engine</span>
+      </div>
+
+      <!-- Upload Form -->
+      <form id="mu-upload-form" onsubmit="event.preventDefault();">
+        <div class="mu-upload-grid">
+          <!-- Dropzone 1: Demand Register -->
+          <div class="mu-dropzone-box" id="drop-demand">
+            <input type="file" id="file-demand" class="mu-file-input" accept=".xls,.xlsx" required>
+            <div class="mu-drop-icon">📋</div>
+            <div class="mu-drop-label">Upload Demand Register (.xls / .xlsx)</div>
+            <div class="mu-drop-hint">Drop your e-Panchayat Demand Register here or click to browse</div>
+            <div class="mu-file-status" id="status-demand"></div>
+          </div>
+
+          <!-- Dropzone 2: Mobile Numbers Updated Report -->
+          <div class="mu-dropzone-box" id="drop-updated">
+            <input type="file" id="file-updated" class="mu-file-input" accept=".xls,.xlsx" required>
+            <div class="mu-drop-icon">📱</div>
+            <div class="mu-drop-label">Upload Mobile Numbers Updated Report (.xlsx)</div>
+            <div class="mu-drop-hint">Drop the e-Panchayat Mobile Updated Report (.xlsx) here or click to browse</div>
+            <div class="mu-file-status" id="status-updated"></div>
+          </div>
+        </div>
+
+        <!-- Action Button & Alert -->
+        <div class="mu-action-row">
+          <button type="button" class="mu-btn-primary" id="btn-generate">
+            <span id="btn-icon">⚡</span>
+            <span id="btn-text">Generate Pending List</span>
+          </button>
+        </div>
+
+        <div class="mu-alert mu-alert-danger" id="mu-error-banner"></div>
+        <div class="mu-alert mu-alert-success" id="mu-success-banner"></div>
+      </form>
+    </div>
+
+    <!-- Results Section (Initially Hidden) -->
+    <div id="mu-results-card" class="mu-card" style="display:none;">
+      <!-- Results Toolbar with Metadata & Downloads -->
+      <div class="mu-results-toolbar">
+        <div class="mu-meta-pill" id="mu-meta-info">
+          <span>🏛️</span>
+          <span class="mu-meta-tag" id="meta-gp">Gram Panchayat: --</span>
+          <span class="mu-meta-tag" id="meta-mandal">Mandal: --</span>
+          <span class="mu-meta-tag" id="meta-dist">District: --</span>
+        </div>
+        <div class="mu-download-group">
+          <a class="mu-btn-dl mu-btn-excel" id="btn-dl-excel" href="#" target="_blank">
+            <span>📥</span>
+            <span>Download Excel (.xlsx)</span>
+          </a>
+          <a class="mu-btn-dl mu-btn-pdf" id="btn-dl-pdf" href="#" target="_blank">
+            <span>📄</span>
+            <span>Download PDF</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="mu-kpi-grid">
+        <div class="mu-kpi-card kpi-total">
+          <div class="mu-kpi-label">Demand Register Total</div>
+          <div class="mu-kpi-value" id="kpi-total-demand">0</div>
+          <div class="mu-kpi-sub">Total Property Assessments</div>
+        </div>
+
+        <div class="mu-kpi-card kpi-updated">
+          <div class="mu-kpi-label">Updated Assessments</div>
+          <div class="mu-kpi-value" id="kpi-total-updated">0</div>
+          <div class="mu-kpi-sub">Mobile Numbers Seeded</div>
+        </div>
+
+        <div class="mu-kpi-card kpi-pending">
+          <div class="mu-kpi-label">Pending Assessments</div>
+          <div class="mu-kpi-value" id="kpi-total-pending">0</div>
+          <div class="mu-kpi-sub">Unseeded Contact Numbers</div>
+        </div>
+
+        <div class="mu-kpi-card kpi-rate">
+          <div class="mu-kpi-label">Seeding Coverage</div>
+          <div class="mu-kpi-value" id="kpi-coverage-rate">0.0%</div>
+          <div class="mu-kpi-sub">Completion Percentage</div>
+        </div>
+      </div>
+
+      <!-- Live Preview Table -->
+      <div id="mu-preview-container">
+        <div class="mu-search-bar">
+          <input type="text" id="mu-table-search" class="mu-search-input" placeholder="🔍 Search pending assessments, names, door numbers...">
+          <div class="mu-count-badge" id="mu-preview-count">Showing 0 pending assessments</div>
+        </div>
+
+        <div class="mu-table-wrapper">
+          <table class="mu-table" id="mu-preview-table">
+            <thead>
+              <tr>
+                <th style="width:60px; text-align:center;">S.No</th>
+                <th style="width:160px; text-align:center;">Assessment Number</th>
+                <th>Owner Name</th>
+                <th style="width:160px; text-align:center;">House Number</th>
+                <th style="width:120px; text-align:center;">Remarks</th>
+              </tr>
+            </thead>
+            <tbody id="mu-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 100% Complete Zero Banner -->
+      <div id="mu-zero-banner" class="mu-zero-banner" style="display:none;">
+        🎉 <strong>Outstanding Achievement!</strong> 100% of property assessments in the Demand Register have verified mobile numbers updated. Zero pending records found.
+      </div>
+    </div>
+  </main>
+
+  {{CANONICAL_FOOTER}}
+
+  <script>
+    (function() {
+      var fileDemand = document.getElementById('file-demand');
+      var fileUpdated = document.getElementById('file-updated');
+      var dropDemand = document.getElementById('drop-demand');
+      var dropUpdated = document.getElementById('drop-updated');
+      var statusDemand = document.getElementById('status-demand');
+      var statusUpdated = document.getElementById('status-updated');
+
+      var btnGenerate = document.getElementById('btn-generate');
+      var btnIcon = document.getElementById('btn-icon');
+      var btnText = document.getElementById('btn-text');
+      var errorBanner = document.getElementById('mu-error-banner');
+      var successBanner = document.getElementById('mu-success-banner');
+
+      var resultsCard = document.getElementById('mu-results-card');
+      var metaGp = document.getElementById('meta-gp');
+      var metaMandal = document.getElementById('meta-mandal');
+      var metaDist = document.getElementById('meta-dist');
+      var btnDlExcel = document.getElementById('btn-dl-excel');
+      var btnDlPdf = document.getElementById('btn-dl-pdf');
+
+      var kpiDemand = document.getElementById('kpi-total-demand');
+      var kpiUpdated = document.getElementById('kpi-total-updated');
+      var kpiPending = document.getElementById('kpi-total-pending');
+      var kpiCoverage = document.getElementById('kpi-coverage-rate');
+
+      var tableBody = document.getElementById('mu-table-body');
+      var searchInput = document.getElementById('mu-table-search');
+      var countBadge = document.getElementById('mu-preview-count');
+      var previewContainer = document.getElementById('mu-preview-container');
+      var zeroBanner = document.getElementById('mu-zero-banner');
+
+      var rawPendingRecords = [];
+
+      function setupDropzone(inputEl, dropBox, statusEl) {
+        inputEl.addEventListener('change', function() {
+          if (inputEl.files && inputEl.files[0]) {
+            var f = inputEl.files[0];
+            dropBox.classList.add('has-file');
+            statusEl.textContent = '✓ ' + f.name + ' (' + (f.size / 1024).toFixed(1) + ' KB)';
+            statusEl.style.display = 'inline-block';
+            hideAlerts();
+          } else {
+            dropBox.classList.remove('has-file');
+            statusEl.textContent = '';
+            statusEl.style.display = 'none';
+          }
+        });
+
+        ['dragenter', 'dragover'].forEach(function(evt) {
+          dropBox.addEventListener(evt, function(e) {
+            e.preventDefault();
+            dropBox.classList.add('dragover');
+          });
+        });
+
+        ['dragleave', 'drop'].forEach(function(evt) {
+          dropBox.addEventListener(evt, function(e) {
+            e.preventDefault();
+            dropBox.classList.remove('dragover');
+          });
+        });
+
+        dropBox.addEventListener('drop', function(e) {
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            inputEl.files = e.dataTransfer.files;
+            var changeEvt = new Event('change');
+            inputEl.dispatchEvent(changeEvt);
+          }
+        });
+      }
+
+      setupDropzone(fileDemand, dropDemand, statusDemand);
+      setupDropzone(fileUpdated, dropUpdated, statusUpdated);
+
+      function showError(msg) {
+        errorBanner.textContent = msg;
+        errorBanner.style.display = 'block';
+        successBanner.style.display = 'none';
+      }
+
+      function showSuccess(msg) {
+        successBanner.textContent = msg;
+        successBanner.style.display = 'block';
+        errorBanner.style.display = 'none';
+      }
+
+      function hideAlerts() {
+        errorBanner.style.display = 'none';
+        successBanner.style.display = 'none';
+      }
+
+      btnGenerate.addEventListener('click', async function() {
+        hideAlerts();
+
+        var dFile = fileDemand.files && fileDemand.files[0];
+        var uFile = fileUpdated.files && fileUpdated.files[0];
+
+        if (!dFile) {
+          showError('Please select or drop the Demand Register file (.xls / .xlsx).');
+          return;
+        }
+        if (!uFile) {
+          showError('Please select or drop the Mobile Numbers Updated Report file (.xlsx).');
+          return;
+        }
+
+        btnGenerate.disabled = true;
+        btnIcon.innerHTML = '<span class="mu-spinner"></span>';
+        btnText.textContent = 'Reconciling Assessments...';
+
+        var formData = new FormData();
+        formData.append('demand_file', dFile);
+        formData.append('updated_file', uFile);
+
+        try {
+          var resp = await fetch('/api/manual-reports/pending-mobile-assessments', {
+            method: 'POST',
+            body: formData
+          });
+
+          var data = await resp.json();
+
+          if (!resp.ok) {
+            var errMsg = data.detail || 'Reconciliation failed. Please verify the uploaded files.';
+            showError(errMsg);
+            return;
+          }
+
+          renderResults(data);
+          showSuccess('Reconciliation complete! Generated pending assessment lookup report.');
+        } catch (err) {
+          showError('Connection error: ' + (err.message || 'Server request failed'));
+        } finally {
+          btnGenerate.disabled = false;
+          btnIcon.innerHTML = '⚡';
+          btnText.textContent = 'Generate Pending List';
+        }
+      });
+
+      function renderResults(data) {
+        resultsCard.style.display = 'block';
+
+        // Metadata
+        var meta = data.metadata || {};
+        metaGp.textContent = 'Gram Panchayat: ' + (meta.gram_panchayat || 'N/A');
+        metaMandal.textContent = 'Mandal: ' + (meta.mandal || 'N/A');
+        metaDist.textContent = 'District: ' + (meta.district || 'N/A');
+
+        // Downloads
+        btnDlExcel.href = data.excel_download_url;
+        btnDlPdf.href = data.pdf_download_url;
+
+        // KPIs
+        kpiDemand.textContent = Number(data.total_demand || 0).toLocaleString();
+        kpiUpdated.textContent = Number(data.total_updated || 0).toLocaleString();
+        kpiPending.textContent = Number(data.total_pending || 0).toLocaleString();
+        kpiCoverage.textContent = (data.coverage_pct !== undefined ? data.coverage_pct : 0.0) + '%';
+
+        rawPendingRecords = data.preview || [];
+
+        if (data.total_pending === 0) {
+          previewContainer.style.display = 'none';
+          zeroBanner.style.display = 'block';
+        } else {
+          previewContainer.style.display = 'block';
+          zeroBanner.style.display = 'none';
+          renderTableRows(rawPendingRecords);
+        }
+
+        resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      function renderTableRows(records) {
+        tableBody.innerHTML = '';
+        countBadge.textContent = 'Showing ' + records.length + ' of ' + (rawPendingRecords.length) + ' pending assessment' + (records.length === 1 ? '' : 's');
+
+        if (!records.length) {
+          tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6b7280;">No matching pending records found.</td></tr>';
+          return;
+        }
+
+        records.forEach(function(r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML = 
+            '<td style="text-align:center; font-weight:600; color:#64748b;">' + (r.sl_no || '--') + '</td>' +
+            '<td style="text-align:center; font-weight:700; color:#064e3b;">' + (r.assessment_number || '--') + '</td>' +
+            '<td><strong>' + escapeHtml(r.owner_name || '--') + '</strong></td>' +
+            '<td style="text-align:center;">' + escapeHtml(r.house_number || '--') + '</td>' +
+            '<td style="text-align:center;"><span class="mu-badge-pending">' + escapeHtml(r.remarks || 'Pending') + '</span></td>';
+          tableBody.appendChild(tr);
+        });
+      }
+
+      searchInput.addEventListener('input', function() {
+        var query = (searchInput.value || '').toLowerCase().trim();
+        if (!query) {
+          renderTableRows(rawPendingRecords);
+          return;
+        }
+        var filtered = rawPendingRecords.filter(function(r) {
+          return (
+            (r.assessment_number && String(r.assessment_number).toLowerCase().includes(query)) ||
+            (r.owner_name && String(r.owner_name).toLowerCase().includes(query)) ||
+            (r.house_number && String(r.house_number).toLowerCase().includes(query))
+          );
+        });
+        renderTableRows(filtered);
+      });
+
+      function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -730,6 +730,7 @@
   var MODULE_CARD_MAP = {
     module_dsr_excel: ['card-policy-module_dsr_excel'],
     module_dsr_multiday: ['card-policy-module_dsr_multiday'],
+    module_mobile_updation: ['card-policy-module_mobile_updation'],
     module_dsr_automation: ['card-policy-module_dsr_automation'],
     module_state_format: ['card-policy-module_state_format'],
     module_gp_balance_automation: ['card-policy-module_gp_balance_automation'],
@@ -746,6 +747,7 @@
   var DEFAULT_BADGE_LABELS = {
     module_dsr_excel: '● Live',
     module_dsr_multiday: '● Live',
+    module_mobile_updation: '● Live',
     module_dcb_live: '● Live',
     module_dsr_automation: '● Live',
     module_state_format: '● Live',

@@ -34,7 +34,7 @@
     },
     {
       title: 'Platform 1 · Manual Reports Modules',
-      keys: ['module_dsr_excel', 'module_dsr_multiday'],
+      keys: ['module_dsr_excel', 'module_dsr_multiday', 'module_mobile_updation'],
     },
     {
       title: 'Live Analytics & Console Robot Modules',

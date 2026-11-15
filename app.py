@@ -32,6 +32,7 @@ from gp_balance.router import router as gp_balance_router
 from inspections.router import router as inspections_router
 from mas.router import mas_alias_router, mas_upper_router, router as mas_router, web_router as mas_web_router
 from multiday_dsr.router import router as multiday_dsr_router
+from mobile_updation.router import router as mobile_updation_router
 from Auto_Multi_DSR.router import router as auto_multi_dsr_router
 from portal.admin_router import router as admin_router
 from portal.billing_router import router as billing_router
@@ -60,6 +61,10 @@ def _resolve_tracked_tool_event(method: str, path: str) -> tuple[str, str, str] 
         return "portal", "dsr_multiday", "generate"
     if m == "GET" and (p.startswith("/api/multiday-dsr/jobs/") and any(k in p for k in ("download-pdf", "download-excel"))):
         return "portal", "dsr_multiday", "download"
+    if m == "POST" and p == "/api/manual-reports/pending-mobile-assessments":
+        return "portal", "mobile_updation", "generate"
+    if m == "GET" and p.startswith("/api/manual-reports/pending-mobile-assessments") and "download" in p:
+        return "portal", "mobile_updation", "download"
     if p in ("/api/tax/report.pdf", "/api/tax/download-pdf", "/api/tax/powerbi-report.pdf", "/api/tax/download") and m == "GET":
         return "portal", "dcb_live", p.rsplit("/", 1)[-1]
     if p == "/api/tax/refresh" and m == "POST":
@@ -258,6 +263,7 @@ def create_app() -> FastAPI:
     app.include_router(gp_balance_router)
     app.include_router(inspections_router)
     app.include_router(multiday_dsr_router)
+    app.include_router(mobile_updation_router)
     app.include_router(auto_multi_dsr_router)
     app.include_router(mas_web_router)
     app.include_router(mas_router)
