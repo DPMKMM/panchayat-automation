@@ -8,8 +8,8 @@
   var PLATFORM_NAME = 'e-Panchayat Automation';
   var CONSOLE_NAME = 'e-Panchayat Automation Console';
   var WELCOME_MESSAGE = 'Welcome to ' + PLATFORM_NAME;
-  var DESIGNATIONS = ['DPO', 'DPM', 'DLPO', 'MPDO', 'MPO', 'PS', 'DEO'];
-  var ROLES = ['Mandal Level', 'Division Level', 'District Level'];
+  var DESIGNATIONS = ['CITIZEN', 'PS', 'DEO', 'MPO', 'MPDO', 'DLPO', 'DPO', 'DPM', 'COLLECTOR', 'SPECIAL OFFICER', 'OTHER'];
+  var ROLES = ['Mandal Level', 'Division Level', 'District Level', 'Citizen'];
 
   window.FIREBASE_CONFIG = null;
   window.isPortalAuthenticated = false;
@@ -1311,8 +1311,8 @@
       return;
     }
 
-    var name = user.name || 'Officer';
-    var desig = user.designation || 'OFFICER';
+    var name = user.display_name || user.name || 'Officer';
+    var desig = user.effective_designation || (user.designation === 'OTHER' && user.designation_other ? user.designation_other : (user.designation || 'OFFICER'));
     var gmail = user.gmail || user.email || '';
 
     // Legacy / In-Flow Header Bar (User Level removed)
@@ -1387,60 +1387,352 @@
     }
   };
 
-  window.openChangeDesignationModal = function () {
-    var modal = document.getElementById('change-designation-modal');
-    if (!modal) return;
-    var currentDesig = (window.currentUser && window.currentUser.designation) || '';
-    var sel = document.getElementById('change-desig-select');
-    if (sel && currentDesig) {
-      sel.value = currentDesig;
+  // ---------------------------------------------------------------------------
+  // Email/Password Registration, Sign In & Password Visibility Handlers
+  // ---------------------------------------------------------------------------
+
+  window.switchAuthView = function (mode) {
+    var loginView = document.getElementById('auth-view-login');
+    var regView = document.getElementById('auth-view-register');
+    var alertEl = document.getElementById('portal-login-alert');
+    if (alertEl) alertEl.style.display = 'none';
+
+    if (mode === 'register') {
+      if (loginView) loginView.style.display = 'none';
+      if (regView) regView.style.display = 'block';
+      var firstInput = document.getElementById('reg-surname');
+      if (firstInput) firstInput.focus();
+    } else {
+      if (regView) regView.style.display = 'none';
+      if (loginView) loginView.style.display = 'block';
+      var loginInput = document.getElementById('login-email');
+      if (loginInput) loginInput.focus();
     }
+  };
+
+  window.togglePasswordVisibility = function (inputId, btnEl) {
+    var inp = document.getElementById(inputId);
+    if (!inp) return;
+    if (inp.type === 'password') {
+      inp.type = 'text';
+      if (btnEl) btnEl.textContent = '🙈';
+    } else {
+      inp.type = 'password';
+      if (btnEl) btnEl.textContent = '👁️';
+    }
+  };
+
+  window.handleDesignationSelectChange = function (selectEl, otherWrapId) {
+    if (!selectEl) return;
+    var otherWrap = document.getElementById(otherWrapId);
+    if (!otherWrap) return;
+    var isOther = (selectEl.value === 'OTHER');
+    otherWrap.style.display = isOther ? 'block' : 'none';
+    var otherInp = otherWrap.querySelector('input');
+    if (otherInp) {
+      otherInp.required = isOther;
+      if (isOther) otherInp.focus();
+    }
+  };
+
+  window.handleEmailLogin = async function (e) {
+    if (e) e.preventDefault();
+    var emailInp = document.getElementById('login-email');
+    var pwdInp = document.getElementById('login-password');
+    var btn = document.getElementById('btn-email-login');
+    var alertEl = document.getElementById('portal-login-alert');
+
+    if (!emailInp || !pwdInp) return;
+    var email = (emailInp.value || '').trim();
+    var pwd = (pwdInp.value || '');
+
+    function showLoginAlert(msg, isSuccess) {
+      if (!alertEl) return;
+      alertEl.textContent = msg;
+      alertEl.style.display = 'block';
+      if (isSuccess) {
+        alertEl.style.background = '#f0fdf4';
+        alertEl.style.color = '#166534';
+        alertEl.style.border = '1px solid #bbf7d0';
+      } else {
+        alertEl.style.background = '#fef2f2';
+        alertEl.style.color = '#991b1b';
+        alertEl.style.border = '1px solid #fecaca';
+      }
+    }
+
+    if (!email || !pwd) {
+      showLoginAlert('Please enter both your registered email address and password.', false);
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
+    if (alertEl) alertEl.style.display = 'none';
+
+    try {
+      var res = await window.safeFetchJson('/api/auth/email-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email, password: pwd })
+      });
+
+      if (res && res.success) {
+        window.isPortalAuthenticated = true;
+        window.currentUser = res.user;
+        if (typeof window.applyPortalLoginState === 'function') {
+          window.applyPortalLoginState(true, res.user);
+        } else if (typeof window.applyScreenVisualState === 'function') {
+          window.applyScreenVisualState('workspace', res.user);
+        }
+        if (typeof window.updateHeaderUserInfo === 'function') {
+          window.updateHeaderUserInfo(res.user);
+        }
+        if (typeof window.showPortalNotice === 'function') {
+          window.showPortalNotice(res.message || 'Signed in successfully!', 'success');
+        }
+      } else {
+        var msg = (res && res.message) || 'Sign-in failed. Please verify credentials.';
+        showLoginAlert(msg, false);
+      }
+    } catch (err) {
+      showLoginAlert('Connection error: ' + (err.message || 'Could not connect to server.'), false);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'SIGN IN'; }
+    }
+  };
+
+  window.handleRegistration = async function (e) {
+    if (e) e.preventDefault();
+    var alertEl = document.getElementById('portal-login-alert');
+    var btn = document.getElementById('btn-register-action');
+
+    var surname = (document.getElementById('reg-surname') && document.getElementById('reg-surname').value || '').trim();
+    var name = (document.getElementById('reg-name') && document.getElementById('reg-name').value || '').trim();
+    var displayName = (document.getElementById('reg-display-name') && document.getElementById('reg-display-name').value || '').trim();
+    var gender = (document.getElementById('reg-gender') && document.getElementById('reg-gender').value || '').trim();
+    var mobile = (document.getElementById('reg-mobile') && document.getElementById('reg-mobile').value || '').trim();
+    var state = (document.getElementById('reg-state') && document.getElementById('reg-state').value || '').trim();
+    var district = (document.getElementById('reg-district') && document.getElementById('reg-district').value || '').trim();
+    var mandal = (document.getElementById('reg-mandal') && document.getElementById('reg-mandal').value || '').trim();
+    var village = (document.getElementById('reg-village') && document.getElementById('reg-village').value || '').trim();
+    var desig = (document.getElementById('reg-designation') && document.getElementById('reg-designation').value || '').trim();
+    var desigOther = (document.getElementById('reg-designation-other') && document.getElementById('reg-designation-other').value || '').trim();
+    var email = (document.getElementById('reg-email') && document.getElementById('reg-email').value || '').trim();
+    var pwd = (document.getElementById('reg-password') && document.getElementById('reg-password').value || '');
+    var confirmPwd = (document.getElementById('reg-confirm-password') && document.getElementById('reg-confirm-password').value || '');
+
+    function showRegAlert(msg) {
+      if (alertEl) {
+        alertEl.textContent = msg;
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#fef2f2';
+        alertEl.style.color = '#991b1b';
+        alertEl.style.border = '1px solid #fecaca';
+      }
+    }
+
+    if (pwd !== confirmPwd) {
+      showRegAlert('Password and Confirm Password do not match.');
+      return;
+    }
+    if (pwd.length < 6) {
+      showRegAlert('Password must be at least 6 characters long.');
+      return;
+    }
+    if (desig === 'OTHER' && !desigOther) {
+      showRegAlert('Please specify your designation in the manual text box.');
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Registering Account...'; }
+    if (alertEl) alertEl.style.display = 'none';
+
+    try {
+      var res = await window.safeFetchJson('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          surname: surname,
+          name: name,
+          display_name: displayName,
+          gender: gender,
+          mobile_number: mobile,
+          state: state,
+          district: district,
+          mandal: mandal,
+          village_gp: village,
+          designation: desig,
+          designation_other: desigOther,
+          email: email,
+          password: pwd
+        })
+      });
+
+      if (res && res.success) {
+        window.isPortalAuthenticated = true;
+        window.currentUser = res.user;
+        if (typeof window.applyPortalLoginState === 'function') {
+          window.applyPortalLoginState(true, res.user);
+        } else if (typeof window.applyScreenVisualState === 'function') {
+          window.applyScreenVisualState('workspace', res.user);
+        }
+        if (typeof window.updateHeaderUserInfo === 'function') {
+          window.updateHeaderUserInfo(res.user);
+        }
+        if (typeof window.showPortalNotice === 'function') {
+          window.showPortalNotice(res.message || 'Account registered successfully!', 'success');
+        }
+      } else {
+        showRegAlert((res && res.message) || 'Registration failed. Please check your details.');
+      }
+    } catch (err) {
+      showRegAlert('Connection error: ' + (err.message || 'Could not register account.'));
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'REGISTER NOW'; }
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Comprehensive User Profile & Designation Modal Handlers
+  // ---------------------------------------------------------------------------
+
+  window.openUserProfileModal = function () {
+    var modal = document.getElementById('user-profile-modal');
+    if (!modal) return;
+    var u = window.currentUser || {};
+
+    var sName = document.getElementById('profile-field-surname');
+    var name = document.getElementById('profile-field-name');
+    var dName = document.getElementById('profile-field-display-name');
+    var gender = document.getElementById('profile-field-gender');
+    var mobile = document.getElementById('profile-field-mobile');
+    var state = document.getElementById('profile-field-state');
+    var district = document.getElementById('profile-field-district');
+    var mandal = document.getElementById('profile-field-mandal');
+    var village = document.getElementById('profile-field-village');
+    var desig = document.getElementById('profile-field-designation');
+    var desigOther = document.getElementById('profile-field-designation-other');
+    var emailDisp = document.getElementById('profile-field-account-email');
+    var authTag = document.getElementById('profile-field-auth-provider-tag');
+    var alertEl = document.getElementById('user-profile-alert');
+    if (alertEl) alertEl.style.display = 'none';
+
+    if (sName) sName.value = u.surname || '';
+    if (name) name.value = u.name || '';
+    if (dName) dName.value = u.display_name || u.name || '';
+    if (gender) gender.value = u.gender || '';
+    if (mobile) mobile.value = u.mobile_number || u.phone || '';
+    if (state) state.value = u.state || 'Telangana';
+    if (district) district.value = u.district || '';
+    if (mandal) mandal.value = u.mandal || '';
+    if (village) village.value = u.village_gp || u.village || '';
+
+    if (desig) {
+      var dVal = (u.designation || 'CITIZEN').toUpperCase();
+      desig.value = dVal;
+      window.handleDesignationSelectChange(desig, 'profile-field-designation-other-wrap');
+    }
+    if (desigOther) desigOther.value = u.designation_other || '';
+
+    if (emailDisp) emailDisp.textContent = u.gmail || u.email || 'Registered User';
+    if (authTag) {
+      var isGoogle = (u.auth_provider === 'google' || (u.firebase_uid && !u.firebase_uid.startsWith('email:')));
+      authTag.textContent = isGoogle ? 'Google Account' : 'Email & Password Account';
+    }
+
     modal.style.display = 'flex';
   };
 
-  window.closeChangeDesignationModal = function () {
-    var modal = document.getElementById('change-designation-modal');
+  window.closeUserProfileModal = function () {
+    var modal = document.getElementById('user-profile-modal');
     if (modal) modal.style.display = 'none';
   };
 
-  window.submitChangeDesignation = async function (e) {
-    if (e) e.preventDefault();
-    var sel = document.getElementById('change-desig-select');
-    var btn = document.getElementById('btn-save-designation');
-    if (!sel) return;
-    var desig = sel.value;
-    if (!desig) return;
+  window.openChangeDesignationModal = window.openUserProfileModal;
+  window.closeChangeDesignationModal = window.closeUserProfileModal;
 
-    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+  window.submitUpdateProfile = async function (e) {
+    if (e) e.preventDefault();
+    var alertEl = document.getElementById('user-profile-alert');
+    var btn = document.getElementById('btn-save-profile');
+
+    var surname = (document.getElementById('profile-field-surname') && document.getElementById('profile-field-surname').value || '').trim();
+    var name = (document.getElementById('profile-field-name') && document.getElementById('profile-field-name').value || '').trim();
+    var displayName = (document.getElementById('profile-field-display-name') && document.getElementById('profile-field-display-name').value || '').trim();
+    var gender = (document.getElementById('profile-field-gender') && document.getElementById('profile-field-gender').value || '').trim();
+    var mobile = (document.getElementById('profile-field-mobile') && document.getElementById('profile-field-mobile').value || '').trim();
+    var state = (document.getElementById('profile-field-state') && document.getElementById('profile-field-state').value || '').trim();
+    var district = (document.getElementById('profile-field-district') && document.getElementById('profile-field-district').value || '').trim();
+    var mandal = (document.getElementById('profile-field-mandal') && document.getElementById('profile-field-mandal').value || '').trim();
+    var village = (document.getElementById('profile-field-village') && document.getElementById('profile-field-village').value || '').trim();
+    var desig = (document.getElementById('profile-field-designation') && document.getElementById('profile-field-designation').value || '').trim();
+    var desigOther = (document.getElementById('profile-field-designation-other') && document.getElementById('profile-field-designation-other').value || '').trim();
+
+    if (desig === 'OTHER' && !desigOther) {
+      if (alertEl) {
+        alertEl.textContent = 'Please enter your designation in the manual specification field.';
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#fef2f2';
+        alertEl.style.color = '#991b1b';
+        alertEl.style.border = '1px solid #fecaca';
+      }
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving Profile...'; }
+    if (alertEl) alertEl.style.display = 'none';
+
     try {
-      var res = await window.safeFetchJson('/api/auth/update-designation', {
+      var res = await window.safeFetchJson('/api/auth/update-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ designation: desig })
+        body: JSON.stringify({
+          surname: surname,
+          name: name,
+          display_name: displayName,
+          gender: gender,
+          mobile_number: mobile,
+          state: state,
+          district: district,
+          mandal: mandal,
+          village_gp: village,
+          designation: desig,
+          designation_other: desigOther
+        })
       });
+
       if (res && res.success) {
-        if (window.currentUser) {
-          window.currentUser.designation = desig;
+        window.currentUser = res.user;
+        if (typeof window.updateHeaderUserInfo === 'function') {
+          window.updateHeaderUserInfo(res.user);
         }
-        var ribDesig = document.getElementById('ribbon-user-desig');
-        if (ribDesig) ribDesig.textContent = desig + ' ✏️';
-        var mobDesig = document.getElementById('mobile-user-desig');
-        if (mobDesig) mobDesig.textContent = desig + ' ✏️';
-        window.closeChangeDesignationModal();
-        if (typeof window.showNotice === 'function') {
-          window.showNotice('Official designation updated to ' + desig + ' successfully!', 'success');
-        } else if (typeof window.showPortalNotice === 'function') {
-          window.showPortalNotice('Official designation updated to ' + desig + ' successfully!', 'success');
+        window.closeUserProfileModal();
+        if (typeof window.showPortalNotice === 'function') {
+          window.showPortalNotice(res.message || 'Profile updated successfully!', 'success');
         }
       } else {
-        window.showPortalNotice((res && res.message) || 'Failed to update designation.', 'error');
+        if (alertEl) {
+          alertEl.textContent = (res && res.message) || 'Failed to update profile.';
+          alertEl.style.display = 'block';
+          alertEl.style.background = '#fef2f2';
+          alertEl.style.color = '#991b1b';
+          alertEl.style.border = '1px solid #fecaca';
+        }
       }
     } catch (err) {
-      window.showPortalNotice('Error updating designation: ' + err.message, 'error');
+      if (alertEl) {
+        alertEl.textContent = 'Error updating profile: ' + (err.message || 'Unknown error');
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#fef2f2';
+        alertEl.style.color = '#991b1b';
+        alertEl.style.border = '1px solid #fecaca';
+      }
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = 'Save Designation'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Profile Details'; }
     }
   };
+
+  window.submitChangeDesignation = window.submitUpdateProfile;
 
   window.applyScreenVisualState = function (stateName, user) {
     var body = document.body;

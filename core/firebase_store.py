@@ -31,8 +31,20 @@ from core.firebase_app import get_live_firestore_client, is_inmemory_firestore_e
 
 logger = logging.getLogger("firebase_store")
 
-VALID_DESIGNATIONS = {"DPO", "DPM", "DLPO", "MPDO", "MPO", "PS", "DEO"}
-VALID_ROLES = {"Mandal Level", "Division Level", "District Level"}
+VALID_DESIGNATIONS = {
+    "COLLECTOR",
+    "DPO",
+    "DPM",
+    "DLPO",
+    "MPDO",
+    "MPO",
+    "PS",
+    "SPECIAL OFFICER",
+    "DEO",
+    "CITIZEN",
+    "OTHER",
+}
+VALID_ROLES = {"Mandal Level", "Division Level", "District Level", "Citizen"}
 VALID_SCOPES = {"portal", "console"}
 VALID_STATUSES = {"Active", "Disabled"}
 VALID_SUBSCRIPTION_STATUSES = {"free_preview", "trial", "active", "past_due", "cancelled", "expired"}
@@ -534,12 +546,37 @@ def _token_doc_id(token: str) -> str:
     return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
 
 
+def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
+    """Compute PBKDF2-HMAC-SHA256 hash of password with 100,000 iterations and salt."""
+    clean_pwd = str(password or "")
+    if not clean_pwd:
+        raise ValueError("Password cannot be empty.")
+    if not salt:
+        salt = secrets.token_hex(16)
+    hashed = hashlib.pbkdf2_hmac(
+        "sha256",
+        clean_pwd.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations=100_000,
+    ).hex()
+    return hashed, salt
+
+
+def verify_password(password: str, expected_hash: str, salt: str) -> bool:
+    """Verify password against salted PBKDF2-HMAC-SHA256 hash using constant-time comparison."""
+    if not password or not expected_hash or not salt:
+        return False
+    computed, _ = hash_password(password, salt=salt)
+    return secrets.compare_digest(computed, expected_hash)
+
+
 def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     if not raw:
         return None
     d = dict(raw)
     gmail = str(d.get("gmail") or d.get("email") or "").strip().lower()
     desig = str(d.get("designation") or "").strip().upper()
+    desig_other = str(d.get("designation_other") or "").strip()
     role = str(d.get("role") or "").strip() or designation_to_role(desig)
     uid = str(d.get("firebase_uid") or d.get("google_uid") or "").strip()
     if gmail in REVOKED_ADMIN_EMAILS:
@@ -550,14 +587,35 @@ def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[
     sub_status = str(d.get("subscription_status") or ("active" if has_sub else "free_preview")).strip().lower()
     if sub_status not in VALID_SUBSCRIPTION_STATUSES:
         sub_status = "active" if has_sub else "free_preview"
+
+    first_name = str(d.get("name") or "").strip()
+    surname = str(d.get("surname") or "").strip()
+    display_name = str(d.get("display_name") or d.get("username") or first_name or "").strip()
+    pwd_hash = str(d.get("password_hash") or "").strip()
+    pwd_salt = str(d.get("password_salt") or "").strip()
+    auth_prov = str(d.get("auth_provider") or ("google" if (uid and not pwd_hash) else "email")).strip()
+
     return {
         "user_id": str(d.get("user_id") or doc_id),
         "firebase_uid": uid,
         "google_uid": uid,
         "email": gmail,
         "gmail": gmail,
-        "name": str(d.get("name") or "").strip(),
+        "name": first_name,
+        "surname": surname,
+        "display_name": display_name,
+        "username": str(d.get("username") or display_name or d.get("user_id") or "").strip(),
+        "gender": str(d.get("gender") or "").strip(),
+        "state": str(d.get("state") or "Telangana").strip(),
+        "district": str(d.get("district") or "").strip(),
+        "mandal": str(d.get("mandal") or "").strip(),
+        "village_gp": str(d.get("village_gp") or d.get("village") or "").strip(),
+        "village": str(d.get("village_gp") or d.get("village") or "").strip(),
         "designation": desig,
+        "designation_other": desig_other,
+        "auth_provider": auth_prov,
+        "password_hash": pwd_hash,
+        "password_salt": pwd_salt,
         "role": role,
         "mobile_number": str(d.get("mobile_number") or "").strip(),
         "profile_picture": str(d.get("profile_picture") or "").strip(),
@@ -581,13 +639,15 @@ def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[
 
 def designation_to_role(designation: str) -> str:
     d = str(designation or "").strip().upper()
-    if d in {"DPO", "DPM"}:
+    if d in {"COLLECTOR", "DPO", "DPM", "SPECIAL OFFICER"}:
         return "District Level"
     if d == "DLPO":
         return "Division Level"
     if d in {"MPDO", "MPO", "PS", "DEO"}:
         return "Mandal Level"
-    return ""
+    if d == "CITIZEN":
+        return "Citizen"
+    return "Mandal Level" if d else ""
 
 
 def _pick_best_user_doc(snaps: list[Any]) -> Optional[dict[str, Any]]:
@@ -859,6 +919,226 @@ def register_user_profile(
     except Exception as exc:
         logger.error("Failed to save profile in Cloud Firestore: %s", exc)
         return False, f"Failed to save profile: {exc}", None
+
+
+def register_email_password_user(
+    email: str,
+    password: str,
+    surname: str = "",
+    name: str = "",
+    display_name: str = "",
+    gender: str = "",
+    mobile_number: str = "",
+    state: str = "Telangana",
+    district: str = "",
+    mandal: str = "",
+    village_gp: str = "",
+    designation: str = "CITIZEN",
+    designation_other: str = "",
+) -> dict[str, Any]:
+    """Register a new user account with registered email, password, and comprehensive profile details."""
+    clean_email = str(email or "").strip().lower()
+    if not clean_email or "@" not in clean_email or "." not in clean_email.split("@")[-1]:
+        raise ValueError("Please provide a valid email address.")
+
+    existing = get_user_by_gmail(clean_email)
+    if existing is not None:
+        raise ValueError("An account with this email address already exists. Please sign in.")
+
+    clean_pwd = str(password or "")
+    if len(clean_pwd) < 6:
+        raise ValueError("Password must be at least 6 characters long.")
+
+    clean_name = re.sub(r"\s+", " ", str(name or "").strip())
+    if len(clean_name) < 2:
+        raise ValueError("Please enter your name.")
+
+    clean_surname = re.sub(r"\s+", " ", str(surname or "").strip())
+    clean_display = re.sub(r"\s+", " ", str(display_name or "").strip()) or clean_name
+
+    digits = re.sub(r"\D+", "", str(mobile_number or ""))
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    if not re.fullmatch(r"[6-9]\d{9}", digits):
+        raise ValueError("Mobile number must be a valid 10-digit Indian number (starting with 6-9).")
+
+    clean_desig = str(designation or "CITIZEN").strip().upper()
+    if clean_desig not in VALID_DESIGNATIONS:
+        clean_desig = "CITIZEN" if not clean_desig else "OTHER"
+
+    clean_other = str(designation_other or "").strip()
+    if clean_desig == "OTHER" and not clean_other:
+        raise ValueError("Please specify your designation.")
+
+    clean_role = designation_to_role(clean_desig)
+    pwd_hash, pwd_salt = hash_password(clean_pwd)
+
+    now = _utc_now_iso()
+    new_user_id = f"usr_{secrets.token_hex(6)}"
+    col = _db().collection(COL_USERS)
+
+    payload = {
+        "user_id": new_user_id,
+        "firebase_uid": f"email:{clean_email}",
+        "google_uid": f"email:{clean_email}",
+        "email": clean_email,
+        "gmail": clean_email,
+        "surname": clean_surname,
+        "name": clean_name,
+        "display_name": clean_display,
+        "username": clean_display,
+        "gender": str(gender or "").strip(),
+        "mobile_number": digits,
+        "state": str(state or "Telangana").strip(),
+        "district": str(district or "").strip(),
+        "mandal": str(mandal or "").strip(),
+        "village_gp": str(village_gp or "").strip(),
+        "village": str(village_gp or "").strip(),
+        "designation": clean_desig,
+        "designation_other": clean_other,
+        "role": clean_role,
+        "password_hash": pwd_hash,
+        "password_salt": pwd_salt,
+        "auth_provider": "email",
+        "profile_picture": "",
+        "registration_date": now,
+        "last_login": now,
+        "updated_at": now,
+        "account_status": "Active",
+        "profile_completed": True,
+        "is_admin": is_admin_email(clean_email),
+        "can_access_portal": True,
+        "can_access_console": True,
+        "has_automated_subscription": False,
+        "subscription_status": "free_preview",
+        "subscription_plan_id": "",
+        "subscription_plan_name": "",
+        "subscription_expires_at": "",
+        "razorpay_customer_id": "",
+        "razorpay_subscription_id": "",
+    }
+
+    col.document(new_user_id).set(payload)
+    created = get_user_by_id(new_user_id)
+    return created or payload
+
+
+def authenticate_email_password_user(
+    email: str,
+    password: str,
+    platform_scope: str = "portal",
+) -> dict[str, Any]:
+    """Authenticate a registered officer or citizen via registered email and password."""
+    clean_email = str(email or "").strip().lower()
+    clean_pwd = str(password or "")
+    if not clean_email or not clean_pwd:
+        raise ValueError("Please provide both registered email address and password.")
+
+    user = get_user_by_gmail(clean_email)
+    if user is None:
+        raise ValueError("No account found with this email. Please check your email or click 'Sign Up' to create an account.")
+
+    if user.get("account_status") != "Active":
+        raise PermissionError("Your account has been disabled by an administrator. Please contact district support.")
+
+    pwd_hash = str(user.get("password_hash") or "").strip()
+    pwd_salt = str(user.get("password_salt") or "").strip()
+    if not pwd_hash or not pwd_salt:
+        raise ValueError("This account was created with Google Sign-In. Please click 'Sign in with Google' to log in.")
+
+    if not verify_password(clean_pwd, pwd_hash, pwd_salt):
+        raise ValueError("Incorrect password. Please verify your password and try again.")
+
+    scope = str(platform_scope or "portal").strip().lower()
+    if scope == "portal" and not user.get("can_access_portal", True):
+        raise PermissionError("Access to Panchayat Automation is restricted for your account.")
+    if scope == "console" and not user.get("can_access_console", True):
+        raise PermissionError("Access to Panchayat Automation Console is restricted for your account.")
+
+    now = _utc_now_iso()
+    col = _db().collection(COL_USERS)
+    target_doc_id = _resolve_user_doc_id(col, user["user_id"]) or user["user_id"]
+    col.document(target_doc_id).update({"last_login": now, "updated_at": now})
+    user["last_login"] = now
+    user["updated_at"] = now
+    _update_cached_user_sessions(user["user_id"], user)
+    return user
+
+
+def update_user_profile_details(
+    user_id: str,
+    surname: str = "",
+    name: str = "",
+    display_name: str = "",
+    gender: str = "",
+    mobile_number: str = "",
+    state: str = "",
+    district: str = "",
+    mandal: str = "",
+    village_gp: str = "",
+    designation: str = "",
+    designation_other: str = "",
+) -> dict[str, Any]:
+    """Update profile details for an authenticated user and synchronize active sessions."""
+    clean_uid = str(user_id or "").strip()
+    existing = get_user_by_id(clean_uid)
+    if existing is None:
+        raise ValueError("User account not found.")
+
+    clean_name = re.sub(r"\s+", " ", str(name or existing.get("name") or "").strip())
+    if len(clean_name) < 2:
+        raise ValueError("Please enter your name.")
+
+    clean_surname = re.sub(r"\s+", " ", str(surname or "").strip())
+    clean_display = re.sub(r"\s+", " ", str(display_name or "").strip()) or clean_name
+
+    raw_mobile = str(mobile_number or existing.get("mobile_number") or "").strip()
+    digits = re.sub(r"\D+", "", raw_mobile)
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+    if digits and not re.fullmatch(r"[6-9]\d{9}", digits):
+        raise ValueError("Mobile number must be a valid 10-digit Indian number (starting with 6-9).")
+
+    clean_desig = str(designation or existing.get("designation") or "CITIZEN").strip().upper()
+    if clean_desig not in VALID_DESIGNATIONS:
+        clean_desig = "OTHER"
+
+    clean_other = str(designation_other or existing.get("designation_other") or "").strip()
+    if clean_desig == "OTHER" and not clean_other:
+        raise ValueError("Please specify your designation.")
+
+    clean_role = designation_to_role(clean_desig)
+    now = _utc_now_iso()
+
+    updates = {
+        "surname": clean_surname,
+        "name": clean_name,
+        "display_name": clean_display,
+        "username": clean_display,
+        "gender": str(gender or existing.get("gender") or "").strip(),
+        "mobile_number": digits or existing.get("mobile_number", ""),
+        "state": str(state or existing.get("state") or "Telangana").strip(),
+        "district": str(district or existing.get("district") or "").strip(),
+        "mandal": str(mandal or existing.get("mandal") or "").strip(),
+        "village_gp": str(village_gp or existing.get("village_gp") or "").strip(),
+        "village": str(village_gp or existing.get("village_gp") or "").strip(),
+        "designation": clean_desig,
+        "designation_other": clean_other,
+        "role": clean_role,
+        "profile_completed": True,
+        "updated_at": now,
+    }
+
+    col = _db().collection(COL_USERS)
+    target_doc_id = _resolve_user_doc_id(col, clean_uid) or clean_uid
+    col.document(target_doc_id).update(updates)
+
+    updated = _normalize_user_doc(target_doc_id, col.document(target_doc_id).get().to_dict())
+    if updated is None:
+        raise RuntimeError("Failed to read updated profile from database.")
+
+    _update_cached_user_sessions(clean_uid, updated)
+    return updated
 
 
 _SESSION_CACHE: dict[str, tuple[dict[str, Any], float]] = {}

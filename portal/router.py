@@ -27,16 +27,19 @@ from core.dependencies import (
 )
 from core.firebase_app import get_firebase_runtime_status, verify_firebase_id_token
 from core.firebase_store import (
+    authenticate_email_password_user,
     authenticate_or_register_firebase_user,
     create_portal_session,
     get_portal_session,
     get_recent_feedback,
     log_usage,
+    register_email_password_user,
     register_user_profile,
     revoke_portal_session,
     save_feedback,
     update_feedback_reply,
     update_user_admin,
+    update_user_profile_details,
 )
 from core.templating import load_portal_shell_html
 from dsr import service as automation_service
@@ -48,22 +51,41 @@ _get_sid = extract_epts_session_id
 
 
 def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
-    clean_gmail = str(user.get("gmail") or "").strip().lower()
+    clean_gmail = str(user.get("gmail") or user.get("email") or "").strip().lower()
     is_adm = (
         clean_gmail not in REVOKED_ADMIN_EMAILS
         and (bool(user.get("is_admin")) or is_admin_email(clean_gmail))
     )
+    desig = str(user.get("designation") or "").strip()
+    desig_other = str(user.get("designation_other") or "").strip()
+    effective_desig = desig_other if (desig == "OTHER" and desig_other) else (desig or "CITIZEN" if desig == "CITIZEN" else "OFFICER")
+    name = str(user.get("name") or "").strip()
+    surname = str(user.get("surname") or "").strip()
+    display_name = str(user.get("display_name") or user.get("username") or name or "Officer").strip()
+
     return {
         "user_id": user.get("user_id"),
         "firebase_uid": user.get("firebase_uid") or user.get("google_uid") or "",
-        "name": user.get("name"),
-        "gmail": user.get("gmail"),
-        "email": user.get("gmail"),
-        "designation": user.get("designation") or "",
+        "name": name,
+        "surname": surname,
+        "display_name": display_name,
+        "username": str(user.get("username") or display_name or user.get("user_id") or "").strip(),
+        "gender": str(user.get("gender") or "").strip(),
+        "state": str(user.get("state") or "Telangana").strip(),
+        "district": str(user.get("district") or "").strip(),
+        "mandal": str(user.get("mandal") or "").strip(),
+        "village_gp": str(user.get("village_gp") or user.get("village") or "").strip(),
+        "village": str(user.get("village_gp") or user.get("village") or "").strip(),
+        "gmail": clean_gmail,
+        "email": clean_gmail,
+        "designation": desig,
+        "designation_other": desig_other,
+        "effective_designation": effective_desig,
         "role": user.get("role") or "",
-        "role_label": user.get("role") or "Mandal Level",
+        "role_label": user.get("role") or ("Citizen" if desig == "CITIZEN" else "Mandal Level"),
         "mobile_number": user.get("mobile_number") or "",
         "phone": user.get("mobile_number") or "",
+        "auth_provider": user.get("auth_provider") or "email",
         "profile_picture": user.get("profile_picture") or "",
         "registration_date": user.get("registration_date") or "",
         "last_login": user.get("last_login") or "",
@@ -78,9 +100,6 @@ def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
         "subscription_plan_id": str(user.get("subscription_plan_id") or ""),
         "subscription_plan_name": str(user.get("subscription_plan_name") or ""),
         "subscription_expires_at": str(user.get("subscription_expires_at") or ""),
-        "username": user.get("user_id"),
-        "district": "Khammam",
-        "mandal": "",
     }
 
 
@@ -432,6 +451,244 @@ async def api_firebase_login(request: Request, response: Response):
         "is_first_time": is_new,
         "profile_completed": bool(user_record.get("profile_completed", False)),
         "message": f"{WELCOME_MESSAGE}, {user_record.get('name', 'Officer')}!",
+    }
+
+
+@router.post("/api/auth/register", include_in_schema=False)
+async def api_auth_register(request: Request, response: Response):
+    """Register a new officer or citizen account with email, password, and profile fields."""
+    scope = resolve_platform_scope(request)
+    if not is_platform_enabled(scope):
+        return JSONResponse(
+            {"success": False, "message": "This platform is temporarily unavailable under administrator policy."},
+            status_code=403,
+        )
+
+    data: dict[str, Any] = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+    except Exception:
+        pass
+
+    email = str(data.get("email") or data.get("gmail") or "").strip().lower()
+    password = str(data.get("password") or "")
+    surname = str(data.get("surname") or "").strip()
+    name = str(data.get("name") or "").strip()
+    display_name = str(data.get("display_name") or data.get("username") or "").strip()
+    gender = str(data.get("gender") or "").strip()
+    mobile_number = str(data.get("mobile_number") or data.get("phone") or "").strip()
+    state = str(data.get("state") or "Telangana").strip()
+    district = str(data.get("district") or "").strip()
+    mandal = str(data.get("mandal") or "").strip()
+    village_gp = str(data.get("village_gp") or data.get("village") or "").strip()
+    designation = str(data.get("designation") or "CITIZEN").strip().upper()
+    designation_other = str(data.get("designation_other") or "").strip()
+
+    try:
+        user_record = register_email_password_user(
+            email=email,
+            password=password,
+            surname=surname,
+            name=name,
+            display_name=display_name,
+            gender=gender,
+            mobile_number=mobile_number,
+            state=state,
+            district=district,
+            mandal=mandal,
+            village_gp=village_gp,
+            designation=designation,
+            designation_other=designation_other,
+        )
+    except (ValueError, PermissionError) as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=400)
+    except Exception as exc:
+        logger.error("Registration error: %s", exc)
+        return JSONResponse({"success": False, "message": f"Registration failed: {exc}"}, status_code=500)
+
+    user_agent = str(request.headers.get("user-agent") or "").strip()
+    client_ip = str(request.client.host if request.client else "").strip()
+    token = create_portal_session(
+        user_id=str(user_record["user_id"]),
+        app_scope=scope,
+        user_agent=user_agent,
+        ip_address=client_ip,
+    )
+    set_auth_cookie(response, token, scope, request)
+    log_usage(
+        user_id=str(user_record["user_id"]),
+        gmail=str(user_record.get("gmail") or ""),
+        platform_scope=scope,
+        module="auth",
+        action="email_register",
+    )
+
+    import secrets
+    user_sid = f"sid_{user_record['user_id']}_{secrets.token_hex(8)}"
+    response.set_cookie(
+        key="epts_session_id",
+        value=user_sid,
+        httponly=False,
+        samesite="lax",
+        secure=is_https_request(request),
+        domain=auth_cookie_domain(request),
+        path="/",
+    )
+    try:
+        automation_service.get_or_create_session(user_sid, owner_user_id=str(user_record["user_id"]))
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "token": token,
+        "epts_session_id": user_sid,
+        "platform_scope": scope,
+        "user": serialize_user_payload(user_record),
+        "message": f"Account registered successfully! Welcome to Panchayat Automation, {user_record.get('name', 'Officer')}!",
+    }
+
+
+@router.post("/api/auth/email-login", include_in_schema=False)
+@router.post("/api/auth/login", include_in_schema=False)
+async def api_auth_email_login(request: Request, response: Response):
+    """Authenticate via registered email address and password."""
+    scope = resolve_platform_scope(request)
+    if not is_platform_enabled(scope):
+        return JSONResponse(
+            {"success": False, "message": "This platform is temporarily unavailable under administrator policy."},
+            status_code=403,
+        )
+
+    data: dict[str, Any] = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+    except Exception:
+        pass
+
+    email = str(data.get("email") or data.get("gmail") or "").strip().lower()
+    password = str(data.get("password") or "")
+
+    try:
+        user_record = authenticate_email_password_user(
+            email=email,
+            password=password,
+            platform_scope=scope,
+        )
+    except PermissionError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=403)
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=400)
+    except Exception as exc:
+        logger.error("Email login error: %s", exc)
+        return JSONResponse({"success": False, "message": f"Sign-in failed: {exc}"}, status_code=500)
+
+    user_agent = str(request.headers.get("user-agent") or "").strip()
+    client_ip = str(request.client.host if request.client else "").strip()
+    token = create_portal_session(
+        user_id=str(user_record["user_id"]),
+        app_scope=scope,
+        user_agent=user_agent,
+        ip_address=client_ip,
+    )
+    set_auth_cookie(response, token, scope, request)
+    log_usage(
+        user_id=str(user_record["user_id"]),
+        gmail=str(user_record.get("gmail") or ""),
+        platform_scope=scope,
+        module="auth",
+        action="email_login",
+    )
+
+    import secrets
+    user_sid = f"sid_{user_record['user_id']}_{secrets.token_hex(8)}"
+    response.set_cookie(
+        key="epts_session_id",
+        value=user_sid,
+        httponly=False,
+        samesite="lax",
+        secure=is_https_request(request),
+        domain=auth_cookie_domain(request),
+        path="/",
+    )
+    try:
+        automation_service.get_or_create_session(user_sid, owner_user_id=str(user_record["user_id"]))
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "token": token,
+        "epts_session_id": user_sid,
+        "platform_scope": scope,
+        "user": serialize_user_payload(user_record),
+        "message": f"{WELCOME_MESSAGE}, {user_record.get('name', 'Officer')}!",
+    }
+
+
+@router.post("/api/auth/update-profile", include_in_schema=False)
+async def api_auth_update_profile(request: Request, response: Response):
+    """Update profile details for currently logged-in user."""
+    scope = resolve_platform_scope(request)
+    session_user, token = resolve_sso_session(request, scope)
+    if not session_user or not token:
+        return JSONResponse({"success": False, "message": "Sign-in required to edit your profile."}, status_code=401)
+
+    data: dict[str, Any] = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+    except Exception:
+        pass
+
+    user_id = str(session_user["user_id"]).strip()
+    try:
+        updated = update_user_profile_details(
+            user_id=user_id,
+            surname=str(data.get("surname") or "").strip(),
+            name=str(data.get("name") or "").strip(),
+            display_name=str(data.get("display_name") or data.get("username") or "").strip(),
+            gender=str(data.get("gender") or "").strip(),
+            mobile_number=str(data.get("mobile_number") or data.get("phone") or "").strip(),
+            state=str(data.get("state") or "").strip(),
+            district=str(data.get("district") or "").strip(),
+            mandal=str(data.get("mandal") or "").strip(),
+            village_gp=str(data.get("village_gp") or data.get("village") or "").strip(),
+            designation=str(data.get("designation") or "").strip(),
+            designation_other=str(data.get("designation_other") or "").strip(),
+        )
+    except ValueError as exc:
+        return JSONResponse({"success": False, "message": str(exc)}, status_code=400)
+    except Exception as exc:
+        logger.error("Profile update error: %s", exc)
+        return JSONResponse({"success": False, "message": f"Could not update profile: {exc}"}, status_code=500)
+
+    log_usage(
+        user_id=user_id,
+        gmail=str(updated.get("gmail") or ""),
+        platform_scope=scope,
+        module="profile",
+        action="update_profile_full",
+    )
+
+    return {
+        "success": True,
+        "message": "Profile updated successfully!",
+        "user": serialize_user_payload(updated),
     }
 
 

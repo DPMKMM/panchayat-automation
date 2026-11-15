@@ -914,19 +914,220 @@
               <h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>
               <p id="hero-platform-tagline" style="margin:6px 0 0; font-size:0.86rem; font-weight:700; color:#0f766e; line-height:1.4;">Simplifying Panchayat Administration through Smart Reporting and Automation.</p>
             </div>
-            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
-              <h2 class="gov-login-main-title" style="margin:0;">LOGIN</h2>
-              <div id="login-console-badge" style="display:none; align-items:center; background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.68rem; font-weight:800; padding:2px 7px; border-radius:999px; text-transform:uppercase;">e-Panchayat Automation Console</div>
-            </div>
-            <p class="gov-login-main-subtitle" id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation</p>
-
+            <!-- Container: Alert Message -->
             <div id="portal-login-alert" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:18px; font-size:0.86rem; font-weight:700;"></div>
 
-            <div class="gov-google-box" style="margin-bottom:20px;">
-              <button type="button" id="btn-google-login-action" class="btn-google-official" onclick="triggerGoogleSignIn()">
-                <svg width="24" height="24" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
-                <span>Sign in with Google</span>
-              </button>
+            <!-- VIEW 1: SIGN IN (Email/Password & Google SSO) -->
+            <div id="auth-view-login">
+              <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:4px;">
+                <h2 class="gov-login-main-title" style="margin:0;">LOGIN</h2>
+                <div id="login-console-badge" style="display:none; align-items:center; background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.68rem; font-weight:800; padding:2px 7px; border-radius:999px; text-transform:uppercase;">e-Panchayat Automation Console</div>
+              </div>
+              <p class="gov-login-main-subtitle" id="login-panel-subtitle">Sign in with your registered email or Google account</p>
+
+              <!-- Form: Sign In with Registered Email & Password -->
+              <form id="form-email-login" onsubmit="window.handleEmailLogin(event);" style="margin-bottom:14px;">
+                <div class="auth-input-group">
+                  <label for="login-email" class="auth-label">Registered Email Address *</label>
+                  <input type="email" id="login-email" class="auth-input-control" placeholder="name@example.com" required autocomplete="email">
+                </div>
+                <div class="auth-input-group">
+                  <label for="login-password" class="auth-label">Password *</label>
+                  <div class="auth-pwd-wrapper">
+                    <input type="password" id="login-password" class="auth-input-control" placeholder="Enter your password" required autocomplete="current-password">
+                    <button type="button" class="auth-pwd-toggle" onclick="window.togglePasswordVisibility('login-password', this);" title="Show or hide password" aria-label="Toggle password visibility">👁️</button>
+                  </div>
+                </div>
+                <button type="submit" id="btn-email-login" class="btn btn-gold" style="width:100%; padding:11px; font-weight:800; font-size:0.95rem; border-radius:9px; margin-top:4px;">
+                  SIGN IN
+                </button>
+              </form>
+
+              <div class="auth-divider-line">
+                <span>OR SIGN IN WITH GOOGLE</span>
+              </div>
+
+              <div class="gov-google-box" style="margin-bottom:16px;">
+                <button type="button" id="btn-google-login-action" class="btn-google-official" onclick="triggerGoogleSignIn()">
+                  <svg width="24" height="24" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                  <span>Sign in with Google</span>
+                </button>
+              </div>
+
+              <!-- DON'T HAVE AN ACCOUNT? SIGN UP Link -->
+              <div style="text-align:center; margin:16px 0 18px; padding-top:12px; border-top:1px solid #f1f5f9;">
+                <a href="javascript:void(0)" onclick="window.switchAuthView('register')" class="btn-auth-switch" style="font-weight:800; font-size:0.86rem; color:#0f3a63; letter-spacing:0.4px;">
+                  DON'T HAVE AN ACCOUNT? SIGN UP
+                </a>
+              </div>
+            </div>
+
+            <!-- VIEW 2: CREATE ACCOUNT / REGISTRATION -->
+            <div id="auth-view-register" style="display:none;">
+              <div style="text-align:center; margin-bottom:16px;">
+                <h2 style="font-size:1.45rem; font-weight:900; color:#0f3a63; margin:0 0 4px;">Create Account</h2>
+                <p style="font-size:0.84rem; color:#64748b; margin:0;">Fill in your details to get started.</p>
+              </div>
+
+              <form id="form-email-register" onsubmit="window.handleRegistration(event);">
+                <!-- Row 1: Surname & Name -->
+                <div class="auth-grid-2">
+                  <div class="auth-input-group">
+                    <label for="reg-surname" class="auth-label">Surname *</label>
+                    <input type="text" id="reg-surname" name="surname" class="auth-input-control" placeholder="Surname" required autocomplete="family-name">
+                  </div>
+                  <div class="auth-input-group">
+                    <label for="reg-name" class="auth-label">Name *</label>
+                    <input type="text" id="reg-name" name="name" class="auth-input-control" placeholder="Name" required autocomplete="given-name">
+                  </div>
+                </div>
+
+                <!-- Row 2: Username / Display Name -->
+                <div class="auth-input-group">
+                  <label for="reg-display-name" class="auth-label">Username / Display Name *</label>
+                  <input type="text" id="reg-display-name" name="display_name" class="auth-input-control" placeholder="Display name" required autocomplete="nickname">
+                </div>
+
+                <!-- Row 3: Gender & Mobile No -->
+                <div class="auth-grid-2">
+                  <div class="auth-input-group">
+                    <label for="reg-gender" class="auth-label">Gender</label>
+                    <select id="reg-gender" name="gender" class="auth-input-control">
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div class="auth-input-group">
+                    <label for="reg-mobile" class="auth-label">Mobile No *</label>
+                    <input type="tel" id="reg-mobile" name="mobile_number" class="auth-input-control" placeholder="Phone" required pattern="[6-9][0-9]{9}" maxlength="10" autocomplete="tel">
+                  </div>
+                </div>
+
+                <!-- Row 4: State & District -->
+                <div class="auth-grid-2">
+                  <div class="auth-input-group">
+                    <label for="reg-state" class="auth-label">State</label>
+                    <select id="reg-state" name="state" class="auth-input-control">
+                      <option value="Telangana" selected>Telangana</option>
+                      <option value="Andhra Pradesh">Andhra Pradesh</option>
+                      <option value="Other">Other State</option>
+                    </select>
+                  </div>
+                  <div class="auth-input-group">
+                    <label for="reg-district" class="auth-label">District *</label>
+                    <select id="reg-district" name="district" class="auth-input-control" required>
+                      <option value="" disabled selected>Select District</option>
+                      <option value="Adilabad">Adilabad</option>
+                      <option value="Bhadradri Kothagudem">Bhadradri Kothagudem</option>
+                      <option value="Hanumakonda">Hanumakonda</option>
+                      <option value="Hyderabad">Hyderabad</option>
+                      <option value="Jagtial">Jagtial</option>
+                      <option value="Jangaon">Jangaon</option>
+                      <option value="Jayashankar Bhupalpally">Jayashankar Bhupalpally</option>
+                      <option value="Jogulamba Gadwal">Jogulamba Gadwal</option>
+                      <option value="Kamareddy">Kamareddy</option>
+                      <option value="Karimnagar">Karimnagar</option>
+                      <option value="Khammam">Khammam</option>
+                      <option value="Kumuram Bheem Asifabad">Kumuram Bheem Asifabad</option>
+                      <option value="Mahabubabad">Mahabubabad</option>
+                      <option value="Mahabubnagar">Mahabubnagar</option>
+                      <option value="Mancherial">Mancherial</option>
+                      <option value="Medak">Medak</option>
+                      <option value="Medchal-Malkajgiri">Medchal-Malkajgiri</option>
+                      <option value="Mulugu">Mulugu</option>
+                      <option value="Nagarkurnool">Nagarkurnool</option>
+                      <option value="Nalgonda">Nalgonda</option>
+                      <option value="Narayanpet">Narayanpet</option>
+                      <option value="Nirmal">Nirmal</option>
+                      <option value="Nizamabad">Nizamabad</option>
+                      <option value="Peddapalli">Peddapalli</option>
+                      <option value="Rajanna Sircilla">Rajanna Sircilla</option>
+                      <option value="Rangareddy">Rangareddy</option>
+                      <option value="Sangareddy">Sangareddy</option>
+                      <option value="Siddipet">Siddipet</option>
+                      <option value="Suryapet">Suryapet</option>
+                      <option value="Vikarabad">Vikarabad</option>
+                      <option value="Wanaparthy">Wanaparthy</option>
+                      <option value="Warangal">Warangal</option>
+                      <option value="Yadadri Bhuvanagiri">Yadadri Bhuvanagiri</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Row 5: Mandal & Village / GP -->
+                <div class="auth-grid-2">
+                  <div class="auth-input-group">
+                    <label for="reg-mandal" class="auth-label">Mandal</label>
+                    <input type="text" id="reg-mandal" name="mandal" class="auth-input-control" placeholder="Select / Enter Mandal">
+                  </div>
+                  <div class="auth-input-group">
+                    <label for="reg-village" class="auth-label">Village / GP</label>
+                    <input type="text" id="reg-village" name="village_gp" class="auth-input-control" placeholder="Enter Village">
+                  </div>
+                </div>
+
+                <!-- Row 6: Designation (Dropdown Only + Citizen + Other) -->
+                <div class="auth-input-group">
+                  <label for="reg-designation" class="auth-label">Designation *</label>
+                  <select id="reg-designation" name="designation" class="auth-input-control" onchange="window.handleDesignationSelectChange(this, 'reg-designation-other-wrap')" required>
+                    <option value="" disabled selected>Select Designation</option>
+                    <option value="CITIZEN">Citizen</option>
+                    <option value="PS">Panchayat Secretary (PS)</option>
+                    <option value="DEO">Data Entry Operator (DEO)</option>
+                    <option value="MPO">Mandal Panchayat Officer (MPO)</option>
+                    <option value="MPDO">Mandal Parishad Development Officer (MPDO)</option>
+                    <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
+                    <option value="DPO">District Panchayat Officer (DPO)</option>
+                    <option value="DPM">District Project Manager (DPM)</option>
+                    <option value="COLLECTOR">Collector &amp; District Magistrate</option>
+                    <option value="SPECIAL OFFICER">Special Officer</option>
+                    <option value="OTHER">Other (Specify Manually)</option>
+                  </select>
+                  <div id="reg-designation-other-wrap" style="display:none; margin-top:8px;">
+                    <label for="reg-designation-other" style="display:block; font-size:0.78rem; font-weight:700; color:#1e40af; margin-bottom:4px;">Specify Your Designation Manually *</label>
+                    <input type="text" id="reg-designation-other" name="designation_other" class="auth-input-control" placeholder="Type your designation">
+                  </div>
+                </div>
+
+                <!-- Row 7: Email Address -->
+                <div class="auth-input-group">
+                  <label for="reg-email" class="auth-label">Email Address *</label>
+                  <input type="email" id="reg-email" name="email" class="auth-input-control" placeholder="email@example.com" required autocomplete="email">
+                </div>
+
+                <!-- Row 8: Password & Confirm Password -->
+                <div class="auth-grid-2">
+                  <div class="auth-input-group">
+                    <label for="reg-password" class="auth-label">Password *</label>
+                    <div class="auth-pwd-wrapper">
+                      <input type="password" id="reg-password" name="password" class="auth-input-control" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+                      <button type="button" class="auth-pwd-toggle" onclick="window.togglePasswordVisibility('reg-password', this);" title="Show or hide password" aria-label="Toggle password visibility">👁️</button>
+                    </div>
+                  </div>
+                  <div class="auth-input-group">
+                    <label for="reg-confirm-password" class="auth-label">Confirm Password *</label>
+                    <div class="auth-pwd-wrapper">
+                      <input type="password" id="reg-confirm-password" name="confirm_password" class="auth-input-control" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+                      <button type="button" class="auth-pwd-toggle" onclick="window.togglePasswordVisibility('reg-confirm-password', this);" title="Show or hide password" aria-label="Toggle password visibility">👁️</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action Button: REGISTER NOW -->
+                <button type="submit" id="btn-register-action" class="btn-register-action" style="margin-top:6px;">
+                  REGISTER NOW
+                </button>
+              </form>
+
+              <!-- ALREADY HAVE AN ACCOUNT? SIGN IN Link -->
+              <div style="text-align:center; margin-top:16px; padding-top:10px; border-top:1px solid #f1f5f9;">
+                <a href="javascript:void(0)" onclick="window.switchAuthView('login')" class="btn-auth-switch" style="font-weight:800; font-size:0.84rem; color:#0f3a63; letter-spacing:0.4px;">
+                  ALREADY HAVE AN ACCOUNT? SIGN IN
+                </a>
+              </div>
             </div>
 
             <div class="gov-auth-notes">
@@ -4269,6 +4470,165 @@
         <div style="margin-top:20px; padding-top:14px; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end;">
           <button type="button" class="btn btn-outline btn-sm" onclick="closeSoftwareHelpModal()">Close Guide</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Comprehensive User Profile & Designation Modal (Officer & Citizen Self-Service) -->
+    <div id="user-profile-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+      <div style="background:#ffffff; border-radius:18px; padding:24px 28px; max-width:560px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.35); color:#1e293b; position:relative; border:1px solid #cbd5e1;">
+        <button type="button" onclick="window.closeUserProfileModal()" style="position:absolute; right:16px; top:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:#94a3b8; padding:4px; line-height:1;" title="Close">&times;</button>
+        
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; padding-bottom:12px; border-bottom:1.5px solid #e2e8f0;">
+          <div style="width:44px; height:44px; border-radius:12px; background:#ecfdf5; border:1px solid #a7f3d0; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">👤</div>
+          <div>
+            <h3 style="margin:0; font-size:1.2rem; font-weight:800; color:#064e3b;">User Profile &amp; Designation</h3>
+            <p style="margin:2px 0 0; font-size:0.78rem; color:#64748b;">Manage your official details, contact info, and jurisdiction</p>
+          </div>
+        </div>
+
+        <div id="user-profile-alert" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.84rem; font-weight:700;"></div>
+
+        <form id="form-profile-edit" onsubmit="window.submitUpdateProfile(event);">
+          <!-- Row 1: Surname & Name -->
+          <div class="auth-grid-2">
+            <div class="auth-input-group">
+              <label for="profile-field-surname" class="auth-label">Surname</label>
+              <input type="text" id="profile-field-surname" name="surname" class="auth-input-control" placeholder="Surname" autocomplete="family-name">
+            </div>
+            <div class="auth-input-group">
+              <label for="profile-field-name" class="auth-label">Name *</label>
+              <input type="text" id="profile-field-name" name="name" class="auth-input-control" placeholder="Name" required autocomplete="given-name">
+            </div>
+          </div>
+
+          <!-- Row 2: Username / Display Name -->
+          <div class="auth-input-group">
+            <label for="profile-field-display-name" class="auth-label">Username / Display Name *</label>
+            <input type="text" id="profile-field-display-name" name="display_name" class="auth-input-control" placeholder="Display name" required autocomplete="nickname">
+          </div>
+
+          <!-- Row 3: Gender & Mobile No -->
+          <div class="auth-grid-2">
+            <div class="auth-input-group">
+              <label for="profile-field-gender" class="auth-label">Gender</label>
+              <select id="profile-field-gender" name="gender" class="auth-input-control">
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="auth-input-group">
+              <label for="profile-field-mobile" class="auth-label">Mobile No *</label>
+              <input type="tel" id="profile-field-mobile" name="mobile_number" class="auth-input-control" placeholder="Phone" required pattern="[6-9][0-9]{9}" maxlength="10" autocomplete="tel">
+            </div>
+          </div>
+
+          <!-- Row 4: State & District -->
+          <div class="auth-grid-2">
+            <div class="auth-input-group">
+              <label for="profile-field-state" class="auth-label">State</label>
+              <select id="profile-field-state" name="state" class="auth-input-control">
+                <option value="Telangana">Telangana</option>
+                <option value="Andhra Pradesh">Andhra Pradesh</option>
+                <option value="Other">Other State</option>
+              </select>
+            </div>
+            <div class="auth-input-group">
+              <label for="profile-field-district" class="auth-label">District *</label>
+              <select id="profile-field-district" name="district" class="auth-input-control" required>
+                <option value="" disabled>Select District</option>
+                <option value="Adilabad">Adilabad</option>
+                <option value="Bhadradri Kothagudem">Bhadradri Kothagudem</option>
+                <option value="Hanumakonda">Hanumakonda</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Jagtial">Jagtial</option>
+                <option value="Jangaon">Jangaon</option>
+                <option value="Jayashankar Bhupalpally">Jayashankar Bhupalpally</option>
+                <option value="Jogulamba Gadwal">Jogulamba Gadwal</option>
+                <option value="Kamareddy">Kamareddy</option>
+                <option value="Karimnagar">Karimnagar</option>
+                <option value="Khammam">Khammam</option>
+                <option value="Kumuram Bheem Asifabad">Kumuram Bheem Asifabad</option>
+                <option value="Mahabubabad">Mahabubabad</option>
+                <option value="Mahabubnagar">Mahabubnagar</option>
+                <option value="Mancherial">Mancherial</option>
+                <option value="Medak">Medak</option>
+                <option value="Medchal-Malkajgiri">Medchal-Malkajgiri</option>
+                <option value="Mulugu">Mulugu</option>
+                <option value="Nagarkurnool">Nagarkurnool</option>
+                <option value="Nalgonda">Nalgonda</option>
+                <option value="Narayanpet">Narayanpet</option>
+                <option value="Nirmal">Nirmal</option>
+                <option value="Nizamabad">Nizamabad</option>
+                <option value="Peddapalli">Peddapalli</option>
+                <option value="Rajanna Sircilla">Rajanna Sircilla</option>
+                <option value="Rangareddy">Rangareddy</option>
+                <option value="Sangareddy">Sangareddy</option>
+                <option value="Siddipet">Siddipet</option>
+                <option value="Suryapet">Suryapet</option>
+                <option value="Vikarabad">Vikarabad</option>
+                <option value="Wanaparthy">Wanaparthy</option>
+                <option value="Warangal">Warangal</option>
+                <option value="Yadadri Bhuvanagiri">Yadadri Bhuvanagiri</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 5: Mandal & Village / GP -->
+          <div class="auth-grid-2">
+            <div class="auth-input-group">
+              <label for="profile-field-mandal" class="auth-label">Mandal</label>
+              <input type="text" id="profile-field-mandal" name="mandal" class="auth-input-control" placeholder="Select / Enter Mandal">
+            </div>
+            <div class="auth-input-group">
+              <label for="profile-field-village" class="auth-label">Village / GP</label>
+              <input type="text" id="profile-field-village" name="village_gp" class="auth-input-control" placeholder="Enter Village">
+            </div>
+          </div>
+
+          <!-- Row 6: Designation (Dropdown Only + Citizen + Other) -->
+          <div class="auth-input-group">
+            <label for="profile-field-designation" class="auth-label">Designation (Dropdown Only) *</label>
+            <select id="profile-field-designation" name="designation" class="auth-input-control" onchange="window.handleDesignationSelectChange(this, 'profile-field-designation-other-wrap')" required>
+              <option value="" disabled>Select Designation</option>
+              <option value="CITIZEN">Citizen</option>
+              <option value="PS">Panchayat Secretary (PS)</option>
+              <option value="DEO">Data Entry Operator (DEO)</option>
+              <option value="MPO">Mandal Panchayat Officer (MPO)</option>
+              <option value="MPDO">Mandal Parishad Development Officer (MPDO)</option>
+              <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
+              <option value="DPO">District Panchayat Officer (DPO)</option>
+              <option value="DPM">District Project Manager (DPM)</option>
+              <option value="COLLECTOR">Collector &amp; District Magistrate</option>
+              <option value="SPECIAL OFFICER">Special Officer</option>
+              <option value="OTHER">Other (Specify Manually)</option>
+            </select>
+            <div id="profile-field-designation-other-wrap" style="display:none; margin-top:8px;">
+              <label for="profile-field-designation-other" style="display:block; font-size:0.78rem; font-weight:700; color:#1e40af; margin-bottom:4px;">Specify Your Designation Manually *</label>
+              <input type="text" id="profile-field-designation-other" name="designation_other" class="auth-input-control" placeholder="Type your designation">
+            </div>
+          </div>
+
+          <!-- Row 7: Account Status & Registered Email Info -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+              <div>
+                <div style="font-size:0.75rem; font-weight:700; color:#64748b;">Registered Account Email</div>
+                <div id="profile-field-account-email" style="font-size:0.86rem; font-weight:800; color:#0f172a;">user@example.com</div>
+              </div>
+              <div id="profile-field-auth-provider-tag" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:999px;">
+                Verified Account
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="window.closeUserProfileModal()" style="padding:8px 18px;">Cancel</button>
+            <button type="submit" id="btn-save-profile" class="btn btn-gold btn-sm" style="padding:8px 22px; font-weight:800;">Save Profile Details</button>
+          </div>
+        </form>
       </div>
     </div>
 
