@@ -36,6 +36,28 @@ def get_my_iframe(page):
     return None
 
 
+def find_form_frame(page, preferred_frame=None):
+    """Resolves the active frame holding the report form (Select Date or Download button)."""
+    check_frames = []
+    if preferred_frame and preferred_frame in page.frames:
+        check_frames.append(preferred_frame)
+    primary = get_my_iframe(page)
+    if primary and primary not in check_frames:
+        check_frames.append(primary)
+    for f in page.frames:
+        if f not in check_frames:
+            check_frames.append(f)
+
+    for f in check_frames:
+        try:
+            if f.locator("text='Select Date', input[value*='Download' i], button:has-text('Download')").first.is_visible(timeout=500):
+                return f
+        except Exception:
+            continue
+
+    return preferred_frame or primary or (page.frames[0] if page.frames else None)
+
+
 def format_portal_date(date_val: str) -> str:
     """Formats date to DD-MMM-YYYY (e.g. 30-Oct-2026 or 02-Nov-2026) required by portal."""
     if not date_val:
@@ -152,10 +174,17 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             "button:has-text('Download Excel')",
             "input[id*='btnExport' i]",
             "input[id*='btnDownload' i]",
+            "input[name*='btnDownload' i]",
+            "input[name*='btnExport' i]",
+            "input[value*='Excel' i]",
+            "button:has-text('Excel')",
+            "input[type='submit']",
+            "button[type='submit']",
         ]
 
         print(f"[*] Waiting for report form ({code}) to load in portal iframe...", flush=True)
-        # Wait for download button or Select Date to indicate the report view has rendered
+        # Check active form frame
+        iframe = find_form_frame(page, preferred_frame=iframe)
         dl_loc = iframe.locator(", ".join(dl_selectors))
         txt_loc = iframe.locator("text='Select Date'")
         report_form_indicator = dl_loc.or_(txt_loc)
@@ -166,8 +195,8 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             print(f"[-] Note waiting for report form on {code}: {wait_err}", flush=True)
             time.sleep(2.0)
 
-        # Re-resolve fresh iframe handle if needed
-        iframe = get_my_iframe(page) or iframe
+        # Re-resolve fresh frame
+        iframe = find_form_frame(page, preferred_frame=iframe)
 
         # Screenshot initial view
         if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
@@ -181,27 +210,46 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
         # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 09-Nov-2026)
         print(f"[*] Setting date to {date_formatted} in iframe for {code}...", flush=True)
 
-        # 1. Comprehensive DOM evaluation & jQuery UI datepicker
+        # 1. Comprehensive DOM evaluation & jQuery UI datepicker (STRICTLY NON-BUTTON INPUTS ONLY)
         try:
             iframe.evaluate(f"""(dt) => {{
+                function isEditableDateInput(el) {{
+                    if (!el || el.tagName !== 'INPUT') return false;
+                    const type = (el.getAttribute('type') || el.type || 'text').toLowerCase();
+                    if (['button', 'submit', 'reset', 'image', 'hidden', 'checkbox', 'radio', 'file'].includes(type)) {{
+                        return false;
+                    }}
+                    const val = (el.value || '').trim().toLowerCase();
+                    if (['download', 'excel', 'export', 'submit', 'search', 'cancel', 'back'].some(w => val.includes(w))) {{
+                        return false;
+                    }}
+                    const id = (el.id || '').toLowerCase();
+                    const name = (el.name || '').toLowerCase();
+                    if (['download', 'btnexport', 'btndownload', 'btnsubmit'].some(w => id.includes(w) || name.includes(w))) {{
+                        return false;
+                    }}
+                    return true;
+                }}
+
                 const candidates = [];
                 const attrInputs = document.querySelectorAll(
-                    "input[id*='Date' i], input[name*='Date' i], input[id*='txt' i], input.hasDatepicker, input[type='text']"
+                    "input[id*='Date' i], input[name*='Date' i], input.hasDatepicker, input[type='text'], input:not([type])"
                 );
                 for (const inp of attrInputs) {{
-                    if (inp && inp.type !== 'hidden' && inp.offsetParent !== null && !candidates.includes(inp)) {{
+                    if (isEditableDateInput(inp) && inp.offsetParent !== null && !candidates.includes(inp)) {{
                         candidates.push(inp);
                     }}
                 }}
+
                 const allLabels = Array.from(document.querySelectorAll('label, td, span, div, b, strong, th'))
                     .filter(el => el.textContent && el.textContent.toLowerCase().includes('select date'));
                 for (const lbl of allLabels) {{
                     let parent = lbl.parentElement;
                     for (let step = 0; step < 3 && parent; step++) {{
-                        const inps = parent.querySelectorAll('input:not([type="hidden"])');
+                        const inps = parent.querySelectorAll('input');
                         for (const inp of inps) {{
-                            if (inp && inp.offsetParent !== null && !candidates.includes(inp)) {{
-                                candidates.unshift(inp);
+                            if (isEditableDateInput(inp) && inp.offsetParent !== null && !candidates.includes(inp)) {{
+                                candidates.push(inp);
                             }}
                         }}
                         parent = parent.parentElement;
@@ -228,18 +276,18 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
         except Exception as e:
             print(f"[-] Note on DOM date evaluation for {code}: {e}", flush=True)
 
-        # 2. Playwright locator typing/filling
+        # 2. Playwright locator typing/filling (STRICTLY NON-BUTTON INPUTS)
         date_selectors = [
-            "xpath=//*[contains(text(), 'Select Date')]/following::input[1]",
-            "input[id*='Date' i]:visible",
-            "input[name*='Date' i]:visible",
-            "input.hasDatepicker:visible",
-            "input[type='text']:visible",
+            "xpath=//*[contains(text(), 'Select Date')]/following::input[not(@type='button') and not(@type='submit') and not(@type='hidden')][1]",
+            "input[id*='Date' i]:not([type='button']):not([type='submit'])",
+            "input[name*='Date' i]:not([type='button']):not([type='submit'])",
+            "input.hasDatepicker:not([type='button']):not([type='submit'])",
+            "input[type='text']:not([id*='btn' i])",
         ]
         for sel in date_selectors:
             cand = iframe.locator(sel).first
             try:
-                if cand.is_visible(timeout=2500):
+                if cand.is_visible(timeout=2000):
                     cand.evaluate("el => { el.removeAttribute('readonly'); el.removeAttribute('disabled'); }")
                     cand.click()
                     cand.fill("")
@@ -250,17 +298,25 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             except Exception:
                 continue
 
-        # 3. Verification & retry loop
+        # 3. Verification & retry loop (STRICTLY NON-BUTTON INPUTS)
         target_clean = date_formatted.strip()
         for attempt in range(1, 4):
             current_val = ""
             try:
                 current_val = iframe.evaluate("""() => {
+                    function isEditableDateInput(el) {
+                        if (!el || el.tagName !== 'INPUT') return false;
+                        const type = (el.getAttribute('type') || el.type || 'text').toLowerCase();
+                        if (['button', 'submit', 'reset', 'image', 'hidden', 'checkbox', 'radio', 'file'].includes(type)) return false;
+                        const val = (el.value || '').trim().toLowerCase();
+                        if (['download', 'excel', 'export', 'submit'].some(w => val.includes(w))) return false;
+                        return true;
+                    }
                     const inps = document.querySelectorAll(
-                        "input[id*='Date' i], input[name*='Date' i], input.hasDatepicker, input[type='text']"
+                        "input[id*='Date' i], input[name*='Date' i], input.hasDatepicker, input[type='text'], input:not([type])"
                     );
                     for (const inp of inps) {
-                        if (inp && inp.type !== 'hidden' && inp.offsetParent !== null && inp.value) {
+                        if (isEditableDateInput(inp) && inp.offsetParent !== null && inp.value) {
                             return inp.value.trim();
                         }
                     }
@@ -277,9 +333,17 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
                 print(f"[!] Date mismatch on attempt {attempt} for {code} (current='{current_val}', target='{target_clean}'). Forcing update...", flush=True)
                 try:
                     iframe.evaluate(f"""(dt) => {{
-                        const inps = document.querySelectorAll('input:not([type="hidden"])');
+                        function isEditableDateInput(el) {{
+                            if (!el || el.tagName !== 'INPUT') return false;
+                            const type = (el.getAttribute('type') || el.type || 'text').toLowerCase();
+                            if (['button', 'submit', 'reset', 'image', 'hidden', 'checkbox', 'radio', 'file'].includes(type)) return false;
+                            const val = (el.value || '').trim().toLowerCase();
+                            if (['download', 'excel', 'export', 'submit'].some(w => val.includes(w))) return false;
+                            return true;
+                        }}
+                        const inps = document.querySelectorAll("input[type='text'], input.hasDatepicker, input:not([type])");
                         for (const inp of inps) {{
-                            if (inp.offsetParent !== null && inp.tagName === 'INPUT') {{
+                            if (isEditableDateInput(inp) && inp.offsetParent !== null) {{
                                 inp.removeAttribute('readonly');
                                 inp.removeAttribute('disabled');
                                 inp.value = dt;
@@ -298,6 +362,17 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
 
         time.sleep(0.5)
 
+        # Close any active jQuery UI datepicker popups that might obscure elements
+        try:
+            iframe.evaluate("""() => {
+                if (window.jQuery && window.jQuery.datepicker) {
+                    try { window.jQuery.datepicker._hideDatepicker(); } catch(e){}
+                }
+                document.querySelectorAll('.ui-datepicker').forEach(el => el.style.display = 'none');
+            }""")
+        except Exception:
+            pass
+
         # Save verification screenshot showing date filled in
         if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
             after_date_ss = DEBUG_DIR / f"after_date_{code.replace('.', '_')}.png"
@@ -309,15 +384,55 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
 
         # Locate and click Download button
         print(f"[*] Waiting for download button for {code}...", flush=True)
-        dl_btn = iframe.locator(", ".join(dl_selectors)).first
-        dl_btn.wait_for(state="visible", timeout=25000)
+        iframe = find_form_frame(page, preferred_frame=iframe)
+
+        dl_btn = None
+        for sel in dl_selectors:
+            cand = iframe.locator(sel).first
+            try:
+                if cand.is_visible(timeout=1500):
+                    dl_btn = cand
+                    break
+            except Exception:
+                continue
+
+        # If not found yet in current frame, search across all frames
+        if not dl_btn:
+            for f in page.frames:
+                for sel in dl_selectors[:5]:
+                    cand = f.locator(sel).first
+                    try:
+                        if cand.is_visible(timeout=1000):
+                            dl_btn = cand
+                            iframe = f
+                            break
+                    except Exception:
+                        continue
+                if dl_btn:
+                    break
+
+        if not dl_btn:
+            dl_btn = iframe.locator(", ".join(dl_selectors)).first
+            try:
+                dl_btn.wait_for(state="visible", timeout=25000)
+            except Exception as wait_err:
+                try:
+                    err_ss = DEBUG_DIR / f"error_dl_{code.replace('.', '_')}.png"
+                    page.screenshot(path=str(err_ss))
+                    print(f"[-] Saved error screenshot to {err_ss}", flush=True)
+                except Exception:
+                    pass
+                raise wait_err
 
         print(f"[*] Triggering download for {code}...", flush=True)
         portal_dialog_messages.clear()
 
         try:
             with page.expect_download(timeout=35000) as dl_info:
-                dl_btn.click()
+                try:
+                    dl_btn.click(timeout=5000)
+                except Exception:
+                    dl_btn.click(force=True)
 
             download = dl_info.value
             portal_filename = download.suggested_filename

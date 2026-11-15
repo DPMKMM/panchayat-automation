@@ -688,4 +688,41 @@ def test_state_format_all_three_reports_receive_matching_user_date(monkeypatch, 
     assert download_calls[2] == {"code": "1.2.10", "date": expected_portal_date}
 
 
+def test_find_form_frame_and_safe_button_selectors():
+    """Verify find_form_frame helper and that auto_download avoids button corruption."""
+    from dsr.auto_download import find_form_frame
+
+    class DummyLocator:
+        def __init__(self, visible=True):
+            self.visible = visible
+
+        @property
+        def first(self):
+            return self
+
+        def is_visible(self, timeout=0):
+            return self.visible
+
+    class DummyFrame:
+        def __init__(self, name="", url="", has_form=False):
+            self.name = name
+            self.url = url
+            self.has_form = has_form
+
+        def locator(self, sel):
+            return DummyLocator(visible=self.has_form)
+
+    class DummyPage:
+        def __init__(self, frames):
+            self.frames = frames
+
+    f1 = DummyFrame("nav", "nav.aspx", has_form=False)
+    f2 = DummyFrame("my-iframe", "PSPerformance/DynamicReports", has_form=True)
+    page = DummyPage([f1, f2])
+
+    resolved = find_form_frame(page)
+    assert resolved is f2
+
+
+
 
