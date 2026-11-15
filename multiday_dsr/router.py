@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import re
 import time
 from pathlib import Path
@@ -15,7 +16,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from core.access_policy import is_module_enabled
 from core.branding import PLATFORM_NAME, TAGLINE, render_canonical_footer_html
 from core.config import BASE_DIR, MAX_UPLOAD_BYTES, WEB_SESSION_SECRET, is_admin_email
-from core.dependencies import get_current_user_optional, is_https_request
+from core.dependencies import (
+    get_current_user_optional,
+    is_https_request,
+    require_portal_or_console_user,
+)
 from multiday_dsr import service as md_service
 
 router = APIRouter()
@@ -113,6 +118,8 @@ def analyze_multiday_dsr(
 ) -> JSONResponse:
     if not is_module_enabled("module_dsr_multiday"):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        require_portal_or_console_user(request)
     _check_rate_limit(request)
 
     if not files:
@@ -162,6 +169,8 @@ def analyze_multiday_dsr(
 def _download_artifact_response(request: Request, job_id: str, kind: str, level: str = "district", inline: bool = False) -> Response:
     if not is_module_enabled("module_dsr_multiday"):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        require_portal_or_console_user(request)
     _enforce_job_access(request, job_id)
     try:
         fname, raw, mime = md_service.get_job_artifact(job_id.strip(), kind, level=level)

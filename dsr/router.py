@@ -37,6 +37,7 @@ from core.dependencies import (
     get_scoped_token,
     is_https_request,
     require_admin_user,
+    require_portal_or_console_user,
 )
 from core.integrations import (
     JobRecord,
@@ -660,6 +661,8 @@ def create_web_report(
             status_code=403,
             detail="Daily PS Attendance & DSR manual upload is currently paused by administrator policy.",
         )
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        require_portal_or_console_user(request)
     _check_web_upload_rate_limit(request)
     current_user = get_current_user_optional(request)
     owner_user_id = str(current_user.get("user_id", "")) if current_user else ""
@@ -735,6 +738,8 @@ def create_multiday_web_report(
             status_code=403,
             detail="Multiple Days DSR reporting is currently paused by administrator policy.",
         )
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        require_portal_or_console_user(request)
     _check_web_upload_rate_limit(request)
     if not files:
         raise HTTPException(status_code=400, detail="Please upload one or more GM-R 1.2.7 attendance files.")

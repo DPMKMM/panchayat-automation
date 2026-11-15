@@ -7,17 +7,25 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse
 
 from core.branding import apply_subpage_console_branding
-from core.dependencies import enforce_department_api_access, extract_epts_session_id, resolve_platform_scope
+from core.dependencies import (
+    enforce_department_api_access,
+    extract_epts_session_id,
+    require_portal_or_console_user,
+    resolve_platform_scope,
+)
 from dcb.html import TAX_PAGE_HTML
 from dcb import service as tax_service
 from dcb import pdf_generator as dcb_pdf_generator
 from dcb import powerbi_pdf_generator
+import os
 
 
 def _enforce_dcb_scope_access(request: Request) -> None:
-    """Enforce centralized Stage-1 + Stage-2 auth when accessed from Console scope."""
+    """Enforce centralized Stage-1 + Stage-2 auth on Console scope, and require active user auth on production."""
     if resolve_platform_scope(request) == "console":
         enforce_department_api_access(request)
+    elif os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        require_portal_or_console_user(request)
 
 
 def _resolve_mandal(request: Request, mandal: str = "all") -> tuple[str, bool, str]:

@@ -92,10 +92,14 @@ for _directory in (
     _directory.mkdir(parents=True, exist_ok=True)
 
 # Temp file retention & upload limits
-_DEV_DEFAULT_SECRET = "khammam-epanchayat-automation-secure-key-2026"
-WEB_SESSION_SECRET = os.getenv("WEB_SESSION_SECRET", _DEV_DEFAULT_SECRET).strip() or _DEV_DEFAULT_SECRET
-if IS_PRODUCTION and WEB_SESSION_SECRET == _DEV_DEFAULT_SECRET:
-    _logger.warning("WEB_SESSION_SECRET is using default value in production; set a strong random secret in .env!")
+import secrets
+
+WEB_SESSION_SECRET = os.getenv("WEB_SESSION_SECRET", "").strip()
+if not WEB_SESSION_SECRET:
+    if IS_PRODUCTION:
+        raise RuntimeError("CRITICAL SECURITY ERROR: WEB_SESSION_SECRET is not set in production environment!")
+    # In non-production, generate dynamic ephemeral secret so no fixed key is hardcoded
+    WEB_SESSION_SECRET = secrets.token_hex(32)
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(30 * 1024 * 1024)))
 TEMP_RETENTION_HOURS = float(os.getenv("TEMP_RETENTION_HOURS", "24"))
@@ -115,34 +119,26 @@ URL_EPTS_LOGIN = "https://epanchayat.telangana.gov.in/epts/login.do"
 DCB_PORTAL_PROXY_URL = (os.getenv("DCB_PORTAL_PROXY_URL") or "").strip().rstrip("/")
 DCB_PORTAL_PROXY_TOKEN = (os.getenv("DCB_PORTAL_PROXY_TOKEN") or "").strip()
 
-# Firebase Project & Authentication Configuration (Defaults provisioned for epanchayat-automation-tg)
-DEFAULT_FIREBASE_PROJECT_ID = "epanchayat-automation-tg"
-DEFAULT_FIREBASE_API_KEY = "AIzaSyCmMfCAHuKE70pMwFuq7uP6evUvY1hYVb8"
-DEFAULT_FIREBASE_AUTH_DOMAIN = "epanchayat-automation-tg.firebaseapp.com"
-DEFAULT_FIREBASE_STORAGE_BUCKET = "epanchayat-automation-tg.firebasestorage.app"
-DEFAULT_FIREBASE_MESSAGING_SENDER_ID = "572548123520"
-DEFAULT_FIREBASE_APP_ID = "1:572548123520:web:bdad6aa6e2d7f2a7e20f65"
-
-FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", DEFAULT_FIREBASE_PROJECT_ID).strip() or DEFAULT_FIREBASE_PROJECT_ID
+# Firebase Project & Authentication Configuration (loaded from environment)
+FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "epanchayat-automation-tg").strip() or "epanchayat-automation-tg"
 FIREBASE_DATABASE_ID = os.getenv("FIREBASE_DATABASE_ID", "(default)").strip() or "(default)"
+FIREBASE_API_KEY = os.getenv("FIREBASE_API_KEY", "").strip()
+FIREBASE_AUTH_DOMAIN = os.getenv("FIREBASE_AUTH_DOMAIN", f"{FIREBASE_PROJECT_ID}.firebaseapp.com").strip()
+FIREBASE_STORAGE_BUCKET = os.getenv("FIREBASE_STORAGE_BUCKET", f"{FIREBASE_PROJECT_ID}.firebasestorage.app").strip()
+FIREBASE_MESSAGING_SENDER_ID = os.getenv("FIREBASE_MESSAGING_SENDER_ID", "").strip()
+FIREBASE_APP_ID = os.getenv("FIREBASE_APP_ID", "").strip()
 
 
 def get_firebase_web_config() -> dict[str, str]:
     """Return public Firebase Web SDK configuration dictionary for client authentication."""
-    project_id = (
-        os.getenv("FIREBASE_PROJECT_ID", DEFAULT_FIREBASE_PROJECT_ID).strip()
-        or DEFAULT_FIREBASE_PROJECT_ID
-    )
+    project_id = os.getenv("FIREBASE_PROJECT_ID", FIREBASE_PROJECT_ID).strip() or FIREBASE_PROJECT_ID
     return {
-        "apiKey": os.getenv("FIREBASE_API_KEY", DEFAULT_FIREBASE_API_KEY).strip() or DEFAULT_FIREBASE_API_KEY,
-        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", DEFAULT_FIREBASE_AUTH_DOMAIN).strip()
-        or f"{project_id}.firebaseapp.com",
+        "apiKey": os.getenv("FIREBASE_API_KEY", FIREBASE_API_KEY).strip(),
+        "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", FIREBASE_AUTH_DOMAIN).strip() or f"{project_id}.firebaseapp.com",
         "projectId": project_id,
-        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", DEFAULT_FIREBASE_STORAGE_BUCKET).strip()
-        or f"{project_id}.firebasestorage.app",
-        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", DEFAULT_FIREBASE_MESSAGING_SENDER_ID).strip()
-        or DEFAULT_FIREBASE_MESSAGING_SENDER_ID,
-        "appId": os.getenv("FIREBASE_APP_ID", DEFAULT_FIREBASE_APP_ID).strip() or DEFAULT_FIREBASE_APP_ID,
+        "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", FIREBASE_STORAGE_BUCKET).strip() or f"{project_id}.firebasestorage.app",
+        "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", FIREBASE_MESSAGING_SENDER_ID).strip(),
+        "appId": os.getenv("FIREBASE_APP_ID", FIREBASE_APP_ID).strip(),
     }
 
 

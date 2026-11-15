@@ -1,3 +1,4 @@
+# Virtual Environments & Python Cache
 .venv/
 venv/
 __pycache__/
@@ -7,6 +8,7 @@ __pycache__/
 build/
 dist/
 
+# Environment Variables & Secrets
 .env
 .env.*
 !.env.example
@@ -15,22 +17,45 @@ dist/
 firebase-service-account.json
 secrets/
 .firebase/
+config.json
+*/config.json
+dsr/config.json
 
-# Dynamic Runtime Data
+# Local Databases & SQLite Stores
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.sqlite*
+
+# Session Cookies, States & Browser Profiles
 data/
-downloads/
+data/sessions/
+data/browser_profiles/
 browser_profile/
-*.log
+browser_profiles/
+downloads/
+*/downloads/
+dsr/downloads/
+storage_state*.json
+session_*.json
+*.session
 
-# No offline excel/csv files (everything is scraped live from portal)
+# Local Logs & Run Artifacts
+*.log
+otp.txt
+command.txt
+latest_public_url.txt
+cloudflared.exe
+scratch/
+
+# Generated Reports & Downloaded Output Files
 *.xlsx
 *.xlsm
 *.xlsb
 *.xls
 *.csv
 *.csv.gz
-
-# Generated reports & screenshots
 *.pdf
 *.png
 *.jpg
@@ -38,11 +63,7 @@ browser_profile/
 *.zip
 !static/softwares/*.zip
 !static/softwares/
+
 # Exclude large software packages (>50MB) from git repository (hosted via GitHub Releases)
 static/softwares/jdk-*.zip
 static/softwares/AdbeRdr*.zip
-otp.txt
-command.txt
-latest_public_url.txt
-cloudflared.exe
-scratch/

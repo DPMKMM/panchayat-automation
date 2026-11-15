@@ -48,10 +48,18 @@ def _resolve_tracked_tool_event(method: str, path: str) -> tuple[str, str, str] 
         slug = p[len("/api/tools/pdf/"):].strip("/")
         if slug and "/" not in slug and slug != "health":
             return "tools", f"pdf:{slug}", "execute"
+    if m == "POST" and (p.startswith("/api/tools/excel/execute") or p.startswith("/api/tools/excel/viewer/")):
+        return "tools", "excel_studio", "execute"
+    if m == "GET" and p.startswith("/api/tools/excel/download/"):
+        return "tools", "excel_studio", "download"
     if m == "POST" and p == "/api/web/reports":
         return "portal", "dsr_manual", "generate"
+    if m == "GET" and (p.startswith("/api/web/reports/") and any(k in p for k in ("download", "download-excel", "download-image"))):
+        return "portal", "dsr_manual", "download"
     if m == "POST" and p in ("/api/web/multi-day-reports", "/api/multiday-dsr/analyze"):
         return "portal", "dsr_multiday", "generate"
+    if m == "GET" and (p.startswith("/api/multiday-dsr/jobs/") and any(k in p for k in ("download-pdf", "download-excel"))):
+        return "portal", "dsr_multiday", "download"
     if p in ("/api/tax/report.pdf", "/api/tax/download-pdf", "/api/tax/powerbi-report.pdf", "/api/tax/download") and m == "GET":
         return "portal", "dcb_live", p.rsplit("/", 1)[-1]
     if p == "/api/tax/refresh" and m == "POST":
@@ -64,6 +72,8 @@ def _resolve_tracked_tool_event(method: str, path: str) -> tuple[str, str, str] 
         return "console", "gp_inspections", "generate"
     if m == "POST" and p == "/api/auto-multi-dsr/start-job":
         return "console", "auto_multi_dsr", "generate"
+    if m == "GET" and (p.startswith("/api/auto-multi-dsr/jobs/") and any(k in p for k in ("download-pdf", "download-excel"))):
+        return "console", "auto_multi_dsr", "download"
     return None
 
 logging.basicConfig(level=LOG_LEVEL, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -143,6 +153,26 @@ def create_app() -> FastAPI:
             is_new = True
 
         request.state.session_id = sid
+
+        # Security Patch 4: Block /docs, /redoc, and /openapi.json when enable_docs is disabled
+        path_low = request.url.path.lower()
+        if not enable_docs and path_low in ("/docs", "/redoc", "/openapi.json", "/api/docs", "/api/redoc", "/api/openapi.json"):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+        # Security Patch 5: Strictly require authenticated user session for all automation & report endpoints in production
+        if is_production:
+            tracked_event = _resolve_tracked_tool_event(request.method, request.url.path)
+            if tracked_event:
+                user, _ = resolve_sso_session(request)
+                if user is None:
+                    from fastapi.responses import JSONResponse
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Authentication required. Please sign in with an active account to access automation and reports."},
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+
         response = await call_next(request)
 
         if response.status_code < 400:
