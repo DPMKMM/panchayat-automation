@@ -387,6 +387,11 @@ def test_services_hub_page():
     assert 'Gram Panchayat Inspections' in html
     assert 'House Tax Demand Collection Balance' in html
     assert 'Monthly Activity Statement (MAS)' in html
+    assert 'State Format DSR Report' in html
+    assert 'Pending Mobile Number Assessments' in html
+    assert 'Excel &amp; Data Studio' in html
+    assert 'All-in-One PDF Studio' in html
+    assert 'Official Softwares &amp; Drivers Hub' in html
 
     # All service-meta blocks and card action hyperlinks/buttons must be removed (informational cards only)
     for removed_text in (
