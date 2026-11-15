@@ -12,7 +12,7 @@ import re
 import time
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from inspections.models import (
     SUPPORTED_DESIGNATIONS,
@@ -706,6 +706,7 @@ def download_inspection_weeks(
     from_month: str = "",
     to_month: str = "",
     counting_mode: str = "monday",
+    on_progress: Optional[Callable[[str, int, int], None]] = None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Iterate selected weeks in GM-R 39.1, click Submit then Excel icon, and save weekly files."""
     page = bot.page
@@ -775,6 +776,11 @@ def download_inspection_weeks(
 
         for idx, wk in enumerate(selected_weeks, start=1):
             portal_dialogs.clear()
+            if on_progress:
+                try:
+                    on_progress(wk["text"], idx, len(selected_weeks))
+                except Exception:
+                    pass
             iframe, infos, _, cur_week_info = _find_frame_with_gmr391_selects(page, fallback_frame=iframe)
             if cur_week_info is None:
                 raise RuntimeError(f"Week dropdown disappeared in GM-R 39.1 on week '{wk['text']}'.")

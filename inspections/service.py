@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Optional
 
 from core.config import get_reports_dir
 from core.session_manager import get_or_create_session, run_in_session_thread
@@ -32,6 +33,56 @@ logger = logging.getLogger("inspections_service")
 
 _SESSION_STORE_LOCK = Lock()
 _SESSION_REPORTS: dict[str, dict[str, Any]] = {}
+
+_INSP_PROGRESS_LOCK = Lock()
+_INSP_PROGRESS_MAP: dict[str, dict[str, Any]] = {}
+
+
+def set_inspection_progress(
+    session_id: str,
+    *,
+    status: str,
+    current_week: str = "",
+    current_index: int = 0,
+    total_weeks: int = 0,
+    designation: str = "",
+    detail: str = "",
+) -> None:
+    sid = str(session_id or "").strip()
+    if not sid:
+        return
+    with _INSP_PROGRESS_LOCK:
+        _INSP_PROGRESS_MAP[sid] = {
+            "status": status,
+            "current_week": current_week,
+            "current_index": current_index,
+            "total_weeks": total_weeks,
+            "designation": designation,
+            "detail": detail,
+            "updated_at": time.time(),
+        }
+
+
+def get_inspection_progress(session_id: str) -> dict[str, Any]:
+    sid = str(session_id or "").strip()
+    with _INSP_PROGRESS_LOCK:
+        info = _INSP_PROGRESS_MAP.get(sid)
+        if not info:
+            return {
+                "active": False,
+                "status": "idle",
+                "current_week": "",
+                "current_index": 0,
+                "total_weeks": 0,
+                "detail": "",
+            }
+        return {"active": True, **info}
+
+
+def clear_inspection_progress(session_id: str) -> None:
+    sid = str(session_id or "").strip()
+    with _INSP_PROGRESS_LOCK:
+        _INSP_PROGRESS_MAP.pop(sid, None)
 
 
 def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
@@ -257,6 +308,16 @@ def generate_live_inspection_report(
     canon_desig = spec["designation"]
     session = get_or_create_session(session_id)
 
+    set_inspection_progress(
+        session_id,
+        status="starting",
+        current_week=from_week or "Initializing",
+        current_index=0,
+        total_weeks=1,
+        designation=canon_desig,
+        detail="Initializing GM-R 39.1 inspection robot...",
+    )
+
     with session["lock"]:
         def _task():
             bot = session.get("bot")
@@ -267,6 +328,17 @@ def generate_live_inspection_report(
                     "e-Panchayat browser session is not active. Please complete Departmental Login first."
                 )
 
+            def _progress_cb(wk_label: str, cur_idx: int, tot_wks: int) -> None:
+                set_inspection_progress(
+                    session_id,
+                    status="processing",
+                    current_week=wk_label,
+                    current_index=cur_idx,
+                    total_weeks=tot_wks,
+                    designation=canon_desig,
+                    detail=f"Processing Week {cur_idx} of {tot_wks}: {wk_label}",
+                )
+
             dl_kwargs: dict[str, Any] = {
                 "bot": bot,
                 "designation": canon_desig,
@@ -274,11 +346,23 @@ def generate_live_inspection_report(
                 "to_week": to_week,
                 "downloads_dir": session["downloads_dir"],
                 "counting_mode": counting_mode,
+                "on_progress": _progress_cb,
             }
             if from_month.strip():
                 dl_kwargs["from_month"] = from_month
                 dl_kwargs["to_month"] = to_month
             week_files, week_labels = download_inspection_weeks(**dl_kwargs)
+
+            set_inspection_progress(
+                session_id,
+                status="consolidating",
+                current_week=f"All {len(week_labels)} week(s)",
+                current_index=len(week_labels),
+                total_weeks=len(week_labels),
+                designation=canon_desig,
+                detail=f"Consolidating submitted inspection records across {len(week_labels)} week(s)...",
+            )
+
             dist_name = str(session.get("district_name") or "").strip()
             user_level = str(session.get("user_level") or "district").strip().lower()
             mandal_name = str(session.get("mandal_name") or "").strip()
@@ -310,9 +394,31 @@ def generate_live_inspection_report(
                         else 0.0
                     )
 
-            return _persist_artifacts_for_session(session_id, report)
+            res = _persist_artifacts_for_session(session_id, report)
+            set_inspection_progress(
+                session_id,
+                status="completed",
+                current_week=f"Completed {len(week_labels)} week(s)",
+                current_index=len(week_labels),
+                total_weeks=len(week_labels),
+                designation=canon_desig,
+                detail=f"Successfully consolidated {len(week_labels)} week(s).",
+            )
+            return res
 
-        return run_in_session_thread(session, _task)
+        try:
+            return run_in_session_thread(session, _task)
+        except Exception as exc:
+            set_inspection_progress(
+                session_id,
+                status="error",
+                current_week="",
+                current_index=0,
+                total_weeks=0,
+                designation=canon_desig,
+                detail=str(exc),
+            )
+            raise
 
 
 def consolidate_uploaded_inspection_files(

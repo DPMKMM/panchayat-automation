@@ -958,3 +958,54 @@ def test_inspection_counting_mode_monday_vs_attendance(tmp_path, monkeypatch):
     oct_sec = next(s for s in res_data["monthly_sections"] if s["month_key"] == "2026-10")
     assert oct_sec["rows"][0]["completed"] == 2
 
+
+def test_inspection_live_progress_and_processing_week_status(monkeypatch):
+    """Verify live inspection progress tracking, /progress endpoint, and processing week display."""
+    from inspections import service as insp_service
+
+    client = TestClient(create_app())
+    token = _console_login(client, monkeypatch, "insp_prog")
+    sid = "sess_prog_test_01"
+
+    # 1. Initially idle progress
+    insp_service.clear_inspection_progress(sid)
+    res_idle = client.get(
+        "/api/inspections/progress",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
+    )
+    assert res_idle.status_code == 200
+    assert res_idle.json()["active"] is False
+
+    # 2. Update progress with processing week
+    insp_service.set_inspection_progress(
+        sid,
+        status="processing",
+        current_week="02-11-2026 to 07-11-2026",
+        current_index=1,
+        total_weeks=3,
+        designation="MPO",
+        detail="Processing Week 1 of 3: 02-11-2026 to 07-11-2026",
+    )
+
+    res_active = client.get(
+        "/api/inspections/progress",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {token}", "X-Session-ID": sid},
+    )
+    assert res_active.status_code == 200
+    data = res_active.json()
+    assert data["active"] is True
+    assert data["status"] == "processing"
+    assert data["current_week"] == "02-11-2026 to 07-11-2026"
+    assert data["current_index"] == 1
+    assert data["total_weeks"] == 3
+
+    # 3. Verify HTML & console.js elements for processing week badge & status
+    portal_html = (ROOT / "templates" / "portal_shell.html").read_text(encoding="utf-8")
+    console_js = (ROOT / "static" / "js" / "console.js").read_text(encoding="utf-8")
+
+    assert 'id="insp-processing-week-badge"' in portal_html
+    assert "Processing Week" in console_js
+    assert "window.updateInspectionWeekSelectionStatus" in console_js
+    assert "/api/inspections/progress" in console_js
+
+

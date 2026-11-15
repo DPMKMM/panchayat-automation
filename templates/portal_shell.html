@@ -3522,13 +3522,13 @@
           </div>
           <div id="insp-from-week-wrap">
             <label for="insp-from-week" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">From Week (Mon–Sat) *</label>
-            <select id="insp-from-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner()">
+            <select id="insp-from-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner(); updateInspectionWeekSelectionStatus();">
               <option value="">Click "Fetch Portal Weeks" to load GM-R 39.1 weeks...</option>
             </select>
           </div>
           <div id="insp-to-week-wrap">
             <label for="insp-to-week" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">To Week (Mon–Sat) *</label>
-            <select id="insp-to-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner()">
+            <select id="insp-to-week" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem;" onchange="updateInspectionTargetBanner(); updateInspectionWeekSelectionStatus();">
               <option value="">Click "Fetch Portal Weeks" to load GM-R 39.1 weeks...</option>
             </select>
           </div>
@@ -3610,7 +3610,10 @@
             <div id="insp-progress-fill" class="progress-fill-gradient" style="background:linear-gradient(90deg, #0284c7, #10b981); width:0%; height:100%; border-radius:999px; transition:width 0.3s ease;"></div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.85rem; color:#334155;">
-            <div><span style="font-weight:700;">Status:</span> <span id="insp-status-text">Processing inspections download...</span></div>
+            <div>
+              <span style="font-weight:700;">Status:</span> <span id="insp-status-text">Processing inspections download...</span>
+              <span id="insp-processing-week-badge" style="display:none; margin-left:8px; padding:3px 9px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:12px; font-size:0.75rem; font-weight:800;"></span>
+            </div>
             <div style="display:flex; gap:12px; font-weight:600;">
               <span>⏱️ Elapsed: <strong id="insp-elapsed-time" style="color:#047857;">00:00</strong></span>
               <span>⏳ Estimated: <strong id="insp-estimated-time" style="color:#0284c7;">--:--</strong></span>

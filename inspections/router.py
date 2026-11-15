@@ -28,6 +28,15 @@ def get_inspection_specs(request: Request) -> dict[str, Any]:
     return inspections_service.get_specs_payload()
 
 
+@router.get("/progress", include_in_schema=False)
+def get_inspection_progress_api(request: Request) -> dict[str, Any]:
+    """Return live week-by-week processing progress for active GM-R 39.1 robot."""
+    enforce_console_api_access(request)
+    sid = _get_sid(request)
+    data = inspections_service.get_inspection_progress(sid)
+    return {"success": True, **data}
+
+
 @router.get("/weeks", include_in_schema=False)
 def get_inspection_weeks(request: Request, designation: str = "MPO") -> dict[str, Any]:
     """Fetch live Designation & Week options from portal GM-R 39.1 using shared session."""

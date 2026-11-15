@@ -179,6 +179,14 @@
       clearTimeout(deptAutoCloseTimer);
       deptAutoCloseTimer = null;
     }
+    if (inspTimerInterval) {
+      clearInterval(inspTimerInterval);
+      inspTimerInterval = null;
+    }
+    if (inspProgressPoller) {
+      clearInterval(inspProgressPoller);
+      inspProgressPoller = null;
+    }
     clearStepTimeouts();
     deptLoginInProgress = false;
   };
@@ -3138,8 +3146,11 @@
   // ---------------------------------------------------------------------------
   // GP Inspections Monitoring Station (#inspections-station - GM-R 39.1)
   // ---------------------------------------------------------------------------
+  // GM-R 39.1 Gram Panchayat Inspections Module Controller
+  // ---------------------------------------------------------------------------
 
   var inspTimerInterval = null;
+  var inspProgressPoller = null;
 
   function countSelectedInspWeeks(fromWeek, toWeek) {
     if (!inspWeeksCache || !inspWeeksCache.length) return 1;
@@ -3156,14 +3167,17 @@
     return Math.abs(fIdx - tIdx) + 1;
   }
 
-  function startInspProgressTimer(estSeconds, statusMsg) {
+  function startInspProgressTimer(estSeconds, statusMsg, initialWeekText) {
     if (inspTimerInterval) clearInterval(inspTimerInterval);
+    if (inspProgressPoller) clearInterval(inspProgressPoller);
     var strip = document.getElementById('insp-progress-strip');
     var elapEl = document.getElementById('insp-elapsed-time');
     var estEl = document.getElementById('insp-estimated-time');
     var pctEl = document.getElementById('insp-progress-pct');
     var fillEl = document.getElementById('insp-progress-fill');
     var statusEl = document.getElementById('insp-status-text');
+    var badgeEl = document.getElementById('insp-processing-week-badge');
+    var syncEl = document.getElementById('insp-sync-time');
     var startMs = Date.now();
     var targetSec = Math.max(8, estSeconds || 12);
 
@@ -3172,7 +3186,22 @@
     if (estEl) estEl.textContent = formatMinSec(targetSec);
     if (pctEl) pctEl.textContent = '0%';
     if (fillEl) fillEl.style.width = '0%';
-    if (statusEl) statusEl.textContent = statusMsg || 'Iterating weeks and compiling GM-R 39.1 inspection reports...';
+
+    var displayWeek = initialWeekText || '';
+    var initMsg = statusMsg || (displayWeek ? ('Processing Week: ' + displayWeek) : 'Iterating weeks and compiling GM-R 39.1 inspection reports...');
+    if (statusEl) statusEl.textContent = initMsg;
+    if (badgeEl) {
+      if (displayWeek) {
+        badgeEl.style.display = 'inline-block';
+        badgeEl.textContent = '📅 ' + displayWeek;
+      } else {
+        badgeEl.style.display = 'none';
+        badgeEl.textContent = '';
+      }
+    }
+    if (syncEl && displayWeek) {
+      syncEl.textContent = 'Status: Processing Week: ' + displayWeek + ' (connecting GM-R 39.1)...';
+    }
 
     inspTimerInterval = setInterval(function () {
       var elapsed = Math.floor((Date.now() - startMs) / 1000);
@@ -3180,29 +3209,73 @@
       if (elapsed >= targetSec - 2) targetSec = elapsed + 5;
       if (estEl) estEl.textContent = formatMinSec(Math.max(0, targetSec - elapsed));
       var pct = Math.min(96, Math.round((elapsed / Math.max(1, targetSec)) * 96));
-      if (pctEl) pctEl.textContent = pct + '%';
-      if (fillEl) fillEl.style.width = pct + '%';
+      if (pctEl) {
+        var curVal = parseInt(pctEl.textContent, 10) || 0;
+        if (pct > curVal) pctEl.textContent = pct + '%';
+      }
+      if (fillEl) {
+        var curW = parseInt(fillEl.style.width, 10) || 0;
+        if (pct > curW) fillEl.style.width = pct + '%';
+      }
     }, 250);
+
+    inspProgressPoller = setInterval(async function () {
+      try {
+        var url = '/api/inspections/progress?_ts=' + Date.now();
+        if (window.DeptSessionManager && typeof window.DeptSessionManager.appendSessionParam === 'function') {
+          url = window.DeptSessionManager.appendSessionParam(url);
+        }
+        var pData = await window.safeFetchJson(url);
+        if (pData && pData.active && pData.current_week) {
+          var curWk = pData.current_week;
+          var idxPart = (pData.current_index && pData.total_weeks) ? (' [' + pData.current_index + '/' + pData.total_weeks + ']') : '';
+          var liveTxt = 'Processing Week' + idxPart + ': ' + curWk;
+          if (statusEl) statusEl.textContent = liveTxt;
+          if (syncEl) syncEl.textContent = 'Status: ' + liveTxt + ' (downloading GM-R 39.1 Submitted inspections)...';
+          if (badgeEl) {
+            badgeEl.style.display = 'inline-block';
+            badgeEl.textContent = '📅 ' + (pData.current_index ? ('Week ' + pData.current_index + '/' + pData.total_weeks + ': ') : '') + curWk;
+          }
+          if (pData.current_index && pData.total_weeks) {
+            var realPct = Math.min(96, Math.round((pData.current_index / pData.total_weeks) * 90));
+            if (pctEl) {
+              var cVal = parseInt(pctEl.textContent, 10) || 0;
+              if (realPct > cVal) pctEl.textContent = realPct + '%';
+            }
+            if (fillEl) {
+              var cW = parseInt(fillEl.style.width, 10) || 0;
+              if (realPct > cW) fillEl.style.width = realPct + '%';
+            }
+          }
+        }
+      } catch (e) {}
+    }, 800);
   }
 
-  function finishInspProgressTimer(success) {
+  function finishInspProgressTimer(success, summaryMsg) {
     if (inspTimerInterval) {
       clearInterval(inspTimerInterval);
       inspTimerInterval = null;
+    }
+    if (inspProgressPoller) {
+      clearInterval(inspProgressPoller);
+      inspProgressPoller = null;
     }
     var estEl = document.getElementById('insp-estimated-time');
     var pctEl = document.getElementById('insp-progress-pct');
     var fillEl = document.getElementById('insp-progress-fill');
     var statusEl = document.getElementById('insp-status-text');
+    var badgeEl = document.getElementById('insp-processing-week-badge');
     if (success) {
       if (estEl) estEl.textContent = '00:00';
       if (pctEl) pctEl.textContent = '100%';
       if (fillEl) fillEl.style.width = '100%';
-      if (statusEl) statusEl.textContent = 'Inspections abstract compiled successfully!';
+      if (statusEl) statusEl.textContent = summaryMsg || 'Inspections abstract compiled successfully!';
     } else {
       if (estEl) estEl.textContent = '--:--';
-      if (statusEl) statusEl.textContent = 'Inspections robot halted.';
+      if (statusEl) statusEl.textContent = summaryMsg || 'Inspections robot halted.';
     }
+    if (badgeEl) badgeEl.style.display = 'none';
   }
 
   function getInspTargetMeta(desig) {
@@ -3227,6 +3300,28 @@
     if (searchLbl) searchLbl.textContent = meta.level;
     if (colHdr) colHdr.textContent = meta.level;
     if (unitsLbl && !inspCurrentReport) unitsLbl.textContent = 'Total ' + meta.plural;
+  };
+
+  window.updateInspectionWeekSelectionStatus = function () {
+    var syncEl = document.getElementById('insp-sync-time');
+    if (!syncEl || inspCurrentReport) return;
+    var pMode = (document.getElementById('insp-period-mode') && document.getElementById('insp-period-mode').value) || 'weeks';
+    if (pMode === 'weeks') {
+      var fw = (document.getElementById('insp-from-week') && document.getElementById('insp-from-week').value) || '';
+      var tw = (document.getElementById('insp-to-week') && document.getElementById('insp-to-week').value) || fw;
+      if (fw) {
+        var cnt = countSelectedInspWeeks(fw, tw);
+        var wDesc = (fw === tw) ? ('Processing Week: ' + fw) : ('Processing Week Range (' + cnt + ' weeks): ' + fw + ' -> ' + tw);
+        syncEl.textContent = 'Status: Selected ' + wDesc + '. Click "⚡ Run Inspections Robot" to compile.';
+      }
+    } else {
+      var fm = (document.getElementById('insp-from-month') && document.getElementById('insp-from-month').value) || '';
+      var tm = (document.getElementById('insp-to-month') && document.getElementById('insp-to-month').value) || fm;
+      if (fm) {
+        var mDesc = (fm === tm) ? ('Month ' + fm) : ('Months ' + fm + ' to ' + tm);
+        syncEl.textContent = 'Status: Selected ' + mDesc + '. Click "⚡ Run Inspections Robot" to compile.';
+      }
+    }
   };
 
   window.resetInspectionsView = function () {
@@ -3263,6 +3358,12 @@
 
     var pStrip = document.getElementById('insp-progress-strip');
     if (pStrip) pStrip.style.display = 'none';
+
+    var badgeEl = document.getElementById('insp-processing-week-badge');
+    if (badgeEl) {
+      badgeEl.style.display = 'none';
+      badgeEl.textContent = '';
+    }
 
     var syncEl = document.getElementById('insp-sync-time');
     if (syncEl) {
@@ -3394,6 +3495,7 @@
     if (prev) prev.style.display = isMonths ? 'block' : 'none';
     if (isMonths) window.updateInspectionMonthPreview();
     window.resetInspectionsView();
+    window.updateInspectionWeekSelectionStatus();
   };
 
   window.updateInspectionMonthPreview = function () {
@@ -3474,10 +3576,14 @@
         }
       }
       if (syncEl) {
+        var selFw = fromEl ? fromEl.value : '';
+        var selTw = toEl ? toEl.value : '';
+        var wDisplay = (selFw && selTw && selFw !== selTw) ? (selFw + ' -> ' + selTw) : (selFw || '');
         syncEl.textContent = weeks.length
-          ? ('Loaded ' + weeks.length + ' weekly inspection period(s) across ' + inspMonthsCache.length + ' month(s) for ' + desig + '. Select Week Range or Month-Wise Range and click Run.')
+          ? ('Status: Loaded ' + weeks.length + ' weekly inspection periods for ' + desig + (wDisplay ? (' • Selected Processing Week: ' + wDisplay) : '') + '. Click "⚡ Run Inspections Robot" to compile.')
           : ('GM-R 39.1 returned no weekly options for ' + desig + '.');
       }
+      window.updateInspectionWeekSelectionStatus();
       if (explicitClick) showNotice('Loaded ' + weeks.length + ' weeks from GM-R 39.1 for ' + desig + '.', 'success');
     } catch (err) {
       if (handleDepartmentSessionExpiredError(err, 'inspections', { designation: desig })) return;
@@ -3507,13 +3613,21 @@
     var wkCnt = (mode === 'months' && fromMonth)
       ? countWeeksForMonthRange(fromMonth, toMonth)
       : countSelectedInspWeeks(fromWeek, toWeek);
-    startInspProgressTimer(Math.max(10, wkCnt * 4 + 6));
+
+    var initialWeekText = (mode === 'months' && fromMonth)
+      ? (fromMonth === toMonth ? fromMonth : (fromMonth + ' -> ' + toMonth))
+      : (fromWeek === toWeek ? fromWeek : (fromWeek + (toWeek ? (' -> ' + toWeek) : '')));
+
+    startInspProgressTimer(Math.max(10, wkCnt * 4 + 6), 'Processing Week: ' + (initialWeekText || 'Iterating weeks...'), initialWeekText);
 
     if (btn) {
       btn.disabled = true;
       btn.innerHTML = '⏳ Running GM-R 39.1 Robot...';
     }
-    if (syncEl) syncEl.textContent = 'Iterating ' + wkCnt + ' week(s) in GM-R 39.1, downloading Excel reports, and consolidating Submitted inspections...';
+    if (syncEl) {
+      syncEl.textContent = 'Status: Processing Week' + (wkCnt > 1 ? ('s (' + wkCnt + ')') : '') + ': ' +
+        (initialWeekText || 'Iterating GM-R 39.1 weeks') + ', downloading Excel reports and consolidating Submitted inspections...';
+    }
 
     try {
       var fd = new FormData();
@@ -3533,12 +3647,12 @@
         method: 'POST',
         body: fd,
       });
-      finishInspProgressTimer(true);
+      finishInspProgressTimer(true, 'Compiled ' + (data.weeks_count || 1) + ' week(s) successfully!');
       inspActiveMonthKey = 'all';
       window.renderInspectionsReport(data);
       showNotice('Compiled GM-R 39.1 ' + data.designation + ' Inspection Abstract (' + (data.weeks_count || 1) + ' week(s)).', 'success');
     } catch (err) {
-      finishInspProgressTimer(false);
+      finishInspProgressTimer(false, 'Inspections robot halted.');
       if (actionsWrap) actionsWrap.style.display = 'none';
       if (handleDepartmentSessionExpiredError(err, 'inspections', { designation: desig, from_week: fromWeek, to_week: toWeek })) return;
       if (syncEl) syncEl.textContent = 'Error: ' + err.message;
@@ -3560,7 +3674,13 @@
     var countingMode = (document.getElementById('insp-counting-mode') && document.getElementById('insp-counting-mode').value) || 'monday';
     var overrideVal = (document.getElementById('insp-target-override') && document.getElementById('insp-target-override').value) || '';
     var syncEl = document.getElementById('insp-sync-time');
-    if (syncEl) syncEl.textContent = 'Consolidating ' + fileList.length + ' uploaded GM-R 39.1 Excel file(s) (Final Submit Status = Submitted only)...';
+
+    var fileNames = [];
+    for (var f = 0; f < fileList.length; f++) {
+      fileNames.push(fileList[f].name);
+    }
+    var fDisplay = fileNames.length <= 2 ? fileNames.join(', ') : (fileNames.length + ' Excel files');
+    if (syncEl) syncEl.textContent = 'Status: Processing uploaded week file(s) [' + fDisplay + '], consolidating Submitted inspections...';
 
     try {
       var fd = new FormData();
@@ -3633,19 +3753,26 @@
     el = document.getElementById('insp-kpi-units-label'); if (el) el.textContent = 'Total ' + plural;
     el = document.getElementById('insp-col-unit-header'); if (el) el.textContent = levelLabel;
     el = document.getElementById('insp-search-unit-label'); if (el) el.textContent = levelLabel;
-    el = document.getElementById('insp-target-rule-text');
-    if (el) {
-      var modeTxt = data.counting_mode_label ? (' • Counting: ' + data.counting_mode_label) : '';
-      el.textContent = (data.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only' + modeTxt;
-    }
-
-    var actionsWrap = document.getElementById('insp-actions-wrap');
-    if (actionsWrap) actionsWrap.style.display = 'flex';
 
     var totals = data.totals || {};
     var periodTxt = (data.from_week && data.to_week && data.from_week !== data.to_week)
       ? (data.from_week + ' -> ' + data.to_week)
       : (data.from_week || '');
+    var weeksList = Array.isArray(data.weeks_selected) && data.weeks_selected.length > 0
+      ? data.weeks_selected
+      : (periodTxt ? [periodTxt] : []);
+    var weeksText = weeksList.join(', ');
+    var weeksDisplay = (weeksList.length > 1 ? ('Processing Weeks (' + weeksList.length + '): [' + weeksText + ']') : ('Processing Week: ' + (weeksText || '—')));
+
+    el = document.getElementById('insp-target-rule-text');
+    if (el) {
+      var modeTxt = data.counting_mode_label ? (' • Counting: ' + data.counting_mode_label) : '';
+      el.textContent = (data.target_rule_desc || '') + ' • ' + weeksDisplay + ' • Filter: Final Submit Status = Submitted Only' + modeTxt;
+    }
+
+    var actionsWrap = document.getElementById('insp-actions-wrap');
+    if (actionsWrap) actionsWrap.style.display = 'flex';
+
     var monthPart = data.month_period ? (data.month_period + ' • ') : '';
     var countingModePart = data.counting_mode_label ? (' • Mode: ' + data.counting_mode_label) : '';
     var genPart = data.generated_at ? (' • Report Generated On: ' + data.generated_at) : '';
@@ -3658,8 +3785,8 @@
         }).join(', ');
       }
       syncEl.textContent =
-        'Compiled ' + (data.designation || 'MPO') + ' (' + monthPart + (data.weeks_count || 1) + ' week(s): ' +
-        periodTxt + ') • Submitted Considered: ' +
+        'Status: Compiled ' + (data.designation || 'MPO') + ' • ' + (monthPart ? ('Month: ' + monthPart) : '') +
+        weeksDisplay + ' • Submitted Considered: ' +
         (totals.submitted_row_count || 0) + ' / Raw: ' + (totals.raw_row_count || 0) +
         ' (Excluded Non-Submitted: ' + (totals.excluded_non_submitted_count || 0) + ')' + countingModePart + genPart + logNote;
     }
@@ -3685,7 +3812,9 @@
           var ruleEl = document.getElementById('insp-target-rule-text');
           if (ruleEl) {
             var sModeTxt = (inspCurrentReport && inspCurrentReport.counting_mode_label) ? (' • ' + inspCurrentReport.counting_mode_label) : '';
-            ruleEl.textContent = foundSec.month_label + ': ' + (foundSec.target_rule_desc || '') + ' • Weeks (' + foundSec.week_count + '): ' + (foundSec.weeks_included || []).join(', ') + sModeTxt;
+            var secWeeks = (foundSec.weeks_included || []).join(', ');
+            var secWeeksDisplay = (foundSec.week_count > 1 ? ('Processing Weeks (' + foundSec.week_count + '): [' + secWeeks + ']') : ('Processing Week: ' + (secWeeks || '—')));
+            ruleEl.textContent = foundSec.month_label + ': ' + (foundSec.target_rule_desc || '') + ' • ' + secWeeksDisplay + sModeTxt;
           }
         }
       }
@@ -3694,7 +3823,12 @@
         var ruleEl2 = document.getElementById('insp-target-rule-text');
         if (ruleEl2) {
           var aModeTxt = (inspCurrentReport && inspCurrentReport.counting_mode_label) ? (' • Counting: ' + inspCurrentReport.counting_mode_label) : '';
-          ruleEl2.textContent = (inspCurrentReport.target_rule_desc || '') + ' • Filter: Final Submit Status = Submitted Only' + aModeTxt;
+          var allWeeksList = Array.isArray(inspCurrentReport.weeks_selected) && inspCurrentReport.weeks_selected.length > 0
+            ? inspCurrentReport.weeks_selected
+            : (inspCurrentReport.from_week ? [inspCurrentReport.from_week + (inspCurrentReport.to_week && inspCurrentReport.to_week !== inspCurrentReport.from_week ? ' -> ' + inspCurrentReport.to_week : '')] : []);
+          var allWeeksText = allWeeksList.join(', ');
+          var allWeeksDisplay = (allWeeksList.length > 1 ? ('Processing Weeks (' + allWeeksList.length + '): [' + allWeeksText + ']') : ('Processing Week: ' + (allWeeksText || '—')));
+          ruleEl2.textContent = (inspCurrentReport.target_rule_desc || '') + ' • ' + allWeeksDisplay + ' • Filter: Final Submit Status = Submitted Only' + aModeTxt;
         }
       }
     }
