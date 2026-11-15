@@ -1891,6 +1891,10 @@ def save_feedback(
         "rating": max(1, min(5, int(rating or 5))),
         "app_scope": str(app_scope or "portal"),
         "created_at": now,
+        "admin_reply": "",
+        "admin_replied_at": "",
+        "admin_name": "",
+        "status": "open",
     }
     _db().collection(COL_FEEDBACK).document(feedback_id).set(record)
     return record
@@ -1906,9 +1910,43 @@ def get_recent_feedback(limit: int = 50) -> list[dict[str, Any]]:
             item.setdefault("feedback_id", snap.id)
             item.setdefault("id", snap.id)
             item.setdefault("email", item.get("gmail") or "")
+            item.setdefault("admin_reply", "")
+            item.setdefault("admin_replied_at", "")
+            item.setdefault("admin_name", "")
+            item.setdefault("status", "replied" if item.get("admin_reply") else "open")
             items.append(item)
     items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
     return items[: max(1, int(limit))]
+
+
+def update_feedback_reply(
+    feedback_id: str,
+    admin_reply: str,
+    admin_name: str = "Administrator",
+    admin_user_id: str = "",
+) -> dict[str, Any]:
+    """Persist an official admin reply to an officer feedback/suggestion record in Cloud Firestore."""
+    clean_id = str(feedback_id or "").strip()
+    if not clean_id:
+        raise ValueError("Invalid feedback_id")
+    now = _utc_now_iso()
+    doc_ref = _db().collection(COL_FEEDBACK).document(clean_id)
+    reply_payload = {
+        "admin_reply": str(admin_reply or "").strip(),
+        "admin_name": str(admin_name or "Administrator").strip(),
+        "admin_user_id": str(admin_user_id or "").strip(),
+        "admin_replied_at": now,
+        "status": "replied",
+        "updated_at": now,
+    }
+    doc_ref.set(reply_payload, merge=True)
+    snap = doc_ref.get()
+    data = snap.to_dict() if snap and hasattr(snap, "to_dict") else {}
+    record = dict(data or {})
+    record.setdefault("feedback_id", clean_id)
+    record.setdefault("id", clean_id)
+    record.update(reply_payload)
+    return record
 
 
 # ---------------------------------------------------------------------------

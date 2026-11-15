@@ -975,36 +975,141 @@
     }
   };
 
+  window.cachedAdminFeedbackRows = [];
+
   window.loadAdminFeedback = async function () {
     try {
       var res = await window.safeFetchJson('/api/admin/feedback');
       var rows = Array.isArray(res.feedback) ? res.feedback : [];
+      window.cachedAdminFeedbackRows = rows;
       var countEl = document.getElementById('admin-feedback-count');
       if (countEl) countEl.textContent = String(res.count != null ? res.count : rows.length);
-
-      var tbody = document.getElementById('admin-feedback-tbody');
-      if (!tbody) return;
-      if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding:24px; color:#64748b;">No officer feedback submissions yet.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = rows.map(function (fb) {
-        return (
-          '<tr>' +
-            '<td style="white-space:nowrap; font-size:0.8rem; color:#475569;">' + esc(formatShortDate(fb.created_at)) + '</td>' +
-            '<td>' +
-              '<div style="font-weight:700; color:#0f172a;">' + esc(fb.name || 'Officer') + '</div>' +
-              '<div style="font-size:0.78rem; color:#64748b;">' + esc(fb.email || '—') + '</div>' +
-            '</td>' +
-            '<td style="font-size:0.82rem;">' + esc(fb.designation || '—') + '</td>' +
-            '<td><span class="badge-pill-live">' + esc(fb.category || 'General Feedback') + '</span></td>' +
-            '<td style="max-width:420px; white-space:pre-wrap; font-size:0.85rem;">' + esc(fb.message || '') + '</td>' +
-          '</tr>'
-        );
-      }).join('');
+      window.filterAdminFeedbackRows();
     } catch (err) {
       showAdminAlert('Failed to load feedback inbox: ' + err.message, 'error');
+    }
+  };
+
+  window.filterAdminFeedbackRows = function () {
+    var filterEl = document.getElementById('admin-feedback-filter');
+    var val = filterEl ? filterEl.value : 'ALL';
+    var rows = window.cachedAdminFeedbackRows || [];
+    var filtered = rows.filter(function (fb) {
+      if (val === 'ALL') return true;
+      if (val === 'PENDING') return !fb.admin_reply;
+      if (val === 'REPLIED') return Boolean(fb.admin_reply);
+      return true;
+    });
+
+    var tbody = document.getElementById('admin-feedback-tbody');
+    if (!tbody) return;
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No feedback submissions match the current filter.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(function (fb) {
+      var fId = fb.feedback_id || fb.id || '';
+      var hasReply = Boolean(fb.admin_reply);
+      return (
+        '<tr>' +
+          '<td style="white-space:nowrap; font-size:0.8rem; color:#475569;">' + esc(formatShortDate(fb.created_at)) + '</td>' +
+          '<td>' +
+            '<div style="font-weight:700; color:#0f172a;">' + esc(fb.name || 'Officer') + '</div>' +
+            '<div style="font-size:0.76rem; color:#64748b;">' + esc(fb.email || '—') + '</div>' +
+          '</td>' +
+          '<td style="font-size:0.82rem;"><span class="badge-role-pill">' + esc(fb.designation || 'OFFICER') + '</span></td>' +
+          '<td><span class="badge-pill-live">' + esc(fb.category || 'General Feedback') + '</span></td>' +
+          '<td style="max-width:340px; white-space:pre-wrap; font-size:0.85rem; color:#1e293b;">' + esc(fb.message || '') + '</td>' +
+          '<td>' +
+            (hasReply
+              ? ('<span style="display:inline-block; background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:10px;">🛡️ Replied</span>' +
+                 '<div style="font-size:0.78rem; color:#047857; margin-top:4px; max-width:240px; white-space:pre-wrap; line-height:1.35;">' + esc(fb.admin_reply) + '</div>' +
+                 '<div style="font-size:0.68rem; color:#64748b; margin-top:2px;">by ' + esc(fb.admin_name || 'Admin') + (fb.admin_replied_at ? (' · ' + esc(formatShortDate(fb.admin_replied_at))) : '') + '</div>')
+              : '<span style="display:inline-block; background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.72rem; font-weight:800; padding:2px 8px; border-radius:10px;">⏳ Needs Reply</span>') +
+          '</td>' +
+          '<td class="text-center" style="white-space:nowrap;">' +
+            '<button type="button" class="btn btn-primary btn-sm" onclick="window.openAdminReplyModal(\'' + esc(fId) + '\')" style="background:#059669; border-color:#059669; font-size:0.78rem; padding:4px 10px;">' +
+              (hasReply ? '✏️ Edit' : '💬 Reply') +
+            '</button>' +
+          '</td>' +
+        '</tr>'
+      );
+    }).join('');
+  };
+
+  window.openAdminReplyModal = function (feedbackId) {
+    var modal = document.getElementById('admin-reply-modal');
+    if (!modal) return;
+    var list = window.cachedAdminFeedbackRows || [];
+    var fb = null;
+    for (var i = 0; i < list.length; i++) {
+      if ((list[i].feedback_id || list[i].id) === feedbackId) {
+        fb = list[i];
+        break;
+      }
+    }
+    if (!fb) return;
+
+    var idEl = document.getElementById('admin-reply-feedback-id');
+    var offInfo = document.getElementById('admin-reply-officer-info');
+    var catBadge = document.getElementById('admin-reply-category-badge');
+    var origMsg = document.getElementById('admin-reply-orig-message');
+    var txtEl = document.getElementById('admin-reply-textarea');
+
+    if (idEl) idEl.value = feedbackId;
+    if (offInfo) offInfo.textContent = (fb.name || 'Officer') + ' (' + (fb.designation || 'OFFICER') + ') · ' + (fb.email || '');
+    if (catBadge) catBadge.textContent = fb.category || 'General Feedback';
+    if (origMsg) origMsg.textContent = fb.message || '';
+    if (txtEl) txtEl.value = fb.admin_reply || '';
+
+    modal.style.display = 'flex';
+    if (txtEl) txtEl.focus();
+  };
+
+  window.closeAdminReplyModal = function () {
+    var modal = document.getElementById('admin-reply-modal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.submitAdminReplyModal = async function () {
+    var idEl = document.getElementById('admin-reply-feedback-id');
+    var txtEl = document.getElementById('admin-reply-textarea');
+    var btn = document.getElementById('btn-save-admin-reply');
+    var feedbackId = idEl ? idEl.value : '';
+    var reply = txtEl ? txtEl.value.trim() : '';
+
+    if (!feedbackId) return;
+    if (!reply) {
+      alert('Please enter an official response before publishing.');
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Publishing...';
+    }
+
+    try {
+      var res = await window.safeFetchJson('/api/admin/feedback/' + encodeURIComponent(feedbackId) + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: reply }),
+      });
+      if (res && res.success) {
+        window.closeAdminReplyModal();
+        showAdminAlert('✓ Official admin reply published successfully!', 'success');
+        await window.loadAdminFeedback();
+      } else {
+        alert((res && res.message) || 'Failed to publish admin reply.');
+      }
+    } catch (err) {
+      alert('Error publishing admin reply: ' + err.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Publish Reply';
+      }
     }
   };
 

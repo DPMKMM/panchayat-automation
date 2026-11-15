@@ -487,3 +487,89 @@ def test_remove_role_and_change_designation_admin_and_portal(monkeypatch):
     assert self_res.json()["designation"] == "DLPO"
     assert self_res.json()["user"]["designation"] == "DLPO"
 
+
+def test_community_feedback_and_admin_direct_reply(monkeypatch):
+    """Verify that feedback & suggestions are visible to everyone and admins can reply directly."""
+    ts = int(time.time() * 1000)
+    c = TestClient(app)
+
+    # 1. Unauthenticated / Public checks on UI
+    resp_ui = c.get("/", headers={"Host": "panchayatautomation.in"})
+    assert resp_ui.status_code == 200
+    html = resp_ui.text
+    assert 'id="ribbon-btn-feedback"' in html
+    assert "Feedback &amp; Suggestions" in html
+    assert 'id="fb-view-board"' in html
+    assert 'id="fb-cards-container"' in html
+    assert 'id="fb-category-filter"' in html
+    assert 'id="admin-reply-modal"' in html
+
+    # 2. Officer submits a new suggestion
+    officer_client, _ = _login(monkeypatch, f"officer_sugg_{ts}@gmail.com", "Ramesh PS")
+    sub_res = officer_client.post(
+        "/api/feedback",
+        json={
+            "name": "Ramesh PS",
+            "designation": "PS",
+            "category": "Suggestion",
+            "message": f"Please add GP balance register export feature {ts}",
+        },
+    )
+    assert sub_res.status_code == 200
+    sub_data = sub_res.json()
+    assert sub_data["success"] is True
+    feedback_id = sub_data["record"]["feedback_id"]
+
+    # 3. Public GET /api/feedback: Visible to everyone
+    pub_res = c.get("/api/feedback")
+    assert pub_res.status_code == 200
+    pub_feed = pub_res.json()["feedback"]
+    matched = [item for item in pub_feed if item["feedback_id"] == feedback_id]
+    assert len(matched) == 1
+    assert matched[0]["name"] == "Ramesh PS"
+    assert matched[0]["designation"] == "PS"
+    assert matched[0]["category"] == "Suggestion"
+    assert f"export feature {ts}" in matched[0]["message"]
+    assert matched[0]["admin_reply"] == ""
+    assert matched[0]["status"] == "open"
+    # Ensure email is not leaked in public endpoint
+    assert "email" not in matched[0]
+
+    # 4. Non-admin attempting to reply is blocked with 403
+    forbidden_reply = officer_client.post(
+        f"/api/feedback/{feedback_id}/reply",
+        json={"reply": "Attempted unauthorized reply"},
+    )
+    assert forbidden_reply.status_code == 403
+
+    # 5. Admin replies directly via /api/feedback/{feedback_id}/reply (Portal Modal Reply)
+    admin_client, _ = _login(monkeypatch, "admin.epanchayat@gmail.com", "State Administrator")
+    admin_reply_text = f"Approved! We will schedule this for next week's release {ts}."
+    rep_res = admin_client.post(
+        f"/api/feedback/{feedback_id}/reply",
+        json={"reply": admin_reply_text},
+    )
+    assert rep_res.status_code == 200
+    assert rep_res.json()["success"] is True
+    assert rep_res.json()["record"]["admin_reply"] == admin_reply_text
+
+    # 6. Admin replies/updates via /api/admin/feedback/{feedback_id}/reply (Admin Panel Reply)
+    admin_update_text = f"Updated: Feature has been deployed to live testing {ts}."
+    admin_panel_rep = admin_client.post(
+        f"/api/admin/feedback/{feedback_id}/reply",
+        headers={"Host": "admin.panchayatautomation.in"},
+        json={"reply": admin_update_text},
+    )
+    assert admin_panel_rep.status_code == 200
+    assert admin_panel_rep.json()["success"] is True
+
+    # 7. Check public GET /api/feedback again: The Admin reply is visible to everyone!
+    pub_res2 = c.get("/api/feedback")
+    assert pub_res2.status_code == 200
+    pub_feed2 = pub_res2.json()["feedback"]
+    matched2 = [item for item in pub_feed2 if item["feedback_id"] == feedback_id]
+    assert len(matched2) == 1
+    assert matched2[0]["admin_reply"] == admin_update_text
+    assert matched2[0]["status"] == "replied"
+    assert matched2[0]["admin_name"] != ""
+

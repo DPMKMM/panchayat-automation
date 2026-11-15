@@ -30,10 +30,12 @@ from core.firebase_store import (
     authenticate_or_register_firebase_user,
     create_portal_session,
     get_portal_session,
+    get_recent_feedback,
     log_usage,
     register_user_profile,
     revoke_portal_session,
     save_feedback,
+    update_feedback_reply,
     update_user_admin,
 )
 from core.templating import load_portal_shell_html
@@ -238,6 +240,84 @@ async def api_submit_feedback(request: Request):
     except Exception as exc:
         logger.error("Failed to save feedback: %s", exc)
         return JSONResponse({"success": False, "message": f"Failed to save feedback: {exc}"}, status_code=500)
+
+
+@router.get("/api/feedback", include_in_schema=False)
+def api_get_public_feedback(limit: int = 100) -> dict[str, Any]:
+    """Return public community feedback & suggestions submissions visible to everyone."""
+    rows = get_recent_feedback(limit=max(1, min(200, int(limit))))
+    public_rows = []
+    for r in rows:
+        public_rows.append({
+            "feedback_id": str(r.get("feedback_id") or r.get("id") or ""),
+            "id": str(r.get("feedback_id") or r.get("id") or ""),
+            "name": str(r.get("name") or "Officer"),
+            "designation": str(r.get("designation") or ""),
+            "category": str(r.get("category") or "General Feedback"),
+            "message": str(r.get("message") or ""),
+            "rating": int(r.get("rating") or 5),
+            "created_at": str(r.get("created_at") or ""),
+            "admin_reply": str(r.get("admin_reply") or ""),
+            "admin_replied_at": str(r.get("admin_replied_at") or ""),
+            "admin_name": str(r.get("admin_name") or ""),
+            "status": str(r.get("status") or ("replied" if r.get("admin_reply") else "open")),
+        })
+    return {"success": True, "feedback": public_rows, "count": len(public_rows)}
+
+
+@router.post("/api/feedback/{feedback_id}/reply", include_in_schema=False)
+async def api_post_feedback_reply(feedback_id: str, request: Request):
+    """Directly post an official administrator reply to a feedback or suggestion."""
+    session_user = (
+        get_current_user_optional(request)
+        or get_current_user_optional(request, app_scope="console")
+        or get_current_user_optional(request, app_scope="portal")
+    )
+    if not session_user or not session_user.get("is_admin"):
+        return JSONResponse(
+            {"success": False, "message": "Only platform administrators can post official replies."},
+            status_code=403,
+        )
+
+    data: dict[str, Any] = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+    except Exception:
+        pass
+
+    reply_text = str(data.get("reply") or data.get("admin_reply") or "").strip()
+    if not reply_text:
+        return JSONResponse(
+            {"success": False, "message": "Reply message cannot be empty."},
+            status_code=400,
+        )
+
+    admin_name = str(session_user.get("name") or "Administrator").strip()
+    admin_uid = str(session_user.get("user_id") or "")
+
+    try:
+        record = update_feedback_reply(
+            feedback_id=feedback_id,
+            admin_reply=reply_text,
+            admin_name=admin_name,
+            admin_user_id=admin_uid,
+        )
+        return {
+            "success": True,
+            "message": "Admin reply published successfully.",
+            "record": record,
+        }
+    except Exception as exc:
+        logger.error("Failed to post feedback reply: %s", exc)
+        return JSONResponse(
+            {"success": False, "message": f"Failed to post reply: {exc}"},
+            status_code=500,
+        )
 
 
 # ---------------------------------------------------------------------------

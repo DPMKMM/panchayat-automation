@@ -465,6 +465,7 @@
       'dept-login-modal': window.closeDepartmentLoginModal,
       'privacy-legal-modal': window.closePrivacyLegalModal,
       'feedback-modal': window.closeFeedbackModal,
+      'admin-reply-modal': window.closeAdminReplyModal,
       'upcoming-modal': window.closeUpcomingModal,
       'sessions-modal': window.closeSessionsModal,
       'insp-detail-modal': window.closeInspModal,
@@ -494,7 +495,7 @@
         r(false);
       }
     }
-    ['upcoming-modal', 'sessions-modal', 'insp-detail-modal', 'privacy-legal-modal', 'feedback-modal', 'dept-login-modal'].forEach(function (id) {
+    ['upcoming-modal', 'sessions-modal', 'insp-detail-modal', 'privacy-legal-modal', 'feedback-modal', 'admin-reply-modal', 'dept-login-modal'].forEach(function (id) {
       var m = document.getElementById(id);
       if (m && e.target === m) {
         closeModalByIdSafely(id);
@@ -514,7 +515,7 @@
         r(false);
       }
     }
-    ['upcoming-modal', 'sessions-modal', 'insp-detail-modal', 'privacy-legal-modal', 'feedback-modal', 'dept-login-modal'].forEach(function (id) {
+    ['upcoming-modal', 'sessions-modal', 'insp-detail-modal', 'privacy-legal-modal', 'feedback-modal', 'admin-reply-modal', 'dept-login-modal'].forEach(function (id) {
       closeModalByIdSafely(id);
     });
   });
@@ -1779,24 +1780,263 @@
     if (modal) modal.style.display = 'none';
   };
 
+  var escHtml = window.escapeHtml || function (str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  window.cachedFeedbackList = [];
+
+  window.isCurrentOfficerAdmin = function () {
+    var u = (typeof window.getScopedUser === 'function') ? window.getScopedUser() : null;
+    return Boolean(u && u.is_admin);
+  };
+
+  window.switchFeedbackTab = function (tab) {
+    var viewBoard = document.getElementById('fb-view-board');
+    var viewSubmit = document.getElementById('fb-view-submit');
+    var tabBoard = document.getElementById('fb-tab-board');
+    var tabSubmit = document.getElementById('fb-tab-submit');
+    var filterWrap = document.getElementById('fb-filter-wrapper');
+    if (!viewBoard || !viewSubmit) return;
+
+    if (tab === 'submit') {
+      viewBoard.style.display = 'none';
+      viewSubmit.style.display = 'block';
+      if (filterWrap) filterWrap.style.display = 'none';
+      if (tabSubmit) {
+        tabSubmit.style.background = '#064e3b';
+        tabSubmit.style.color = '#ffffff';
+        tabSubmit.style.border = 'none';
+      }
+      if (tabBoard) {
+        tabBoard.style.background = '#ffffff';
+        tabBoard.style.color = '#334155';
+        tabBoard.style.border = '1px solid #cbd5e1';
+      }
+    } else {
+      viewBoard.style.display = 'block';
+      viewSubmit.style.display = 'none';
+      if (filterWrap) filterWrap.style.display = 'flex';
+      if (tabBoard) {
+        tabBoard.style.background = '#064e3b';
+        tabBoard.style.color = '#ffffff';
+        tabBoard.style.border = 'none';
+      }
+      if (tabSubmit) {
+        tabSubmit.style.background = '#ffffff';
+        tabSubmit.style.color = '#334155';
+        tabSubmit.style.border = '1px solid #cbd5e1';
+      }
+    }
+  };
+
   window.openFeedbackModal = function () {
     var modal = document.getElementById('feedback-modal');
     if (!modal) return;
     var user = window.getScopedUser() || {};
     var fbName = document.getElementById('fb-name');
     var fbDesig = document.getElementById('fb-desig');
-    if (fbName && user.name) fbName.value = user.name;
+    if (fbName && user.name && !fbName.value) fbName.value = user.name;
     if (fbDesig && user.designation && DESIGNATIONS.indexOf(user.designation) !== -1) {
       fbDesig.value = user.designation;
     }
     var alertEl = document.getElementById('feedback-alert');
     if (alertEl) alertEl.style.display = 'none';
     modal.style.display = 'flex';
+    window.switchFeedbackTab('board');
+    window.loadPublicFeedbackBoard();
   };
 
   window.closeFeedbackModal = function () {
     var modal = document.getElementById('feedback-modal');
     if (modal) modal.style.display = 'none';
+  };
+
+  window.loadPublicFeedbackBoard = async function () {
+    var container = document.getElementById('fb-cards-container');
+    var countEl = document.getElementById('fb-board-count');
+    try {
+      var res = await fetch('/api/feedback');
+      var data = await res.json().catch(function () { return {}; });
+      var list = Array.isArray(data.feedback) ? data.feedback : [];
+      window.cachedFeedbackList = list;
+      if (countEl) countEl.textContent = String(list.length);
+      window.filterFeedbackCards();
+    } catch (err) {
+      if (container) {
+        container.innerHTML = '<div style="text-align:center; padding:30px; color:#ef4444; font-weight:700;">Could not load community feedback: ' + escHtml(err.message) + '</div>';
+      }
+    }
+  };
+
+  window.filterFeedbackCards = function () {
+    var filterEl = document.getElementById('fb-category-filter');
+    var val = filterEl ? filterEl.value : 'ALL';
+    var all = window.cachedFeedbackList || [];
+    var filtered = all.filter(function (fb) {
+      if (val === 'ALL') return true;
+      if (val === 'REPLIED_ONLY') return Boolean(fb.admin_reply);
+      return (fb.category || '').toLowerCase().indexOf(val.toLowerCase()) !== -1;
+    });
+    window.renderPublicFeedbackCards(filtered);
+  };
+
+  window.renderPublicFeedbackCards = function (items) {
+    var container = document.getElementById('fb-cards-container');
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding:40px 16px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; color:#64748b;">' +
+        '<div style="font-size:2.2rem; margin-bottom:8px;">💡</div>' +
+        '<div style="font-weight:800; font-size:1rem; color:#1e293b;">No feedback or suggestions found</div>' +
+        '<div style="font-size:0.84rem; margin-top:4px;">Be the first to share an idea, report a difficulty, or suggest a new feature!</div>' +
+        '<button type="button" onclick="window.switchFeedbackTab(\'submit\')" style="margin-top:14px; padding:8px 18px; background:#064e3b; color:#ffffff; border:none; border-radius:8px; font-size:0.85rem; font-weight:700; cursor:pointer;">✍️ Submit Suggestion Now</button>' +
+        '</div>';
+      return;
+    }
+
+    var isAdmin = window.isCurrentOfficerAdmin();
+
+    container.innerHTML = items.map(function (fb) {
+      var fId = fb.feedback_id || fb.id || '';
+      var cat = fb.category || 'General Feedback';
+      var hasReply = Boolean(fb.admin_reply);
+      var catIcon = '💡';
+      if (cat.indexOf('Bug') !== -1) catIcon = '🐛';
+      else if (cat.indexOf('Feature') !== -1) catIcon = '🚀';
+      else if (cat.indexOf('Data') !== -1) catIcon = '📊';
+      else if (cat.indexOf('Appreciation') !== -1) catIcon = '⭐';
+
+      var dateStr = '—';
+      try {
+        if (fb.created_at) {
+          var d = new Date(fb.created_at);
+          if (!isNaN(d.getTime())) {
+            dateStr = d.toLocaleString('en-IN', {
+              year: 'numeric',
+              month: 'short',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+          }
+        }
+      } catch (e) {}
+
+      var html = '<div class="fb-board-card" id="fb-card-' + escHtml(fId) + '">';
+      html += '<div class="fb-card-header">';
+      html += '<div class="fb-officer-line">';
+      html += '<span class="fb-officer-name">' + escHtml(fb.name || 'Panchayat Officer') + '</span>';
+      if (fb.designation) {
+        html += '<span class="fb-desig-tag">' + escHtml(fb.designation) + '</span>';
+      }
+      html += '<span class="fb-category-tag">' + catIcon + ' ' + escHtml(cat) + '</span>';
+      if (hasReply) {
+        html += '<span style="background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; font-size:0.7rem; font-weight:800; padding:2px 8px; border-radius:10px;">🛡️ Replied</span>';
+      } else {
+        html += '<span style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; font-size:0.7rem; font-weight:800; padding:2px 8px; border-radius:10px;">⏳ Under Review</span>';
+      }
+      html += '</div>';
+      html += '<div class="fb-date-tag">' + escHtml(dateStr) + '</div>';
+      html += '</div>';
+
+      html += '<div class="fb-message-body">' + escHtml(fb.message || '') + '</div>';
+
+      if (hasReply) {
+        var replyDateStr = '';
+        try {
+          if (fb.admin_replied_at) {
+            var rd = new Date(fb.admin_replied_at);
+            if (!isNaN(rd.getTime())) {
+              replyDateStr = rd.toLocaleString('en-IN', {
+                year: 'numeric',
+                month: 'short',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+            }
+          }
+        } catch (e) {}
+
+        html += '<div class="fb-admin-reply-box">';
+        html += '<div class="fb-admin-reply-header">';
+        html += '<div class="fb-admin-reply-title"><span>🛡️</span> Official Admin Response · ' + escHtml(fb.admin_name || 'Administrator') + '</div>';
+        if (replyDateStr) {
+          html += '<div class="fb-admin-reply-time">' + escHtml(replyDateStr) + '</div>';
+        }
+        html += '</div>';
+        html += '<div class="fb-admin-reply-text">' + escHtml(fb.admin_reply) + '</div>';
+        html += '</div>';
+      }
+
+      if (isAdmin) {
+        html += '<div style="margin-top:10px; display:flex; justify-content:flex-end;">';
+        html += '<button type="button" onclick="window.toggleInlineAdminReply(\'' + escHtml(fId) + '\')" style="padding:4px 12px; font-size:0.76rem; font-weight:800; color:#064e3b; background:#ecfdf5; border:1px solid #6ee7b7; border-radius:6px; cursor:pointer;">';
+        html += (hasReply ? '✏️ Edit Admin Reply' : '💬 Direct Admin Reply');
+        html += '</button>';
+        html += '</div>';
+
+        html += '<div id="inline-reply-box-' + escHtml(fId) + '" class="fb-inline-reply-form" style="display:none;">';
+        html += '<label style="display:block; font-size:0.76rem; font-weight:800; color:#064e3b; margin-bottom:4px;">Official Administrator Response (Visible to Everyone):</label>';
+        html += '<textarea id="inline-reply-text-' + escHtml(fId) + '" rows="3" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.84rem; font-family:inherit; resize:vertical;" placeholder="Write reply to ' + escHtml(fb.name || 'officer') + '...">' + escHtml(fb.admin_reply || '') + '</textarea>';
+        html += '<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">';
+        html += '<button type="button" onclick="window.toggleInlineAdminReply(\'' + escHtml(fId) + '\')" style="padding:6px 12px; font-size:0.76rem; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer; font-weight:700;">Cancel</button>';
+        html += '<button type="button" id="btn-inline-submit-' + escHtml(fId) + '" onclick="window.submitInlineAdminReply(\'' + escHtml(fId) + '\')" style="padding:6px 14px; font-size:0.78rem; background:#059669; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:800;">Publish Reply</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
+    }).join('');
+  };
+
+  window.toggleInlineAdminReply = function (feedbackId) {
+    var box = document.getElementById('inline-reply-box-' + feedbackId);
+    if (!box) return;
+    box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+  };
+
+  window.submitInlineAdminReply = async function (feedbackId) {
+    var txtEl = document.getElementById('inline-reply-text-' + feedbackId);
+    var btn = document.getElementById('btn-inline-submit-' + feedbackId);
+    var reply = txtEl ? txtEl.value.trim() : '';
+    if (!reply) {
+      alert('Please enter an official reply message before publishing.');
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Publishing...';
+    }
+    try {
+      var res = await fetch('/api/feedback/' + encodeURIComponent(feedbackId) + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: reply }),
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (res.ok && data && data.success) {
+        window.loadPublicFeedbackBoard();
+        if (typeof window.showPortalNotice === 'function') {
+          window.showPortalNotice('Official admin reply published successfully!', 'success');
+        }
+      } else {
+        alert((data && data.message) || 'Failed to publish reply.');
+      }
+    } catch (err) {
+      alert('Error publishing reply: ' + err.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Publish Reply';
+      }
+    }
   };
 
   window.handleFeedbackSubmit = async function (e) {
@@ -1844,10 +2084,11 @@
       if (res.ok && data && data.success) {
         showFbAlert('✓ ' + (data.message || 'Feedback submitted successfully!'), true);
         setTimeout(function () {
-          window.closeFeedbackModal();
           var msgArea = document.getElementById('fb-message');
           if (msgArea) msgArea.value = '';
-        }, 1200);
+          window.switchFeedbackTab('board');
+          window.loadPublicFeedbackBoard();
+        }, 900);
       } else {
         showFbAlert((data && data.message) || 'Failed to submit feedback.', false);
       }
@@ -1856,7 +2097,7 @@
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<span>📤</span> Submit Feedback';
+        btn.innerHTML = '<span>📤</span> Submit Feedback &amp; Suggestion';
       }
     }
   };

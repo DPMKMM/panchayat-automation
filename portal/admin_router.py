@@ -26,6 +26,7 @@ from core.firebase_store import (
     list_users,
     log_usage,
     revoke_user_subscription,
+    update_feedback_reply,
     update_user_admin,
     upsert_subscription_plan,
 )
@@ -269,6 +270,53 @@ async def admin_set_module_visibility(
 def admin_feedback(limit: int = Query(default=100, ge=1, le=500)) -> dict[str, Any]:
     rows = get_recent_feedback(limit=limit)
     return {"success": True, "feedback": rows, "count": len(rows)}
+
+
+@router.post("/feedback/{feedback_id}/reply", include_in_schema=False)
+async def admin_reply_feedback(
+    feedback_id: str,
+    request: Request,
+    admin: dict[str, Any] = Depends(require_admin_user),
+) -> dict[str, Any]:
+    """Persist an official admin reply from the Admin Control Center."""
+    data: dict[str, Any] = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+    except Exception:
+        pass
+
+    reply_text = str(data.get("reply") or data.get("admin_reply") or "").strip()
+    if not reply_text:
+        return JSONResponse(
+            {"success": False, "message": "Reply message cannot be empty."},
+            status_code=400,
+        )
+
+    admin_name = str(admin.get("name") or "Administrator").strip()
+    admin_uid = str(admin.get("user_id") or "")
+
+    try:
+        record = update_feedback_reply(
+            feedback_id=feedback_id,
+            admin_reply=reply_text,
+            admin_name=admin_name,
+            admin_user_id=admin_uid,
+        )
+        return {
+            "success": True,
+            "message": "Admin reply published successfully.",
+            "record": record,
+        }
+    except Exception as exc:
+        return JSONResponse(
+            {"success": False, "message": f"Failed to save admin reply: {exc}"},
+            status_code=500,
+        )
 
 
 @router.get("/stats", include_in_schema=False)
