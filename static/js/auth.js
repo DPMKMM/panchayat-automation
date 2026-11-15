@@ -1051,6 +1051,11 @@
     showLoginAlert('');
     window.setPortalUI(true, user);
     window.proceedAfterPortalAuth();
+
+    var isFirst = Boolean(data && (data.is_first_time || data.is_new));
+    if (typeof window.checkAndShowFirstLoginProfilePrompt === 'function') {
+      window.checkAndShowFirstLoginProfilePrompt(user, isFirst);
+    }
   };
 
   window.handleGoogleLoginSuccess = window.handleFirebaseLoginSuccess;
@@ -1303,6 +1308,28 @@
     }
   };
 
+  window.formatDateIST = function (isoStr) {
+    if (!isoStr) return '';
+    try {
+      var cleaned = String(isoStr).trim();
+      if (cleaned.indexOf('IST') !== -1) return cleaned;
+      if (cleaned.endsWith('Z')) cleaned = cleaned.slice(0, -1) + '+00:00';
+      var d = new Date(cleaned);
+      if (isNaN(d.getTime())) return isoStr;
+      return d.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }) + ' IST';
+    } catch (e) {
+      return isoStr;
+    }
+  };
+
   window.updateHeaderUserInfo = function (user) {
     var bar = document.getElementById('nav-officer-profile-bar');
     var ribbonPill = document.getElementById('ribbon-officer-pill');
@@ -1316,6 +1343,8 @@
     var name = user.display_name || user.name || 'Officer';
     var desig = user.effective_designation || (user.designation === 'OTHER' && user.designation_other ? user.designation_other : (user.designation || 'OFFICER'));
     var gmail = user.gmail || user.email || '';
+    var lastLoginRaw = user.last_login_ist || user.previous_last_login || user.last_login || '';
+    var lastLoginText = lastLoginRaw ? (window.formatDateIST(lastLoginRaw) || lastLoginRaw) : 'Just now';
 
     // Legacy / In-Flow Header Bar (User Level removed)
     if (bar) {
@@ -1348,10 +1377,15 @@
       var ribEmail = document.getElementById('ribbon-user-email');
       var ribAvatar = document.getElementById('ribbon-user-avatar');
       var ribIcon = document.getElementById('ribbon-user-icon');
+      var ribLastLogin = document.getElementById('ribbon-user-last-login');
 
       if (ribName) ribName.textContent = name;
       if (ribDesig) ribDesig.textContent = desig + ' ✏️';
       if (ribEmail) ribEmail.textContent = gmail;
+      if (ribLastLogin) {
+        ribLastLogin.textContent = '🕒 ' + lastLoginText;
+        ribLastLogin.style.display = 'block';
+      }
 
       if (user.profile_picture && ribAvatar) {
         ribAvatar.src = user.profile_picture;
@@ -1370,13 +1404,23 @@
     var mobAvatar = document.getElementById('mobile-user-avatar');
     var mobIcon = document.getElementById('mobile-user-icon');
     var mobQuickName = document.getElementById('ribbon-mobile-quick-name');
+    var mobLastLogin = document.getElementById('mobile-user-last-login');
 
     if (mobName) mobName.textContent = name;
     if (mobDesig) mobDesig.textContent = desig + ' ✏️';
     if (mobEmail) mobEmail.textContent = gmail;
+    if (mobLastLogin) {
+      mobLastLogin.textContent = '🕒 Last Login: ' + lastLoginText;
+      mobLastLogin.style.display = 'block';
+    }
     if (mobQuickName) {
       var firstName = (name || '').split(' ')[0] || 'Officer';
       mobQuickName.textContent = firstName;
+    }
+
+    var profileLastLoginEl = document.getElementById('profile-field-last-login');
+    if (profileLastLoginEl) {
+      profileLastLoginEl.textContent = lastLoginText;
     }
 
     if (user.profile_picture && mobAvatar) {
@@ -1491,6 +1535,10 @@
         }
         if (typeof window.showPortalNotice === 'function') {
           window.showPortalNotice(res.message || 'Signed in successfully!', 'success');
+        }
+        var isFirst = Boolean(res && (res.is_first_time || (res.user && !res.user.profile_completed)));
+        if (typeof window.checkAndShowFirstLoginProfilePrompt === 'function') {
+          window.checkAndShowFirstLoginProfilePrompt(res.user, isFirst);
         }
       } else {
         var msg = (res && res.message) || 'Sign-in failed. Please verify credentials.';
@@ -1611,10 +1659,15 @@
   // Comprehensive User Profile & Designation Modal Handlers
   // ---------------------------------------------------------------------------
 
-  window.openUserProfileModal = function () {
+  window.openUserProfileModal = function (isFirstLoginPrompt) {
     var modal = document.getElementById('user-profile-modal');
     if (!modal) return;
     var u = window.currentUser || {};
+
+    var welcomeBanner = document.getElementById('profile-modal-welcome-banner');
+    if (welcomeBanner) {
+      welcomeBanner.style.display = isFirstLoginPrompt ? 'block' : 'none';
+    }
 
     var fullNameInput = document.getElementById('profile-field-full-name');
     var mobile = document.getElementById('profile-field-mobile');
@@ -1625,6 +1678,7 @@
     var desigOther = document.getElementById('profile-field-designation-other');
     var emailDisp = document.getElementById('profile-field-account-email');
     var authTag = document.getElementById('profile-field-auth-provider-tag');
+    var lastLoginEl = document.getElementById('profile-field-last-login');
     var alertEl = document.getElementById('user-profile-alert');
     if (alertEl) alertEl.style.display = 'none';
 
@@ -1647,6 +1701,10 @@
       var isGoogle = (u.auth_provider === 'google' || (u.firebase_uid && !u.firebase_uid.startsWith('email:')));
       authTag.textContent = isGoogle ? 'Google Account' : 'Email & Password Account';
     }
+    if (lastLoginEl) {
+      var ll = u.last_login_ist || (window.formatDateIST ? window.formatDateIST(u.previous_last_login || u.last_login) : (u.last_login || 'Just now'));
+      lastLoginEl.textContent = ll || 'Just now';
+    }
 
     modal.style.display = 'flex';
   };
@@ -1654,6 +1712,31 @@
   window.closeUserProfileModal = function () {
     var modal = document.getElementById('user-profile-modal');
     if (modal) modal.style.display = 'none';
+    if (window.currentUser && window.currentUser.user_id) {
+      try {
+        localStorage.setItem('profile_prompt_dismissed_' + window.currentUser.user_id, '1');
+      } catch (e) {}
+    }
+  };
+
+  window.checkAndShowFirstLoginProfilePrompt = function (user, isFirstTime) {
+    if (!user || !user.user_id) return;
+    var uid = user.user_id;
+    var seenKey = 'profile_prompt_dismissed_' + uid;
+    var isDismissed = false;
+    try {
+      isDismissed = localStorage.getItem(seenKey) === '1';
+    } catch (e) {}
+
+    // Show popup if explicitly first time, or if profile is incomplete and user hasn't dismissed it
+    var isProfileIncomplete = !user.profile_completed || !user.designation || !user.mobile_number;
+    if ((isFirstTime || isProfileIncomplete) && !isDismissed) {
+      setTimeout(function () {
+        if (typeof window.openUserProfileModal === 'function') {
+          window.openUserProfileModal(true);
+        }
+      }, 700);
+    }
   };
 
   window.openChangeDesignationModal = window.openUserProfileModal;
@@ -2737,6 +2820,10 @@
     }
 
     await window.proceedAfterPortalAuth();
+
+    if (portalUser && typeof window.checkAndShowFirstLoginProfilePrompt === 'function') {
+      window.checkAndShowFirstLoginProfilePrompt(portalUser, false);
+    }
 
     var dedSection = window.getDedicatedPageSection();
     if (dedSection && (!target || !(window.DeptSessionManager && urlParams.get('pending_module')))) {

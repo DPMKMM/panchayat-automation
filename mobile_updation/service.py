@@ -5,6 +5,7 @@ Telangana e-Panchayat House Tax Demand Register vs Mobile Numbers Updated Report
 
 from __future__ import annotations
 
+import csv
 import io
 import re
 import threading
@@ -16,6 +17,7 @@ from uuid import uuid4
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+import pandas as pd
 
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.lib import colors
@@ -28,8 +30,7 @@ def clean_asmt_no(val: Any) -> str:
     if val is None:
         return ""
     s = str(val).strip()
-    if s.endswith(".0"):
-        s = s[:-2].strip()
+    s = re.sub(r"\.0$", "", s).strip()
     # Normalize scientific notation e.g. 1.23E+03 if needed
     try:
         if "." in s and ("e" in s.lower() or s.replace(".", "").isdigit()):
@@ -175,16 +176,17 @@ def parse_demand_register_bytes(file_bytes: bytes, filename: str) -> List[Dict[s
 
 def parse_updated_report_bytes(file_bytes: bytes) -> Tuple[Dict[str, str], Set[str], Dict[str, str]]:
     """
-    Parses the Mobile Numbers Updated Report (.xlsx).
+    Parses the Mobile Numbers Updated Report (.xlsx, .csv, or HTML table).
+    Explicitly locates the header row where a cell equals "Assessment Number"
+    (row index 6 / Excel row 7), reads the dataframe using that header row, and
+    extracts df_up["Assessment Number"] (Column B / index 1), NEVER S.No. (Column A / index 0).
+    Normalizes Assessment Number as string: .astype(str).str.replace(r"\\.0$", "", regex=True).str.strip().
+
     Returns:
     - metadata: {"district": ..., "mandal": ..., "gram_panchayat": ...}
-    - updated_asmt_set: set of normalized ASMT_CLEAN
-    - asmt_to_mobile: map of ASMT_CLEAN -> updated mobile number
+    - updated_asmt_set: set of normalized Assessment Numbers
+    - asmt_to_mobile: map of Assessment Number -> updated mobile number
     """
-    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-
     metadata: Dict[str, str] = {
         "district": "",
         "mandal": "",
@@ -193,79 +195,177 @@ def parse_updated_report_bytes(file_bytes: bytes) -> Tuple[Dict[str, str], Set[s
     updated_asmt_set: Set[str] = set()
     asmt_to_mobile: Dict[str, str] = {}
 
-    if not rows:
+    if not file_bytes:
         return metadata, updated_asmt_set, asmt_to_mobile
 
-    # 1. Extract metadata from top rows (typically rows 1-5)
-    for r in rows[:7]:
-        line_str = " ".join(str(c or "") for c in r)
-        m_dist = re.search(r"District\s*:\s*([A-Za-z\s]+?)(?:Mandal|$|,|\|)", line_str, re.I)
-        if m_dist and not metadata["district"]:
-            metadata["district"] = m_dist.group(1).strip()
-        m_mandal = re.search(r"Mandal\s*:\s*([A-Za-z\s]+?)(?:Gram|GP|$|,|\|)", line_str, re.I)
-        if m_mandal and not metadata["mandal"]:
-            metadata["mandal"] = m_mandal.group(1).strip()
-        m_gp = re.search(r"(?:Gram\s*Panchayat|GP)\s*:\s*([A-Za-z\s]+?)(?:Date|$|,|\|)", line_str, re.I)
-        if m_gp and not metadata["gram_panchayat"]:
-            metadata["gram_panchayat"] = m_gp.group(1).strip()
+    # Attempt parsing using pandas first
+    try:
+        raw_head = file_bytes[:1024].decode("utf-8", errors="ignore").lower().strip()
+        is_html = ("<html" in raw_head or "<table" in raw_head or "<div" in raw_head)
 
-    # 2. Locate header row containing "Assessment Number"
-    header_idx = -1
-    col_asmt = -1
-    col_sl = -1
-    col_mob = -1
+        if is_html:
+            dfs = pd.read_html(io.BytesIO(file_bytes), header=None)
+            df_raw = dfs[0] if dfs else pd.DataFrame()
+        else:
+            try:
+                df_raw = pd.read_excel(io.BytesIO(file_bytes), header=None)
+            except Exception:
+                df_raw = pd.read_csv(io.BytesIO(file_bytes), header=None)
 
-    for idx, r in enumerate(rows[:15]):
-        r_str = [str(c or "").lower().strip() for c in r]
-        for c_idx, c_val in enumerate(r_str):
-            if "assessment" in c_val and "number" in c_val or c_val == "assessment number":
-                header_idx = idx
-                col_asmt = c_idx
-            elif "s.no" in c_val or "sl" in c_val:
-                col_sl = c_idx
-            elif "mobile" in c_val or "phone" in c_val:
-                col_mob = c_idx
-        if header_idx != -1:
-            break
+        if not df_raw.empty:
+            # 1. Locate header row where any cell equals "Assessment Number" (case-insensitive)
+            header_idx = None
+            for idx in range(min(25, len(df_raw))):
+                row_vals = [
+                    str(v).strip().lower()
+                    for v in df_raw.iloc[idx].dropna()
+                    if str(v).lower() != "nan"
+                ]
+                if any(
+                    v in ("assessment number", "assessment no", "asmt no", "asmtno", "assessmentnum")
+                    for v in row_vals
+                ):
+                    header_idx = idx
+                    break
 
-    if header_idx == -1:
-        # Fallback: scan for any assessment column
-        for idx, r in enumerate(rows[:15]):
-            r_str = [str(c or "").lower().strip() for c in r]
-            for c_idx, c_val in enumerate(r_str):
-                if "asmt" in c_val or "assessment" in c_val:
+            # 2. Extract metadata from top rows (above header row)
+            scan_limit = header_idx if header_idx is not None else min(10, len(df_raw))
+            for idx in range(scan_limit):
+                row_cells = [
+                    str(v).strip()
+                    for v in df_raw.iloc[idx].dropna()
+                    if str(v).lower() != "nan"
+                ]
+                line_str = " ".join(row_cells)
+                m_dist = re.search(r"District\s*:\s*([A-Za-z\s]+?)(?:Division|Mandal|$|,|\|)", line_str, re.I)
+                if m_dist and not metadata["district"]:
+                    metadata["district"] = m_dist.group(1).strip()
+                m_mandal = re.search(r"Mandal\s*:\s*([A-Za-z\s]+?)(?:Gram|GP|$|,|\|)", line_str, re.I)
+                if m_mandal and not metadata["mandal"]:
+                    metadata["mandal"] = m_mandal.group(1).strip()
+                m_gp = re.search(r"(?:Gram\s*Panchayat|GP)\s*:\s*([A-Za-z\s]+?)(?:Date|Generated|$|,|\|)", line_str, re.I)
+                if m_gp and not metadata["gram_panchayat"]:
+                    metadata["gram_panchayat"] = m_gp.group(1).strip()
+
+            # 3. Read dataframe using header row and extract df_up["Assessment Number"]
+            if header_idx is not None:
+                header_row = [str(c).strip() for c in df_raw.iloc[header_idx]]
+                df_up = df_raw.iloc[header_idx + 1:].copy()
+                df_up.columns = header_row
+
+                # Find "Assessment Number" column explicitly - NEVER select Column 0 (S.No.)
+                asmt_col = None
+                for col in df_up.columns:
+                    clean_col = re.sub(r"[^a-z0-9]", "", str(col).lower())
+                    if clean_col in ("assessmentnumber", "asmtno", "assessmentno", "asmtnumber"):
+                        asmt_col = col
+                        break
+
+                # Fallback to Column B (index 1) if not found by name, NEVER Column A (index 0)
+                if asmt_col is None and len(df_up.columns) > 1:
+                    asmt_col = df_up.columns[1]
+
+                # Identify Mobile column (New Mobile Number preferred, else Mobile Number)
+                mob_col = None
+                for cand in ("new mobile number", "newmobilenumber", "mobilenumber", "mobile no", "mobile", "phone"):
+                    for col in df_up.columns:
+                        if cand in re.sub(r"[^a-z0-9]", "", str(col).lower()):
+                            mob_col = col
+                            break
+                    if mob_col:
+                        break
+
+                if asmt_col is not None:
+                    # Normalize Assessment Number as string: .astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+                    asmt_series = df_up[asmt_col].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+
+                    if mob_col is not None:
+                        mob_series = df_up[mob_col].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+                    else:
+                        mob_series = pd.Series([""] * len(df_up), index=df_up.index)
+
+                    for asmt_val, mob_val in zip(asmt_series, mob_series):
+                        asmt_clean = clean_asmt_no(asmt_val)
+                        if not asmt_clean or asmt_clean.upper() in ("TOTAL", "GRAND TOTAL", "NAN", "NONE", "--", "NA"):
+                            continue
+                        updated_asmt_set.add(asmt_clean)
+                        asmt_to_mobile[asmt_clean] = mob_val if mob_val and mob_val.lower() != "nan" else ""
+
+                    if updated_asmt_set:
+                        return metadata, updated_asmt_set, asmt_to_mobile
+    except Exception:
+        pass
+
+    # Fallback to openpyxl row parsing if pandas fails
+    try:
+        raw_head = file_bytes[:1024].decode("utf-8", errors="ignore").lower().strip()
+        is_html = ("<html" in raw_head or "<table" in raw_head or "<div" in raw_head)
+        rows: List[List[Any]] = []
+        if is_html:
+            text = file_bytes.decode("utf-8", errors="ignore")
+            row_chunks = re.split(r"</\s*tr\s*>", text, flags=re.I)
+            for chunk in row_chunks:
+                if not chunk or ("<td" not in chunk.lower() and "<th" not in chunk.lower()):
+                    continue
+                cells_match = re.findall(r"<(?:td|th)[^>]*>(.*?)</(?:td|th)>", chunk, flags=re.DOTALL | re.I)
+                if cells_match:
+                    rows.append([re.sub(r"&nbsp;|<[^>]+>", "", c).strip() for c in cells_match])
+        else:
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                ws = wb.active
+                rows = [list(r) for r in ws.iter_rows(values_only=True)]
+            except Exception:
+                text = file_bytes.decode("utf-8", errors="ignore")
+                rows = [list(r) for r in csv.reader(io.StringIO(text))]
+
+        if not rows:
+            return metadata, updated_asmt_set, asmt_to_mobile
+
+        for r in rows[:8]:
+            line_str = " ".join(str(c or "") for c in r if str(c or "").lower() != "none")
+            m_dist = re.search(r"District\s*:\s*([A-Za-z\s]+?)(?:Division|Mandal|$|,|\|)", line_str, re.I)
+            if m_dist and not metadata["district"]:
+                metadata["district"] = m_dist.group(1).strip()
+            m_mandal = re.search(r"Mandal\s*:\s*([A-Za-z\s]+?)(?:Gram|GP|$|,|\|)", line_str, re.I)
+            if m_mandal and not metadata["mandal"]:
+                metadata["mandal"] = m_mandal.group(1).strip()
+            m_gp = re.search(r"(?:Gram\s*Panchayat|GP)\s*:\s*([A-Za-z\s]+?)(?:Date|Generated|$|,|\|)", line_str, re.I)
+            if m_gp and not metadata["gram_panchayat"]:
+                metadata["gram_panchayat"] = m_gp.group(1).strip()
+
+        header_idx = -1
+        col_asmt = -1
+        col_mob = -1
+
+        for idx, r in enumerate(rows[:25]):
+            r_norm = [re.sub(r"[^a-z0-9]", "", str(c or "").lower()) for c in r]
+            for c_idx, c_clean in enumerate(r_norm):
+                if c_clean in ("assessmentnumber", "asmtno", "assessmentno", "asmtnumber"):
                     header_idx = idx
                     col_asmt = c_idx
-                    break
-            if header_idx != -1:
+                elif "newmobile" in c_clean or ("mobile" in c_clean and col_mob == -1) or ("phone" in c_clean and col_mob == -1):
+                    col_mob = c_idx
+            if header_idx != -1 and col_asmt > 0:
                 break
 
-    if header_idx == -1:
-        header_idx = 6
-        col_asmt = 1
-        col_sl = 0
-        col_mob = 4
+        # Explicitly ensure Assessment Number is never Column 0 (S.No.)
+        if col_asmt <= 0:
+            header_idx = 6 if len(rows) > 6 else 0
+            col_asmt = 1
+            col_mob = 5
 
-    # 3. Extract updated assessments
-    for r in rows[header_idx + 1:]:
-        if not r or len(r) <= col_asmt:
-            continue
-        # Filter where S.No is numeric if col_sl exists
-        if col_sl != -1 and col_sl < len(r):
-            sl_val = str(r[col_sl] or "").strip()
-            clean_sl = re.sub(r"\D+", "", sl_val)
-            if not clean_sl and sl_val.upper() not in ("TOTAL", ""):
-                # If non-numeric and not empty, check if asmt is present
-                pass
-
-        asmt_raw = str(r[col_asmt] or "").strip()
-        asmt_clean = clean_asmt_no(asmt_raw)
-        if not asmt_clean or asmt_clean.upper() in ("TOTAL", "GRAND TOTAL"):
-            continue
-
-        mob_raw = str(r[col_mob] or "").strip() if col_mob != -1 and col_mob < len(r) else ""
-        updated_asmt_set.add(asmt_clean)
-        asmt_to_mobile[asmt_clean] = mob_raw
+        for r in rows[header_idx + 1:]:
+            if not r or len(r) <= col_asmt:
+                continue
+            asmt_clean = clean_asmt_no(r[col_asmt])
+            if not asmt_clean or asmt_clean.upper() in ("TOTAL", "GRAND TOTAL", "--", "NA", "NONE"):
+                continue
+            mob_raw = str(r[col_mob] or "").strip() if col_mob != -1 and col_mob < len(r) and r[col_mob] is not None else ""
+            updated_asmt_set.add(asmt_clean)
+            asmt_to_mobile[asmt_clean] = mob_raw
+    except Exception:
+        pass
 
     return metadata, updated_asmt_set, asmt_to_mobile
 
@@ -673,8 +773,9 @@ def process_pending_mobile_assessments(
     )
 
     total_demand = len(demand_records)
-    total_updated = len(updated_asmt_set)
     total_pending = len(pending_records)
+    total_updated = total_demand - total_pending
+    coverage_pct = round((total_updated / total_demand * 100), 1) if total_demand else 0.0
 
     excel_buf = generate_lookup_excel_workbook(
         metadata=metadata,
@@ -707,6 +808,7 @@ def process_pending_mobile_assessments(
         "total_demand": total_demand,
         "total_updated": total_updated,
         "total_pending": total_pending,
+        "coverage_pct": coverage_pct,
         "excel_bytes": excel_buf.getvalue(),
         "excel_filename": excel_filename,
         "pdf_bytes": pdf_buf.getvalue(),
@@ -731,9 +833,9 @@ def process_pending_mobile_assessments(
         "total_demand": total_demand,
         "total_updated": total_updated,
         "total_pending": total_pending,
-        "coverage_pct": round((total_updated / total_demand * 100), 1) if total_demand else 0.0,
+        "coverage_pct": coverage_pct,
         "metadata": metadata,
-        "preview": pending_records[:100],
+        "preview": pending_records,
         "total_preview_count": len(pending_records),
         "excel_download_url": f"/api/manual-reports/pending-mobile-assessments/download-excel?token={job_id}",
         "pdf_download_url": f"/api/manual-reports/pending-mobile-assessments/download-pdf?token={job_id}",

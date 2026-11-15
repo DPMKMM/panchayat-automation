@@ -620,6 +620,7 @@ def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[
         "profile_picture": str(d.get("profile_picture") or "").strip(),
         "registration_date": str(d.get("registration_date") or ""),
         "last_login": str(d.get("last_login") or ""),
+        "previous_last_login": str(d.get("previous_last_login") or ""),
         "updated_at": str(d.get("updated_at") or d.get("last_login") or ""),
         "account_status": str(d.get("account_status") or "Active"),
         "profile_completed": bool(d.get("profile_completed", False)),
@@ -756,11 +757,13 @@ def get_or_create_firebase_user(
 
     col = _db().collection(COL_USERS)
     if existing is not None:
+        prev_login = str(existing.get("last_login") or existing.get("registration_date") or "").strip()
         updates: dict[str, Any] = {
             "firebase_uid": clean_uid,
             "google_uid": clean_uid,
             "email": clean_email or existing["gmail"],
             "gmail": clean_email or existing["gmail"],
+            "previous_last_login": prev_login,
             "last_login": now,
             "updated_at": now,
         }
@@ -792,6 +795,7 @@ def get_or_create_firebase_user(
         "profile_picture": clean_pic,
         "registration_date": now,
         "last_login": now,
+        "previous_last_login": "",
         "updated_at": now,
         "account_status": "Active",
         "profile_completed": False,
@@ -1005,6 +1009,7 @@ def register_email_password_user(
         "profile_picture": "",
         "registration_date": now,
         "last_login": now,
+        "previous_last_login": "",
         "updated_at": now,
         "account_status": "Active",
         "profile_completed": True,
@@ -1058,9 +1063,11 @@ def authenticate_email_password_user(
         raise PermissionError("Access to Panchayat Automation Console is restricted for your account.")
 
     now = _utc_now_iso()
+    prev_login = str(user.get("last_login") or user.get("registration_date") or "").strip()
     col = _db().collection(COL_USERS)
     target_doc_id = _resolve_user_doc_id(col, user["user_id"]) or user["user_id"]
-    col.document(target_doc_id).update({"last_login": now, "updated_at": now})
+    col.document(target_doc_id).update({"previous_last_login": prev_login, "last_login": now, "updated_at": now})
+    user["previous_last_login"] = prev_login
     user["last_login"] = now
     user["updated_at"] = now
     _update_cached_user_sessions(user["user_id"], user)

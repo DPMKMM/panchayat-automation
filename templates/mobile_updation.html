@@ -450,6 +450,20 @@
       margin-top: 10px;
     }
 
+    .mu-page-btn {
+      transition: all 0.15s ease;
+      color: #374151;
+    }
+    .mu-page-btn:hover:not(:disabled) {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+      color: #111827;
+    }
+    .mu-page-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     /* Spinner */
     .mu-spinner {
       display: inline-block;
@@ -611,6 +625,24 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Table Pagination & Page Size Toolbar -->
+        <div class="mu-pagination-bar" id="mu-pagination-bar" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-top:14px; padding:4px 2px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label for="mu-page-size" style="font-size:0.86rem; color:var(--mu-muted); font-weight:600;">Rows per page:</label>
+            <select id="mu-page-size" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-size:0.86rem; background:#fff; font-weight:600; cursor:pointer;">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="250">250</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button type="button" id="btn-page-prev" class="mu-page-btn" style="padding:6px 14px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; font-size:0.86rem; font-weight:600; cursor:pointer;" disabled>&larr; Previous</button>
+            <span id="mu-page-info" style="font-size:0.86rem; font-weight:600; color:var(--mu-muted);">Page 1 of 1</span>
+            <button type="button" id="btn-page-next" class="mu-page-btn" style="padding:6px 14px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; font-size:0.86rem; font-weight:600; cursor:pointer;" disabled>Next &rarr;</button>
+          </div>
+        </div>
       </div>
 
       <!-- 100% Complete Zero Banner -->
@@ -655,7 +687,16 @@
       var previewContainer = document.getElementById('mu-preview-container');
       var zeroBanner = document.getElementById('mu-zero-banner');
 
+      var pageSizeSelect = document.getElementById('mu-page-size');
+      var btnPagePrev = document.getElementById('btn-page-prev');
+      var btnPageNext = document.getElementById('btn-page-next');
+      var pageInfo = document.getElementById('mu-page-info');
+      var paginationBar = document.getElementById('mu-pagination-bar');
+
       var rawPendingRecords = [];
+      var filteredRecords = [];
+      var currentPage = 1;
+      var pageSize = 100;
 
       function setupDropzone(inputEl, dropBox, statusEl) {
         inputEl.addEventListener('change', function() {
@@ -783,6 +824,8 @@
         kpiCoverage.textContent = (data.coverage_pct !== undefined ? data.coverage_pct : 0.0) + '%';
 
         rawPendingRecords = data.preview || [];
+        filteredRecords = rawPendingRecords.slice();
+        currentPage = 1;
 
         if (data.total_pending === 0) {
           previewContainer.style.display = 'none';
@@ -790,15 +833,46 @@
         } else {
           previewContainer.style.display = 'block';
           zeroBanner.style.display = 'none';
-          renderTableRows(rawPendingRecords);
+          updatePagination();
         }
 
         resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
-      function renderTableRows(records) {
+      function updatePagination() {
+        var total = filteredRecords.length;
+        var totalPages = pageSize === 'all' ? 1 : Math.max(1, Math.ceil(total / pageSize));
+
+        if (currentPage > totalPages) {
+          currentPage = totalPages;
+        }
+        if (currentPage < 1) {
+          currentPage = 1;
+        }
+
+        var startIdx = pageSize === 'all' ? 0 : (currentPage - 1) * pageSize;
+        var endIdx = pageSize === 'all' ? total : Math.min(startIdx + pageSize, total);
+        var pageSlice = filteredRecords.slice(startIdx, endIdx);
+
+        if (total === 0) {
+          countBadge.textContent = 'Showing 0 pending assessments';
+          pageInfo.textContent = 'Page 1 of 1';
+          btnPagePrev.disabled = true;
+          btnPageNext.disabled = true;
+        } else {
+          var displayStart = startIdx + 1;
+          var displayEnd = endIdx;
+          countBadge.textContent = 'Showing ' + displayStart + '–' + displayEnd + ' of ' + total + ' pending assessment' + (total === 1 ? '' : 's');
+          pageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+          btnPagePrev.disabled = (currentPage <= 1);
+          btnPageNext.disabled = (currentPage >= totalPages || pageSize === 'all');
+        }
+
+        renderTableSlice(pageSlice);
+      }
+
+      function renderTableSlice(records) {
         tableBody.innerHTML = '';
-        countBadge.textContent = 'Showing ' + records.length + ' of ' + (rawPendingRecords.length) + ' pending assessment' + (records.length === 1 ? '' : 's');
 
         if (!records.length) {
           tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#6b7280;">No matching pending records found.</td></tr>';
@@ -817,20 +891,43 @@
         });
       }
 
+      pageSizeSelect.addEventListener('change', function() {
+        var val = pageSizeSelect.value;
+        pageSize = val === 'all' ? 'all' : parseInt(val, 10);
+        currentPage = 1;
+        updatePagination();
+      });
+
+      btnPagePrev.addEventListener('click', function() {
+        if (currentPage > 1) {
+          currentPage--;
+          updatePagination();
+        }
+      });
+
+      btnPageNext.addEventListener('click', function() {
+        var totalPages = pageSize === 'all' ? 1 : Math.ceil(filteredRecords.length / pageSize);
+        if (currentPage < totalPages) {
+          currentPage++;
+          updatePagination();
+        }
+      });
+
       searchInput.addEventListener('input', function() {
         var query = (searchInput.value || '').toLowerCase().trim();
+        currentPage = 1;
         if (!query) {
-          renderTableRows(rawPendingRecords);
-          return;
+          filteredRecords = rawPendingRecords.slice();
+        } else {
+          filteredRecords = rawPendingRecords.filter(function(r) {
+            return (
+              (r.assessment_number && String(r.assessment_number).toLowerCase().includes(query)) ||
+              (r.owner_name && String(r.owner_name).toLowerCase().includes(query)) ||
+              (r.house_number && String(r.house_number).toLowerCase().includes(query))
+            );
+          });
         }
-        var filtered = rawPendingRecords.filter(function(r) {
-          return (
-            (r.assessment_number && String(r.assessment_number).toLowerCase().includes(query)) ||
-            (r.owner_name && String(r.owner_name).toLowerCase().includes(query)) ||
-            (r.house_number && String(r.house_number).toLowerCase().includes(query))
-          );
-        });
-        renderTableRows(filtered);
+        updatePagination();
       });
 
       function escapeHtml(str) {

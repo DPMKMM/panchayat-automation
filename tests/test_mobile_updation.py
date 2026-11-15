@@ -229,3 +229,105 @@ def test_api_pending_mobile_assessments_flow():
 
     dl_not_found = client.get(f"/api/manual-reports/pending-mobile-assessments/download-excel?token={'a' * 32}")
     assert dl_not_found.status_code == 404
+
+
+def test_updated_report_never_reads_column_a_sno():
+    """
+    Critical regression test: Ensures Column B ('Assessment Number') is selected,
+    and Column A ('S.No.') is NEVER used as the assessment lookup key.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["District: Khammam | Mandal: Raghunadhapalem | Gram Panchayat: Raghunadha Palem"])
+    ws.append([])
+    ws.append([])
+    ws.append([])
+    ws.append([])
+    ws.append([])
+    # Header row at row 7
+    ws.append(["S.No.", "Assessment Number", "Owner Name", "House Number", "Old Mobile", "New Mobile Number"])
+    # 5 rows where S.No is 1..5, but Assessment Numbers are 2313..2317
+    ws.append(["1", "2313.0", "Owner A", "1-1", "9000000001", "9000000001"])
+    ws.append(["2", "2314", "Owner B", "1-2", "9000000002", "9000000002"])
+    ws.append(["3", "2315", "Owner C", "1-3", "9000000003", "9000000003"])
+    ws.append(["4", "2316.0", "Owner D", "1-4", "9000000004", "9000000004"])
+    ws.append(["5", "2317", "Owner E", "1-5", "9000000005", "9000000005"])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    data = buf.getvalue()
+
+    meta, updated_set, mob_map = parse_updated_report_bytes(data)
+
+    # Must contain Assessment Numbers (Column B), NOT S.No. 1..5 (Column A)
+    assert "2313" in updated_set
+    assert "2314" in updated_set
+    assert "2315" in updated_set
+    assert "2316" in updated_set
+    assert "2317" in updated_set
+    assert "1" not in updated_set
+    assert "2" not in updated_set
+    assert "3" not in updated_set
+    assert "4" not in updated_set
+    assert "5" not in updated_set
+
+
+def test_kpi_calculations_and_reconciliation_exact():
+    """
+    Verifies KPI calculations:
+    - DEMAND REGISTER TOTAL = len(demand) (e.g. 2254)
+    - UPDATED ASSESSMENTS = DEMAND REGISTER TOTAL - PENDING ASSESSMENTS (e.g. 2218)
+    - PENDING ASSESSMENTS = DEMAND REGISTER TOTAL - UPDATED ASSESSMENTS (e.g. 36)
+    - SEEDING COVERAGE = (UPDATED ASSESSMENTS / DEMAND REGISTER TOTAL) * 100 (e.g. 98.4%)
+    """
+    demand_records = [
+        {"sl_no": i, "asmt_clean": str(i), "assessment_number": str(i), "house_number": f"1-{i}", "owner_name": f"Owner {i}", "demand_mobile": ""}
+        for i in range(1, 2255)  # 2254 total demand assessments
+    ]
+    # Simulate updated assessments missing exactly 36 records: 1241, 1243, 1292, 1438, 1454, 1482, and 30 records >= 2219
+    missing_asmts = {"1241", "1243", "1292", "1438", "1454", "1482"} | {str(x) for x in range(2219, 2249)}
+    assert len(missing_asmts) == 36
+
+    updated_asmts = {str(i) for i in range(1, 2255) if str(i) not in missing_asmts}
+    assert len(updated_asmts) == 2218
+
+    pending, full = perform_pending_lookup(demand_records, updated_asmts, {})
+    total_demand = len(demand_records)
+    total_pending = len(pending)
+    total_updated = total_demand - total_pending
+    coverage_pct = round((total_updated / total_demand * 100), 1)
+
+    assert total_demand == 2254
+    assert total_updated == 2218
+    assert total_pending == 36
+    assert coverage_pct == 98.4
+    assert [p["assessment_number"] for p in pending[:6]] == ["1241", "1243", "1292", "1438", "1454", "1482"]
+
+
+def test_real_raghunadhapalem_files_if_available():
+    """
+    If real user files DPM DR RNP.xls and DMP RNP UPDATED.xlsx exist on host,
+    verifies exact 36 pending count, 2254 demand, 2218 updated, 98.4% coverage,
+    and pending sequence starting with 1241, 1243, 1292, 1438, 1454, 1482, 2313...
+    """
+    from pathlib import Path
+    dr_path = Path(r"C:\Users\dpmkm\Downloads\DPM DR RNP.xls")
+    up_path = Path(r"C:\Users\dpmkm\Downloads\DMP RNP UPDATED.xlsx")
+
+    if not dr_path.exists() or not up_path.exists():
+        return  # Skip if environment does not have downloads
+
+    dr_bytes = dr_path.read_bytes()
+    up_bytes = up_path.read_bytes()
+
+    res = process_pending_mobile_assessments(dr_bytes, "DPM DR RNP.xls", up_bytes, "DMP RNP UPDATED.xlsx")
+    assert res["success"] is True
+    assert res["total_demand"] == 2254
+    assert res["total_updated"] == 2218
+    assert res["total_pending"] == 36
+    assert res["coverage_pct"] == 98.4
+    assert len(res["preview"]) == 36
+
+    pending_asmts = [p["assessment_number"] for p in res["preview"]]
+    assert pending_asmts[:7] == ["1241", "1243", "1292", "1438", "1454", "1482", "2313"]
+

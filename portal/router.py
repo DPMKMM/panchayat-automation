@@ -50,6 +50,21 @@ router = APIRouter(tags=["Dual-Domain Portal & Authentication"])
 _get_sid = extract_epts_session_id
 
 
+def _format_ist_datetime(iso_str: str) -> str:
+    if not iso_str:
+        return ""
+    try:
+        from datetime import datetime, timezone, timedelta
+        cleaned = str(iso_str).strip()
+        if cleaned.endswith("Z"):
+            cleaned = cleaned[:-1] + "+00:00"
+        dt = datetime.fromisoformat(cleaned)
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        return dt.astimezone(ist_tz).strftime("%d %b %Y, %I:%M %p IST")
+    except Exception:
+        return str(iso_str)
+
+
 def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
     clean_gmail = str(user.get("gmail") or user.get("email") or "").strip().lower()
     is_adm = (
@@ -62,6 +77,9 @@ def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
     name = str(user.get("name") or "").strip()
     surname = str(user.get("surname") or "").strip()
     display_name = str(user.get("display_name") or user.get("username") or name or "Officer").strip()
+
+    prev_ll = str(user.get("previous_last_login") or user.get("last_login") or "").strip()
+    curr_ll = str(user.get("last_login") or "").strip()
 
     return {
         "user_id": user.get("user_id"),
@@ -88,7 +106,9 @@ def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
         "auth_provider": user.get("auth_provider") or "email",
         "profile_picture": user.get("profile_picture") or "",
         "registration_date": user.get("registration_date") or "",
-        "last_login": user.get("last_login") or "",
+        "last_login": curr_ll,
+        "previous_last_login": prev_ll,
+        "last_login_ist": _format_ist_datetime(prev_ll or curr_ll),
         "account_status": user.get("account_status", "Active"),
         "profile_completed": bool(user.get("profile_completed", False)),
         "is_admin": is_adm,
@@ -634,6 +654,8 @@ async def api_auth_email_login(request: Request, response: Response):
         "epts_session_id": user_sid,
         "platform_scope": scope,
         "user": serialize_user_payload(user_record),
+        "is_first_time": bool(not user_record.get("profile_completed")),
+        "profile_completed": bool(user_record.get("profile_completed", False)),
         "message": f"{WELCOME_MESSAGE}, {user_record.get('name', 'Officer')}!",
     }
 

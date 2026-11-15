@@ -217,6 +217,13 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .ribbon-user-last-login {
+      font-size: 0.63rem;
+      color: #fef08a;
+      white-space: nowrap;
+      margin-top: 1px;
+      opacity: 0.95;
+    }
     .ribbon-dot {
       width: 7px;
       height: 7px;
@@ -727,6 +734,7 @@
                 <span id="ribbon-user-desig" class="ribbon-user-desig" title="Click to change designation">OFFICER ✏️</span>
               </div>
               <div id="ribbon-user-email" class="ribbon-user-email">officer@gmail.com</div>
+              <div id="ribbon-user-last-login" class="ribbon-user-last-login" style="display:none;" title="Your Last Login Time">🕒 Last Login: —</div>
             </div>
           </div>
 
@@ -834,6 +842,7 @@
                 <span id="mobile-user-desig" class="mobile-officer-desig" onclick="handleMobileChangeDesig()" title="Click to change designation">OFFICER ✏️</span>
               </div>
               <div id="mobile-user-email" class="mobile-officer-email">officer@gmail.com</div>
+              <div id="mobile-user-last-login" class="mobile-officer-last-login" style="font-size:0.72rem; color:#065f46; font-weight:600; margin-top:2px; display:none;" title="Your Last Login Time">🕒 Last Login: —</div>
             </div>
             <button type="button" class="mobile-officer-edit-btn" onclick="handleMobileChangeDesig()" title="Change Designation">
               Change ✏️
@@ -4421,9 +4430,9 @@
     </div>
 
     <!-- Comprehensive User Profile & Designation Modal (Officer & Citizen Self-Service) -->
-    <div id="user-profile-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+    <div id="user-profile-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);" onclick="if(event.target===this)window.closeUserProfileModal()">
       <div style="background:#ffffff; border-radius:18px; padding:24px 28px; max-width:560px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 25px 60px rgba(0,0,0,0.35); color:#1e293b; position:relative; border:1px solid #cbd5e1;">
-        <button type="button" onclick="window.closeUserProfileModal()" style="position:absolute; right:16px; top:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:#94a3b8; padding:4px; line-height:1;" title="Close">&times;</button>
+        <button type="button" onclick="window.closeUserProfileModal()" style="position:absolute; right:16px; top:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:#94a3b8; padding:4px; line-height:1;" title="Close (or Skip)">&times;</button>
         
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; padding-bottom:12px; border-bottom:1.5px solid #e2e8f0;">
           <div style="width:44px; height:44px; border-radius:12px; background:#ecfdf5; border:1px solid #a7f3d0; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">👤</div>
@@ -4431,6 +4440,13 @@
             <h3 style="margin:0; font-size:1.2rem; font-weight:800; color:#064e3b;">User Profile &amp; Designation</h3>
             <p style="margin:2px 0 0; font-size:0.78rem; color:#64748b;">Manage your official details, contact info, and jurisdiction</p>
           </div>
+        </div>
+
+        <div id="profile-modal-welcome-banner" style="display:none; background:#ecfdf5; border:1.5px solid #a7f3d0; border-radius:12px; padding:12px 14px; margin-bottom:14px; font-size:0.83rem; color:#064e3b;">
+          <div style="font-weight:800; display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+            <span>👋 Welcome to Panchayat Automation!</span>
+          </div>
+          <div style="line-height:1.4;">Please take a moment to fill in your official details. If you're not ready right now, you can simply click <strong>Skip / Fill Later</strong> below to start using reports immediately.</div>
         </div>
 
         <div id="user-profile-alert" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.84rem; font-weight:700;"></div>
@@ -4487,7 +4503,7 @@
             </div>
           </div>
 
-          <!-- Row 7: Account Status & Registered Email Info -->
+          <!-- Row 7: Account Status, Registered Email Info & Last Login -->
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; margin-bottom:16px;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
               <div>
@@ -4498,10 +4514,14 @@
                 Verified Account
               </div>
             </div>
+            <div style="margin-top:8px; padding-top:6px; border-top:1px dashed #cbd5e1; font-size:0.75rem; color:#475569; display:flex; justify-content:space-between; align-items:center;">
+              <span>🕒 Last Login Time (IST):</span>
+              <strong id="profile-field-last-login" style="color:#065f46;">—</strong>
+            </div>
           </div>
 
-          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
-            <button type="button" class="btn btn-outline btn-sm" onclick="window.closeUserProfileModal()" style="padding:8px 18px;">Cancel</button>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="window.closeUserProfileModal()" style="padding:8px 18px; font-weight:700; color:#64748b;" title="Close this popup and continue">Skip / Fill Later</button>
             <button type="submit" id="btn-save-profile" class="btn btn-gold btn-sm" style="padding:8px 22px; font-weight:800;">Save Profile Details</button>
           </div>
         </form>
@@ -4657,7 +4677,7 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=6"></script>
-  <script src="/static/js/auth.js?v=28"></script>
+  <script src="/static/js/auth.js?v=29"></script>
   <script src="/static/js/console.js?v=25"></script>
   <script src="/static/js/admin.js?v=8"></script>
   <script>
