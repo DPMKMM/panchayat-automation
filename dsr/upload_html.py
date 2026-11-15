@@ -361,14 +361,6 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
                 <span>Focused 2-Page Mandal Officer PDF Report</span>
               </div>
             </a>
-            <a class="dropdown-item" href="#reports-multiday" onclick="navigateTo('reports', 'multiday'); return false;">
-              <span class="dropdown-item-icon">📅</span>
-              <div class="dropdown-item-content">
-                <strong>Multiple Days DSR Report</strong>
-                <span>Consolidated Multi-Date PDF &amp; Excel Matrix</span>
-                <span class="badge-soon">Upcoming</span>
-              </div>
-            </a>
 
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Tax &amp; DCB Analytics</div>
@@ -426,9 +418,6 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
             <button type="button" class="btn-action btn-secondary" onclick="navigateTo('reports', 'mandal')">
               🏛️ Mandal Monitoring
             </button>
-            <button type="button" class="btn-action btn-secondary" onclick="navigateTo('reports', 'multiday')">
-              📅 Multiple Days DSR <span class="badge-soon" style="margin-top:0; margin-left:4px;">Upcoming</span>
-            </button>
           </div>
         </div>
 
@@ -474,9 +463,6 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           </button>
           <button type="button" class="tab-btn" id="tab-btn-mandal" onclick="switchMonitoringTab('mandal')">
             🏛️ Mandal Level Monitoring
-          </button>
-          <button type="button" class="tab-btn" id="tab-btn-multiday" onclick="switchMonitoringTab('multiday')">
-            📅 Multiple Days DSR <span class="badge-soon" style="margin-top:0; margin-left:4px;">Upcoming</span>
           </button>
         </div>
 
@@ -594,50 +580,7 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
           </form>
         </div>
 
-        <!-- TAB 3: Multiple Days DSR Monitoring -->
-        <div id="tab-multiday" class="tab-content">
-          <div class="notice">
-            <strong>Multiple Days DSR Consolidation:</strong> Select two or more daily GM-R 1.2.7 Attendance &amp; DSR spreadsheets (or a multi-date file) along with optional Presentees and Absentees directories to generate a consolidated <strong>Multi-Day Abstract PDF</strong> and <strong>4-Sheet Excel Workbook</strong> tracking punctuality, DSR completion, and recurring defaulters.
-          </div>
-
-          <form id="multiday-form">
-            <div class="field-group">
-              <label for="multiday-files">1. Daily Attendance &amp; DSR Raw Data Files (Select Multiple) <span class="req">*</span></label>
-              <input id="multiday-files" name="files" type="file" multiple required>
-              <div class="hint" id="multiday-files-hint">Hold Ctrl / Shift (or select multiple files in your picker) to upload 2 or more daily exports (.xls, .xlsx, .csv, or portal HTML tables).</div>
-            </div>
-
-            <div class="field-group">
-              <label for="multiday-presentees-file">2. Presentees PS Details File <span class="badge badge-rec">Recommended</span></label>
-              <input id="multiday-presentees-file" name="presentees_file" type="file">
-              <div class="hint">Enriches Panchayat Secretary Name, Mobile Number, Designation, and Nature of Posting across all selected dates.</div>
-            </div>
-
-            <div class="field-group">
-              <label for="multiday-absentees-file">3. Absentees PS Details File <span class="badge badge-opt">Optional</span></label>
-              <input id="multiday-absentees-file" name="absentees_file" type="file">
-              <div class="hint">Optional directory for completing contact details of absent secretaries.</div>
-            </div>
-
-            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px;">
-              <div class="field-group" style="margin:0;">
-                <label for="multiday-mandal">4. Mandal Filter <span class="badge badge-opt">Optional</span></label>
-                <input id="multiday-mandal" name="mandal_name" type="text" placeholder="Leave blank for District (or type Mandal name)">
-              </div>
-              <div class="field-group" style="margin:0;">
-                <label for="multiday-cutoff">5. Cutoff Time</label>
-                <input id="multiday-cutoff" name="cutoff_time" type="time" value="09:00" style="width:100%; box-sizing:border-box; padding:11px 13px; border:1px solid #bfd1c7; border-radius:9px; background:white; color:#15332b; font-size:0.95rem; font-family:inherit;">
-              </div>
-            </div>
-
-            <div class="actions">
-              <button id="multiday-generate-button" type="submit">Generate Multiple Days DSR Report (PDF &amp; Excel)</button>
-            </div>
-            <div id="multiday-report-message" class="message" role="status" aria-live="polite"></div>
-          </form>
-        </div>
-
-        <p class="fine-print">Supported formats: Excel (.xls, .xlsx), CSV, or portal HTML tables exported with a .xls extension. The PDF report downloads automatically once analytics finish.</p>
+<p class="fine-print">Supported formats: Excel (.xls, .xlsx), CSV, or portal HTML tables exported with a .xls extension. The PDF report downloads automatically once analytics finish.</p>
       </section>
     </div>
   </main>
@@ -740,7 +683,8 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
         const hash = window.location.hash.toLowerCase();
         const isInit = isInitialLoad === true;
         if (hash.startsWith('#reports-multiday')) {
-          window.navigateTo('reports', 'multiday', null, isInit);
+          window.location.href = '/reports/multi-day-dsr';
+          return;
         } else if (hash.startsWith('#reports-mandal')) {
           window.navigateTo('reports', 'mandal', null, isInit);
         } else if (hash.startsWith('#reports-district') || hash.startsWith('#reports')) {
@@ -757,15 +701,12 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
       window.switchMonitoringTab = function(mode) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        if (mode === 'multiday') {
-          document.getElementById('tab-btn-multiday').classList.add('active');
-          document.getElementById('tab-multiday').classList.add('active');
-        } else if (mode === 'mandal') {
-          document.getElementById('tab-btn-mandal').classList.add('active');
-          document.getElementById('tab-mandal').classList.add('active');
+        if (mode === 'mandal') {
+          const bm = document.getElementById('tab-btn-mandal'); if (bm) bm.classList.add('active');
+          const cm = document.getElementById('tab-mandal'); if (cm) cm.classList.add('active');
         } else {
-          document.getElementById('tab-btn-district').classList.add('active');
-          document.getElementById('tab-district').classList.add('active');
+          const bd = document.getElementById('tab-btn-district'); if (bd) bd.classList.add('active');
+          const cd = document.getElementById('tab-district'); if (cd) cd.classList.add('active');
         }
       };
 

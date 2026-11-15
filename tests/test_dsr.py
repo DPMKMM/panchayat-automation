@@ -453,8 +453,9 @@ def test_multiday_dsr_pdf_excel_and_endpoint():
 
     page_res = client.get("/reports/ps-attendance")
     assert page_res.status_code == 200
-    assert 'id="tab-btn-multiday"' in page_res.text
-    assert 'id="multiday-form"' in page_res.text
+    assert 'id="tab-btn-multiday"' not in page_res.text
+    assert 'id="tab-btn-district"' in page_res.text
+    assert 'id="tab-btn-mandal"' in page_res.text
 
     res = client.post(
         "/api/web/multi-day-reports",
