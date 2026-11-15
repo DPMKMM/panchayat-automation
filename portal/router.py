@@ -148,6 +148,45 @@ def privacy_legal_page(request: Request) -> HTMLResponse:
     return HTMLResponse(apply_subpage_console_branding(get_privacy_legal_html(), request))
 
 
+@router.post("/api/softwares/track-download", include_in_schema=False)
+async def api_track_software_download(request: Request):
+    """Record software package download telemetry for officer audit logs."""
+    data: dict[str, Any] = {}
+    try:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form = await request.form()
+            data = dict(form)
+    except Exception:
+        pass
+    item_id = str(data.get("item_id") or request.query_params.get("id") or "general").strip()
+    item_title = str(data.get("item_title") or request.query_params.get("title") or item_id).strip()
+    filename = str(data.get("filename") or request.query_params.get("filename") or "").strip()
+
+    user = None
+    try:
+        user, _ = resolve_sso_session(request)
+    except Exception:
+        user = None
+
+    log_usage(
+        user_id=str((user or {}).get("user_id") or "guest"),
+        gmail=str((user or {}).get("gmail") or ""),
+        user_name=str((user or {}).get("name") or ""),
+        designation=str((user or {}).get("designation") or ""),
+        platform_scope="portal",
+        module="softwares",
+        action="download",
+        tool_id=f"softwares:{item_id}",
+        tool_name=f"Download {item_title}",
+        category="Softwares & Drivers",
+        details=f"File: {filename}" if filename else f"Package: {item_id}",
+    )
+    return {"success": True, "tracked": True}
+
+
 @router.post("/api/feedback", include_in_schema=False)
 async def api_submit_feedback(request: Request):
     data: dict[str, Any] = {}

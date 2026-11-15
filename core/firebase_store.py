@@ -150,9 +150,7 @@ class _InMemoryDocRef:
 
     def update(self, data: dict[str, Any]) -> None:
         with _MEM_LOCK:
-            if self.id not in self._store:
-                raise KeyError(f"Document {self.id} does not exist")
-            merged = copy.deepcopy(self._store[self.id])
+            merged = copy.deepcopy(self._store.get(self.id, {}))
             merged.update(copy.deepcopy(data))
             self._store[self.id] = merged
             if self._on_change:
@@ -311,21 +309,189 @@ def _matches_filters(doc: dict[str, Any], filters: list[tuple[str, str, Any]]) -
     return True
 
 
+class _ResilientDocRef:
+    def __init__(self, col_name: str, doc_id: str, live_ref: Any, local_ref: _InMemoryDocRef) -> None:
+        self.col_name = col_name
+        self.id = doc_id
+        self._live_ref = live_ref
+        self._local_ref = local_ref
+
+    def get(self) -> Any:
+        if self._live_ref is not None:
+            try:
+                snap = self._live_ref.get()
+                if getattr(snap, "exists", False):
+                    d = snap.to_dict() or {}
+                    self._local_ref.set(d)
+                return snap
+            except Exception as exc:
+                logger.warning("Firestore doc.get() fallback to local for %s/%s: %s", self.col_name, self.id, exc)
+        return self._local_ref.get()
+
+    def set(self, data: dict[str, Any], merge: bool = False) -> None:
+        self._local_ref.set(data, merge=merge)
+        if self._live_ref is not None:
+            try:
+                self._live_ref.set(data, merge=merge)
+            except Exception as exc:
+                logger.warning("Firestore doc.set() deferred for %s/%s (stored locally): %s", self.col_name, self.id, exc)
+
+    def update(self, data: dict[str, Any]) -> None:
+        self._local_ref.update(data)
+        if self._live_ref is not None:
+            try:
+                self._live_ref.update(data)
+            except Exception as exc:
+                logger.warning("Firestore doc.update() deferred for %s/%s (stored locally): %s", self.col_name, self.id, exc)
+
+    def delete(self) -> None:
+        self._local_ref.delete()
+        if self._live_ref is not None:
+            try:
+                self._live_ref.delete()
+            except Exception as exc:
+                logger.warning("Firestore doc.delete() deferred for %s/%s (stored locally): %s", self.col_name, self.id, exc)
+
+
+class _ResilientQuery:
+    def __init__(self, col_name: str, live_query: Any, local_query: _InMemoryQuery) -> None:
+        self.col_name = col_name
+        self._live_query = live_query
+        self._local_query = local_query
+
+    def where(
+        self,
+        field_path: Optional[str] = None,
+        op_string: Optional[str] = None,
+        value: Any = None,
+        *,
+        filter: Optional[FieldFilter] = None,
+    ) -> "_ResilientQuery":
+        next_live = None
+        if self._live_query is not None:
+            try:
+                if filter is not None:
+                    next_live = self._live_query.where(filter=filter)
+                else:
+                    next_live = self._live_query.where(field_path, op_string, value)
+            except Exception:
+                next_live = None
+        next_local = self._local_query.where(field_path, op_string, value, filter=filter)
+        return _ResilientQuery(self.col_name, next_live, next_local)
+
+    def limit(self, count: int) -> "_ResilientQuery":
+        next_live = None
+        if self._live_query is not None:
+            try:
+                next_live = self._live_query.limit(count)
+            except Exception:
+                next_live = None
+        next_local = self._local_query.limit(count)
+        return _ResilientQuery(self.col_name, next_live, next_local)
+
+    def stream(self) -> Any:
+        if self._live_query is not None:
+            try:
+                snaps = list(self._live_query.stream())
+                for s in snaps:
+                    if getattr(s, "exists", True):
+                        d = s.to_dict()
+                        if d is not None:
+                            with _MEM_LOCK:
+                                self._local_query._store[s.id] = copy.deepcopy(d)
+                return snaps
+            except Exception as exc:
+                logger.warning("Firestore query.stream() fallback to local for %s: %s", self.col_name, exc)
+        return self._local_query.stream()
+
+
+class _ResilientCollection:
+    def __init__(self, name: str, live_col: Any, local_col: _InMemoryCollection) -> None:
+        self.name = name
+        self._live_col = live_col
+        self._local_col = local_col
+
+    def document(self, doc_id: Optional[str] = None) -> _ResilientDocRef:
+        key = doc_id or f"auto_{secrets.token_hex(8)}"
+        live_ref = self._live_col.document(key) if self._live_col is not None else None
+        local_ref = self._local_col.document(key)
+        return _ResilientDocRef(self.name, key, live_ref, local_ref)
+
+    def where(
+        self,
+        field_path: Optional[str] = None,
+        op_string: Optional[str] = None,
+        value: Any = None,
+        *,
+        filter: Optional[FieldFilter] = None,
+    ) -> _ResilientQuery:
+        live_q = None
+        if self._live_col is not None:
+            try:
+                if filter is not None:
+                    live_q = self._live_col.where(filter=filter)
+                else:
+                    live_q = self._live_col.where(field_path, op_string, value)
+            except Exception:
+                live_q = None
+        local_q = self._local_col.where(field_path, op_string, value, filter=filter)
+        return _ResilientQuery(self.name, live_q, local_q)
+
+    def limit(self, count: int) -> _ResilientQuery:
+        live_q = None
+        if self._live_col is not None:
+            try:
+                live_q = self._live_col.limit(count)
+            except Exception:
+                live_q = None
+        local_q = self._local_col.limit(count)
+        return _ResilientQuery(self.name, live_q, local_q)
+
+    def stream(self) -> Any:
+        if self._live_col is not None:
+            try:
+                snaps = list(self._live_col.stream())
+                for s in snaps:
+                    if getattr(s, "exists", True):
+                        d = s.to_dict()
+                        if d is not None:
+                            with _MEM_LOCK:
+                                self._local_col._store[s.id] = copy.deepcopy(d)
+                return snaps
+            except Exception as exc:
+                logger.warning("Firestore collection.stream() fallback to local for %s: %s", self.name, exc)
+        return self._local_col.stream()
+
+
+class _ResilientFirestoreClient:
+    def __init__(self, live_client: Any, local_client: _InMemoryFirestoreClient) -> None:
+        self._live = live_client
+        self._local = local_client
+
+    def collection(self, name: str) -> _ResilientCollection:
+        live_col = None
+        if self._live is not None:
+            try:
+                live_col = self._live.collection(name)
+            except Exception:
+                live_col = None
+        local_col = self._local.collection(name)
+        return _ResilientCollection(name, live_col, local_col)
+
+
+_RESILIENT_CLIENT: Optional[_ResilientFirestoreClient] = None
+
+
 def reset_inmemory_firestore() -> None:
     """Clear the test in-memory Firestore collections cleanly between isolated test runs."""
+    global _RESILIENT_CLIENT
+    _RESILIENT_CLIENT = None
     _INMEM_CLIENT.reset()
 
 
 def _db():
-    """Return active Cloud Firestore client, isolated test RAM store, or disk-backed dev store."""
-    global _MEM_WARNED, _DEV_PERSIST_CLIENT, _DEV_PERSIST_PATH
-    live = get_live_firestore_client()
-    if live is not None:
-        return live
-
-    if IS_PRODUCTION:
-        raise RuntimeError("Cloud Firestore client unavailable in production.")
-
+    """Return active Cloud Firestore client with seamless local-disk fallback on quota/outages."""
+    global _MEM_WARNED, _DEV_PERSIST_CLIENT, _DEV_PERSIST_PATH, _RESILIENT_CLIENT
     if is_inmemory_firestore_enabled():
         return _INMEM_CLIENT
 
@@ -334,14 +500,17 @@ def _db():
         if _DEV_PERSIST_CLIENT is None or _DEV_PERSIST_PATH != target_path:
             _DEV_PERSIST_CLIENT = _InMemoryFirestoreClient(persist_path=target_path)
             _DEV_PERSIST_PATH = target_path
+
+    live = get_live_firestore_client()
+    if live is None:
         if not _MEM_WARNED:
-            logger.warning(
-                "Cloud Firestore service account credentials not configured; persisting local store at %s. "
-                "Add secrets/firebase-service-account.json or set FIREBASE_SERVICE_ACCOUNT_PATH for Cloud Firestore.",
-                target_path,
-            )
+            logger.warning("Cloud Firestore live client not active; persisting local store at %s", target_path)
             _MEM_WARNED = True
         return _DEV_PERSIST_CLIENT
+
+    if _RESILIENT_CLIENT is None or getattr(_RESILIENT_CLIENT, "_live", None) is not live:
+        _RESILIENT_CLIENT = _ResilientFirestoreClient(live, _DEV_PERSIST_CLIENT)
+    return _RESILIENT_CLIENT
 
 
 def init_db(*args: Any, **kwargs: Any) -> None:
@@ -911,16 +1080,42 @@ def revoke_user_sessions(user_id: str, app_scope: Optional[str] = None) -> None:
     clean_uid = str(user_id or "").strip()
     if not clean_uid:
         return
-    snaps = _db().collection(COL_SESSIONS).where(filter=FieldFilter("user_id", "==", clean_uid)).stream()
-    wanted_scope = str(app_scope).strip().lower() if app_scope in VALID_SCOPES else None
-    col = _db().collection(COL_SESSIONS)
-    for snap in snaps:
-        data = snap.to_dict() or {}
-        if data.get("revoked"):
-            continue
-        if wanted_scope and str(data.get("app_scope") or "").strip().lower() != wanted_scope:
-            continue
-        col.document(snap.id).update({"revoked": True})
+
+    # Clear from in-memory cache
+    for tok, (usr, exp) in list(_SESSION_CACHE.items()):
+        if str(usr.get("user_id") or "") == clean_uid:
+            _SESSION_CACHE.pop(tok, None)
+
+    # Mark revoked in disk sessions
+    try:
+        with _AUTH_SESSIONS_LOCK:
+            sessions = _load_disk_sessions()
+            changed = False
+            for tok, entry in list(sessions.items()):
+                if str(entry.get("user", {}).get("user_id") or "") == clean_uid:
+                    entry["sess"]["revoked"] = True
+                    changed = True
+            if changed:
+                tmp = _AUTH_SESSIONS_FILE.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(sessions, f)
+                tmp.replace(_AUTH_SESSIONS_FILE)
+    except Exception as exc:
+        logger.warning("Could not revoke disk sessions for user %s: %s", clean_uid, exc)
+
+    try:
+        snaps = _db().collection(COL_SESSIONS).where(filter=FieldFilter("user_id", "==", clean_uid)).stream()
+        wanted_scope = str(app_scope).strip().lower() if app_scope in VALID_SCOPES else None
+        col = _db().collection(COL_SESSIONS)
+        for snap in snaps:
+            data = snap.to_dict() or {}
+            if data.get("revoked"):
+                continue
+            if wanted_scope and str(data.get("app_scope") or "").strip().lower() != wanted_scope:
+                continue
+            col.document(snap.id).update({"revoked": True})
+    except Exception as exc:
+        logger.warning("Could not revoke sessions in Firestore: %s", exc)
 
 
 def list_users(
@@ -1068,7 +1263,47 @@ def update_user_admin(
             revoke_user_sessions(existing["user_id"], app_scope="console")
 
     updated = get_user_by_id(existing["user_id"])
+    if updated:
+        _update_cached_user_sessions(existing["user_id"], updated)
     return True, "Officer permissions updated successfully.", updated
+
+
+_USAGE_LOGS_FILE = get_data_dir() / "analytics" / "usage_events.jsonl"
+_USAGE_LOGS_LOCK = threading.Lock()
+
+
+def _append_local_usage_log(event: dict[str, Any]) -> None:
+    try:
+        with _USAGE_LOGS_LOCK:
+            _USAGE_LOGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(_USAGE_LOGS_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        logger.warning("Could not append local usage log: %s", exc)
+
+
+def _load_local_usage_logs(cutoff_ts: float = 0.0) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    try:
+        if not _USAGE_LOGS_FILE.exists():
+            return events
+        with _USAGE_LOGS_LOCK:
+            with open(_USAGE_LOGS_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        if isinstance(row, dict):
+                            ts = float(row.get("created_at_ts") or 0)
+                            if cutoff_ts <= 0 or ts >= cutoff_ts:
+                                events.append(row)
+                    except Exception:
+                        continue
+    except Exception as exc:
+        logger.warning("Could not read local usage logs: %s", exc)
+    return events
 
 
 def _classify_tool_usage(module: str, action: str = "", platform_scope: str = "portal", tool_id: str = "", category: str = "") -> tuple[str, str, str]:
@@ -1077,13 +1312,15 @@ def _classify_tool_usage(module: str, action: str = "", platform_scope: str = "p
     mod = str(module or "").strip()
     if category:
         cat = str(category).strip()
+    elif mod == "softwares" or raw_id.startswith("softwares:"):
+        cat = "Softwares & Drivers"
     elif mod.startswith("excel:") or mod in {"excel_viewer", "excel_editor"}:
         cat = "Excel & Data Studio"
     elif mod.startswith("pdf:"):
         cat = "PDF Studio"
     elif mod in {"dsr_manual", "dsr_multiday", "dcb_live"}:
         cat = "Manual Reports & DCB"
-    elif mod in {"dsr_automation", "gp_balance", "mas_consolidated", "epts_auth"}:
+    elif mod in {"dsr_automation", "gp_balance", "mas_consolidated", "epts_auth", "auto_multi_dsr", "gp_inspections"}:
         cat = "Automated Portal Console"
     elif mod in {"billing", "razorpay"}:
         cat = "Subscriptions & Billing"
@@ -1093,6 +1330,38 @@ def _classify_tool_usage(module: str, action: str = "", platform_scope: str = "p
         cat = "Automated Portal Console"
     else:
         cat = "Portal & Authentication"
+
+    known_labels = {
+        "excel_viewer": "Excel Viewer & Editor",
+        "dsr_manual": "Manual DSR PDF Generator",
+        "dsr_multiday": "Multi-Day DSR Consolidation",
+        "dcb_live": "Live House Tax DCB Analytics",
+        "dsr_automation": "Automated DSR & Attendance Robot",
+        "gp_balance": "Thursday GP Balance Robot",
+        "mas_consolidated": "MAS 18-Indicator Robot",
+        "auto_multi_dsr": "Auto Multi-DSR Morning Robot",
+        "gp_inspections": "GP Inspection Reports Consolidator",
+        "epts_auth": "e-Panchayat Department Login",
+        "portal": "Officer Google Sign-In & Profile",
+        "admin": "Admin Governance Action",
+        "billing": "Subscription & Razorpay Billing",
+        "softwares:office_2010": "MS Office 2010 Pro Plus SP2 ISO",
+        "softwares:jdk_x32": "Java 8 JDK (32-Bit / x86)",
+        "softwares:jdk_x64": "Java 8 JDK (64-Bit / x64)",
+        "softwares:adobe_reader": "Adobe Acrobat Reader 11",
+        "softwares:digisign": "UBD New DigiSign Component",
+        "softwares:open_ie": "Open Internet Explorer Utility",
+        "softwares:telugu_fonts": "Official Telugu Unicode Fonts",
+        "softwares:mantra_mfs100": "Mantra MFS100 RD Service Driver",
+        "softwares:morpho_mso1300": "Morpho MSO 1300 E3 RD Driver",
+        "softwares:startek_fm220": "Startek FM220U RD Driver",
+        "softwares:secugen_hamster": "SecuGen Hamster Pro 20 Driver",
+    }
+
+    if raw_id.startswith("softwares:"):
+        slug = raw_id.split(":", 1)[1]
+        label = known_labels.get(raw_id, f"Download {slug.replace('_', ' ').title()}")
+        return raw_id, label, cat
 
     if raw_id.startswith("excel:"):
         slug = raw_id.split(":", 1)[1]
@@ -1109,20 +1378,7 @@ def _classify_tool_usage(module: str, action: str = "", platform_scope: str = "p
         label = re.sub(r"\bJpg\b", "JPG", label)
         return raw_id, label, cat
 
-    known_labels = {
-        "excel_viewer": "Excel Viewer & Editor",
-        "dsr_manual": "Manual DSR PDF Generator",
-        "dsr_multiday": "Multi-Day DSR Consolidation",
-        "dcb_live": "Live House Tax DCB Analytics",
-        "dsr_automation": "Automated DSR & Attendance Robot",
-        "gp_balance": "Thursday GP Balance Robot",
-        "mas_consolidated": "MAS 18-Indicator Robot",
-        "epts_auth": "e-Panchayat Portal OTP Session",
-        "portal": "Officer Google Sign-In & Profile",
-        "admin": "Admin Governance Action",
-        "billing": "Subscription & Razorpay Billing",
-    }
-    label = known_labels.get(mod, raw_id.replace("_", " ").replace("-", " ").title())
+    label = known_labels.get(raw_id) or known_labels.get(mod, raw_id.replace("_", " ").replace("-", " ").title())
     return raw_id, label, cat
 
 
@@ -1152,7 +1408,7 @@ def log_usage(
     category: str = "",
     details: str = "",
 ) -> None:
-    """Append a lightweight analytics event to Firestore usage_logs."""
+    """Append a lightweight analytics event to local persistent storage and Firestore usage_logs."""
     try:
         now_ts = time.time()
         resolved_id, resolved_label, resolved_cat = _classify_tool_usage(
@@ -1163,50 +1419,79 @@ def log_usage(
             category=category,
         )
         doc_id = f"log_{int(now_ts * 1000)}_{secrets.token_hex(4)}"
-        _db().collection(COL_USAGE).document(doc_id).set(
-            {
-                "log_id": doc_id,
-                "user_id": str(user_id or ""),
-                "gmail": str(gmail or "").lower(),
-                "user_name": str(user_name or "")[:120],
-                "designation": str(designation or "")[:32],
-                "platform_scope": str(platform_scope or "portal"),
-                "module": str(module or ""),
-                "action": str(action or ""),
-                "tool_id": resolved_id,
-                "tool_name": str(tool_name or resolved_label)[:120],
-                "category": resolved_cat,
-                "details": str(details or "")[:255],
-                "created_at": datetime.fromtimestamp(now_ts, tz=timezone.utc).isoformat(),
-                "created_at_ts": now_ts,
-            }
-        )
+        event_dict = {
+            "log_id": doc_id,
+            "user_id": str(user_id or "guest"),
+            "gmail": str(gmail or "").lower(),
+            "user_name": str(user_name or "")[:120],
+            "designation": str(designation or "")[:32],
+            "platform_scope": str(platform_scope or "portal"),
+            "module": str(module or ""),
+            "action": str(action or ""),
+            "tool_id": resolved_id,
+            "tool_name": str(tool_name or resolved_label)[:120],
+            "category": resolved_cat,
+            "details": str(details or "")[:255],
+            "created_at": datetime.fromtimestamp(now_ts, tz=timezone.utc).isoformat(),
+            "created_at_ts": now_ts,
+        }
+
+        # 1. Local append-only disk ledger (resilient against Firestore quota/dropouts)
+        _append_local_usage_log(event_dict)
+
+        # 2. Firestore cloud sync
+        try:
+            _db().collection(COL_USAGE).document(doc_id).set(event_dict)
+        except Exception as exc:
+            logger.debug("Non-fatal Firestore usage_log skip: %s", exc)
     except Exception as exc:
-        logger.debug("Non-fatal Firestore usage_log skip: %s", exc)
+        logger.debug("Non-fatal log_usage skip: %s", exc)
 
 
 def get_tool_usage_analytics(days: int = 30) -> dict[str, Any]:
-    """Return detailed per-tool, per-category, and recent activity analytics over the lookback window."""
+    """Return detailed per-tool, per-user, per-category, and recent activity analytics over the lookback window."""
     lookback_days = max(1, int(days or 30))
     now_ts = time.time()
     cutoff_ts = now_ts - lookback_days * 86400
     cutoff_24h = now_ts - 86400
     cutoff_7d = now_ts - 7 * 86400
 
+    # Merged event map deduplicated by log_id
+    events_by_id: dict[str, dict[str, Any]] = {}
+
+    # 1. Load local persistent disk events
+    for ev in _load_local_usage_logs(cutoff_ts):
+        lid = str(ev.get("log_id") or f"local_{ev.get('created_at_ts')}")
+        events_by_id[lid] = ev
+
+    # 2. Query Firestore usage events
+    try:
+        for snap in _db().collection(COL_USAGE).where(filter=FieldFilter("created_at_ts", ">=", cutoff_ts)).stream():
+            row = snap.to_dict() or {}
+            lid = str(row.get("log_id") or snap.id)
+            if lid not in events_by_id:
+                events_by_id[lid] = row
+    except Exception as exc:
+        logger.warning("Notice querying Firestore usage logs: %s", exc)
+
     tools_map: dict[str, dict[str, Any]] = {}
+    users_map: dict[str, dict[str, Any]] = {}
     categories_map: dict[str, int] = {}
     module_counts: dict[tuple[str, str], int] = {}
     recent_events: list[dict[str, Any]] = []
     active_uids_24h: set[str] = set()
     active_uids_7d: set[str] = set()
 
-    for snap in _db().collection(COL_USAGE).where(filter=FieldFilter("created_at_ts", ">=", cutoff_ts)).stream():
-        row = snap.to_dict() or {}
+    for lid, row in events_by_id.items():
         ts_val = float(row.get("created_at_ts") or 0)
         scope = str(row.get("platform_scope") or "portal")
         mod = str(row.get("module") or "action")
-        uid = str(row.get("user_id") or "").strip()
-        if uid and uid != "anonymous":
+        uid = str(row.get("user_id") or "guest").strip()
+        uname = str(row.get("user_name") or "") or (str(row.get("gmail") or "").split("@")[0] if row.get("gmail") else "Officer")
+        gmail = str(row.get("gmail") or "")
+        desig = str(row.get("designation") or "")
+
+        if uid and uid != "guest" and uid != "anonymous":
             if ts_val >= cutoff_24h:
                 active_uids_24h.add(uid)
             if ts_val >= cutoff_7d:
@@ -1224,6 +1509,7 @@ def get_tool_usage_analytics(days: int = 30) -> dict[str, Any]:
         module_counts[(scope, mod)] = module_counts.get((scope, mod), 0) + 1
         categories_map[t_cat] = categories_map.get(t_cat, 0) + 1
 
+        # Aggregate by Tool
         entry = tools_map.get(t_id)
         if entry is None:
             entry = {
@@ -1232,26 +1518,105 @@ def get_tool_usage_analytics(days: int = 30) -> dict[str, Any]:
                 "category": t_cat,
                 "platform_scope": scope,
                 "count": 0,
-                "_users": set(),
+                "_users": {},  # uid -> { user_id, user_name, gmail, designation, count, last_used_at }
                 "last_used_at": "",
                 "_last_ts": 0.0,
             }
             tools_map[t_id] = entry
         entry["count"] += 1
-        if uid:
-            entry["_users"].add(uid)
         created_at_str = str(row.get("created_at") or "")
         if ts_val >= entry["_last_ts"]:
             entry["_last_ts"] = ts_val
             entry["last_used_at"] = created_at_str
 
+        if uid and uid != "guest":
+            u_entry = entry["_users"].get(uid)
+            if u_entry is None:
+                u_entry = {
+                    "user_id": uid,
+                    "user_name": uname,
+                    "gmail": gmail,
+                    "designation": desig,
+                    "count": 0,
+                    "last_used_at": created_at_str,
+                    "_last_ts": ts_val,
+                }
+                entry["_users"][uid] = u_entry
+            u_entry["count"] += 1
+            if ts_val >= u_entry["_last_ts"]:
+                u_entry["_last_ts"] = ts_val
+                u_entry["last_used_at"] = created_at_str
+                if uname and uname != "Officer":
+                    u_entry["user_name"] = uname
+                if desig:
+                    u_entry["designation"] = desig
+
+        # Aggregate by User
+        if uid and uid != "guest":
+            usr_entry = users_map.get(uid)
+            if usr_entry is None:
+                usr_entry = {
+                    "user_id": uid,
+                    "user_name": uname,
+                    "gmail": gmail,
+                    "designation": desig,
+                    "total_runs": 0,
+                    "_tools": {},  # t_id -> { tool_id, tool_name, category, count, last_used_at }
+                    "last_active_at": created_at_str,
+                    "_last_ts": ts_val,
+                }
+                users_map[uid] = usr_entry
+            usr_entry["total_runs"] += 1
+            if ts_val >= usr_entry["_last_ts"]:
+                usr_entry["_last_ts"] = ts_val
+                usr_entry["last_active_at"] = created_at_str
+                if uname and uname != "Officer":
+                    usr_entry["user_name"] = uname
+                if desig:
+                    usr_entry["designation"] = desig
+
+            t_sub = usr_entry["_tools"].get(t_id)
+            if t_sub is None:
+                t_sub = {
+                    "tool_id": t_id,
+                    "tool_name": t_label,
+                    "category": t_cat,
+                    "count": 0,
+                    "last_used_at": created_at_str,
+                    "_last_ts": ts_val,
+                }
+                usr_entry["_tools"][t_id] = t_sub
+            t_sub["count"] += 1
+            if ts_val >= t_sub["_last_ts"]:
+                t_sub["_last_ts"] = ts_val
+                t_sub["last_used_at"] = created_at_str
+
+        # Format IST readable string
+        readable_ist = ""
+        time_ago = ""
+        if ts_val > 0:
+            try:
+                ist_dt = datetime.fromtimestamp(ts_val, tz=timezone(timedelta(hours=5, minutes=30)))
+                readable_ist = ist_dt.strftime("%d %b %Y, %I:%M:%S %p IST")
+                diff_sec = max(0, int(now_ts - ts_val))
+                if diff_sec < 60:
+                    time_ago = "Just now"
+                elif diff_sec < 3600:
+                    time_ago = f"{diff_sec // 60}m ago"
+                elif diff_sec < 86400:
+                    time_ago = f"{diff_sec // 3600}h ago"
+                else:
+                    time_ago = f"{diff_sec // 86400}d ago"
+            except Exception:
+                readable_ist = created_at_str
+
         recent_events.append(
             {
-                "log_id": str(row.get("log_id") or snap.id),
-                "user_id": uid or "guest",
-                "user_name": str(row.get("user_name") or "") or (str(row.get("gmail") or "").split("@")[0] if row.get("gmail") else "Officer / Guest"),
-                "gmail": str(row.get("gmail") or ""),
-                "designation": str(row.get("designation") or ""),
+                "log_id": str(row.get("log_id") or lid),
+                "user_id": uid,
+                "user_name": uname,
+                "gmail": gmail,
+                "designation": desig,
                 "tool_id": t_id,
                 "tool_name": t_label,
                 "category": t_cat,
@@ -1259,12 +1624,18 @@ def get_tool_usage_analytics(days: int = 30) -> dict[str, Any]:
                 "action": str(row.get("action") or ""),
                 "details": str(row.get("details") or ""),
                 "created_at": created_at_str,
+                "created_at_ist": readable_ist,
+                "time_ago": time_ago,
                 "_ts": ts_val,
             }
         )
 
+    # Format tools list with users breakdown
     tool_usage = []
     for item in tools_map.values():
+        u_list = sorted(item["_users"].values(), key=lambda x: x["count"], reverse=True)
+        for u in u_list:
+            u.pop("_last_ts", None)
         tool_usage.append(
             {
                 "tool_id": item["tool_id"],
@@ -1272,11 +1643,32 @@ def get_tool_usage_analytics(days: int = 30) -> dict[str, Any]:
                 "category": item["category"],
                 "platform_scope": item["platform_scope"],
                 "count": item["count"],
-                "unique_users": len(item["_users"]),
+                "unique_users": len(u_list),
                 "last_used_at": item["last_used_at"],
+                "users": u_list[:50],
             }
         )
     tool_usage.sort(key=lambda x: x["count"], reverse=True)
+
+    # Format users list with tools breakdown
+    user_tool_usage = []
+    for item in users_map.values():
+        t_list = sorted(item["_tools"].values(), key=lambda x: x["count"], reverse=True)
+        for t in t_list:
+            t.pop("_last_ts", None)
+        user_tool_usage.append(
+            {
+                "user_id": item["user_id"],
+                "user_name": item["user_name"],
+                "gmail": item["gmail"],
+                "designation": item["designation"],
+                "total_runs": item["total_runs"],
+                "distinct_tools": len(t_list),
+                "last_active_at": item["last_active_at"],
+                "tools": t_list,
+            }
+        )
+    user_tool_usage.sort(key=lambda x: x["total_runs"], reverse=True)
 
     category_usage = sorted(
         [{"category": k, "count": v} for k, v in categories_map.items()],
@@ -1296,12 +1688,37 @@ def get_tool_usage_analytics(days: int = 30) -> dict[str, Any]:
         "days": lookback_days,
         "total_events": sum(item["count"] for item in tool_usage),
         "unique_tools_used": len(tool_usage),
-        "tool_usage": tool_usage[:50],
+        "tool_usage": tool_usage,
+        "user_tool_usage": user_tool_usage,
         "category_usage": category_usage,
         "module_usage": module_usage,
-        "recent_activity": recent_events[:30],
+        "recent_activity": recent_events[:250],
         "active_uids_24h": active_uids_24h,
         "active_uids_7d": active_uids_7d,
+    }
+
+
+def get_user_activity(user_id: str, days: int = 90) -> dict[str, Any]:
+    """Return comprehensive tool usage breakdown and chronological logs for a specific officer."""
+    analytics = get_tool_usage_analytics(days=days)
+    target_user_id = str(user_id).strip()
+    user_summary = next((u for u in analytics["user_tool_usage"] if u["user_id"] == target_user_id), None)
+    user_events = [ev for ev in analytics["recent_activity"] if ev["user_id"] == target_user_id]
+    user_doc = get_user_by_id(target_user_id) or {}
+    return {
+        "user_id": target_user_id,
+        "user": user_doc,
+        "summary": user_summary or {
+            "user_id": target_user_id,
+            "user_name": user_doc.get("name", "Officer"),
+            "gmail": user_doc.get("gmail", ""),
+            "designation": user_doc.get("designation", ""),
+            "total_runs": 0,
+            "distinct_tools": 0,
+            "last_active_at": "",
+            "tools": [],
+        },
+        "recent_events": user_events,
     }
 
 
@@ -1666,6 +2083,7 @@ def grant_or_activate_subscription(
     if razorpay_subscription_id:
         user_updates["razorpay_subscription_id"] = str(razorpay_subscription_id)
     user_col.document(target_doc_id).update(user_updates)
+    _update_cached_user_sessions(user["user_id"], user_updates)
 
     if record_payment and eff_amt > 0:
         pay_id = f"pay_{int(time.time() * 1000)}_{secrets.token_hex(4)}"
@@ -1722,6 +2140,10 @@ def revoke_user_subscription(user_id: str, actor: str = "", status: str = "cance
             "updated_at": now_iso,
         }
     )
+    _update_cached_user_sessions(user["user_id"], {
+        "has_automated_subscription": False,
+        "subscription_status": st,
+    })
     return get_user_by_id(user["user_id"]) or user
 
 

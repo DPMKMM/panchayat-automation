@@ -17,6 +17,7 @@ from core.firebase_store import (
     get_recent_feedback,
     get_tool_usage_analytics,
     get_usage_stats,
+    get_user_activity,
     get_user_by_id,
     grant_or_activate_subscription,
     list_payments,
@@ -80,6 +81,17 @@ def admin_list_users(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/users/{user_id}/activity", include_in_schema=False)
+def admin_user_activity(
+    user_id: str,
+    days: int = Query(default=90, ge=1, le=365),
+) -> dict[str, Any]:
+    """Return comprehensive tool usage breakdown and chronological logs for a specific officer."""
+    clean_target_id = str(user_id or "").strip()
+    activity = get_user_activity(clean_target_id, days=days)
+    return {"success": True, **activity}
 
 
 @router.patch("/users/{user_id}", include_in_schema=False)

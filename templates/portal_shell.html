@@ -1385,7 +1385,10 @@
 
         <div class="table-card" style="margin-bottom:18px;">
           <div class="table-header">
-            <div class="table-title">Tools &amp; Reports Usage Ranking (<span id="admin-tools-count">0</span>)</div>
+            <div>
+              <div class="table-title">Tools &amp; Reports Usage Ranking (<span id="admin-tools-count">0</span>)</div>
+              <div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Track total runs and click "View Officers" to see who used each tool.</div>
+            </div>
           </div>
           <div class="table-responsive">
             <table>
@@ -1393,9 +1396,10 @@
                 <tr>
                   <th>Tool / Module</th>
                   <th>Category</th>
-                  <th class="text-center">Runs</th>
-                  <th class="text-center">Unique Users</th>
+                  <th class="text-center">Total Runs</th>
+                  <th class="text-center">Unique Officers</th>
                   <th>Last Used</th>
+                  <th class="text-center">Officers Breakdown</th>
                 </tr>
               </thead>
               <tbody id="admin-tools-tbody"></tbody>
@@ -1403,19 +1407,53 @@
           </div>
         </div>
 
-        <div class="table-card">
+        <div class="table-card" style="margin-bottom:18px;">
           <div class="table-header">
-            <div class="table-title">Recent Live Activity Stream (<span id="admin-recent-count">0</span>)</div>
+            <div>
+              <div class="table-title">🏆 Officer Tool Usage Leaderboard (<span id="admin-user-tools-count">0</span> officers)</div>
+              <div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Officers ranked by total tool runs and distinct features used across the platform.</div>
+            </div>
           </div>
           <div class="table-responsive">
             <table>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>User</th>
+                  <th class="text-center" style="width:50px;">Rank</th>
+                  <th>Officer Name &amp; Gmail</th>
+                  <th>Designation</th>
+                  <th class="text-center">Total Tool Runs</th>
+                  <th class="text-center">Distinct Tools</th>
+                  <th>Last Active</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="admin-user-tools-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-header" style="flex-wrap:wrap; gap:10px;">
+            <div>
+              <div class="table-title">⏱️ Live User Activity Audit Stream (<span id="admin-recent-count">0</span> events)</div>
+              <div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Real-time log of who used which tool at what time, with full action details.</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <input type="text" id="admin-act-search" placeholder="🔍 Search officer, email, tool, action..." oninput="window.filterAdminActivityTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.82rem; min-width:220px;">
+              <select id="admin-act-cat" onchange="window.filterAdminActivityTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:8px; font-size:0.82rem;">
+                <option value="">All Categories</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Exact Time (IST)</th>
+                  <th>Officer</th>
                   <th>Tool / Action</th>
                   <th>Category</th>
-                  <th>Details</th>
+                  <th>Activity Details</th>
                 </tr>
               </thead>
               <tbody id="admin-recent-tbody"></tbody>
@@ -1490,6 +1528,7 @@
                   <th>Designation</th>
                   <th>Role</th>
                   <th>Last Active</th>
+                  <th class="text-center">Tools Used</th>
                   <th>Subscription</th>
                   <th>Status</th>
                   <th class="text-center">Portal</th>
@@ -3373,6 +3412,73 @@
         </div>
       </div>
     </div>
+
+    <!-- Admin Officer Activity & Tool Usage Modal -->
+    <div id="admin-officer-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) window.closeOfficerActivityModal();">
+      <div class="modal-card" style="max-width:850px; width:95%; max-height:88vh; overflow-y:auto; padding:24px; border-radius:14px; background:#ffffff; box-shadow:0 12px 36px rgba(0,0,0,0.25);">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; border-bottom:1.5px solid #e2e8f0; padding-bottom:12px;">
+          <div>
+            <div style="font-size:1.25rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+              <span>👤</span> <span id="adm-officer-modal-name">Officer Name</span>
+              <span id="adm-officer-modal-badge" class="badge-role-pill">Mandal Level</span>
+            </div>
+            <div id="adm-officer-modal-sub" style="font-size:0.84rem; color:#64748b; margin-top:3px;">officer@gmail.com · DEO</div>
+          </div>
+          <button type="button" onclick="window.closeOfficerActivityModal()" style="background:none; border:none; font-size:1.6rem; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+        </div>
+
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); margin-bottom:18px;">
+          <div class="metric-card accent" style="margin:0;">
+            <div class="metric-label">Total Tool Runs</div>
+            <div class="metric-value" id="adm-officer-kpi-runs">0</div>
+            <div class="metric-sub">Executions</div>
+          </div>
+          <div class="metric-card info" style="margin:0;">
+            <div class="metric-label">Distinct Tools Used</div>
+            <div class="metric-value" id="adm-officer-kpi-distinct">0</div>
+            <div class="metric-sub">Features / Modules</div>
+          </div>
+          <div class="metric-card success" style="margin:0;">
+            <div class="metric-label">Last Tool Run</div>
+            <div class="metric-value" id="adm-officer-kpi-last" style="font-size:0.92rem; font-weight:700;">—</div>
+            <div class="metric-sub">Recent activity</div>
+          </div>
+        </div>
+
+        <h4 style="margin:0 0 10px; color:#064e3b; font-size:0.95rem; font-weight:800;">🧰 Tools &amp; Features Used by this Officer</h4>
+        <div class="table-responsive" style="margin-bottom:20px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Tool / Feature</th>
+                <th>Category</th>
+                <th class="text-center">Times Used (Runs)</th>
+                <th>Last Used Time</th>
+              </tr>
+            </thead>
+            <tbody id="adm-officer-tools-tbody"></tbody>
+          </table>
+        </div>
+
+        <h4 style="margin:0 0 10px; color:#064e3b; font-size:0.95rem; font-weight:800;">⏱️ Chronological Activity Log (What they did &amp; when)</h4>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Time (IST)</th>
+                <th>Tool / Action</th>
+                <th>Category</th>
+                <th>Activity Details</th>
+              </tr>
+            </thead>
+            <tbody id="adm-officer-events-tbody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:18px; text-align:right;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="window.closeOfficerActivityModal()">Close</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer>
@@ -3619,6 +3725,33 @@
       var modal = document.getElementById('software-help-modal');
       if (modal) modal.style.display = 'none';
     };
+
+    // Automatic telemetry for Software and Driver downloads
+    document.addEventListener('click', function (ev) {
+      try {
+        var a = ev.target && ev.target.closest ? ev.target.closest('a[download]') : null;
+        if (!a) return;
+        var filename = a.getAttribute('download') || a.getAttribute('href') || '';
+        var card = a.closest('.software-card') || a.closest('.module-card') || null;
+        var title = '';
+        if (card) {
+          var h = card.querySelector('h3') || card.querySelector('h2') || card.querySelector('.module-card-title');
+          if (h) title = h.textContent.trim();
+        }
+        if (!title) title = filename;
+        var payload = JSON.stringify({ item_id: filename, item_title: title, filename: filename });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/softwares/track-download', new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch('/api/softwares/track-download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payload,
+            keepalive: true,
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    }, true);
   </script>
 </body>
 </html>

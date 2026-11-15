@@ -278,15 +278,172 @@
     }
   };
 
+  window._adminAllRecentActivity = [];
+
+  window.toggleToolOfficersDetail = function (toolId) {
+    var subrow = document.getElementById('tool-users-row-' + toolId);
+    if (!subrow) return;
+    if (subrow.style.display === 'none' || !subrow.style.display) {
+      subrow.style.display = 'table-row';
+    } else {
+      subrow.style.display = 'none';
+    }
+  };
+
+  window.filterAdminActivityTable = function () {
+    var q = ((document.getElementById('admin-act-search') && document.getElementById('admin-act-search').value) || '').trim().toLowerCase();
+    var cat = ((document.getElementById('admin-act-cat') && document.getElementById('admin-act-cat').value) || '').trim().toLowerCase();
+    var all = window._adminAllRecentActivity || [];
+
+    var filtered = all.filter(function (ev) {
+      if (cat && String(ev.category || '').toLowerCase() !== cat) return false;
+      if (!q) return true;
+      var haystack = [
+        ev.user_name || '',
+        ev.gmail || '',
+        ev.tool_name || '',
+        ev.tool_id || '',
+        ev.action || '',
+        ev.details || '',
+        ev.category || '',
+        ev.created_at_ist || '',
+      ].join(' ').toLowerCase();
+      return haystack.indexOf(q) !== -1;
+    });
+
+    var countEl = document.getElementById('admin-recent-count');
+    if (countEl) countEl.textContent = String(filtered.length);
+
+    var recBody = document.getElementById('admin-recent-tbody');
+    if (!recBody) return;
+
+    if (filtered.length === 0) {
+      recBody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding:24px; color:#64748b;">No activity events match your filter criteria.</td></tr>';
+      return;
+    }
+
+    recBody.innerHTML = filtered.map(function (ev) {
+      var timeDisplay = esc(ev.created_at_ist || formatShortDate(ev.created_at));
+      var timeAgoPill = ev.time_ago ? (' <span style="display:inline-block; font-size:0.72rem; color:#059669; font-weight:700; background:#ecfdf5; padding:1px 6px; border-radius:4px; margin-left:4px;">' + esc(ev.time_ago) + '</span>') : '';
+      var detailsText = esc(ev.details || ev.action || '—');
+      return (
+        '<tr>' +
+          '<td style="white-space:nowrap; font-size:0.78rem; color:#334155; font-family:monospace;">' + timeDisplay + timeAgoPill + '</td>' +
+          '<td>' +
+            '<div style="font-weight:700; color:#0f172a;">' + esc(ev.user_name || 'Guest Officer') + '</div>' +
+            '<div style="font-size:0.74rem; color:#64748b;">' + esc(ev.gmail || '—') + (ev.designation ? (' · ' + esc(ev.designation)) : '') + '</div>' +
+          '</td>' +
+          '<td>' +
+            '<div style="font-weight:700; color:#064e3b;">' + esc(ev.tool_name || ev.tool_id) + '</div>' +
+            '<div style="font-size:0.72rem; color:#64748b;"><code>' + esc(ev.tool_id || ev.action) + '</code></div>' +
+          '</td>' +
+          '<td><span class="badge-role-pill">' + esc(ev.category || 'Tools') + '</span></td>' +
+          '<td style="font-size:0.8rem; color:#334155; max-width:320px; word-break:break-word;">' + detailsText + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+  };
+
+  window.openOfficerActivityModal = async function (userId, fallbackName) {
+    var modal = document.getElementById('admin-officer-modal');
+    if (!modal) return;
+
+    var nameEl = document.getElementById('adm-officer-modal-name');
+    var badgeEl = document.getElementById('adm-officer-modal-badge');
+    var subEl = document.getElementById('adm-officer-modal-sub');
+    var kpiRuns = document.getElementById('adm-officer-kpi-runs');
+    var kpiDistinct = document.getElementById('adm-officer-kpi-distinct');
+    var kpiLast = document.getElementById('adm-officer-kpi-last');
+    var toolsTbody = document.getElementById('adm-officer-tools-tbody');
+    var eventsTbody = document.getElementById('adm-officer-events-tbody');
+
+    if (nameEl) nameEl.textContent = fallbackName || 'Officer Activity';
+    if (badgeEl) badgeEl.textContent = 'Loading...';
+    if (subEl) subEl.textContent = 'Loading officer details & activity timeline...';
+    if (kpiRuns) kpiRuns.textContent = '...';
+    if (kpiDistinct) kpiDistinct.textContent = '...';
+    if (kpiLast) kpiLast.textContent = '...';
+    if (toolsTbody) toolsTbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:20px; color:#64748b;">Loading tools breakdown...</td></tr>';
+    if (eventsTbody) eventsTbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:20px; color:#64748b;">Loading activity logs...</td></tr>';
+
+    modal.style.display = 'flex';
+
+    try {
+      var data = await window.safeFetchJson('/api/admin/users/' + encodeURIComponent(userId) + '/activity?days=90');
+      var user = data.user || {};
+      var summary = data.summary || {};
+      var tools = Array.isArray(summary.tools) ? summary.tools : [];
+      var events = Array.isArray(data.recent_events) ? data.recent_events : [];
+
+      if (nameEl) nameEl.textContent = user.name || summary.user_name || fallbackName || 'Officer';
+      if (badgeEl) badgeEl.textContent = user.role || user.designation || 'Mandal Level';
+      if (subEl) {
+        subEl.textContent = (user.gmail || summary.gmail || 'No email') + (user.designation ? (' · ' + user.designation) : '') + (user.mobile_number ? (' · 📱 ' + user.mobile_number) : '');
+      }
+      if (kpiRuns) kpiRuns.textContent = String(summary.total_runs || events.length || 0);
+      if (kpiDistinct) kpiDistinct.textContent = String(summary.distinct_tools || tools.length || 0);
+      if (kpiLast) {
+        kpiLast.textContent = summary.last_active_at ? formatShortDate(summary.last_active_at) : (events.length > 0 ? (events[0].time_ago || formatShortDate(events[0].created_at)) : 'Never');
+      }
+
+      if (toolsTbody) {
+        if (tools.length === 0) {
+          toolsTbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:16px; color:#64748b;">No recorded tool executions for this officer yet.</td></tr>';
+        } else {
+          toolsTbody.innerHTML = tools.map(function (t) {
+            return (
+              '<tr>' +
+                '<td><strong>' + esc(t.tool_name || t.tool_id) + '</strong><div style="font-size:0.72rem; color:#64748b;"><code>' + esc(t.tool_id) + '</code></div></td>' +
+                '<td><span class="badge-role-pill">' + esc(t.category || 'Tools') + '</span></td>' +
+                '<td class="text-center"><strong style="color:#059669; font-size:0.95rem;">' + esc(t.count || 0) + '</strong></td>' +
+                '<td style="font-size:0.8rem; color:#475569;">' + esc(formatShortDate(t.last_used_at)) + '</td>' +
+              '</tr>'
+            );
+          }).join('');
+        }
+      }
+
+      if (eventsTbody) {
+        if (events.length === 0) {
+          eventsTbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:16px; color:#64748b;">No recent chronological events found.</td></tr>';
+        } else {
+          eventsTbody.innerHTML = events.map(function (ev) {
+            var tStr = esc(ev.created_at_ist || formatShortDate(ev.created_at));
+            var agoPill = ev.time_ago ? (' <span style="font-size:0.72rem; color:#059669; font-weight:700; background:#ecfdf5; padding:1px 5px; border-radius:4px;">' + esc(ev.time_ago) + '</span>') : '';
+            return (
+              '<tr>' +
+                '<td style="white-space:nowrap; font-size:0.78rem; font-family:monospace; color:#334155;">' + tStr + agoPill + '</td>' +
+                '<td><strong>' + esc(ev.tool_name || ev.tool_id) + '</strong><div style="font-size:0.72rem; color:#64748b;"><code>' + esc(ev.action || ev.tool_id) + '</code></div></td>' +
+                '<td><span class="badge-role-pill">' + esc(ev.category || 'Tools') + '</span></td>' +
+                '<td style="font-size:0.8rem; color:#334155;">' + esc(ev.details || ev.action || '—') + '</td>' +
+              '</tr>'
+            );
+          }).join('');
+        }
+      }
+    } catch (err) {
+      if (subEl) subEl.textContent = 'Error loading activity: ' + err.message;
+    }
+  };
+
+  window.closeOfficerActivityModal = function () {
+    var modal = document.getElementById('admin-officer-modal');
+    if (modal) modal.style.display = 'none';
+  };
+
   window.loadAdminToolUsage = async function () {
     var daysEl = document.getElementById('admin-tools-days');
     var days = daysEl ? daysEl.value : '30';
     try {
       var data = await window.safeFetchJson('/api/admin/tool-usage?days=' + encodeURIComponent(days));
       var tools = Array.isArray(data.tool_usage) ? data.tool_usage : [];
+      var userTools = Array.isArray(data.user_tool_usage) ? data.user_tool_usage : [];
       var cats = Array.isArray(data.category_usage) ? data.category_usage : [];
       var recent = Array.isArray(data.recent_activity) ? data.recent_activity : [];
 
+      window._adminAllRecentActivity = recent;
+
+      // Category Summary KPI Cards
       var catGrid = document.getElementById('admin-tools-cat-grid');
       if (catGrid) {
         catGrid.innerHTML = cats.map(function (c) {
@@ -300,47 +457,107 @@
         }).join('') || '';
       }
 
+      // Populate Category filter dropdown if not populated
+      var catSelect = document.getElementById('admin-act-cat');
+      if (catSelect && catSelect.options.length <= 1) {
+        cats.forEach(function (c) {
+          var opt = document.createElement('option');
+          opt.value = c.category;
+          opt.textContent = c.category + ' (' + c.count + ')';
+          catSelect.appendChild(opt);
+        });
+      }
+
+      // 1. Tools Ranking Table
       var countEl = document.getElementById('admin-tools-count');
       if (countEl) countEl.textContent = String(tools.length);
       var tbody = document.getElementById('admin-tools-tbody');
       if (tbody) {
         if (tools.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding:20px; color:#64748b;">No tool runs recorded in this window.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding:24px; color:#64748b;">No tool runs recorded in this window.</td></tr>';
         } else {
           tbody.innerHTML = tools.map(function (t) {
+            var usersList = Array.isArray(t.users) ? t.users : [];
+            var hasUsers = usersList.length > 0;
+            var usersBtn = hasUsers
+              ? ('<button type="button" class="btn btn-white btn-xs" onclick="window.toggleToolOfficersDetail(\'' + esc(t.tool_id) + '\')" style="font-size:0.75rem; padding:3px 8px; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">👥 View Officers (' + t.unique_users + ')</button>')
+              : ('<span style="font-size:0.75rem; color:#94a3b8;">None</span>');
+
+            var subTableRows = usersList.map(function (u) {
+              return (
+                '<tr>' +
+                  '<td style="font-weight:700; color:#0f172a;">' + esc(u.user_name || 'Officer') + '<div style="font-size:0.72rem; color:#64748b;">' + esc(u.gmail || '') + '</div></td>' +
+                  '<td><span class="badge-role-pill">' + esc(u.designation || 'Officer') + '</span></td>' +
+                  '<td class="text-center"><strong style="color:#059669;">' + esc(u.count || 0) + ' runs</strong></td>' +
+                  '<td style="font-size:0.78rem; color:#475569;">' + esc(formatShortDate(u.last_used_at)) + '</td>' +
+                  '<td class="text-center"><button type="button" class="btn btn-white btn-xs" onclick="window.openOfficerActivityModal(\'' + esc(u.user_id) + '\', \'' + esc(u.user_name || u.gmail) + '\')">📊 Inspect</button></td>' +
+                '</tr>'
+              );
+            }).join('');
+
+            var subrowHtml = hasUsers ? (
+              '<tr id="tool-users-row-' + esc(t.tool_id) + '" style="display:none; background:#f8fafc;">' +
+                '<td colspan="6" style="padding:12px 16px; border-left:3px solid #059669;">' +
+                  '<div style="font-size:0.8rem; font-weight:800; color:#064e3b; margin-bottom:8px;">Officers who ran ' + esc(t.tool_name || t.tool_id) + ':</div>' +
+                  '<div class="table-responsive"><table style="background:#ffffff; border-radius:8px; border:1px solid #e2e8f0; font-size:0.82rem;">' +
+                    '<thead><tr><th>Officer</th><th>Designation</th><th class="text-center">Times Ran</th><th>Last Ran</th><th class="text-center">Action</th></tr></thead>' +
+                    '<tbody>' + subTableRows + '</tbody>' +
+                  '</table></div>' +
+                '</td>' +
+              '</tr>'
+            ) : '';
+
             return (
               '<tr>' +
                 '<td><strong>' + esc(t.tool_name || t.tool_id) + '</strong><div style="font-size:0.74rem; color:#64748b;"><code>' + esc(t.tool_id) + '</code></div></td>' +
                 '<td><span class="badge-role-pill">' + esc(t.category || 'Tools') + '</span></td>' +
-                '<td class="text-center"><strong>' + esc(t.count || 0) + '</strong></td>' +
+                '<td class="text-center"><strong style="color:#0f172a; font-size:0.96rem;">' + esc(t.count || 0) + '</strong></td>' +
                 '<td class="text-center">' + esc(t.unique_users || 0) + '</td>' +
                 '<td style="font-size:0.8rem; color:#475569;">' + esc(formatShortDate(t.last_used_at)) + '</td>' +
+                '<td class="text-center">' + usersBtn + '</td>' +
+              '</tr>' +
+              subrowHtml
+            );
+          }).join('');
+        }
+      }
+
+      // 2. Officer Leaderboard Table
+      var userToolsCountEl = document.getElementById('admin-user-tools-count');
+      if (userToolsCountEl) userToolsCountEl.textContent = String(userTools.length);
+      var userToolsBody = document.getElementById('admin-user-tools-tbody');
+      if (userToolsBody) {
+        if (userTools.length === 0) {
+          userToolsBody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No officer tool telemetry recorded in this window.</td></tr>';
+        } else {
+          userToolsBody.innerHTML = userTools.map(function (u, idx) {
+            var rank = idx + 1;
+            var medal = rank === 1 ? '🥇 ' : (rank === 2 ? '🥈 ' : (rank === 3 ? '🥉 ' : ''));
+            return (
+              '<tr>' +
+                '<td class="text-center" style="font-weight:800; color:' + (rank <= 3 ? '#b45309' : '#64748b') + ';">' + medal + '#' + rank + '</td>' +
+                '<td>' +
+                  '<div style="font-weight:700; color:#0f172a;">' + esc(u.user_name || 'Officer') + '</div>' +
+                  '<div style="font-size:0.75rem; color:#64748b;">' + esc(u.gmail || '—') + '</div>' +
+                '</td>' +
+                '<td><span class="badge-role-pill">' + esc(u.designation || 'Officer') + '</span></td>' +
+                '<td class="text-center"><strong style="color:#059669; font-size:1.02rem;">' + esc(u.total_runs || 0) + '</strong></td>' +
+                '<td class="text-center">' + esc(u.distinct_tools || 0) + '</td>' +
+                '<td style="font-size:0.8rem; color:#475569;">' + esc(formatShortDate(u.last_active_at)) + '</td>' +
+                '<td class="text-center">' +
+                  '<button type="button" class="btn btn-white btn-xs" onclick="window.openOfficerActivityModal(\'' + esc(u.user_id) + '\', \'' + esc(u.user_name || u.gmail) + '\')" style="font-size:0.75rem; padding:4px 9px; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;">' +
+                    '📊 Inspect Activity' +
+                  '</button>' +
+                '</td>' +
               '</tr>'
             );
           }).join('');
         }
       }
 
-      var recCount = document.getElementById('admin-recent-count');
-      if (recCount) recCount.textContent = String(recent.length);
-      var recBody = document.getElementById('admin-recent-tbody');
-      if (recBody) {
-        if (recent.length === 0) {
-          recBody.innerHTML = '<tr><td colspan="5" class="text-center" style="padding:20px; color:#64748b;">No recent activity events yet.</td></tr>';
-        } else {
-          recBody.innerHTML = recent.map(function (ev) {
-            return (
-              '<tr>' +
-                '<td style="white-space:nowrap; font-size:0.78rem; color:#475569;">' + esc(formatShortDate(ev.created_at)) + '</td>' +
-                '<td><div style="font-weight:700;">' + esc(ev.user_name || 'Guest') + '</div><div style="font-size:0.75rem; color:#64748b;">' + esc(ev.gmail || '—') + '</div></td>' +
-                '<td><strong>' + esc(ev.tool_name || ev.tool_id) + '</strong></td>' +
-                '<td><span class="badge-role-pill">' + esc(ev.category || '') + '</span></td>' +
-                '<td style="font-size:0.78rem; color:#475569;">' + esc(ev.details || ev.action || '—') + '</td>' +
-              '</tr>'
-            );
-          }).join('');
-        }
-      }
+      // 3. Live User Activity Stream
+      window.filterAdminActivityTable();
+
     } catch (err) {
       showAdminAlert('Failed to load tool usage analytics: ' + err.message, 'error');
     }
@@ -431,7 +648,7 @@
       var tbody = document.getElementById('admin-users-tbody');
       if (!tbody) return;
       if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="11" class="text-center" style="padding:24px; color:#64748b;">No officer accounts match the selected filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="text-center" style="padding:24px; color:#64748b;">No officer accounts match the selected filter.</td></tr>';
         return;
       }
 
@@ -465,6 +682,7 @@
             '<td class="text-center"><input type="checkbox" data-field="can_access_portal"' + (u.can_access_portal !== false ? ' checked' : '') + '></td>' +
             '<td class="text-center"><input type="checkbox" data-field="can_access_console"' + (u.can_access_console !== false ? ' checked' : '') + '></td>' +
             '<td class="text-center"><input type="checkbox" data-field="is_admin"' + (u.is_admin ? ' checked' : '') + '></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-white btn-xs" onclick="window.openOfficerActivityModal(\'' + esc(u.user_id) + '\', \'' + esc(u.name || u.gmail || 'Officer') + '\')" style="font-size:0.75rem; padding:3px 8px; border:1px solid #cbd5e1; border-radius:6px; cursor:pointer;" title="View tools used and timestamped history">📊 Activity</button></td>' +
             '<td class="text-center"><button type="button" class="btn btn-primary btn-sm" data-action="save-user">💾 Save</button></td>' +
           '</tr>'
         );

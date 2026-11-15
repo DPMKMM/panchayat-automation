@@ -405,3 +405,47 @@ def test_admin_host_branding_tool_telemetry_and_razorpay_database(monkeypatch):
     assert bill_status["user"]["has_automated_subscription"] is True
     assert bill_status["active_subscription"]["plan_id"] == "plan_annual"
     assert any(p["razorpay_payment_id"] == rzp_pay_id and p["status"] == "captured" for p in bill_status["payments"])
+
+
+def test_admin_user_activity_and_software_download_tracking(monkeypatch):
+    ts = int(time.time() * 1000)
+    admin_client, _ = _login(monkeypatch, "admin.epanchayat@gmail.com", "State Admin")
+
+    officer_email = f"track_officer_{ts}@gmail.com"
+    officer_client, off_body = _login(monkeypatch, officer_email, "Field Auditor")
+    officer_uid = off_body["user"]["user_id"]
+
+    # 1. Download tracking event
+    dl_res = officer_client.post(
+        "/api/softwares/track-download",
+        headers={"Host": "panchayatautomation.in"},
+        json={
+            "item_id": "Office_ProPlus_2010.iso",
+            "item_title": "Microsoft Office 2010 Pro Plus SP2",
+            "filename": "Office_ProPlus_2010.iso",
+        },
+    )
+    assert dl_res.status_code == 200
+    assert dl_res.json()["success"] is True
+
+    # 2. Query tool usage analytics
+    usage_res = admin_client.get(
+        "/api/admin/tool-usage?days=30",
+        headers={"Host": "admin.panchayatautomation.in"},
+    )
+    assert usage_res.status_code == 200
+    body = usage_res.json()
+    assert "user_tool_usage" in body
+    assert any(u["user_id"] == officer_uid for u in body["user_tool_usage"])
+
+    # 3. Query specific officer activity endpoint
+    act_res = admin_client.get(
+        f"/api/admin/users/{officer_uid}/activity?days=90",
+        headers={"Host": "admin.panchayatautomation.in"},
+    )
+    assert act_res.status_code == 200
+    act_data = act_res.json()
+    assert act_data["success"] is True
+    assert act_data["summary"]["total_runs"] >= 1
+    assert any("Office_ProPlus_2010" in str(ev.get("details", "")) or "Office" in str(ev.get("tool_name", "")) for ev in act_data["recent_events"])
+
