@@ -95,7 +95,7 @@
       if (s === 'automated') return 'https://autoreports.panchayatautomation.in/';
       if (s === 'manual') return 'https://manualreports.panchayatautomation.in/';
       if (s === 'tools') return 'https://tools.panchayatautomation.in/';
-      if (s === 'softwares' || s === 'software') return '/softwares';
+      if (s === 'softwares' || s === 'software') return 'https://softwares.panchayatautomation.in/';
       return 'https://panchayatautomation.in/';
     }
     if (s === 'automated') return '/autoreports?site=console';
@@ -556,6 +556,7 @@
       { id: 'login-link-autoreports', sec: 'automated', href: consoleDest },
       { id: 'login-link-manualreports', sec: 'manual', href: manualDest },
       { id: 'login-link-tools', sec: 'tools', href: toolsDest },
+      { id: 'login-link-softwares', sec: 'softwares', href: softwaresDest },
     ];
     secNavLinks.forEach(function (item) {
       var a = document.getElementById(item.id);
@@ -1420,7 +1421,8 @@
     if (isDirectClick && window.isProdCustomDomain()) {
       if ((m === 'manual' && !window.isManualHost()) ||
           (m === 'automated' && !window.isReportsHost()) ||
-          (m === 'tools' && !window.isToolsHost())) {
+          (m === 'tools' && !window.isToolsHost()) ||
+          (m === 'softwares' && !window.isSoftwaresHost())) {
         window.location.href = window.getSectionUrl(m);
         return true;
       }
