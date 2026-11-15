@@ -674,6 +674,8 @@ def register_user_profile(
             mobile_number=mobile_number,
             role=role,
         )
+        if updated:
+            _update_cached_user_sessions(user_id, updated)
         return True, "Officer profile registered successfully!", updated
     except ValueError as exc:
         return False, str(exc), None
@@ -682,36 +684,128 @@ def register_user_profile(
         return False, f"Failed to save profile: {exc}", None
 
 
+_SESSION_CACHE: dict[str, tuple[dict[str, Any], float]] = {}
+_SESSION_CACHE_TTL: float = 86400.0 * 30  # 30 days RAM session cache
+
+_AUTH_SESSIONS_FILE = get_data_dir() / "sessions" / "auth_sessions.json"
+_AUTH_SESSIONS_LOCK = threading.Lock()
+
+
+def _update_cached_user_sessions(user_id: str, updated_user: dict[str, Any]) -> None:
+    for tok, (usr, exp) in list(_SESSION_CACHE.items()):
+        if str(usr.get("user_id") or "") == str(user_id):
+            usr_copy = dict(usr)
+            usr_copy.update(updated_user)
+            _SESSION_CACHE[tok] = (usr_copy, exp)
+    try:
+        with _AUTH_SESSIONS_LOCK:
+            sessions = _load_disk_sessions()
+            changed = False
+            for tok, entry in list(sessions.items()):
+                if str(entry.get("user", {}).get("user_id") or "") == str(user_id):
+                    entry["user"].update(updated_user)
+                    changed = True
+            if changed:
+                tmp = _AUTH_SESSIONS_FILE.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(sessions, f)
+                tmp.replace(_AUTH_SESSIONS_FILE)
+    except Exception as exc:
+        logger.warning("Could not update cached disk sessions: %s", exc)
+
+
+def _load_disk_sessions() -> dict[str, dict[str, Any]]:
+    try:
+        if _AUTH_SESSIONS_FILE.exists():
+            with open(_AUTH_SESSIONS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning("Could not read auth_sessions.json: %s", exc)
+    return {}
+
+
+def _save_disk_session(token: str, sess: dict[str, Any], user: dict[str, Any]) -> None:
+    try:
+        with _AUTH_SESSIONS_LOCK:
+            _AUTH_SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            sessions = _load_disk_sessions()
+            sessions[token] = {
+                "sess": sess,
+                "user": user,
+                "saved_at": time.time(),
+            }
+            now = time.time()
+            valid_sessions = {
+                k: v for k, v in sessions.items()
+                if float(v.get("sess", {}).get("expires_at_ts") or 0) > now and not v.get("sess", {}).get("revoked")
+            }
+            tmp = _AUTH_SESSIONS_FILE.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(valid_sessions, f)
+            tmp.replace(_AUTH_SESSIONS_FILE)
+    except Exception as exc:
+        logger.warning("Could not write auth_sessions.json: %s", exc)
+
+
+def _revoke_disk_session(token: str) -> None:
+    try:
+        with _AUTH_SESSIONS_LOCK:
+            sessions = _load_disk_sessions()
+            if token in sessions:
+                sessions[token]["sess"]["revoked"] = True
+                tmp = _AUTH_SESSIONS_FILE.with_suffix(".tmp")
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(sessions, f)
+                tmp.replace(_AUTH_SESSIONS_FILE)
+    except Exception as exc:
+        logger.warning("Could not update revoked disk session: %s", exc)
+
+
 def create_session(
     user_id: str,
     app_scope: str = "portal",
     user_agent: str = "",
     ip_address: str = "",
 ) -> str:
-    """Create a persistent Firestore session token scoped strictly to portal or console."""
+    """Create a persistent session token valid across the entire platform."""
     scope = str(app_scope or "portal").strip().lower()
     if scope not in VALID_SCOPES:
         scope = "portal"
     token = secrets.token_urlsafe(32)
     now_ts = time.time()
-    exp_ts = now_ts + SESSION_TTL_SECONDS
+    exp_ts = now_ts + (86400 * 30)  # 30-day session
     now_iso = datetime.fromtimestamp(now_ts, tz=timezone.utc).isoformat()
     exp_iso = datetime.fromtimestamp(exp_ts, tz=timezone.utc).isoformat()
 
     doc_id = _token_doc_id(token)
-    _db().collection(COL_SESSIONS).document(doc_id).set(
-        {
-            "token_hash": doc_id,
-            "user_id": str(user_id),
-            "app_scope": scope,
-            "user_agent": str(user_agent or "")[:255],
-            "ip_address": str(ip_address or "")[:64],
-            "created_at": now_iso,
-            "expires_at": exp_iso,
-            "expires_at_ts": exp_ts,
-            "revoked": False,
-        }
-    )
+    sess_dict = {
+        "token_hash": doc_id,
+        "user_id": str(user_id),
+        "app_scope": scope,
+        "user_agent": str(user_agent or "")[:255],
+        "ip_address": str(ip_address or "")[:64],
+        "created_at": now_iso,
+        "expires_at": exp_iso,
+        "expires_at_ts": exp_ts,
+        "revoked": False,
+    }
+
+    user = get_user_by_id(str(user_id)) or {
+        "user_id": str(user_id),
+        "account_status": "Active",
+        "can_access_portal": True,
+        "can_access_console": True,
+    }
+    user["session_scope"] = scope
+    _SESSION_CACHE[token] = (dict(user), exp_ts)
+    _save_disk_session(token, sess_dict, user)
+
+    try:
+        _db().collection(COL_SESSIONS).document(doc_id).set(sess_dict)
+    except Exception as exc:
+        logger.warning("Notice on Firestore session set: %s (local session active)", exc)
+
     return token
 
 
@@ -730,27 +824,38 @@ def create_portal_session(
     )
 
 
-_SESSION_CACHE: dict[str, tuple[dict[str, Any], float]] = {}
-_SESSION_CACHE_TTL: float = 30.0
-
 
 def get_session_user(token: str, app_scope: Optional[str] = None) -> Optional[dict[str, Any]]:
-    """Validate Firestore session token (matching app_scope if specified) and return user."""
+    """Validate session token and return user. Unified across all modules."""
     clean_tok = str(token or "").strip()
     if not clean_tok:
         return None
 
     now = time.time()
+
+    # 1. Fast in-memory RAM cache check (0ms)
     cached = _SESSION_CACHE.get(clean_tok)
     if cached is not None:
         user_data, expiry = cached
         if now < expiry:
-            if app_scope is not None:
-                wanted = str(app_scope).strip().lower()
-                if str(user_data.get("session_scope") or "").strip().lower() != wanted:
-                    return None
             return dict(user_data)
+        else:
+            _SESSION_CACHE.pop(clean_tok, None)
 
+    # 2. Local persistent disk session check (0.5ms)
+    disk_sessions = _load_disk_sessions()
+    if clean_tok in disk_sessions:
+        entry = disk_sessions[clean_tok]
+        sess = entry.get("sess", {})
+        if not sess.get("revoked"):
+            exp_ts = float(sess.get("expires_at_ts") or 0)
+            if exp_ts > now:
+                user = entry.get("user") or get_user_by_id(str(sess.get("user_id") or ""))
+                if user and user.get("account_status") == "Active":
+                    _SESSION_CACHE[clean_tok] = (dict(user), exp_ts)
+                    return dict(user)
+
+    # 3. Firestore fallback
     try:
         snap = _db().collection(COL_SESSIONS).document(_token_doc_id(clean_tok)).get()
         if not snap.exists:
@@ -761,16 +866,13 @@ def get_session_user(token: str, app_scope: Optional[str] = None) -> Optional[di
         exp_ts = float(sess.get("expires_at_ts") or 0)
         if exp_ts <= now:
             return None
-        if app_scope is not None:
-            wanted = str(app_scope).strip().lower()
-            if str(sess.get("app_scope") or "").strip().lower() != wanted:
-                return None
 
         user = get_user_by_id(str(sess.get("user_id") or ""))
         if user is None or user.get("account_status") != "Active":
             return None
         user["session_scope"] = str(sess.get("app_scope") or "portal")
-        _SESSION_CACHE[clean_tok] = (dict(user), now + _SESSION_CACHE_TTL)
+        _SESSION_CACHE[clean_tok] = (dict(user), exp_ts)
+        _save_disk_session(clean_tok, sess, user)
         return user
     except Exception as exc:
         logger.warning("Could not read/validate session token from Firestore: %s", exc)
@@ -778,16 +880,17 @@ def get_session_user(token: str, app_scope: Optional[str] = None) -> Optional[di
 
 
 def get_portal_session(token: str, app_scope: Optional[str] = None) -> Optional[dict[str, Any]]:
-    """Validate persistent Firestore session token scoped cleanly to portal or console."""
+    """Validate persistent session token cleanly across all modules."""
     return get_session_user(token, app_scope=app_scope)
 
 
 def revoke_session(token: str) -> bool:
-    """Mark a persistent Firestore session token as revoked."""
+    """Mark a persistent session token as revoked."""
     clean_tok = str(token or "").strip()
     if not clean_tok:
         return False
     _SESSION_CACHE.pop(clean_tok, None)
+    _revoke_disk_session(clean_tok)
     try:
         ref = _db().collection(COL_SESSIONS).document(_token_doc_id(clean_tok))
         if ref.get().exists:
@@ -795,7 +898,7 @@ def revoke_session(token: str) -> bool:
             return True
     except Exception as exc:
         logger.warning("Could not revoke session in Firestore: %s", exc)
-    return False
+    return True
 
 
 def revoke_portal_session(token: str) -> bool:

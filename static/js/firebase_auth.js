@@ -8,6 +8,7 @@ import {
   connectAuthEmulator,
   getAuth,
   getRedirectResult,
+  onAuthStateChanged,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -59,7 +60,31 @@ function init(config, authEmulatorHost) {
   if (!googleProvider) {
     googleProvider = buildProvider();
   }
+  if (!window._firebaseAuthListenerAttached && firebaseAuth) {
+    window._firebaseAuthListenerAttached = true;
+    onAuthStateChanged(firebaseAuth, async (user) => {
+      if (user) {
+        try {
+          const idToken = await user.getIdToken();
+          if (typeof window.onFirebaseAutoAuthState === 'function') {
+            await window.onFirebaseAutoAuthState(user, idToken);
+          }
+        } catch (e) {
+          console.warn('Firebase auto auth state note:', e);
+        }
+      }
+    });
+  }
   return firebaseAuth;
+}
+
+function getCurrentUser() {
+  return firebaseAuth ? firebaseAuth.currentUser : null;
+}
+
+async function getIdToken(forceRefresh = false) {
+  if (!firebaseAuth || !firebaseAuth.currentUser) return null;
+  return await firebaseAuth.currentUser.getIdToken(forceRefresh);
 }
 
 async function ensureReady() {
@@ -123,4 +148,6 @@ window.FirebasePortalAuth = {
   consumeRedirectSignIn,
   signInWithGoogle,
   signOut: firebaseSignOut,
+  getCurrentUser,
+  getIdToken,
 };

@@ -24,10 +24,10 @@ def test_softwares_health_and_cards_wired():
     assert 'selectWorkspaceMode(\'softwares\')' in html
     assert 'id="software-search-input"' in html
     assert 'id="software-help-modal"' in html
-    assert 'All (13)' in html
+    assert 'All (14)' in html
     assert '🔑 DSC &amp; Java (5)' in html
     assert '⌨️ Telugu Typing (2)' in html
-    assert '🛠️ System &amp; Remote IT (2)' in html
+    assert '🛠️ System &amp; Office Tools (3)' in html
     assert "TrustKey / mToken CryptoID" not in html
     assert "Baraha Telugu Software" not in html
     assert "AnyDesk Remote Desktop" not in html
@@ -48,8 +48,8 @@ def test_softwares_route_direct_access():
     assert 'id="softwares-modules-section"' in resp2.text
 
 
-def test_all_13_software_cards_rendered():
-    """Verify all 13 official software cards are present in the HTML."""
+def test_all_14_software_cards_rendered():
+    """Verify all 14 official software cards are present in the HTML."""
     html = client.get("/").text
     expected_softwares = [
         "Mantra MFS100 RD Service &amp; Driver",
@@ -65,6 +65,7 @@ def test_all_13_software_cards_rendered():
         "Official Telugu Fonts Pack (Pothana &amp; Gautami)",
         "Adobe Acrobat Reader DC",
         "Open Internet Explorer Utility (Windows 10 / 11)",
+        "Microsoft Office 2010 Pro Plus (SP2)",
     ]
     for s in expected_softwares:
         assert s in html, f"Missing software card: {s}"
@@ -164,7 +165,7 @@ def test_biometrics_cards_and_category_order_last():
 
     # 2. Verify software cards order: Biometric drivers must be at the end
     cards = [c.find("h3").get_text(strip=True) for c in soup.select("#softwares-grid .software-card")]
-    assert len(cards) == 13
+    assert len(cards) == 14
     biometric_cards = cards[-4:]
     assert biometric_cards == [
         "Mantra MFS100 RD Service & Driver",

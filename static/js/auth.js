@@ -136,7 +136,11 @@
   window.getScopedAuthToken = function (scope) {
     var sc = scope || window.getPlatformScope();
     try {
-      return sessionStorage.getItem(tokenStorageKey(sc)) || '';
+      var tok = sessionStorage.getItem(tokenStorageKey(sc));
+      if (!tok) {
+        tok = localStorage.getItem('epts_auth_token') || localStorage.getItem(tokenStorageKey(sc)) || '';
+      }
+      return tok || '';
     } catch (e) {
       return '';
     }
@@ -147,8 +151,12 @@
     try {
       if (token) {
         sessionStorage.setItem(tokenStorageKey(sc), String(token));
+        localStorage.setItem('epts_auth_token', String(token));
+        localStorage.setItem(tokenStorageKey(sc), String(token));
       } else {
         sessionStorage.removeItem(tokenStorageKey(sc));
+        localStorage.removeItem('epts_auth_token');
+        localStorage.removeItem(tokenStorageKey(sc));
       }
     } catch (e) {}
   };
@@ -156,7 +164,11 @@
   window.getScopedUser = function (scope) {
     var sc = scope || window.getPlatformScope();
     try {
-      return JSON.parse(sessionStorage.getItem(userStorageKey(sc)) || 'null');
+      var raw = sessionStorage.getItem(userStorageKey(sc));
+      if (!raw) {
+        raw = localStorage.getItem('epts_auth_user') || localStorage.getItem(userStorageKey(sc));
+      }
+      return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
     }
@@ -166,11 +178,18 @@
     var sc = scope || window.getPlatformScope();
     try {
       if (user) {
+        var str = JSON.stringify(user);
         sessionStorage.setItem(authFlagKey(sc), 'true');
-        sessionStorage.setItem(userStorageKey(sc), JSON.stringify(user));
+        sessionStorage.setItem(userStorageKey(sc), str);
+        localStorage.setItem('epts_auth_user', str);
+        localStorage.setItem(userStorageKey(sc), str);
+        localStorage.setItem('epts_logged_in', 'true');
       } else {
         sessionStorage.removeItem(authFlagKey(sc));
         sessionStorage.removeItem(userStorageKey(sc));
+        localStorage.removeItem('epts_auth_user');
+        localStorage.removeItem(userStorageKey(sc));
+        localStorage.removeItem('epts_logged_in');
       }
     } catch (e) {}
   };
@@ -181,6 +200,11 @@
       sessionStorage.removeItem(tokenStorageKey(sc));
       sessionStorage.removeItem(authFlagKey(sc));
       sessionStorage.removeItem(userStorageKey(sc));
+      localStorage.removeItem('epts_auth_token');
+      localStorage.removeItem('epts_auth_user');
+      localStorage.removeItem('epts_logged_in');
+      localStorage.removeItem(tokenStorageKey(sc));
+      localStorage.removeItem(userStorageKey(sc));
       if (sc === 'console') {
         sessionStorage.removeItem('epts_portal_auth');
         sessionStorage.removeItem('epts_dept_session');
@@ -277,6 +301,9 @@
         headers.set('X-Platform-Scope', scope);
       }
       if (scopedTok) {
+        if (!headers.has('Authorization')) {
+          headers.set('Authorization', 'Bearer ' + scopedTok);
+        }
         if (scope === 'console' && !headers.has('X-Console-Token')) {
           headers.set('X-Console-Token', scopedTok);
         } else if (scope === 'portal' && !headers.has('X-Portal-Token')) {
@@ -1012,6 +1039,29 @@
 
   window.handleGoogleLoginSuccess = window.handleFirebaseLoginSuccess;
 
+  window.onFirebaseAutoAuthState = async function (fbUser, idToken) {
+    if (window.isPortalAuthenticated && window.getScopedUser()) {
+      return;
+    }
+    if (!idToken) return;
+    try {
+      var res = await fetch('/api/auth/firebase-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      if (res.ok) {
+        var data = await res.json();
+        if (data && data.success && data.user) {
+          window.handleFirebaseLoginSuccess(data);
+        }
+      }
+    } catch (e) {
+      console.warn('Silent auto-login note:', e);
+    }
+  };
+
   window.proceedAfterPortalAuth = async function () {
     var urlSp = new URLSearchParams(window.location.search || '');
     var mgr = window.DeptSessionManager;
@@ -1417,24 +1467,22 @@
       }
     }
 
-    var isDirectClick = !(options && options.fromInit);
-    if (isDirectClick && window.isProdCustomDomain()) {
-      if ((m === 'manual' && !window.isManualHost()) ||
-          (m === 'automated' && !window.isReportsHost()) ||
-          (m === 'tools' && !window.isToolsHost()) ||
-          (m === 'softwares' && !window.isSoftwaresHost())) {
-        window.location.href = window.getSectionUrl(m);
-        return true;
-      }
-    }
-
     window.currentWorkspaceMode = m;
-    try { sessionStorage.setItem('epts_workspace_mode', m); } catch (e) {}
+    try {
+      sessionStorage.setItem('epts_workspace_mode', m);
+      localStorage.setItem('epts_workspace_mode', m);
+    } catch (e) {}
     window.hideAllStations();
     window.setPortalUI(true, u);
     if (!(options && options.skipScroll)) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    try {
+      if (window.history && typeof window.history.pushState === 'function' && !(options && options.fromInit)) {
+        var path = m === 'automated' ? '/autoreports' : (m === 'tools' ? '/tools' : (m === 'softwares' ? '/softwares' : '/manualreports'));
+        window.history.pushState(null, '', path);
+      }
+    } catch (e) {}
     if (m === 'automated' && isDirectClick) {
       Promise.resolve(
         typeof window.initConsoleAfterPortalAuth === 'function'
@@ -1660,9 +1708,13 @@
 
     try {
       var statusUrl = '/api/auth/portal-status?_ts=' + Date.now();
+      var reqHeaders = { 'Cache-Control': 'no-store' };
+      if (cachedToken) {
+        reqHeaders['Authorization'] = 'Bearer ' + cachedToken;
+      }
       var pRes = (window.DeptSessionManager && typeof window.DeptSessionManager.consoleFetch === 'function')
-        ? await window.DeptSessionManager.consoleFetch(statusUrl, { cache: 'no-store' })
-        : await fetch(statusUrl, { cache: 'no-store' });
+        ? await window.DeptSessionManager.consoleFetch(statusUrl, { headers: reqHeaders, credentials: 'include', cache: 'no-store' })
+        : await fetch(statusUrl, { headers: reqHeaders, credentials: 'include', cache: 'no-store' });
       if (pRes.ok) {
         var pData = await pRes.json();
         if (pData && pData.epts_session_id && window.DeptSessionManager) {
@@ -1678,57 +1730,67 @@
         if (pData.authenticated && pData.user) {
           isPortalAuth = true;
           portalUser = pData.user;
+          window.isPortalAuthenticated = true;
           window.setScopedUser(portalUser, scope);
+          if (pData.token) window.setScopedAuthToken(pData.token, scope);
           window.setPortalUI(true, portalUser);
-          if (window.FirebasePortalAuth && pData.firebase_config) {
-            try {
-              window.FirebasePortalAuth.init(pData.firebase_config, pData.auth_emulator_host);
-            } catch (fbErr) {
-              console.warn('Firebase Auth SDK initialization note:', fbErr);
-            }
-          }
+        } else if (cachedToken && cachedUser) {
+          isPortalAuth = true;
+          portalUser = cachedUser;
+          window.isPortalAuthenticated = true;
+          window.setPortalUI(true, cachedUser);
         } else {
-          if (window.FirebasePortalAuth && pData.firebase_config) {
-            try {
-              window.FirebasePortalAuth.init(pData.firebase_config, pData.auth_emulator_host);
-              if (typeof window.FirebasePortalAuth.consumeRedirectSignIn === 'function') {
-                var redirResult = await window.FirebasePortalAuth.consumeRedirectSignIn();
-                if (redirResult && redirResult.idToken) {
-                  var fRes = await fetch('/api/auth/firebase-login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id_token: redirResult.idToken }),
-                  });
-                  if (fRes.ok) {
-                    var fData = await fRes.json();
-                    if (fData && fData.success && fData.user) {
-                      pData.authenticated = true;
-                      pData.user = fData.user;
-                    }
+          isPortalAuth = false;
+          portalUser = null;
+          window.isPortalAuthenticated = false;
+          window.setScopedUser(null, scope);
+          window.setPortalUI(false, null);
+        }
+
+        if (window.FirebasePortalAuth && pData.firebase_config) {
+          try {
+            window.FirebasePortalAuth.init(pData.firebase_config, pData.auth_emulator_host);
+            if (typeof window.FirebasePortalAuth.consumeRedirectSignIn === 'function') {
+              var redirResult = await window.FirebasePortalAuth.consumeRedirectSignIn();
+              if (redirResult && redirResult.idToken) {
+                var fRes = await fetch('/api/auth/firebase-login', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({ id_token: redirResult.idToken }),
+                });
+                if (fRes.ok) {
+                  var fData = await fRes.json();
+                  if (fData && fData.success && fData.user) {
+                    window.handleFirebaseLoginSuccess(fData);
                   }
                 }
               }
-            } catch (fbErr) {
-              console.warn('Firebase Auth SDK initialization note:', fbErr);
             }
+          } catch (fbErr) {
+            console.warn('Firebase Auth SDK initialization note:', fbErr);
           }
-          if (pData.authenticated && pData.user) {
-            isPortalAuth = true;
-            portalUser = pData.user;
-            window.setScopedUser(portalUser, scope);
-          } else {
-            isPortalAuth = false;
-            portalUser = null;
-            window.setScopedUser(null, scope);
-          }
-          window.setPortalUI(isPortalAuth, portalUser);
         }
       } else {
-        window.setPortalUI(isPortalAuth, portalUser);
+        if (cachedToken && cachedUser) {
+          isPortalAuth = true;
+          portalUser = cachedUser;
+          window.isPortalAuthenticated = true;
+          window.setPortalUI(true, cachedUser);
+        } else {
+          window.setPortalUI(isPortalAuth, portalUser);
+        }
       }
     } catch (e) {
       console.warn('Portal auth status check note:', e);
-      window.setPortalUI(isPortalAuth, portalUser);
+      if (cachedToken && cachedUser) {
+        isPortalAuth = true;
+        portalUser = cachedUser;
+        window.isPortalAuthenticated = true;
+        window.setPortalUI(true, cachedUser);
+      } else {
+        window.setPortalUI(isPortalAuth, portalUser);
+      }
     }
 
     var urlParams = new URLSearchParams(window.location.search);

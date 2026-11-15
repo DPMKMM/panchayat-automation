@@ -138,10 +138,6 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     '<div id="login-console-badge" style="display:inline-flex;',
                 ),
                 (
-                    'id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation<',
-                    f'id="login-panel-subtitle">Sign in with your Google account to access the {CONSOLE_NAME}<',
-                ),
-                (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
                     f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{CONSOLE_NAME} · Executive Report Modules</h1>',
                 ),
@@ -175,10 +171,6 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                 (
                     '>e-Panchayat Automation Console</div>',
                     '>Manual Reports Studio</div>',
-                ),
-                (
-                    'id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation<',
-                    f'id="login-panel-subtitle">Sign in with your Google account to access {MANUAL_SECTION_NAME}<',
                 ),
                 (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
@@ -255,10 +247,6 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                     '>Tools Studio</div>',
                 ),
                 (
-                    'id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation<',
-                    f'id="login-panel-subtitle">Sign in with your Google account to access {TOOLS_SECTION_NAME}<',
-                ),
-                (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
                     f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{PLATFORM_NAME} · Tools &amp; Utility Studios</h1>',
                 ),
@@ -292,10 +280,6 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                 (
                     '>e-Panchayat Automation Console</div>',
                     '>Softwares Hub</div>',
-                ),
-                (
-                    'id="login-panel-subtitle">Sign in with your Google account to access e-Panchayat Automation<',
-                    f'id="login-panel-subtitle">Sign in with your Google account to access {SOFTWARES_SECTION_NAME}<',
                 ),
                 (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
