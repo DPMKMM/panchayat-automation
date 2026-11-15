@@ -970,106 +970,37 @@
               </div>
 
               <form id="form-email-register" onsubmit="window.handleRegistration(event);">
-                <!-- Row 1: Surname & Name -->
-                <div class="auth-grid-2">
-                  <div class="auth-input-group">
-                    <label for="reg-surname" class="auth-label">Surname *</label>
-                    <input type="text" id="reg-surname" name="surname" class="auth-input-control" placeholder="Surname" required autocomplete="family-name">
-                  </div>
-                  <div class="auth-input-group">
-                    <label for="reg-name" class="auth-label">Name *</label>
-                    <input type="text" id="reg-name" name="name" class="auth-input-control" placeholder="Name" required autocomplete="given-name">
-                  </div>
-                </div>
-
-                <!-- Row 2: Username / Display Name -->
+                <!-- Full Name -->
                 <div class="auth-input-group">
-                  <label for="reg-display-name" class="auth-label">Username / Display Name *</label>
-                  <input type="text" id="reg-display-name" name="display_name" class="auth-input-control" placeholder="Display name" required autocomplete="nickname">
+                  <label for="reg-full-name" class="auth-label">Full Name *</label>
+                  <input type="text" id="reg-full-name" name="full_name" class="auth-input-control" placeholder="Enter Full Name" required autocomplete="name">
                 </div>
 
-                <!-- Row 3: Gender & Mobile No -->
-                <div class="auth-grid-2">
-                  <div class="auth-input-group">
-                    <label for="reg-gender" class="auth-label">Gender</label>
-                    <select id="reg-gender" name="gender" class="auth-input-control">
-                      <option value="">Select Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  <div class="auth-input-group">
-                    <label for="reg-mobile" class="auth-label">Mobile No *</label>
-                    <input type="tel" id="reg-mobile" name="mobile_number" class="auth-input-control" placeholder="Phone" required pattern="[6-9][0-9]{9}" maxlength="10" autocomplete="tel">
-                  </div>
+                <!-- Mobile No -->
+                <div class="auth-input-group">
+                  <label for="reg-mobile" class="auth-label">Mobile No *</label>
+                  <input type="tel" id="reg-mobile" name="mobile_number" class="auth-input-control" placeholder="Enter 10-digit mobile number" required pattern="[6-9][0-9]{9}" maxlength="10" autocomplete="tel">
                 </div>
 
-                <!-- Row 4: State & District -->
+                <!-- District & Mandal (Manual Entry) -->
                 <div class="auth-grid-2">
-                  <div class="auth-input-group">
-                    <label for="reg-state" class="auth-label">State</label>
-                    <select id="reg-state" name="state" class="auth-input-control">
-                      <option value="Telangana" selected>Telangana</option>
-                      <option value="Andhra Pradesh">Andhra Pradesh</option>
-                      <option value="Other">Other State</option>
-                    </select>
-                  </div>
                   <div class="auth-input-group">
                     <label for="reg-district" class="auth-label">District *</label>
-                    <select id="reg-district" name="district" class="auth-input-control" required>
-                      <option value="" disabled selected>Select District</option>
-                      <option value="Adilabad">Adilabad</option>
-                      <option value="Bhadradri Kothagudem">Bhadradri Kothagudem</option>
-                      <option value="Hanumakonda">Hanumakonda</option>
-                      <option value="Hyderabad">Hyderabad</option>
-                      <option value="Jagtial">Jagtial</option>
-                      <option value="Jangaon">Jangaon</option>
-                      <option value="Jayashankar Bhupalpally">Jayashankar Bhupalpally</option>
-                      <option value="Jogulamba Gadwal">Jogulamba Gadwal</option>
-                      <option value="Kamareddy">Kamareddy</option>
-                      <option value="Karimnagar">Karimnagar</option>
-                      <option value="Khammam">Khammam</option>
-                      <option value="Kumuram Bheem Asifabad">Kumuram Bheem Asifabad</option>
-                      <option value="Mahabubabad">Mahabubabad</option>
-                      <option value="Mahabubnagar">Mahabubnagar</option>
-                      <option value="Mancherial">Mancherial</option>
-                      <option value="Medak">Medak</option>
-                      <option value="Medchal-Malkajgiri">Medchal-Malkajgiri</option>
-                      <option value="Mulugu">Mulugu</option>
-                      <option value="Nagarkurnool">Nagarkurnool</option>
-                      <option value="Nalgonda">Nalgonda</option>
-                      <option value="Narayanpet">Narayanpet</option>
-                      <option value="Nirmal">Nirmal</option>
-                      <option value="Nizamabad">Nizamabad</option>
-                      <option value="Peddapalli">Peddapalli</option>
-                      <option value="Rajanna Sircilla">Rajanna Sircilla</option>
-                      <option value="Rangareddy">Rangareddy</option>
-                      <option value="Sangareddy">Sangareddy</option>
-                      <option value="Siddipet">Siddipet</option>
-                      <option value="Suryapet">Suryapet</option>
-                      <option value="Vikarabad">Vikarabad</option>
-                      <option value="Wanaparthy">Wanaparthy</option>
-                      <option value="Warangal">Warangal</option>
-                      <option value="Yadadri Bhuvanagiri">Yadadri Bhuvanagiri</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <input type="text" id="reg-district" name="district" class="auth-input-control" placeholder="Enter District" required autocomplete="address-level1">
+                  </div>
+                  <div class="auth-input-group">
+                    <label for="reg-mandal" class="auth-label">Mandal *</label>
+                    <input type="text" id="reg-mandal" name="mandal" class="auth-input-control" placeholder="Enter Mandal" required>
                   </div>
                 </div>
 
-                <!-- Row 5: Mandal & Village / GP -->
-                <div class="auth-grid-2">
-                  <div class="auth-input-group">
-                    <label for="reg-mandal" class="auth-label">Mandal</label>
-                    <input type="text" id="reg-mandal" name="mandal" class="auth-input-control" placeholder="Select / Enter Mandal">
-                  </div>
-                  <div class="auth-input-group">
-                    <label for="reg-village" class="auth-label">Village / GP</label>
-                    <input type="text" id="reg-village" name="village_gp" class="auth-input-control" placeholder="Enter Village">
-                  </div>
+                <!-- Gram Panchayat (Manual Entry) -->
+                <div class="auth-input-group">
+                  <label for="reg-village" class="auth-label">Gram Panchayat *</label>
+                  <input type="text" id="reg-village" name="village_gp" class="auth-input-control" placeholder="Enter Gram Panchayat" required>
                 </div>
 
-                <!-- Row 6: Designation (Dropdown Only + Citizen + Other) -->
+                <!-- Designation (Dropdown Only + Citizen + Other) -->
                 <div class="auth-input-group">
                   <label for="reg-designation" class="auth-label">Designation *</label>
                   <select id="reg-designation" name="designation" class="auth-input-control" onchange="window.handleDesignationSelectChange(this, 'reg-designation-other-wrap')" required>
@@ -1082,8 +1013,6 @@
                     <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
                     <option value="DPO">District Panchayat Officer (DPO)</option>
                     <option value="DPM">District Project Manager (DPM)</option>
-                    <option value="COLLECTOR">Collector &amp; District Magistrate</option>
-                    <option value="SPECIAL OFFICER">Special Officer</option>
                     <option value="OTHER">Other (Specify Manually)</option>
                   </select>
                   <div id="reg-designation-other-wrap" style="display:none; margin-top:8px;">
@@ -1092,13 +1021,13 @@
                   </div>
                 </div>
 
-                <!-- Row 7: Email Address -->
+                <!-- Email Address -->
                 <div class="auth-input-group">
                   <label for="reg-email" class="auth-label">Email Address *</label>
                   <input type="email" id="reg-email" name="email" class="auth-input-control" placeholder="email@example.com" required autocomplete="email">
                 </div>
 
-                <!-- Row 8: Password & Confirm Password -->
+                <!-- Password & Confirm Password -->
                 <div class="auth-grid-2">
                   <div class="auth-input-group">
                     <label for="reg-password" class="auth-label">Password *</label>
@@ -4489,106 +4418,37 @@
         <div id="user-profile-alert" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:14px; font-size:0.84rem; font-weight:700;"></div>
 
         <form id="form-profile-edit" onsubmit="window.submitUpdateProfile(event);">
-          <!-- Row 1: Surname & Name -->
-          <div class="auth-grid-2">
-            <div class="auth-input-group">
-              <label for="profile-field-surname" class="auth-label">Surname</label>
-              <input type="text" id="profile-field-surname" name="surname" class="auth-input-control" placeholder="Surname" autocomplete="family-name">
-            </div>
-            <div class="auth-input-group">
-              <label for="profile-field-name" class="auth-label">Name *</label>
-              <input type="text" id="profile-field-name" name="name" class="auth-input-control" placeholder="Name" required autocomplete="given-name">
-            </div>
-          </div>
-
-          <!-- Row 2: Username / Display Name -->
+          <!-- Full Name -->
           <div class="auth-input-group">
-            <label for="profile-field-display-name" class="auth-label">Username / Display Name *</label>
-            <input type="text" id="profile-field-display-name" name="display_name" class="auth-input-control" placeholder="Display name" required autocomplete="nickname">
+            <label for="profile-field-full-name" class="auth-label">Full Name *</label>
+            <input type="text" id="profile-field-full-name" name="full_name" class="auth-input-control" placeholder="Enter Full Name" required autocomplete="name">
           </div>
 
-          <!-- Row 3: Gender & Mobile No -->
-          <div class="auth-grid-2">
-            <div class="auth-input-group">
-              <label for="profile-field-gender" class="auth-label">Gender</label>
-              <select id="profile-field-gender" name="gender" class="auth-input-control">
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div class="auth-input-group">
-              <label for="profile-field-mobile" class="auth-label">Mobile No *</label>
-              <input type="tel" id="profile-field-mobile" name="mobile_number" class="auth-input-control" placeholder="Phone" required pattern="[6-9][0-9]{9}" maxlength="10" autocomplete="tel">
-            </div>
+          <!-- Mobile No -->
+          <div class="auth-input-group">
+            <label for="profile-field-mobile" class="auth-label">Mobile No *</label>
+            <input type="tel" id="profile-field-mobile" name="mobile_number" class="auth-input-control" placeholder="Enter 10-digit mobile number" required pattern="[6-9][0-9]{9}" maxlength="10" autocomplete="tel">
           </div>
 
-          <!-- Row 4: State & District -->
+          <!-- District & Mandal (Manual Entry) -->
           <div class="auth-grid-2">
-            <div class="auth-input-group">
-              <label for="profile-field-state" class="auth-label">State</label>
-              <select id="profile-field-state" name="state" class="auth-input-control">
-                <option value="Telangana">Telangana</option>
-                <option value="Andhra Pradesh">Andhra Pradesh</option>
-                <option value="Other">Other State</option>
-              </select>
-            </div>
             <div class="auth-input-group">
               <label for="profile-field-district" class="auth-label">District *</label>
-              <select id="profile-field-district" name="district" class="auth-input-control" required>
-                <option value="" disabled>Select District</option>
-                <option value="Adilabad">Adilabad</option>
-                <option value="Bhadradri Kothagudem">Bhadradri Kothagudem</option>
-                <option value="Hanumakonda">Hanumakonda</option>
-                <option value="Hyderabad">Hyderabad</option>
-                <option value="Jagtial">Jagtial</option>
-                <option value="Jangaon">Jangaon</option>
-                <option value="Jayashankar Bhupalpally">Jayashankar Bhupalpally</option>
-                <option value="Jogulamba Gadwal">Jogulamba Gadwal</option>
-                <option value="Kamareddy">Kamareddy</option>
-                <option value="Karimnagar">Karimnagar</option>
-                <option value="Khammam">Khammam</option>
-                <option value="Kumuram Bheem Asifabad">Kumuram Bheem Asifabad</option>
-                <option value="Mahabubabad">Mahabubabad</option>
-                <option value="Mahabubnagar">Mahabubnagar</option>
-                <option value="Mancherial">Mancherial</option>
-                <option value="Medak">Medak</option>
-                <option value="Medchal-Malkajgiri">Medchal-Malkajgiri</option>
-                <option value="Mulugu">Mulugu</option>
-                <option value="Nagarkurnool">Nagarkurnool</option>
-                <option value="Nalgonda">Nalgonda</option>
-                <option value="Narayanpet">Narayanpet</option>
-                <option value="Nirmal">Nirmal</option>
-                <option value="Nizamabad">Nizamabad</option>
-                <option value="Peddapalli">Peddapalli</option>
-                <option value="Rajanna Sircilla">Rajanna Sircilla</option>
-                <option value="Rangareddy">Rangareddy</option>
-                <option value="Sangareddy">Sangareddy</option>
-                <option value="Siddipet">Siddipet</option>
-                <option value="Suryapet">Suryapet</option>
-                <option value="Vikarabad">Vikarabad</option>
-                <option value="Wanaparthy">Wanaparthy</option>
-                <option value="Warangal">Warangal</option>
-                <option value="Yadadri Bhuvanagiri">Yadadri Bhuvanagiri</option>
-                <option value="Other">Other</option>
-              </select>
+              <input type="text" id="profile-field-district" name="district" class="auth-input-control" placeholder="Enter District" required autocomplete="address-level1">
+            </div>
+            <div class="auth-input-group">
+              <label for="profile-field-mandal" class="auth-label">Mandal *</label>
+              <input type="text" id="profile-field-mandal" name="mandal" class="auth-input-control" placeholder="Enter Mandal" required>
             </div>
           </div>
 
-          <!-- Row 5: Mandal & Village / GP -->
-          <div class="auth-grid-2">
-            <div class="auth-input-group">
-              <label for="profile-field-mandal" class="auth-label">Mandal</label>
-              <input type="text" id="profile-field-mandal" name="mandal" class="auth-input-control" placeholder="Select / Enter Mandal">
-            </div>
-            <div class="auth-input-group">
-              <label for="profile-field-village" class="auth-label">Village / GP</label>
-              <input type="text" id="profile-field-village" name="village_gp" class="auth-input-control" placeholder="Enter Village">
-            </div>
+          <!-- Gram Panchayat (Manual Entry) -->
+          <div class="auth-input-group">
+            <label for="profile-field-village" class="auth-label">Gram Panchayat *</label>
+            <input type="text" id="profile-field-village" name="village_gp" class="auth-input-control" placeholder="Enter Gram Panchayat" required>
           </div>
 
-          <!-- Row 6: Designation (Dropdown Only + Citizen + Other) -->
+          <!-- Designation (Dropdown Only + Citizen + Other) -->
           <div class="auth-input-group">
             <label for="profile-field-designation" class="auth-label">Designation (Dropdown Only) *</label>
             <select id="profile-field-designation" name="designation" class="auth-input-control" onchange="window.handleDesignationSelectChange(this, 'profile-field-designation-other-wrap')" required>
@@ -4601,8 +4461,6 @@
               <option value="DLPO">Divisional Panchayat Officer (DLPO)</option>
               <option value="DPO">District Panchayat Officer (DPO)</option>
               <option value="DPM">District Project Manager (DPM)</option>
-              <option value="COLLECTOR">Collector &amp; District Magistrate</option>
-              <option value="SPECIAL OFFICER">Special Officer</option>
               <option value="OTHER">Other (Specify Manually)</option>
             </select>
             <div id="profile-field-designation-other-wrap" style="display:none; margin-top:8px;">

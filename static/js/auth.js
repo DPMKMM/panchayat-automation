@@ -8,7 +8,7 @@
   var PLATFORM_NAME = 'e-Panchayat Automation';
   var CONSOLE_NAME = 'e-Panchayat Automation Console';
   var WELCOME_MESSAGE = 'Welcome to ' + PLATFORM_NAME;
-  var DESIGNATIONS = ['CITIZEN', 'PS', 'DEO', 'MPO', 'MPDO', 'DLPO', 'DPO', 'DPM', 'COLLECTOR', 'SPECIAL OFFICER', 'OTHER'];
+  var DESIGNATIONS = ['CITIZEN', 'PS', 'DEO', 'MPO', 'MPDO', 'DLPO', 'DPO', 'DPM', 'OTHER'];
   var ROLES = ['Mandal Level', 'Division Level', 'District Level', 'Citizen'];
 
   window.FIREBASE_CONFIG = null;
@@ -1506,12 +1506,8 @@
     var alertEl = document.getElementById('portal-login-alert');
     var btn = document.getElementById('btn-register-action');
 
-    var surname = (document.getElementById('reg-surname') && document.getElementById('reg-surname').value || '').trim();
-    var name = (document.getElementById('reg-name') && document.getElementById('reg-name').value || '').trim();
-    var displayName = (document.getElementById('reg-display-name') && document.getElementById('reg-display-name').value || '').trim();
-    var gender = (document.getElementById('reg-gender') && document.getElementById('reg-gender').value || '').trim();
+    var fullName = (document.getElementById('reg-full-name') && document.getElementById('reg-full-name').value || '').trim();
     var mobile = (document.getElementById('reg-mobile') && document.getElementById('reg-mobile').value || '').trim();
-    var state = (document.getElementById('reg-state') && document.getElementById('reg-state').value || '').trim();
     var district = (document.getElementById('reg-district') && document.getElementById('reg-district').value || '').trim();
     var mandal = (document.getElementById('reg-mandal') && document.getElementById('reg-mandal').value || '').trim();
     var village = (document.getElementById('reg-village') && document.getElementById('reg-village').value || '').trim();
@@ -1531,16 +1527,44 @@
       }
     }
 
+    if (!fullName || fullName.length < 2) {
+      showRegAlert('Please enter your full name.');
+      return;
+    }
+    if (!mobile || !/^[6-9]\d{9}$/.test(mobile.replace(/\D/g, ''))) {
+      showRegAlert('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!district) {
+      showRegAlert('Please enter your district name.');
+      return;
+    }
+    if (!mandal) {
+      showRegAlert('Please enter your mandal name.');
+      return;
+    }
+    if (!village) {
+      showRegAlert('Please enter your gram panchayat name.');
+      return;
+    }
+    if (!desig) {
+      showRegAlert('Please select your designation.');
+      return;
+    }
+    if (desig === 'OTHER' && !desigOther) {
+      showRegAlert('Please specify your designation in the manual text box.');
+      return;
+    }
+    if (!email || email.indexOf('@') === -1) {
+      showRegAlert('Please enter a valid email address.');
+      return;
+    }
     if (pwd !== confirmPwd) {
       showRegAlert('Password and Confirm Password do not match.');
       return;
     }
     if (pwd.length < 6) {
       showRegAlert('Password must be at least 6 characters long.');
-      return;
-    }
-    if (desig === 'OTHER' && !desigOther) {
-      showRegAlert('Please specify your designation in the manual text box.');
       return;
     }
 
@@ -1552,12 +1576,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          surname: surname,
-          name: name,
-          display_name: displayName,
-          gender: gender,
+          full_name: fullName,
+          name: fullName,
           mobile_number: mobile,
-          state: state,
           district: district,
           mandal: mandal,
           village_gp: village,
@@ -1601,12 +1622,8 @@
     if (!modal) return;
     var u = window.currentUser || {};
 
-    var sName = document.getElementById('profile-field-surname');
-    var name = document.getElementById('profile-field-name');
-    var dName = document.getElementById('profile-field-display-name');
-    var gender = document.getElementById('profile-field-gender');
+    var fullNameInput = document.getElementById('profile-field-full-name');
     var mobile = document.getElementById('profile-field-mobile');
-    var state = document.getElementById('profile-field-state');
     var district = document.getElementById('profile-field-district');
     var mandal = document.getElementById('profile-field-mandal');
     var village = document.getElementById('profile-field-village');
@@ -1617,18 +1634,15 @@
     var alertEl = document.getElementById('user-profile-alert');
     if (alertEl) alertEl.style.display = 'none';
 
-    if (sName) sName.value = u.surname || '';
-    if (name) name.value = u.name || '';
-    if (dName) dName.value = u.display_name || u.name || '';
-    if (gender) gender.value = u.gender || '';
+    if (fullNameInput) fullNameInput.value = u.full_name || u.name || u.display_name || '';
     if (mobile) mobile.value = u.mobile_number || u.phone || '';
-    if (state) state.value = u.state || 'Telangana';
     if (district) district.value = u.district || '';
     if (mandal) mandal.value = u.mandal || '';
     if (village) village.value = u.village_gp || u.village || '';
 
     if (desig) {
       var dVal = (u.designation || 'CITIZEN').toUpperCase();
+      if (dVal === 'COLLECTOR' || dVal === 'SPECIAL OFFICER') dVal = 'OTHER';
       desig.value = dVal;
       window.handleDesignationSelectChange(desig, 'profile-field-designation-other-wrap');
     }
@@ -1656,18 +1670,24 @@
     var alertEl = document.getElementById('user-profile-alert');
     var btn = document.getElementById('btn-save-profile');
 
-    var surname = (document.getElementById('profile-field-surname') && document.getElementById('profile-field-surname').value || '').trim();
-    var name = (document.getElementById('profile-field-name') && document.getElementById('profile-field-name').value || '').trim();
-    var displayName = (document.getElementById('profile-field-display-name') && document.getElementById('profile-field-display-name').value || '').trim();
-    var gender = (document.getElementById('profile-field-gender') && document.getElementById('profile-field-gender').value || '').trim();
+    var fullName = (document.getElementById('profile-field-full-name') && document.getElementById('profile-field-full-name').value || '').trim();
     var mobile = (document.getElementById('profile-field-mobile') && document.getElementById('profile-field-mobile').value || '').trim();
-    var state = (document.getElementById('profile-field-state') && document.getElementById('profile-field-state').value || '').trim();
     var district = (document.getElementById('profile-field-district') && document.getElementById('profile-field-district').value || '').trim();
     var mandal = (document.getElementById('profile-field-mandal') && document.getElementById('profile-field-mandal').value || '').trim();
     var village = (document.getElementById('profile-field-village') && document.getElementById('profile-field-village').value || '').trim();
     var desig = (document.getElementById('profile-field-designation') && document.getElementById('profile-field-designation').value || '').trim();
     var desigOther = (document.getElementById('profile-field-designation-other') && document.getElementById('profile-field-designation-other').value || '').trim();
 
+    if (!fullName || fullName.length < 2) {
+      if (alertEl) {
+        alertEl.textContent = 'Please enter your full name.';
+        alertEl.style.display = 'block';
+        alertEl.style.background = '#fef2f2';
+        alertEl.style.color = '#991b1b';
+        alertEl.style.border = '1px solid #fecaca';
+      }
+      return;
+    }
     if (desig === 'OTHER' && !desigOther) {
       if (alertEl) {
         alertEl.textContent = 'Please enter your designation in the manual specification field.';
@@ -1687,12 +1707,9 @@
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          surname: surname,
-          name: name,
-          display_name: displayName,
-          gender: gender,
+          full_name: fullName,
+          name: fullName,
           mobile_number: mobile,
-          state: state,
           district: district,
           mandal: mandal,
           village_gp: village,

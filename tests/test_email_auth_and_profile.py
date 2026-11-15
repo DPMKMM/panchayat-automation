@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import app
 from core.firebase_store import (
+    VALID_DESIGNATIONS,
     authenticate_email_password_user,
     get_user_by_gmail,
     hash_password,
@@ -234,3 +235,34 @@ def test_api_auth_register_and_login_flow():
     assert upd_data["user"]["designation"] == "OTHER"
     assert upd_data["user"]["designation_other"] == "Project Director"
     assert upd_data["user"]["effective_designation"] == "Project Director"
+
+
+def test_register_with_full_name_and_manual_jurisdiction():
+    user = register_email_password_user(
+        email="full.name.user@example.com",
+        password="ValidPassword123",
+        full_name="Naresh Kumar Parala",
+        mobile_number="9876543210",
+        district="Khammam",
+        mandal="Nelakondapalli",
+        village_gp="Nelakondapalli",
+        designation="PS",
+    )
+    assert user["full_name"] == "Naresh Kumar Parala"
+    assert user["name"] == "Naresh Kumar Parala"
+    assert user["display_name"] == "Naresh Kumar Parala"
+    assert user["district"] == "Khammam"
+    assert user["mandal"] == "Nelakondapalli"
+    assert user["village_gp"] == "Nelakondapalli"
+    assert user["designation"] == "PS"
+
+
+def test_collector_and_special_officer_removed_from_designations():
+    assert "COLLECTOR" not in VALID_DESIGNATIONS
+    assert "SPECIAL OFFICER" not in VALID_DESIGNATIONS
+    assert "CITIZEN" in VALID_DESIGNATIONS
+    assert "OTHER" in VALID_DESIGNATIONS
+    assert "PS" in VALID_DESIGNATIONS
+    assert "DPO" in VALID_DESIGNATIONS
+    assert "DPM" in VALID_DESIGNATIONS
+

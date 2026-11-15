@@ -32,14 +32,12 @@ from core.firebase_app import get_live_firestore_client, is_inmemory_firestore_e
 logger = logging.getLogger("firebase_store")
 
 VALID_DESIGNATIONS = {
-    "COLLECTOR",
     "DPO",
     "DPM",
     "DLPO",
     "MPDO",
     "MPO",
     "PS",
-    "SPECIAL OFFICER",
     "DEO",
     "CITIZEN",
     "OTHER",
@@ -601,6 +599,7 @@ def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[
         "google_uid": uid,
         "email": gmail,
         "gmail": gmail,
+        "full_name": str(d.get("full_name") or first_name or display_name or "").strip(),
         "name": first_name,
         "surname": surname,
         "display_name": display_name,
@@ -639,7 +638,7 @@ def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[
 
 def designation_to_role(designation: str) -> str:
     d = str(designation or "").strip().upper()
-    if d in {"COLLECTOR", "DPO", "DPM", "SPECIAL OFFICER"}:
+    if d in {"DPO", "DPM"}:
         return "District Level"
     if d == "DLPO":
         return "Division Level"
@@ -924,12 +923,13 @@ def register_user_profile(
 def register_email_password_user(
     email: str,
     password: str,
+    full_name: str = "",
     surname: str = "",
     name: str = "",
     display_name: str = "",
     gender: str = "",
     mobile_number: str = "",
-    state: str = "Telangana",
+    state: str = "",
     district: str = "",
     mandal: str = "",
     village_gp: str = "",
@@ -949,9 +949,10 @@ def register_email_password_user(
     if len(clean_pwd) < 6:
         raise ValueError("Password must be at least 6 characters long.")
 
-    clean_name = re.sub(r"\s+", " ", str(name or "").strip())
+    resolved_name = str(full_name or name or "").strip()
+    clean_name = re.sub(r"\s+", " ", resolved_name)
     if len(clean_name) < 2:
-        raise ValueError("Please enter your name.")
+        raise ValueError("Please enter your full name.")
 
     clean_surname = re.sub(r"\s+", " ", str(surname or "").strip())
     clean_display = re.sub(r"\s+", " ", str(display_name or "").strip()) or clean_name
@@ -983,13 +984,14 @@ def register_email_password_user(
         "google_uid": f"email:{clean_email}",
         "email": clean_email,
         "gmail": clean_email,
-        "surname": clean_surname,
+        "full_name": clean_name,
         "name": clean_name,
+        "surname": clean_surname,
         "display_name": clean_display,
         "username": clean_display,
         "gender": str(gender or "").strip(),
         "mobile_number": digits,
-        "state": str(state or "Telangana").strip(),
+        "state": str(state or "").strip(),
         "district": str(district or "").strip(),
         "mandal": str(mandal or "").strip(),
         "village_gp": str(village_gp or "").strip(),
@@ -1067,6 +1069,7 @@ def authenticate_email_password_user(
 
 def update_user_profile_details(
     user_id: str,
+    full_name: str = "",
     surname: str = "",
     name: str = "",
     display_name: str = "",
@@ -1085,11 +1088,12 @@ def update_user_profile_details(
     if existing is None:
         raise ValueError("User account not found.")
 
-    clean_name = re.sub(r"\s+", " ", str(name or existing.get("name") or "").strip())
+    resolved_name = str(full_name or name or existing.get("full_name") or existing.get("name") or "").strip()
+    clean_name = re.sub(r"\s+", " ", resolved_name)
     if len(clean_name) < 2:
-        raise ValueError("Please enter your name.")
+        raise ValueError("Please enter your full name.")
 
-    clean_surname = re.sub(r"\s+", " ", str(surname or "").strip())
+    clean_surname = re.sub(r"\s+", " ", str(surname or existing.get("surname") or "").strip())
     clean_display = re.sub(r"\s+", " ", str(display_name or "").strip()) or clean_name
 
     raw_mobile = str(mobile_number or existing.get("mobile_number") or "").strip()
@@ -1111,13 +1115,14 @@ def update_user_profile_details(
     now = _utc_now_iso()
 
     updates = {
-        "surname": clean_surname,
+        "full_name": clean_name,
         "name": clean_name,
+        "surname": clean_surname,
         "display_name": clean_display,
         "username": clean_display,
         "gender": str(gender or existing.get("gender") or "").strip(),
         "mobile_number": digits or existing.get("mobile_number", ""),
-        "state": str(state or existing.get("state") or "Telangana").strip(),
+        "state": str(state or existing.get("state") or "").strip(),
         "district": str(district or existing.get("district") or "").strip(),
         "mandal": str(mandal or existing.get("mandal") or "").strip(),
         "village_gp": str(village_gp or existing.get("village_gp") or "").strip(),

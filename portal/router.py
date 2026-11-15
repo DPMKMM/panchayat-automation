@@ -477,15 +477,16 @@ async def api_auth_register(request: Request, response: Response):
 
     email = str(data.get("email") or data.get("gmail") or "").strip().lower()
     password = str(data.get("password") or "")
+    full_name = str(data.get("full_name") or data.get("name") or "").strip()
     surname = str(data.get("surname") or "").strip()
-    name = str(data.get("name") or "").strip()
-    display_name = str(data.get("display_name") or data.get("username") or "").strip()
+    name = str(data.get("name") or full_name).strip()
+    display_name = str(data.get("display_name") or data.get("username") or full_name or name).strip()
     gender = str(data.get("gender") or "").strip()
     mobile_number = str(data.get("mobile_number") or data.get("phone") or "").strip()
-    state = str(data.get("state") or "Telangana").strip()
+    state = str(data.get("state") or "").strip()
     district = str(data.get("district") or "").strip()
     mandal = str(data.get("mandal") or "").strip()
-    village_gp = str(data.get("village_gp") or data.get("village") or "").strip()
+    village_gp = str(data.get("village_gp") or data.get("gram_panchayat") or data.get("village") or "").strip()
     designation = str(data.get("designation") or "CITIZEN").strip().upper()
     designation_other = str(data.get("designation_other") or "").strip()
 
@@ -493,6 +494,7 @@ async def api_auth_register(request: Request, response: Response):
         user_record = register_email_password_user(
             email=email,
             password=password,
+            full_name=full_name,
             surname=surname,
             name=name,
             display_name=display_name,
@@ -656,18 +658,21 @@ async def api_auth_update_profile(request: Request, response: Response):
         pass
 
     user_id = str(session_user["user_id"]).strip()
+    full_name = str(data.get("full_name") or data.get("name") or "").strip()
+    name = str(data.get("name") or full_name).strip()
     try:
         updated = update_user_profile_details(
             user_id=user_id,
+            full_name=full_name,
             surname=str(data.get("surname") or "").strip(),
-            name=str(data.get("name") or "").strip(),
-            display_name=str(data.get("display_name") or data.get("username") or "").strip(),
+            name=name,
+            display_name=str(data.get("display_name") or data.get("username") or full_name or name).strip(),
             gender=str(data.get("gender") or "").strip(),
             mobile_number=str(data.get("mobile_number") or data.get("phone") or "").strip(),
             state=str(data.get("state") or "").strip(),
             district=str(data.get("district") or "").strip(),
             mandal=str(data.get("mandal") or "").strip(),
-            village_gp=str(data.get("village_gp") or data.get("village") or "").strip(),
+            village_gp=str(data.get("village_gp") or data.get("gram_panchayat") or data.get("village") or "").strip(),
             designation=str(data.get("designation") or "").strip(),
             designation_other=str(data.get("designation_other") or "").strip(),
         )
