@@ -138,9 +138,33 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
 
         print(f"[+] Found link for {code}. Clicking...", flush=True)
         link.click()
-        time.sleep(3)
+        time.sleep(2.0)
 
         # Re-resolve fresh iframe handle after report link navigation
+        iframe = get_my_iframe(page) or iframe
+
+        # Locate download button selectors
+        dl_selectors = [
+            "input[value='Download']",
+            "input[value='Download Excel']",
+            "input[value*='Download' i]",
+            "button:has-text('Download')",
+            "button:has-text('Download Excel')",
+            "input[id*='btnExport' i]",
+            "input[id*='btnDownload' i]",
+        ]
+
+        print(f"[*] Waiting for report form ({code}) to load in portal iframe...", flush=True)
+        # Wait for download button or Select Date to indicate the report view has rendered
+        report_form_indicator = iframe.locator(", ".join(dl_selectors) + ", text='Select Date'").first
+        try:
+            report_form_indicator.wait_for(state="visible", timeout=25000)
+            print(f"[+] Report form for {code} is visible and ready.", flush=True)
+        except Exception as wait_err:
+            print(f"[-] Note waiting for report form on {code}: {wait_err}", flush=True)
+            time.sleep(2.0)
+
+        # Re-resolve fresh iframe handle if needed
         iframe = get_my_iframe(page) or iframe
 
         # Screenshot initial view
@@ -152,42 +176,124 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
             except Exception:
                 pass
 
-        # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 02-Nov-2026)
+        # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 09-Nov-2026)
         print(f"[*] Setting date to {date_formatted} in iframe for {code}...", flush=True)
-        date_applied = False
-        try:
-            # Wait for date input to appear in the report form
-            date_loc = iframe.locator("input[type='text']:visible, input[name*='Date' i]:visible, input[id*='Date' i]:visible").first
-            if date_loc.is_visible(timeout=5000):
-                date_loc.evaluate("el => el.removeAttribute('readonly')")
-                date_loc.fill(date_formatted)
-                date_loc.press("Tab")
-                time.sleep(0.3)
-                date_applied = True
-        except Exception as e:
-            print(f"[-] Note on Playwright date locator for {code}: {e}", flush=True)
 
+        # 1. Comprehensive DOM evaluation & jQuery UI datepicker
         try:
-            iframe.evaluate(f"""() => {{
-                const inputs = document.querySelectorAll("input[type='text'], input[name*='Date' i], input[id*='Date' i]");
-                for (const inp of inputs) {{
+            iframe.evaluate(f"""(dt) => {{
+                const candidates = [];
+                const attrInputs = document.querySelectorAll(
+                    "input[id*='Date' i], input[name*='Date' i], input[id*='txt' i], input.hasDatepicker, input[type='text']"
+                );
+                for (const inp of attrInputs) {{
+                    if (inp && inp.type !== 'hidden' && inp.offsetParent !== null && !candidates.includes(inp)) {{
+                        candidates.push(inp);
+                    }}
+                }}
+                const allLabels = Array.from(document.querySelectorAll('label, td, span, div, b, strong, th'))
+                    .filter(el => el.textContent && el.textContent.toLowerCase().includes('select date'));
+                for (const lbl of allLabels) {{
+                    let parent = lbl.parentElement;
+                    for (let step = 0; step < 3 && parent; step++) {{
+                        const inps = parent.querySelectorAll('input:not([type="hidden"])');
+                        for (const inp of inps) {{
+                            if (inp && inp.offsetParent !== null && !candidates.includes(inp)) {{
+                                candidates.unshift(inp);
+                            }}
+                        }}
+                        parent = parent.parentElement;
+                    }}
+                }}
+
+                for (const inp of candidates) {{
                     inp.removeAttribute('readonly');
-                    inp.value = '{date_formatted}';
+                    inp.removeAttribute('disabled');
+                    inp.value = dt;
+                    if (window.jQuery && window.jQuery(inp).datepicker) {{
+                        try {{ window.jQuery(inp).datepicker('setDate', dt); }} catch(e) {{}}
+                    }}
+                    inp.dispatchEvent(new Event('focus', {{ bubbles: true }}));
                     inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
                     inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
                     inp.dispatchEvent(new Event('blur', {{ bubbles: true }}));
                 }}
-                // Remove target="_blank" from form so download stays in current page
+
                 for (const f of document.forms) {{
                     f.removeAttribute('target');
                 }}
-            }}""")
-            date_applied = True
+            }}""", date_formatted)
         except Exception as e:
             print(f"[-] Note on DOM date evaluation for {code}: {e}", flush=True)
 
-        if date_applied:
-            print(f"[+] Date filter strictly applied to '{date_formatted}' for {code}.", flush=True)
+        # 2. Playwright locator typing/filling
+        date_selectors = [
+            "xpath=//*[contains(text(), 'Select Date')]/following::input[1]",
+            "input[id*='Date' i]:visible",
+            "input[name*='Date' i]:visible",
+            "input.hasDatepicker:visible",
+            "input[type='text']:visible",
+        ]
+        for sel in date_selectors:
+            cand = iframe.locator(sel).first
+            try:
+                if cand.is_visible(timeout=2500):
+                    cand.evaluate("el => { el.removeAttribute('readonly'); el.removeAttribute('disabled'); }")
+                    cand.click()
+                    cand.fill("")
+                    cand.fill(date_formatted)
+                    cand.press("Tab")
+                    time.sleep(0.2)
+                    break
+            except Exception:
+                continue
+
+        # 3. Verification & retry loop
+        target_clean = date_formatted.strip()
+        for attempt in range(1, 4):
+            current_val = ""
+            try:
+                current_val = iframe.evaluate("""() => {
+                    const inps = document.querySelectorAll(
+                        "input[id*='Date' i], input[name*='Date' i], input.hasDatepicker, input[type='text']"
+                    );
+                    for (const inp of inps) {
+                        if (inp && inp.type !== 'hidden' && inp.offsetParent !== null && inp.value) {
+                            return inp.value.trim();
+                        }
+                    }
+                    return '';
+                }""")
+            except Exception:
+                current_val = ""
+
+            print(f"[*] Verified date input in iframe for {code}: '{current_val}' (target: '{target_clean}')", flush=True)
+            if current_val and (current_val.lower().replace("-", " ") == target_clean.lower().replace("-", " ") or current_val == target_clean):
+                print(f"[+] Date filter strictly verified and applied as '{current_val}' for {code}.", flush=True)
+                break
+            else:
+                print(f"[!] Date mismatch on attempt {attempt} for {code} (current='{current_val}', target='{target_clean}'). Forcing update...", flush=True)
+                try:
+                    iframe.evaluate(f"""(dt) => {{
+                        const inps = document.querySelectorAll('input:not([type="hidden"])');
+                        for (const inp of inps) {{
+                            if (inp.offsetParent !== null && inp.tagName === 'INPUT') {{
+                                inp.removeAttribute('readonly');
+                                inp.removeAttribute('disabled');
+                                inp.value = dt;
+                                if (window.jQuery && window.jQuery(inp).datepicker) {{
+                                    try {{ window.jQuery(inp).datepicker('setDate', dt); }} catch(e) {{}}
+                                }}
+                                inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                inp.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                            }}
+                        }}
+                    }}""", target_clean)
+                except Exception:
+                    pass
+                time.sleep(0.5)
+
         time.sleep(0.5)
 
         # Save verification screenshot showing date filled in
@@ -201,15 +307,6 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
 
         # Locate and click Download button
         print(f"[*] Waiting for download button for {code}...", flush=True)
-        dl_selectors = [
-            "input[value='Download']",
-            "input[value='Download Excel']",
-            "input[value*='Download' i]",
-            "button:has-text('Download')",
-            "button:has-text('Download Excel')",
-            "input[id*='btnExport' i]",
-            "input[id*='btnDownload' i]",
-        ]
         dl_btn = iframe.locator(", ".join(dl_selectors)).first
         dl_btn.wait_for(state="visible", timeout=25000)
 

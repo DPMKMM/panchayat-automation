@@ -600,3 +600,61 @@ def test_state_format_date_selection_enabled(monkeypatch):
     assert called_args["date_str"] == expected_today
 
 
+def test_state_format_all_three_reports_receive_matching_user_date(monkeypatch, tmp_path):
+    """Verify that GM-R 1.2.7, 1.2.11, and 1.2.10 all receive the exact same user-selected date."""
+    import threading
+
+    download_calls = []
+
+    def mock_download(bot, code: str, date_str: str):
+        download_calls.append({"code": code, "date": date_str})
+        f = tmp_path / f"report_{code.replace('.', '_')}.xls"
+        f.write_bytes(b"S.No.\tDistrict\tMandal\n1\tKhammam\tKhammam Urban")
+        return f
+
+    monkeypatch.setattr("DSR_State_Format.service.download_single_report_with_menu", mock_download)
+
+    # Mock session
+    session = {
+        "session_id": "test_sync_dates_sid",
+        "status": "authenticated",
+        "bot": object(),
+        "downloads_dir": tmp_path,
+        "user_id": "DPOA3698",
+        "user_level": "district",
+        "lock": threading.Lock(),
+    }
+    monkeypatch.setattr("DSR_State_Format.service.get_or_create_session", lambda sid: session)
+    monkeypatch.setattr("DSR_State_Format.service._is_bot_alive", lambda b: True)
+    monkeypatch.setattr("DSR_State_Format.service._save_bot_storage_state", lambda s, b: None)
+    monkeypatch.setattr("DSR_State_Format.service.run_in_session_thread", lambda s, fn, *args, **kw: fn(*args, **kw))
+
+    # Also mock report processing to avoid needing live excel parser
+    monkeypatch.setattr(
+        "DSR_State_Format.service.process_and_generate_reports",
+        lambda *args, **kwargs: {
+            "status": "ok",
+            "success": True,
+            "summary": {"total_mandals": 1},
+            "mandals": [],
+            "division_summary": {},
+            "report_date": "09-Nov-2026",
+            "pdf_filename": "test.pdf",
+            "excel_filename": "test.xlsx",
+        },
+    )
+
+    res = state_format_service.generate_state_format_report(
+        session_id="test_sync_dates_sid",
+        date_str="2026-11-09",
+        force_fresh=True,
+    )
+    assert res["status"] == "ok"
+    assert len(download_calls) == 3
+    # Check all 3 reports received the exact same user date formatted as DD-MMM-YYYY
+    assert download_calls[0] == {"code": "1.2.7", "date": "09-Nov-2026"}
+    assert download_calls[1] == {"code": "1.2.11", "date": "09-Nov-2026"}
+    assert download_calls[2] == {"code": "1.2.10", "date": "09-Nov-2026"}
+
+
+
