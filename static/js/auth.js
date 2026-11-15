@@ -1123,6 +1123,102 @@
   };
 
   // ---------------------------------------------------------------------------
+  // Mobile Responsive Navbar Drawer & Handlers
+  // ---------------------------------------------------------------------------
+
+  window.toggleMobileNavMenu = function (forceState) {
+    var drawer = document.getElementById('ribbon-mobile-drawer');
+    var btn = document.getElementById('ribbon-hamburger-btn');
+    var backdrop = document.getElementById('ribbon-mobile-backdrop');
+    if (!drawer || !btn) return;
+    var willOpen = (typeof forceState === 'boolean') ? forceState : !drawer.classList.contains('is-open');
+    if (willOpen) {
+      drawer.classList.add('is-open');
+      btn.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      drawer.setAttribute('aria-hidden', 'false');
+      if (backdrop) backdrop.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+    } else {
+      drawer.classList.remove('is-open');
+      btn.classList.remove('is-open');
+      btn.setAttribute('aria-expanded', 'false');
+      drawer.setAttribute('aria-hidden', 'true');
+      if (backdrop) backdrop.classList.remove('is-open');
+      document.body.style.overflow = '';
+    }
+  };
+
+  window.handleMobileModuleSelect = function (mode) {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.switchPlatformModule === 'function') {
+      window.switchPlatformModule(mode);
+    }
+  };
+
+  window.handleMobileChangeDesig = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.openChangeDesignationModal === 'function') {
+      window.openChangeDesignationModal();
+    }
+  };
+
+  window.handleMobileDeptLogin = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.handleNavDeptLoginClick === 'function') {
+      window.handleNavDeptLoginClick();
+    }
+  };
+
+  window.handleMobileDisconnect = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.disconnectEptsSession === 'function') {
+      window.disconnectEptsSession();
+    }
+  };
+
+  window.handleMobileAdmin = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.openAdminDashboardStation === 'function') {
+      window.openAdminDashboardStation();
+    }
+  };
+
+  window.handleMobileFeedback = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.openFeedbackModal === 'function') {
+      window.openFeedbackModal();
+    }
+  };
+
+  window.handleMobileSignIn = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.triggerGoogleSignIn === 'function') {
+      window.triggerGoogleSignIn();
+    }
+  };
+
+  window.handleMobileLogout = function () {
+    window.toggleMobileNavMenu(false);
+    if (typeof window.logoutPortalApp === 'function') {
+      window.logoutPortalApp();
+    }
+  };
+
+  // Close mobile drawer on Escape key or desktop resize
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      window.toggleMobileNavMenu(false);
+    }
+  });
+
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 860) {
+      window.toggleMobileNavMenu(false);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // Header UI, Dashboard Toggle & Scoped Logout
   // ---------------------------------------------------------------------------
 
@@ -1142,6 +1238,13 @@
         }
       });
     }
+    // Also toggle active labels on mobile cards
+    ['manual', 'automated', 'tools', 'softwares'].forEach(function (m) {
+      var badge = document.getElementById('mobile-badge-' + m);
+      if (badge) {
+        badge.style.display = (m === target) ? 'inline-block' : 'none';
+      }
+    });
   };
 
   window.switchPlatformModule = function (mode) {
@@ -1238,6 +1341,31 @@
         if (ribIcon) ribIcon.style.display = 'inline';
       }
     }
+
+    // Sync Mobile Drawer Officer Profile & Quick Top Bar Status
+    var mobName = document.getElementById('mobile-user-name');
+    var mobDesig = document.getElementById('mobile-user-desig');
+    var mobEmail = document.getElementById('mobile-user-email');
+    var mobAvatar = document.getElementById('mobile-user-avatar');
+    var mobIcon = document.getElementById('mobile-user-icon');
+    var mobQuickName = document.getElementById('ribbon-mobile-quick-name');
+
+    if (mobName) mobName.textContent = name;
+    if (mobDesig) mobDesig.textContent = desig + ' ✏️';
+    if (mobEmail) mobEmail.textContent = gmail;
+    if (mobQuickName) {
+      var firstName = (name || '').split(' ')[0] || 'Officer';
+      mobQuickName.textContent = firstName;
+    }
+
+    if (user.profile_picture && mobAvatar) {
+      mobAvatar.src = user.profile_picture;
+      mobAvatar.style.display = 'inline-block';
+      if (mobIcon) mobIcon.style.display = 'none';
+    } else {
+      if (mobAvatar) mobAvatar.style.display = 'none';
+      if (mobIcon) mobIcon.style.display = 'inline';
+    }
   };
 
   window.openChangeDesignationModal = function () {
@@ -1277,6 +1405,8 @@
         }
         var ribDesig = document.getElementById('ribbon-user-desig');
         if (ribDesig) ribDesig.textContent = desig + ' ✏️';
+        var mobDesig = document.getElementById('mobile-user-desig');
+        if (mobDesig) mobDesig.textContent = desig + ' ✏️';
         window.closeChangeDesignationModal();
         if (typeof window.showNotice === 'function') {
           window.showNotice('Official designation updated to ' + desig + ' successfully!', 'success');
@@ -1408,6 +1538,16 @@
     var ribDept = document.getElementById('ribbon-btn-dept-login');
     var ribDisconn = document.getElementById('ribbon-btn-disconnect-epts');
 
+    // Sync Mobile Drawer Elements & Mobile Quick Header
+    var mobAuthBox = document.getElementById('mobile-drawer-auth-box');
+    var mobSignin = document.getElementById('mobile-btn-signin');
+    var mobLogout = document.getElementById('mobile-btn-logout');
+    var mobAdmin = document.getElementById('mobile-btn-admin');
+    var mobDept = document.getElementById('mobile-btn-dept-login');
+    var mobDisconn = document.getElementById('mobile-btn-disconnect-epts');
+    var mobQuickOfficer = document.getElementById('ribbon-mobile-quick-officer');
+    var mobQuickSignin = document.getElementById('ribbon-mobile-quick-signin');
+
     if (isAuth && profileDone) {
       if (ribPill) ribPill.style.display = 'inline-flex';
       if (ribLogout) ribLogout.style.display = 'inline-flex';
@@ -1420,6 +1560,16 @@
       if (ribDisconn) {
         ribDisconn.style.display = deptActive ? 'inline-flex' : 'none';
       }
+
+      // Mobile sync
+      if (mobAuthBox) mobAuthBox.style.display = 'block';
+      if (mobSignin) mobSignin.style.display = 'none';
+      if (mobLogout) mobLogout.style.display = 'flex';
+      if (mobAdmin) mobAdmin.style.display = (user && user.is_admin) ? 'flex' : 'none';
+      if (mobDept) mobDept.style.display = (window.currentWorkspaceMode === 'automated' || deptActive) ? 'flex' : 'none';
+      if (mobDisconn) mobDisconn.style.display = deptActive ? 'flex' : 'none';
+      if (mobQuickOfficer) mobQuickOfficer.style.display = 'inline-flex';
+      if (mobQuickSignin) mobQuickSignin.style.display = 'none';
     } else {
       if (ribPill) ribPill.style.display = 'none';
       if (ribLogout) ribLogout.style.display = 'none';
@@ -1427,6 +1577,16 @@
       if (ribAdmin) ribAdmin.style.display = 'none';
       if (ribDept) ribDept.style.display = 'none';
       if (ribDisconn) ribDisconn.style.display = 'none';
+
+      // Mobile sync
+      if (mobAuthBox) mobAuthBox.style.display = 'none';
+      if (mobSignin) mobSignin.style.display = 'flex';
+      if (mobLogout) mobLogout.style.display = 'none';
+      if (mobAdmin) mobAdmin.style.display = 'none';
+      if (mobDept) mobDept.style.display = 'none';
+      if (mobDisconn) mobDisconn.style.display = 'none';
+      if (mobQuickOfficer) mobQuickOfficer.style.display = 'none';
+      if (mobQuickSignin) mobQuickSignin.style.display = 'inline-flex';
     }
 
     var activeRibbonMode = window.currentWorkspaceMode || window.getDedicatedPageSection() || 'manual';

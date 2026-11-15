@@ -314,6 +314,8 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
     footer { border-top: 1px solid #dce6e1; margin-top: 60px; padding: 22px 20px; text-align: center; color: #5a7369; font-size: 0.84rem; background: white; }
 
     @media (max-width: 768px) {
+      body { max-width: 100vw; overflow-x: hidden; }
+      .container { padding: 0 12px; }
       .nav-inner { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 6px; }
       .nav-brand { gap: 8px; }
       .nav-brand-main { font-size: 0.94rem; }
@@ -322,6 +324,10 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
       .nav-link, .dropdown-btn { padding: 7px 10px; font-size: 0.84rem; }
       .dropdown-menu { min-width: 270px; left: 0; right: auto; }
       .hero-banner { padding: 22px; }
+      .tabs-header { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs-header::-webkit-scrollbar { display: none; }
+      .tab-btn { padding: 9px 14px; font-size: 0.88rem; white-space: nowrap; flex-shrink: 0; }
+      .modules-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>

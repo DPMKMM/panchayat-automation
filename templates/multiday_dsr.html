@@ -367,6 +367,17 @@
       font-weight: 700;
       border: 1px solid rgba(0, 0, 0, 0.08);
     }
+    @media (max-width: 768px) {
+      body { max-width: 100vw; overflow-x: hidden; }
+      .md-topbar { padding: 10px 14px; flex-direction: column; align-items: stretch; gap: 8px; }
+      .md-brand-title { font-size: 1rem; }
+      .md-nav-links { width: 100%; justify-content: flex-start; }
+      .md-nav-btn { flex: 1 1 auto; text-align: center; padding: 7px 10px; font-size: 0.8rem; }
+      .md-container { padding: 0 12px 30px; margin: 16px auto; }
+      .md-card { padding: 16px 12px; }
+      .md-grid-2 { grid-template-columns: 1fr; gap: 12px; }
+      .md-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
   </style>
 </head>
 <body>

@@ -581,3 +581,16 @@ def test_top_fixed_ribbon_and_4_modules_switcher():
     assert "window.switchPlatformModule" in auth_js
     assert "window.updateRibbonActiveModule" in auth_js
 
+    # 5. Mobile Responsive Navbar & Hamburger Drawer
+    assert 'id="ribbon-mobile-bar"' in html
+    assert 'id="ribbon-hamburger-btn"' in html
+    assert 'id="ribbon-mobile-drawer"' in html
+    assert 'id="mobile-mod-manual"' in html
+    assert 'id="mobile-mod-automated"' in html
+    assert 'id="mobile-mod-tools"' in html
+    assert 'id="mobile-mod-softwares"' in html
+    assert 'id="ribbon-mobile-backdrop"' in html
+    assert "window.toggleMobileNavMenu" in auth_js
+    assert "window.handleMobileModuleSelect" in auth_js
+
+

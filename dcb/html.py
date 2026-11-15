@@ -992,6 +992,7 @@ TAX_PAGE_HTML = """<!doctype html>
       }
     }
     @media (max-width: 768px) {
+      body { max-width: 100vw; overflow-x: hidden; }
       .nav-inner { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 6px; }
       .nav-brand { gap: 8px; }
       .nav-brand-main { font-size: 0.94rem; }
@@ -999,6 +1000,8 @@ TAX_PAGE_HTML = """<!doctype html>
       .nav-link { padding: 6px 10px; font-size: 0.82rem; }
       main { padding: 0 12px; margin: 16px auto 40px; }
       .hero-strip { padding: 18px 16px; }
+      .controls-grid { grid-template-columns: 1fr; }
+      .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
   </style>
 </head>
