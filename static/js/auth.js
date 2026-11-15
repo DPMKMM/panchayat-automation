@@ -95,7 +95,7 @@
       if (s === 'automated') return 'https://autoreports.panchayatautomation.in/';
       if (s === 'manual') return 'https://manualreports.panchayatautomation.in/';
       if (s === 'tools') return 'https://tools.panchayatautomation.in/';
-      if (s === 'softwares' || s === 'software') return 'https://softwares.panchayatautomation.in/';
+      if (s === 'softwares' || s === 'software') return '/softwares';
       return 'https://panchayatautomation.in/';
     }
     if (s === 'automated') return '/autoreports?site=console';
@@ -1420,8 +1420,7 @@
     if (isDirectClick && window.isProdCustomDomain()) {
       if ((m === 'manual' && !window.isManualHost()) ||
           (m === 'automated' && !window.isReportsHost()) ||
-          (m === 'tools' && !window.isToolsHost()) ||
-          (m === 'softwares' && !window.isSoftwaresHost())) {
+          (m === 'tools' && !window.isToolsHost())) {
         window.location.href = window.getSectionUrl(m);
         return true;
       }
