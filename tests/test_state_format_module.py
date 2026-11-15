@@ -552,18 +552,23 @@ def test_real_world_06_nov_dataset():
 
 
 def test_state_format_date_selection_enabled(monkeypatch):
-    """Verify State Format DSR Report supports user date selection and defaults to current date if omitted."""
+    """Verify State Format DSR Report supports user date selection restricted to Today and Yesterday only."""
+    from datetime import timedelta
     portal_html = (ROOT / "templates" / "portal_shell.html").read_text(encoding="utf-8")
     console_js = (ROOT / "static" / "js" / "console.js").read_text(encoding="utf-8")
 
-    # 1. UI: Date selection picker is present
+    # 1. UI: Date selection picker with Today & Yesterday restrictions
     assert '<input type="date" id="state-format-date"' in portal_html
     assert 'for="state-format-date"' in portal_html
+    assert 'Today &amp; Yesterday only' in portal_html
+    assert 'setStateFormatDatePreset' in portal_html
 
-    # 2. console.js: State format date is read from date input with localDateStr() fallback
-    assert "dateVal = (dateEl && dateEl.value ? dateEl.value : localDateStr()).trim()" in console_js
+    # 2. console.js: State format date presets and boundary clamping
+    assert "setStateFormatDatePreset" in console_js
+    assert "dateInput.min = yestStr" in console_js
+    assert "dateInput.max = todayStr" in console_js
 
-    # 3. Router: /api/state-format/generate respects user-selected date
+    # 3. Router: /api/state-format/generate restricts strictly to Today and Yesterday
     called_args: dict[str, Any] = {}
 
     def mock_generate_report(session_id: str, date_str: str, force_fresh: bool):
@@ -580,29 +585,51 @@ def test_state_format_date_selection_enabled(monkeypatch):
         lambda req, always_require=False: ({"user_id": "test_u1"}, sid),
     )
 
-    # A: User selects a specific date
+    now_dt = datetime.now().date()
+    yesterday_str = (now_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+    today_str = now_dt.strftime("%Y-%m-%d")
+
+    # A: User selects Yesterday -> allowed
     r1 = client.post(
         "/api/state-format/generate",
         headers={"X-Session-ID": sid},
-        data={"date": "2026-11-10", "force_fresh": "true"},
+        data={"date": yesterday_str, "force_fresh": "true"},
     )
     assert r1.status_code == 200
-    assert called_args["date_str"] == "2026-11-10"
+    assert called_args["date_str"] == yesterday_str
 
-    # B: User submits without date -> defaults to current date
+    # B: User selects Today -> allowed
     r2 = client.post(
+        "/api/state-format/generate",
+        headers={"X-Session-ID": sid},
+        data={"date": today_str, "force_fresh": "true"},
+    )
+    assert r2.status_code == 200
+    assert called_args["date_str"] == today_str
+
+    # C: User selects an invalid older date (e.g. 2020-01-01) -> clamped to today
+    r3 = client.post(
+        "/api/state-format/generate",
+        headers={"X-Session-ID": sid},
+        data={"date": "2020-01-01", "force_fresh": "true"},
+    )
+    assert r3.status_code == 200
+    assert called_args["date_str"] == today_str
+
+    # D: User submits without date -> defaults to today
+    r4 = client.post(
         "/api/state-format/generate",
         headers={"X-Session-ID": sid},
         data={"date": "", "force_fresh": "true"},
     )
-    assert r2.status_code == 200
-    expected_today = datetime.now().strftime("%Y-%m-%d")
-    assert called_args["date_str"] == expected_today
+    assert r4.status_code == 200
+    assert called_args["date_str"] == today_str
 
 
 def test_state_format_all_three_reports_receive_matching_user_date(monkeypatch, tmp_path):
     """Verify that GM-R 1.2.7, 1.2.11, and 1.2.10 all receive the exact same user-selected date."""
     import threading
+    from datetime import timedelta
 
     download_calls = []
 
@@ -644,17 +671,21 @@ def test_state_format_all_three_reports_receive_matching_user_date(monkeypatch, 
         },
     )
 
+    yest_d = datetime.now().date() - timedelta(days=1)
+    yest_date_str = yest_d.strftime("%Y-%m-%d")
+    expected_portal_date = yest_d.strftime("%d-%b-%Y")
+
     res = state_format_service.generate_state_format_report(
         session_id="test_sync_dates_sid",
-        date_str="2026-11-09",
+        date_str=yest_date_str,
         force_fresh=True,
     )
     assert res["status"] == "ok"
     assert len(download_calls) == 3
     # Check all 3 reports received the exact same user date formatted as DD-MMM-YYYY
-    assert download_calls[0] == {"code": "1.2.7", "date": "09-Nov-2026"}
-    assert download_calls[1] == {"code": "1.2.11", "date": "09-Nov-2026"}
-    assert download_calls[2] == {"code": "1.2.10", "date": "09-Nov-2026"}
+    assert download_calls[0] == {"code": "1.2.7", "date": expected_portal_date}
+    assert download_calls[1] == {"code": "1.2.11", "date": expected_portal_date}
+    assert download_calls[2] == {"code": "1.2.10", "date": expected_portal_date}
 
 
 

@@ -7,7 +7,7 @@ FastAPI router for State Format DSR report generation, manual uploads, and PDF/E
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
@@ -43,7 +43,24 @@ def generate_state_format(
     console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() not in ("false", "0", "no", "off")
 
-    target_date = date.strip() if date and date.strip() else datetime.now().strftime("%Y-%m-%d")
+    # State Format DSR Report date selection is strictly fixed to Today and Yesterday (Day - 1) only
+    today_dt = datetime.now().date()
+    yesterday_dt = today_dt - timedelta(days=1)
+    today_str = today_dt.strftime("%Y-%m-%d")
+
+    target_date = date.strip() if date and date.strip() else today_str
+    parsed_date = None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d-%b-%Y"):
+        try:
+            parsed_date = datetime.strptime(target_date, fmt).date()
+            break
+        except Exception:
+            continue
+
+    if parsed_date is None or parsed_date not in (today_dt, yesterday_dt):
+        target_date = today_str
+    else:
+        target_date = parsed_date.strftime("%Y-%m-%d")
 
     try:
         res = state_format_service.generate_state_format_report(

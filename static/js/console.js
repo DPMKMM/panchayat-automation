@@ -69,8 +69,8 @@
     el.textContent = msg;
   }
 
-  function localDateStr() {
-    var d = new Date();
+  function localDateStr(customDate) {
+    var d = customDate instanceof Date ? customDate : new Date();
     var y = d.getFullYear();
     var m = String(d.getMonth() + 1).padStart(2, '0');
     var day = String(d.getDate()).padStart(2, '0');
@@ -4535,15 +4535,38 @@
     }
 
     var dateInput = document.getElementById('state-format-date');
-    if (dateInput && !dateInput.value) {
-      dateInput.value = localDateStr();
+    var todayStr = localDateStr();
+    var yestStr = localDateStr(new Date(Date.now() - 86400000));
+    if (dateInput) {
+      dateInput.min = yestStr;
+      dateInput.max = todayStr;
+      if (!dateInput.value || (dateInput.value !== todayStr && dateInput.value !== yestStr)) {
+        dateInput.value = todayStr;
+      }
     }
     if (opts.params && opts.params.date && dateInput) {
-      dateInput.value = opts.params.date;
+      var pDate = String(opts.params.date).trim();
+      if (pDate === yestStr) {
+        dateInput.value = yestStr;
+      } else {
+        dateInput.value = todayStr;
+      }
     }
 
     if (opts.autoGenerate === true) {
       await window.runStateFormatRobot();
+    }
+  };
+
+  window.setStateFormatDatePreset = function (preset) {
+    var dateEl = document.getElementById('state-format-date');
+    if (!dateEl) return;
+    var todayStr = localDateStr();
+    var yestStr = localDateStr(new Date(Date.now() - 86400000));
+    if (preset === 'yesterday') {
+      dateEl.value = yestStr;
+    } else {
+      dateEl.value = todayStr;
     }
   };
 
@@ -4626,8 +4649,14 @@
   }
 
   window.runStateFormatRobot = async function () {
+    var todayStr = localDateStr();
+    var yestStr = localDateStr(new Date(Date.now() - 86400000));
     var dateEl = document.getElementById('state-format-date');
-    var dateVal = (dateEl && dateEl.value ? dateEl.value : localDateStr()).trim();
+    var dateVal = (dateEl && dateEl.value ? dateEl.value : todayStr).trim();
+    if (dateVal !== todayStr && dateVal !== yestStr) {
+      dateVal = todayStr;
+      if (dateEl) dateEl.value = todayStr;
+    }
 
     var resultsCard = document.getElementById('state-format-results');
     if (resultsCard) resultsCard.style.display = 'none';

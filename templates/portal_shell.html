@@ -4177,8 +4177,15 @@
       <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; align-items:flex-end;">
           <div>
-            <label for="state-format-date" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Report Date *</label>
-            <input type="date" id="state-format-date" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+              <label for="state-format-date" style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:0;">Report Date *</label>
+              <span style="font-size:0.75rem; font-weight:700; color:#1d4ed8; background:#eff6ff; padding:2px 8px; border-radius:12px; border:1px solid #bfdbfe;">Today &amp; Yesterday only</span>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="date" id="state-format-date" class="form-control" style="flex:1; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;">
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.75rem; font-weight:700; padding:8px 10px; white-space:nowrap;" onclick="setStateFormatDatePreset('today')">📅 Today</button>
+              <button type="button" class="btn btn-outline btn-sm" style="font-size:0.75rem; font-weight:700; padding:8px 10px; white-space:nowrap;" onclick="setStateFormatDatePreset('yesterday')">⏮️ Yesterday</button>
+            </div>
           </div>
           <div style="display:flex; gap:10px;">
             <button type="button" class="btn btn-gold" id="btn-run-state-format" style="flex:1; padding:10px 16px; font-weight:800; background:#1d4ed8; border-color:#1e40af; color:#ffffff; display:inline-flex; align-items:center; justify-content:center; gap:8px;" onclick="runStateFormatRobot()">

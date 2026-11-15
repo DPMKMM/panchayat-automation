@@ -156,9 +156,11 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
 
         print(f"[*] Waiting for report form ({code}) to load in portal iframe...", flush=True)
         # Wait for download button or Select Date to indicate the report view has rendered
-        report_form_indicator = iframe.locator(", ".join(dl_selectors) + ", text='Select Date'").first
+        dl_loc = iframe.locator(", ".join(dl_selectors))
+        txt_loc = iframe.locator("text='Select Date'")
+        report_form_indicator = dl_loc.or_(txt_loc)
         try:
-            report_form_indicator.wait_for(state="visible", timeout=25000)
+            report_form_indicator.first.wait_for(state="visible", timeout=25000)
             print(f"[+] Report form for {code} is visible and ready.", flush=True)
         except Exception as wait_err:
             print(f"[-] Note waiting for report form on {code}: {wait_err}", flush=True)

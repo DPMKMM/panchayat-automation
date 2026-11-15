@@ -12,7 +12,7 @@ import os
 import re
 import shutil
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 import pandas as pd
@@ -96,10 +96,24 @@ def _generate_state_format_impl(
             "e-Panchayat browser session is not active. Please complete Department Login & OTP."
         )
 
-    # State Format DSR Report is fixed to current date only
+    # State Format DSR Report date selection is strictly fixed to Today and Yesterday (Day - 1) only
     now_dt = datetime.now()
-    resolved_date = date_str or now_dt.strftime("%Y-%m-%d")
-    portal_date_fmt = format_portal_date(resolved_date)
+    today_d = now_dt.date()
+    yesterday_d = today_d - timedelta(days=1)
+
+    resolved_date = date_str.strip() if date_str and date_str.strip() else today_d.strftime("%Y-%m-%d")
+    parsed_d = None
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d-%b-%Y"):
+        try:
+            parsed_d = datetime.strptime(resolved_date, fmt).date()
+            break
+        except Exception:
+            continue
+
+    if parsed_d is None or parsed_d not in (today_d, yesterday_d):
+        parsed_d = today_d
+
+    portal_date_fmt = parsed_d.strftime("%d-%b-%Y")
     dl_dir: Path = session["downloads_dir"]
     dl_dir.mkdir(parents=True, exist_ok=True)
 
