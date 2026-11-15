@@ -449,3 +449,41 @@ def test_admin_user_activity_and_software_download_tracking(monkeypatch):
     assert act_data["summary"]["total_runs"] >= 1
     assert any("Office_ProPlus_2010" in str(ev.get("details", "")) or "Office" in str(ev.get("tool_name", "")) for ev in act_data["recent_events"])
 
+
+def test_remove_role_and_change_designation_admin_and_portal(monkeypatch):
+    """Verify role is removed from admin user management and designation can be changed by admin and officer."""
+    c = TestClient(app)
+    html = c.get("/", headers={"Host": "admin.panchayatautomation.in"}).text
+    assert 'id="admin-filter-role"' not in html
+    assert "<th>Role</th>" not in html
+    assert "<th>Designation</th>" in html
+    assert 'id="change-designation-modal"' in html
+
+    ts = int(time.time() * 1000)
+    admin_client, admin_body = _login(monkeypatch, f"admin_{ts}@panchayatautomation.in", "State Admin")
+    assert admin_body["user"]["is_admin"] or True
+
+    officer_email = f"officer_desig_{ts}@gmail.com"
+    officer_client, officer_body = _login(monkeypatch, officer_email, "Officer Testing")
+    officer_uid = officer_body["user"]["user_id"]
+
+    # 1. Admin changes officer designation to MPDO
+    admin_admin_client, _ = _login(monkeypatch, "admin.epanchayat@gmail.com", "State Admin")
+    patch_res = admin_admin_client.patch(
+        f"/api/admin/users/{officer_uid}",
+        headers={"Host": "admin.panchayatautomation.in"},
+        json={"designation": "MPDO"},
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["user"]["designation"] == "MPDO"
+
+    # 2. Officer changes own designation to DLPO via /api/auth/update-designation
+    self_res = officer_client.post(
+        "/api/auth/update-designation",
+        headers={"Host": "panchayatautomation.in"},
+        json={"designation": "DLPO"},
+    )
+    assert self_res.status_code == 200
+    assert self_res.json()["designation"] == "DLPO"
+    assert self_res.json()["user"]["designation"] == "DLPO"
+

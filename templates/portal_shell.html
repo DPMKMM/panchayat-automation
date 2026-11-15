@@ -323,13 +323,13 @@
           </a>
 
           <!-- Officer Profile Display (NO User Level) -->
-          <div id="ribbon-officer-pill" class="ribbon-officer-pill" style="display:none;">
+          <div id="ribbon-officer-pill" class="ribbon-officer-pill" style="display:none; cursor:pointer;" onclick="window.openChangeDesignationModal()" title="Click to change your official designation">
             <img id="ribbon-user-avatar" src="" alt="Officer Profile" class="ribbon-user-avatar" style="display:none;" onerror="this.style.display='none'; document.getElementById('ribbon-user-icon').style.display='inline';">
             <span id="ribbon-user-icon" class="ribbon-user-icon">👤</span>
             <div class="ribbon-user-info">
               <div class="ribbon-user-name-line">
                 <span id="ribbon-user-name" class="ribbon-user-name">Officer</span>
-                <span id="ribbon-user-desig" class="ribbon-user-desig">OFFICER</span>
+                <span id="ribbon-user-desig" class="ribbon-user-desig" title="Click to change designation">OFFICER ✏️</span>
               </div>
               <div id="ribbon-user-email" class="ribbon-user-email">officer@gmail.com</div>
             </div>
@@ -1742,15 +1742,6 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="admin-filter-role">Role Level</label>
-              <select id="admin-filter-role" onchange="loadAdminUsers()">
-                <option value="">All Roles</option>
-                <option value="Mandal Level">Mandal Level</option>
-                <option value="Division Level">Division Level</option>
-                <option value="District Level">District Level</option>
-              </select>
-            </div>
-            <div class="form-group">
               <label for="admin-filter-status">Account Status</label>
               <select id="admin-filter-status" onchange="loadAdminUsers()">
                 <option value="">All Statuses</option>
@@ -1784,14 +1775,13 @@
                   <th>Officer Name &amp; Gmail</th>
                   <th>Mobile</th>
                   <th>Designation</th>
-                  <th>Role</th>
                   <th>Last Active</th>
-                  <th class="text-center">Tools Used</th>
                   <th>Subscription</th>
                   <th>Status</th>
                   <th class="text-center">Portal</th>
                   <th class="text-center">Console</th>
                   <th class="text-center">Admin</th>
+                  <th class="text-center">Tools Used</th>
                   <th class="text-center">Save</th>
                 </tr>
               </thead>
@@ -1971,7 +1961,7 @@
                 <tr>
                   <th>Date</th>
                   <th>Officer</th>
-                  <th>Designation &amp; Role</th>
+                  <th>Designation</th>
                   <th>Category</th>
                   <th>Message</th>
                 </tr>
@@ -3671,6 +3661,41 @@
       </div>
     </div>
 
+    <!-- Change Designation Modal (Officer Self-Service) -->
+    <div id="change-designation-modal" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.75); z-index:999999; align-items:center; justify-content:center; padding:16px; backdrop-filter:blur(4px);">
+      <div style="background:#ffffff; border-radius:16px; padding:26px 28px; max-width:440px; width:100%; box-shadow:0 25px 50px rgba(0,0,0,0.3); color:#1e293b; position:relative; border:1px solid #cbd5e1;">
+        <button type="button" onclick="window.closeChangeDesignationModal()" style="position:absolute; right:16px; top:16px; background:none; border:none; font-size:1.4rem; cursor:pointer; color:#94a3b8; padding:4px; line-height:1;" title="Close">&times;</button>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:12px; border-bottom:1.5px solid #e2e8f0;">
+          <div style="width:42px; height:42px; border-radius:10px; background:#ecfdf5; border:1px solid #a7f3d0; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">🎖️</div>
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#064e3b;">Change Designation</h3>
+            <p style="margin:2px 0 0; font-size:0.8rem; color:#64748b;">Select your official government post</p>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; color:#475569; margin:0 0 16px; line-height:1.4;">
+          Select your official designation for e-Panchayat reports and analytics:
+        </p>
+        <form onsubmit="window.submitChangeDesignation(event);">
+          <div style="margin-bottom:18px;">
+            <label for="change-desig-select" style="display:block; font-size:0.82rem; font-weight:700; color:#334155; margin-bottom:6px;">Official Designation *</label>
+            <select id="change-desig-select" style="width:100%; padding:10px 12px; border:1.5px solid #059669; border-radius:8px; font-size:0.92rem; font-weight:700; background:#f0fdf4; color:#064e3b;" required>
+              <option value="DPO">DPO — District Panchayat Officer</option>
+              <option value="DPM">DPM — District Project Manager</option>
+              <option value="DLPO">DLPO — Divisional Panchayat Officer</option>
+              <option value="MPDO">MPDO — Mandal Parishad Development Officer</option>
+              <option value="MPO">MPO — Mandal Panchayat Officer</option>
+              <option value="PS">PS — Panchayat Secretary</option>
+              <option value="DEO">DEO — Data Entry Operator</option>
+            </select>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="window.closeChangeDesignationModal()" style="padding:8px 16px;">Cancel</button>
+            <button type="submit" id="btn-save-designation" class="btn btn-gold btn-sm" style="padding:8px 20px; font-weight:800;">Save Designation</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Admin Officer Activity & Tool Usage Modal -->
     <div id="admin-officer-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this) window.closeOfficerActivityModal();">
       <div class="modal-card" style="max-width:850px; width:95%; max-height:88vh; overflow-y:auto; padding:24px; border-radius:14px; background:#ffffff; box-shadow:0 12px 36px rgba(0,0,0,0.25);">
@@ -3678,7 +3703,7 @@
           <div>
             <div style="font-size:1.25rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
               <span>👤</span> <span id="adm-officer-modal-name">Officer Name</span>
-              <span id="adm-officer-modal-badge" class="badge-role-pill">Mandal Level</span>
+              <span id="adm-officer-modal-badge" class="badge-role-pill">OFFICER</span>
             </div>
             <div id="adm-officer-modal-sub" style="font-size:0.84rem; color:#64748b; margin-top:3px;">officer@gmail.com · DEO</div>
           </div>

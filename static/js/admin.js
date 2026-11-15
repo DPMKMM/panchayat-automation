@@ -233,12 +233,6 @@
           '<strong>' + esc(item.count || 0) + '</strong></div>';
       }).join('') || '<div style="color:#64748b; font-size:0.84rem;">No designation data yet.</div>';
 
-      var roleRows = (s.by_role || []).map(function (item) {
-        return '<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid #f1f5f9;">' +
-          '<span>' + esc(item.role || 'Pending') + '</span>' +
-          '<strong>' + esc(item.count || 0) + '</strong></div>';
-      }).join('') || '<div style="color:#64748b; font-size:0.84rem;">No role data yet.</div>';
-
       var fsLabel = fb.firestore_mode === 'live_firestore'
         ? 'Connected (Cloud Firestore)'
         : (fb.firestore_mode === 'emulator' ? 'Firebase Emulator' : 'Local Persisted Store');
@@ -261,9 +255,8 @@
           recentHtml +
         '</div>' +
         '<div class="admin-section-card" style="margin-bottom:0;">' +
-          '<h4 style="margin:0 0 10px; color:#064e3b;">👥 Registered by Designation &amp; Role</h4>' +
+          '<h4 style="margin:0 0 10px; color:#064e3b;">👥 Registered by Designation</h4>' +
           desigRows +
-          '<div style="margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1;">' + roleRows + '</div>' +
         '</div>' +
         '<div class="admin-section-card" style="margin-bottom:0;">' +
           '<h4 style="margin:0 0 10px; color:#064e3b;">💳 Razorpay &amp; Database Posture</h4>' +
@@ -376,7 +369,7 @@
       var events = Array.isArray(data.recent_events) ? data.recent_events : [];
 
       if (nameEl) nameEl.textContent = user.name || summary.user_name || fallbackName || 'Officer';
-      if (badgeEl) badgeEl.textContent = user.role || user.designation || 'Mandal Level';
+      if (badgeEl) badgeEl.textContent = user.designation || 'OFFICER';
       if (subEl) {
         subEl.textContent = (user.gmail || summary.gmail || 'No email') + (user.designation ? (' · ' + user.designation) : '') + (user.mobile_number ? (' · 📱 ' + user.mobile_number) : '');
       }
@@ -577,7 +570,6 @@
       if (!userId) return;
 
       var desigEl = tr.querySelector('[data-field="designation"]');
-      var roleEl = tr.querySelector('[data-field="role"]');
       var subEl = tr.querySelector('[data-field="subscription_status"]');
       var statusEl = tr.querySelector('[data-field="account_status"]');
       var portalEl = tr.querySelector('[data-field="can_access_portal"]');
@@ -587,7 +579,6 @@
       var subVal = subEl ? subEl.value : 'free_preview';
       var payload = {
         designation: desigEl ? desigEl.value : '',
-        role: roleEl ? roleEl.value : '',
         subscription_status: subVal,
         has_automated_subscription: subVal === 'active',
         account_status: statusEl ? statusEl.value : 'Active',
@@ -617,20 +608,46 @@
         btn.textContent = '💾 Save';
       }
     });
+
+    tbody.addEventListener('change', async function (ev) {
+      var desigSelect = ev.target && ev.target.closest ? ev.target.closest('select[data-field="designation"]') : null;
+      if (!desigSelect) return;
+      var tr = desigSelect.closest('tr[data-user-id]');
+      if (!tr) return;
+      var userId = tr.getAttribute('data-user-id');
+      if (!userId) return;
+      var newDesig = desigSelect.value;
+      if (!newDesig) return;
+
+      desigSelect.style.opacity = '0.5';
+      try {
+        var res = await window.safeFetchJson('/api/admin/users/' + encodeURIComponent(userId), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ designation: newDesig }),
+        });
+        showAdminAlert('Designation updated to ' + newDesig + ' for officer.', 'success');
+        if (typeof window.showPortalNotice === 'function') {
+          window.showPortalNotice('Officer designation updated to ' + newDesig + '.', 'success');
+        }
+      } catch (err) {
+        showAdminAlert('Failed to update designation: ' + err.message, 'error');
+      } finally {
+        desigSelect.style.opacity = '1';
+      }
+    });
   }
 
   window.loadAdminUsers = async function () {
     bindUsersTableActions();
     var search = ((document.getElementById('admin-user-search') && document.getElementById('admin-user-search').value) || '').trim();
     var desig = ((document.getElementById('admin-filter-desig') && document.getElementById('admin-filter-desig').value) || '').trim();
-    var role = ((document.getElementById('admin-filter-role') && document.getElementById('admin-filter-role').value) || '').trim();
     var status = ((document.getElementById('admin-filter-status') && document.getElementById('admin-filter-status').value) || '').trim();
     var subFilter = ((document.getElementById('admin-filter-sub') && document.getElementById('admin-filter-sub').value) || '').trim().toLowerCase();
 
     var qs = new URLSearchParams();
     if (search) qs.set('search', search);
     if (desig) qs.set('designation', desig);
-    if (role) qs.set('role', role);
     if (status) qs.set('account_status', status);
 
     try {
@@ -648,16 +665,13 @@
       var tbody = document.getElementById('admin-users-tbody');
       if (!tbody) return;
       if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="text-center" style="padding:24px; color:#64748b;">No officer accounts match the selected filter.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center" style="padding:24px; color:#64748b;">No officer accounts match the selected filter.</td></tr>';
         return;
       }
 
       tbody.innerHTML = users.map(function (u) {
-        var desigOptions = '<option value="">Pending</option>' + DESIGNATIONS.map(function (d) {
+        var desigOptions = '<option value="">Select Designation</option>' + DESIGNATIONS.map(function (d) {
           return '<option value="' + d + '"' + (u.designation === d ? ' selected' : '') + '>' + d + '</option>';
-        }).join('');
-        var roleOptions = '<option value="">Pending</option>' + ROLES.map(function (r) {
-          return '<option value="' + esc(r) + '"' + (u.role === r ? ' selected' : '') + '>' + esc(r) + '</option>';
         }).join('');
         var statusOptions = STATUSES.map(function (st) {
           return '<option value="' + st + '"' + (u.account_status === st ? ' selected' : '') + '>' + st + '</option>';
@@ -674,8 +688,7 @@
               '<div style="font-size:0.78rem; color:#475569;">' + esc(u.gmail || '') + '</div>' +
             '</td>' +
             '<td style="font-family:monospace; font-size:0.82rem;">' + esc(u.mobile_number || '—') + '</td>' +
-            '<td><select data-field="designation" style="padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">' + desigOptions + '</select></td>' +
-            '<td><select data-field="role" style="padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">' + roleOptions + '</select></td>' +
+            '<td><select data-field="designation" style="padding:6px 10px; border:1.5px solid #059669; border-radius:6px; font-size:0.82rem; font-weight:700; background:#f0fdf4; color:#064e3b; cursor:pointer;" title="Change Officer Designation">' + desigOptions + '</select></td>' +
             '<td style="font-size:0.76rem; color:#475569;">' + esc(formatShortDate(u.last_login || u.registration_date)) + '</td>' +
             '<td><select data-field="subscription_status" style="padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.8rem;">' + subOptions + '</select></td>' +
             '<td><select data-field="account_status" style="padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.82rem;">' + statusOptions + '</select></td>' +
@@ -984,7 +997,7 @@
               '<div style="font-weight:700; color:#0f172a;">' + esc(fb.name || 'Officer') + '</div>' +
               '<div style="font-size:0.78rem; color:#64748b;">' + esc(fb.email || '—') + '</div>' +
             '</td>' +
-            '<td style="font-size:0.82rem;">' + esc([fb.designation, fb.role].filter(Boolean).join(' · ') || '—') + '</td>' +
+            '<td style="font-size:0.82rem;">' + esc(fb.designation || '—') + '</td>' +
             '<td><span class="badge-pill-live">' + esc(fb.category || 'General Feedback') + '</span></td>' +
             '<td style="max-width:420px; white-space:pre-wrap; font-size:0.85rem;">' + esc(fb.message || '') + '</td>' +
           '</tr>'

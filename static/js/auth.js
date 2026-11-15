@@ -1225,7 +1225,7 @@
       var ribIcon = document.getElementById('ribbon-user-icon');
 
       if (ribName) ribName.textContent = name;
-      if (ribDesig) ribDesig.textContent = desig;
+      if (ribDesig) ribDesig.textContent = desig + ' ✏️';
       if (ribEmail) ribEmail.textContent = gmail;
 
       if (user.profile_picture && ribAvatar) {
@@ -1236,6 +1236,59 @@
         if (ribAvatar) ribAvatar.style.display = 'none';
         if (ribIcon) ribIcon.style.display = 'inline';
       }
+    }
+  };
+
+  window.openChangeDesignationModal = function () {
+    var modal = document.getElementById('change-designation-modal');
+    if (!modal) return;
+    var currentDesig = (window.currentUser && window.currentUser.designation) || '';
+    var sel = document.getElementById('change-desig-select');
+    if (sel && currentDesig) {
+      sel.value = currentDesig;
+    }
+    modal.style.display = 'flex';
+  };
+
+  window.closeChangeDesignationModal = function () {
+    var modal = document.getElementById('change-designation-modal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  window.submitChangeDesignation = async function (e) {
+    if (e) e.preventDefault();
+    var sel = document.getElementById('change-desig-select');
+    var btn = document.getElementById('btn-save-designation');
+    if (!sel) return;
+    var desig = sel.value;
+    if (!desig) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    try {
+      var res = await window.safeFetchJson('/api/auth/update-designation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ designation: desig })
+      });
+      if (res && res.success) {
+        if (window.currentUser) {
+          window.currentUser.designation = desig;
+        }
+        var ribDesig = document.getElementById('ribbon-user-desig');
+        if (ribDesig) ribDesig.textContent = desig + ' ✏️';
+        window.closeChangeDesignationModal();
+        if (typeof window.showNotice === 'function') {
+          window.showNotice('Official designation updated to ' + desig + ' successfully!', 'success');
+        } else if (typeof window.showPortalNotice === 'function') {
+          window.showPortalNotice('Official designation updated to ' + desig + ' successfully!', 'success');
+        }
+      } else {
+        alert((res && res.message) || 'Failed to update designation.');
+      }
+    } catch (err) {
+      alert('Error updating designation: ' + err.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Save Designation'; }
     }
   };
 

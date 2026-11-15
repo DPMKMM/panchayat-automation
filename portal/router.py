@@ -34,6 +34,7 @@ from core.firebase_store import (
     register_user_profile,
     revoke_portal_session,
     save_feedback,
+    update_user_admin,
 )
 from core.templating import load_portal_shell_html
 from dsr import service as automation_service
@@ -513,4 +514,38 @@ async def api_register_profile(request: Request, response: Response):
         "token": token,
         "platform_scope": scope,
         "user": serialize_user_payload(updated_user),
+    }
+
+
+@router.post("/api/auth/update-designation", include_in_schema=False)
+async def api_update_designation(request: Request, response: Response):
+    scope = resolve_platform_scope(request)
+    session_user, token = resolve_sso_session(request, scope)
+    if not session_user or not token:
+        return JSONResponse({"success": False, "message": "Portal authentication is required to change designation."}, status_code=401)
+
+    data: dict[str, Any] = {}
+    try:
+        data = await request.json()
+    except Exception:
+        pass
+    new_desig = str(data.get("designation") or "").strip().upper()
+    user_id = str(session_user["user_id"]).strip()
+
+    ok, msg, updated = update_user_admin(user_id, updates_dict={"designation": new_desig})
+    if not ok or not updated:
+        return JSONResponse({"success": False, "message": msg or "Failed to update designation."}, status_code=400)
+
+    log_usage(
+        user_id=user_id,
+        gmail=str(updated.get("gmail") or ""),
+        platform_scope=scope,
+        module="profile",
+        action="update_designation",
+    )
+    return {
+        "success": True,
+        "message": f"Designation updated to {new_desig} successfully.",
+        "designation": new_desig,
+        "user": serialize_user_payload(updated),
     }
