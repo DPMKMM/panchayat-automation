@@ -140,6 +140,9 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
         link.click()
         time.sleep(3)
 
+        # Re-resolve fresh iframe handle after report link navigation
+        iframe = get_my_iframe(page) or iframe
+
         # Screenshot initial view
         if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
             ss_path = DEBUG_DIR / f"page_{code.replace('.', '_')}.png"
@@ -150,33 +153,42 @@ def download_single_report_with_menu(bot, code: str, target_date: str) -> Path:
                 pass
 
         # Set Date filter in iframe (using DD-MMM-YYYY e.g. 30-Oct-2026 or 02-Nov-2026)
-        print(f"[*] Setting date to {date_formatted} in iframe...", flush=True)
-        iframe.evaluate(f"""() => {{
-            const inputs = document.querySelectorAll("input[type='text'], input[name*='Date' i], input[id*='Date' i]");
-            for (const inp of inputs) {{
-                inp.removeAttribute('readonly');
-                inp.value = '{date_formatted}';
-                inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                inp.dispatchEvent(new Event('blur', {{ bubbles: true }}));
-            }}
-            // Remove target="_blank" from form so download stays in current page
-            for (const f of document.forms) {{
-                f.removeAttribute('target');
-            }}
-        }}""")
-        time.sleep(0.5)
-
-        # Also fill via Playwright locator to trigger any ASP.NET calendar handlers
+        print(f"[*] Setting date to {date_formatted} in iframe for {code}...", flush=True)
+        date_applied = False
         try:
-            txt_loc = iframe.locator("input[type='text']:visible").first
-            if txt_loc.is_visible(timeout=2000):
-                txt_loc.evaluate("el => el.removeAttribute('readonly')")
-                txt_loc.fill(date_formatted)
-                txt_loc.press("Tab")
-                time.sleep(0.5)
+            # Wait for date input to appear in the report form
+            date_loc = iframe.locator("input[type='text']:visible, input[name*='Date' i]:visible, input[id*='Date' i]:visible").first
+            if date_loc.is_visible(timeout=5000):
+                date_loc.evaluate("el => el.removeAttribute('readonly')")
+                date_loc.fill(date_formatted)
+                date_loc.press("Tab")
+                time.sleep(0.3)
+                date_applied = True
         except Exception as e:
-            print(f"[-] Note on fill: {e}", flush=True)
+            print(f"[-] Note on Playwright date locator for {code}: {e}", flush=True)
+
+        try:
+            iframe.evaluate(f"""() => {{
+                const inputs = document.querySelectorAll("input[type='text'], input[name*='Date' i], input[id*='Date' i]");
+                for (const inp of inputs) {{
+                    inp.removeAttribute('readonly');
+                    inp.value = '{date_formatted}';
+                    inp.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    inp.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    inp.dispatchEvent(new Event('blur', {{ bubbles: true }}));
+                }}
+                // Remove target="_blank" from form so download stays in current page
+                for (const f of document.forms) {{
+                    f.removeAttribute('target');
+                }}
+            }}""")
+            date_applied = True
+        except Exception as e:
+            print(f"[-] Note on DOM date evaluation for {code}: {e}", flush=True)
+
+        if date_applied:
+            print(f"[+] Date filter strictly applied to '{date_formatted}' for {code}.", flush=True)
+        time.sleep(0.5)
 
         # Save verification screenshot showing date filled in
         if os.getenv("EPTS_SAVE_DEBUG_SCREENSHOTS") == "1":
