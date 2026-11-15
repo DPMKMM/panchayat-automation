@@ -716,8 +716,10 @@
       if (sEl && sEl.value) merged.start_date = sEl.value;
       if (eEl && eEl.value) merged.end_date = eEl.value;
     } else if (mod === 'state-format' || mod === 'state_format' || mod === 'dsr_state_format') {
+      var curDate = localDateStr();
       var sfDateEl = document.getElementById('state-format-date');
-      if (sfDateEl && sfDateEl.value) merged.date = sfDateEl.value;
+      if (sfDateEl) sfDateEl.value = curDate;
+      merged.date = curDate;
     }
     if (overrideParams && typeof overrideParams === 'object') {
       Object.keys(overrideParams).forEach(function (k) {
@@ -4534,12 +4536,21 @@
       stEl.scrollIntoView({ behavior: 'smooth' });
     }
 
+    // State Format DSR Report is strictly fixed to current date only
+    var curDateStr = localDateStr();
     var dateInput = document.getElementById('state-format-date');
-    if (dateInput && !dateInput.value) {
-      dateInput.value = localDateStr();
+    if (dateInput) {
+      dateInput.value = curDateStr;
     }
-    if (opts.params && opts.params.date && dateInput) {
-      dateInput.value = opts.params.date;
+    var fixedLabel = document.getElementById('state-format-fixed-date-label');
+    if (fixedLabel) {
+      try {
+        var d = new Date();
+        var dStr = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        fixedLabel.textContent = dStr + ' (Today)';
+      } catch (e) {
+        fixedLabel.textContent = curDateStr + ' (Today)';
+      }
     }
 
     if (opts.autoGenerate === true) {
@@ -4626,8 +4637,10 @@
   }
 
   window.runStateFormatRobot = async function () {
+    // State Format DSR Report is strictly fixed to current date only
+    var dateVal = localDateStr();
     var dateEl = document.getElementById('state-format-date');
-    var dateVal = (dateEl && dateEl.value ? dateEl.value : localDateStr()).trim();
+    if (dateEl) dateEl.value = dateVal;
 
     var resultsCard = document.getElementById('state-format-results');
     if (resultsCard) resultsCard.style.display = 'none';

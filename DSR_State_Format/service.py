@@ -96,7 +96,10 @@ def _generate_state_format_impl(
             "e-Panchayat browser session is not active. Please complete Department Login & OTP."
         )
 
-    portal_date_fmt = format_portal_date(date_str)
+    # State Format DSR Report is fixed to current date only
+    now_dt = datetime.now()
+    resolved_date = date_str or now_dt.strftime("%Y-%m-%d")
+    portal_date_fmt = format_portal_date(resolved_date)
     dl_dir: Path = session["downloads_dir"]
     dl_dir.mkdir(parents=True, exist_ok=True)
 

@@ -4175,10 +4175,14 @@
 
       <!-- Station Configuration Card -->
       <div style="background:#ffffff; border:1.5px solid var(--border); border-radius:12px; padding:18px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; align-items:flex-end;">
-          <div>
-            <label for="state-format-date" style="display:block; font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:5px;">Report Date *</label>
-            <input type="date" id="state-format-date" class="form-control" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-size:0.9rem; font-weight:700;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; align-items:center;">
+          <div style="background:#eff6ff; border:1.5px solid #bfdbfe; border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:12px;">
+            <div style="width:40px; height:40px; border-radius:8px; background:#dbeafe; color:#1d4ed8; display:flex; align-items:center; justify-content:center; font-size:1.35rem; flex-shrink:0;">📅</div>
+            <div>
+              <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:#1e40af; letter-spacing:0.04em;">Report Date (Fixed)</div>
+              <div id="state-format-fixed-date-label" style="font-size:0.95rem; font-weight:800; color:#1e3a8a;">Today (Current Date)</div>
+            </div>
+            <input type="hidden" id="state-format-date" value="">
           </div>
           <div style="display:flex; gap:10px;">
             <button type="button" class="btn btn-gold" id="btn-run-state-format" style="flex:1; padding:10px 16px; font-weight:800; background:#1d4ed8; border-color:#1e40af; color:#ffffff; display:inline-flex; align-items:center; justify-content:center; gap:8px;" onclick="runStateFormatRobot()">

@@ -7,6 +7,7 @@ FastAPI router for State Format DSR report generation, manual uploads, and PDF/E
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
@@ -42,10 +43,13 @@ def generate_state_format(
     console_user, sid = enforce_department_api_access(request, always_require=True)
     is_force_fresh = str(force_fresh).strip().lower() not in ("false", "0", "no", "off")
 
+    # State Format DSR Report is strictly fixed to current date only
+    current_date_str = datetime.now().strftime("%Y-%m-%d")
+
     try:
         res = state_format_service.generate_state_format_report(
             session_id=sid,
-            date_str=date,
+            date_str=current_date_str,
             force_fresh=is_force_fresh,
         )
         if console_user:
