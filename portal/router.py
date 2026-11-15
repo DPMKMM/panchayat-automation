@@ -110,7 +110,13 @@ def _firebase_client_payload() -> dict[str, Any]:
 def portal_home_page(request: Request) -> HTMLResponse:
     """Render web shell branded for the active host and upgrade active sessions to SSO cookie."""
     html = apply_portal_branding(load_portal_shell_html(), request)
-    user, tok = resolve_sso_session(request)
+    user = None
+    tok = ""
+    try:
+        user, tok = resolve_sso_session(request)
+    except Exception as exc:
+        logger.warning("SSO session resolution error (non-fatal): %s", exc)
+
     if user is not None:
         html = html.replace(
             '<body class="state-home-login">',
@@ -122,7 +128,10 @@ def portal_home_page(request: Request) -> HTMLResponse:
             1,
         )
     resp = HTMLResponse(html)
-    sync_sso_cookie_if_needed(request, resp, user, tok)
+    try:
+        sync_sso_cookie_if_needed(request, resp, user, tok)
+    except Exception as exc:
+        logger.warning("SSO cookie sync error (non-fatal): %s", exc)
     return resp
 
 
@@ -339,36 +348,48 @@ def api_portal_logout(request: Request, response: Response):
 @router.get("/api/auth/portal-status", include_in_schema=False)
 @router.get("/api/auth/me", include_in_schema=False)
 def api_portal_status(request: Request, response: Response):
-    scope = resolve_platform_scope(request)
-    user, tok = resolve_sso_session(request, scope)
-    if user is not None and scope == "portal" and not user.get("can_access_portal", True):
-        user = None
-    if user is not None:
-        sync_sso_cookie_if_needed(request, response, user, tok)
-    policy = get_access_policy()["flags"]
-    c_uid = str(user.get("user_id") if user else "").strip()
-    epts_sid = str(getattr(request.state, "session_id", "") or "").strip()
-    if not epts_sid and user:
-        epts_sid = extract_epts_session_id(request, user_id=c_uid)
-    base_payload = {
-        "authenticated": bool(user),
-        "platform_scope": scope,
-        "epts_session_id": epts_sid,
-        "access_policy": policy,
-        **_firebase_client_payload(),
-    }
-    if user:
-        payload = serialize_user_payload(user)
+    try:
+        scope = resolve_platform_scope(request)
+        user, tok = resolve_sso_session(request, scope)
+        if user is not None and scope == "portal" and not user.get("can_access_portal", True):
+            user = None
+        if user is not None:
+            sync_sso_cookie_if_needed(request, response, user, tok)
+        policy = get_access_policy()["flags"]
+        c_uid = str(user.get("user_id") if user else "").strip()
+        epts_sid = str(getattr(request.state, "session_id", "") or "").strip()
+        if not epts_sid and user:
+            epts_sid = extract_epts_session_id(request, user_id=c_uid)
+        base_payload = {
+            "authenticated": bool(user),
+            "platform_scope": scope,
+            "epts_session_id": epts_sid,
+            "access_policy": policy,
+            **_firebase_client_payload(),
+        }
+        if user:
+            payload = serialize_user_payload(user)
+            return {
+                **base_payload,
+                "user": payload,
+                "profile_completed": payload["profile_completed"],
+            }
         return {
             **base_payload,
-            "user": payload,
-            "profile_completed": payload["profile_completed"],
+            "user": None,
+            "profile_completed": False,
         }
-    return {
-        **base_payload,
-        "user": None,
-        "profile_completed": False,
-    }
+    except Exception as exc:
+        logger.error("Error in api_portal_status (resilient fallback): %s", exc)
+        return {
+            "authenticated": False,
+            "platform_scope": "portal",
+            "epts_session_id": "",
+            "access_policy": get_access_policy()["flags"],
+            **_firebase_client_payload(),
+            "user": None,
+            "profile_completed": False,
+        }
 
 
 @router.get("/api/auth/department-status", include_in_schema=False)

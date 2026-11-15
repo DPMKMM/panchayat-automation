@@ -432,12 +432,15 @@ def get_user_by_firebase_uid(firebase_uid: str) -> Optional[dict[str, Any]]:
     clean_uid = str(firebase_uid or "").strip()
     if not clean_uid:
         return None
-    col = _db().collection(COL_USERS)
-    for field_name in ("firebase_uid", "google_uid"):
-        snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_uid)).stream())
-        picked = _pick_best_user_doc(snaps)
-        if picked is not None:
-            return picked
+    try:
+        col = _db().collection(COL_USERS)
+        for field_name in ("firebase_uid", "google_uid"):
+            snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_uid)).stream())
+            picked = _pick_best_user_doc(snaps)
+            if picked is not None:
+                return picked
+    except Exception as exc:
+        logger.warning("Could not query user by firebase_uid from Firestore: %s", exc)
     return None
 
 
@@ -449,12 +452,15 @@ def get_user_by_gmail(gmail: str) -> Optional[dict[str, Any]]:
     clean_email = str(gmail or "").strip().lower()
     if not clean_email:
         return None
-    col = _db().collection(COL_USERS)
-    for field_name in ("gmail", "email"):
-        snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_email)).stream())
-        picked = _pick_best_user_doc(snaps)
-        if picked is not None:
-            return picked
+    try:
+        col = _db().collection(COL_USERS)
+        for field_name in ("gmail", "email"):
+            snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_email)).stream())
+            picked = _pick_best_user_doc(snaps)
+            if picked is not None:
+                return picked
+    except Exception as exc:
+        logger.warning("Could not query user by gmail from Firestore: %s", exc)
     return None
 
 
@@ -463,20 +469,31 @@ def _resolve_user_doc_id(col: Any, user_id: str) -> Optional[str]:
     clean_id = str(user_id or "").strip()
     if not clean_id:
         return None
-    if col.document(clean_id).get().exists:
-        return clean_id
-    snaps = list(col.where(filter=FieldFilter("user_id", "==", clean_id)).limit(1).stream())
-    return snaps[0].id if snaps else None
+    try:
+        if col.document(clean_id).get().exists:
+            return clean_id
+        snaps = list(col.where(filter=FieldFilter("user_id", "==", clean_id)).limit(1).stream())
+        return snaps[0].id if snaps else None
+    except Exception as exc:
+        logger.warning("Could not resolve user doc ID %s: %s", clean_id, exc)
+        return None
 
 
 def get_user_by_id(user_id: str) -> Optional[dict[str, Any]]:
     """Retrieve officer record by internal user_id."""
-    col = _db().collection(COL_USERS)
-    doc_id = _resolve_user_doc_id(col, user_id)
-    if not doc_id:
+    clean_id = str(user_id or "").strip()
+    if not clean_id:
         return None
-    snap = col.document(doc_id).get()
-    return _normalize_user_doc(snap.id, snap.to_dict()) if snap.exists else None
+    try:
+        col = _db().collection(COL_USERS)
+        doc_id = _resolve_user_doc_id(col, clean_id)
+        if not doc_id:
+            return None
+        snap = col.document(doc_id).get()
+        return _normalize_user_doc(snap.id, snap.to_dict()) if snap.exists else None
+    except Exception as exc:
+        logger.warning("Could not retrieve user %s from Firestore: %s", clean_id, exc)
+        return None
 
 
 def get_or_create_firebase_user(
@@ -713,30 +730,51 @@ def create_portal_session(
     )
 
 
+_SESSION_CACHE: dict[str, tuple[dict[str, Any], float]] = {}
+_SESSION_CACHE_TTL: float = 30.0
+
+
 def get_session_user(token: str, app_scope: Optional[str] = None) -> Optional[dict[str, Any]]:
     """Validate Firestore session token (matching app_scope if specified) and return user."""
     clean_tok = str(token or "").strip()
     if not clean_tok:
         return None
-    snap = _db().collection(COL_SESSIONS).document(_token_doc_id(clean_tok)).get()
-    if not snap.exists:
-        return None
-    sess = snap.to_dict() or {}
-    if sess.get("revoked"):
-        return None
-    exp_ts = float(sess.get("expires_at_ts") or 0)
-    if exp_ts <= time.time():
-        return None
-    if app_scope is not None:
-        wanted = str(app_scope).strip().lower()
-        if str(sess.get("app_scope") or "").strip().lower() != wanted:
-            return None
 
-    user = get_user_by_id(str(sess.get("user_id") or ""))
-    if user is None or user.get("account_status") != "Active":
+    now = time.time()
+    cached = _SESSION_CACHE.get(clean_tok)
+    if cached is not None:
+        user_data, expiry = cached
+        if now < expiry:
+            if app_scope is not None:
+                wanted = str(app_scope).strip().lower()
+                if str(user_data.get("session_scope") or "").strip().lower() != wanted:
+                    return None
+            return dict(user_data)
+
+    try:
+        snap = _db().collection(COL_SESSIONS).document(_token_doc_id(clean_tok)).get()
+        if not snap.exists:
+            return None
+        sess = snap.to_dict() or {}
+        if sess.get("revoked"):
+            return None
+        exp_ts = float(sess.get("expires_at_ts") or 0)
+        if exp_ts <= now:
+            return None
+        if app_scope is not None:
+            wanted = str(app_scope).strip().lower()
+            if str(sess.get("app_scope") or "").strip().lower() != wanted:
+                return None
+
+        user = get_user_by_id(str(sess.get("user_id") or ""))
+        if user is None or user.get("account_status") != "Active":
+            return None
+        user["session_scope"] = str(sess.get("app_scope") or "portal")
+        _SESSION_CACHE[clean_tok] = (dict(user), now + _SESSION_CACHE_TTL)
+        return user
+    except Exception as exc:
+        logger.warning("Could not read/validate session token from Firestore: %s", exc)
         return None
-    user["session_scope"] = str(sess.get("app_scope") or "portal")
-    return user
 
 
 def get_portal_session(token: str, app_scope: Optional[str] = None) -> Optional[dict[str, Any]]:
@@ -749,10 +787,14 @@ def revoke_session(token: str) -> bool:
     clean_tok = str(token or "").strip()
     if not clean_tok:
         return False
-    ref = _db().collection(COL_SESSIONS).document(_token_doc_id(clean_tok))
-    if ref.get().exists:
-        ref.update({"revoked": True})
-        return True
+    _SESSION_CACHE.pop(clean_tok, None)
+    try:
+        ref = _db().collection(COL_SESSIONS).document(_token_doc_id(clean_tok))
+        if ref.get().exists:
+            ref.update({"revoked": True})
+            return True
+    except Exception as exc:
+        logger.warning("Could not revoke session in Firestore: %s", exc)
     return False
 
 
@@ -1265,16 +1307,19 @@ def get_usage_stats(days: int = 30) -> dict[str, Any]:
 
 
 def get_all_policy_entries() -> dict[str, dict[str, str]]:
-    """Fetch all persisted access_policy flags from Cloud Firestore."""
+    """Fetch all persisted access_policy flags from Cloud Firestore (safe against quota/outage)."""
     out: dict[str, dict[str, str]] = {}
-    for snap in _db().collection(COL_POLICY).stream():
-        d = snap.to_dict() or {}
-        key = str(d.get("key") or snap.id)
-        out[key] = {
-            "value": str(d.get("value") or "true"),
-            "updated_at": str(d.get("updated_at") or ""),
-            "updated_by": str(d.get("updated_by") or ""),
-        }
+    try:
+        for snap in _db().collection(COL_POLICY).stream():
+            d = snap.to_dict() or {}
+            key = str(d.get("key") or snap.id)
+            out[key] = {
+                "value": str(d.get("value") or "true"),
+                "updated_at": str(d.get("updated_at") or ""),
+                "updated_by": str(d.get("updated_by") or ""),
+            }
+    except Exception as exc:
+        logger.warning("Could not read policy entries from Firestore: %s; using local defaults.", exc)
     return out
 
 
@@ -1282,14 +1327,17 @@ def set_policy_entry(key: str, value: str, updated_by: str = "") -> None:
     """Persist an administrator access policy flag to Cloud Firestore."""
     now = _utc_now_iso()
     clean_key = str(key).strip()
-    _db().collection(COL_POLICY).document(clean_key).set(
-        {
-            "key": clean_key,
-            "value": str(value).strip(),
-            "updated_at": now,
-            "updated_by": str(updated_by or "").strip(),
-        }
-    )
+    try:
+        _db().collection(COL_POLICY).document(clean_key).set(
+            {
+                "key": clean_key,
+                "value": str(value).strip(),
+                "updated_at": now,
+                "updated_by": str(updated_by or "").strip(),
+            }
+        )
+    except Exception as exc:
+        logger.warning("Could not persist policy flag %s to Firestore: %s", clean_key, exc)
 
 
 def save_feedback(

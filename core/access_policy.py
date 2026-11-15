@@ -9,9 +9,17 @@ Hide/View module visibility controls for the officer workspace.
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+import time
+from typing import Any, Optional
 
 from core.firebase_store import get_all_policy_entries, set_policy_entry
+
+logger = logging.getLogger("access_policy")
+
+_POLICY_CACHE: Optional[dict[str, Any]] = None
+_POLICY_CACHE_EXPIRY: float = 0.0
+_POLICY_CACHE_TTL: float = 60.0  # 60s cache in RAM protects against Firestore quota exhaustion
 
 # Master catalog of all modules available on the platform
 MODULE_CATALOG: list[dict[str, Any]] = [
@@ -248,9 +256,21 @@ def _parse_bool(raw: Any, default: bool = True) -> bool:
     return default
 
 
-def get_access_policy() -> dict[str, Any]:
+def get_access_policy(force_refresh: bool = False) -> dict[str, Any]:
     """Return merged effective platform/module availability and visibility policy."""
-    stored = get_all_policy_entries()
+    global _POLICY_CACHE, _POLICY_CACHE_EXPIRY
+    now = time.time()
+    if not force_refresh and _POLICY_CACHE is not None and now < _POLICY_CACHE_EXPIRY:
+        return _POLICY_CACHE
+
+    stored: dict[str, dict[str, str]] = {}
+    try:
+        stored = get_all_policy_entries()
+    except Exception as exc:
+        logger.warning("Could not read policy entries from Firestore: %s; using local defaults", exc)
+        if _POLICY_CACHE is not None:
+            return _POLICY_CACHE
+
     flags: dict[str, bool] = {}
     meta: dict[str, dict[str, str]] = {}
     for key, default_val in DEFAULT_POLICY.items():
@@ -276,13 +296,16 @@ def get_access_policy() -> dict[str, Any]:
             "visibility_key": vis_key,
         })
 
-    return {
+    policy = {
         "flags": flags,
         "descriptions": POLICY_DESCRIPTIONS,
         "meta": meta,
         "modules_catalog": modules,
         **flags,
     }
+    _POLICY_CACHE = policy
+    _POLICY_CACHE_EXPIRY = now + _POLICY_CACHE_TTL
+    return policy
 
 
 def is_module_enabled(module_key: str) -> bool:
@@ -324,9 +347,11 @@ def can_user_access_automated_reports(user: dict[str, Any] | None) -> bool:
 
 def update_access_policy(updates: dict[str, Any], updated_by: str = "") -> dict[str, Any]:
     """Persist boolean updates for recognized policy keys."""
+    global _POLICY_CACHE
+    _POLICY_CACHE = None
     for key, value in updates.items():
         if key not in DEFAULT_POLICY:
             raise ValueError(f"Unsupported policy setting: {key}")
         normalized = "true" if _parse_bool(value, True) else "false"
         set_policy_entry(key=key, value=normalized, updated_by=updated_by)
-    return get_access_policy()
+    return get_access_policy(force_refresh=True)
