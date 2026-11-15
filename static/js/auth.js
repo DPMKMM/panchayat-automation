@@ -1541,14 +1541,6 @@
       showRegAlert('Please enter your district name.');
       return;
     }
-    if (!mandal) {
-      showRegAlert('Please enter your mandal name.');
-      return;
-    }
-    if (!village) {
-      showRegAlert('Please enter your gram panchayat name.');
-      return;
-    }
     if (!desig) {
       showRegAlert('Please select your designation.');
       return;

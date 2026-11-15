@@ -266,3 +266,22 @@ def test_collector_and_special_officer_removed_from_designations():
     assert "DPO" in VALID_DESIGNATIONS
     assert "DPM" in VALID_DESIGNATIONS
 
+
+def test_register_without_mandal_and_village_optional():
+    """Verify that Mandal and Gram Panchayat are optional during registration."""
+    user = register_email_password_user(
+        email="optional.jurisdiction@example.com",
+        password="ValidPassword123",
+        full_name="Kiran Kumar",
+        mobile_number="9876543210",
+        district="Khammam",
+        mandal="",
+        village_gp="",
+        designation="CITIZEN",
+    )
+    assert user["name"] == "Kiran Kumar"
+    assert user["district"] == "Khammam"
+    assert user["mandal"] == ""
+    assert user["village_gp"] == ""
+
+
