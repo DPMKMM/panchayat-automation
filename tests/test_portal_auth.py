@@ -540,3 +540,41 @@ def test_authenticated_module_load_hides_login_card_ssr(monkeypatch):
     assert js_res.status_code == 200
     assert "state-auth-resolving" in js_res.text
     assert "cachedToken && cachedUser" in js_res.text
+
+
+def test_top_fixed_ribbon_and_4_modules_switcher():
+    """Verify the fixed top ribbon (#00A2E8 cyan stripe, #ED1C24 red bar), 4 modules switcher, and user level removal."""
+    res = client.get("/", headers={"Host": "panchayatautomation.in"})
+    assert res.status_code == 200
+    html = res.text
+
+    # 1. Fixed Top Ribbon Elements
+    assert 'id="site-top-ribbon"' in html
+    assert 'class="site-top-ribbon"' in html
+    assert 'class="ribbon-cyan-stripe"' in html
+    assert 'class="ribbon-main-bar"' in html
+    assert '#00A2E8' in html
+    assert '#ED1C24' in html
+
+    # 2. 4 Modules Switcher Buttons
+    assert 'id="ribbon-mod-manual"' in html
+    assert 'id="ribbon-mod-automated"' in html
+    assert 'id="ribbon-mod-tools"' in html
+    assert 'id="ribbon-mod-softwares"' in html
+    assert "window.switchPlatformModule('manual')" in html
+    assert "window.switchPlatformModule('automated')" in html
+    assert "window.switchPlatformModule('tools')" in html
+    assert "window.switchPlatformModule('softwares')" in html
+
+    # 3. Officer Profile Pill (No User Level)
+    assert 'id="ribbon-officer-pill"' in html
+    assert 'id="ribbon-user-name"' in html
+    assert 'id="ribbon-user-email"' in html
+    # Ensure user level role display is removed
+    assert 'id="nav-user-role"' not in html
+
+    # 4. JavaScript Functions in auth.js
+    auth_js = client.get("/static/js/auth.js").text
+    assert "window.switchPlatformModule" in auth_js
+    assert "window.updateRibbonActiveModule" in auth_js
+

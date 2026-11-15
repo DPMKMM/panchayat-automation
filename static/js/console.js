@@ -251,6 +251,9 @@
     var navDot = document.getElementById('nav-browser-dot');
     var navText = document.getElementById('nav-browser-text');
     var deptBtn = document.getElementById('nav-btn-dept-login');
+    var ribDeptDot = document.getElementById('ribbon-dept-dot');
+    var ribDeptText = document.getElementById('ribbon-dept-text');
+    var ribDeptBtn = document.getElementById('ribbon-btn-dept-login');
 
     if (data && data.authenticated) {
       var off = '';
@@ -275,6 +278,15 @@
       if (deptBtn) {
         deptBtn.style.background = 'linear-gradient(135deg, #065f46, #047857)';
         deptBtn.title = 'e-Panchayat Session Active (' + off + (dist ? ' · ' + dist : '') + ')';
+      }
+      if (ribDeptDot) {
+        ribDeptDot.style.background = '#10b981';
+        ribDeptDot.style.boxShadow = '0 0 6px #10b981';
+      }
+      if (ribDeptText) ribDeptText.textContent = off;
+      if (ribDeptBtn) {
+        ribDeptBtn.style.background = 'rgba(16, 185, 129, 0.4)';
+        ribDeptBtn.title = 'e-Panchayat Active (' + off + (dist ? ' · ' + dist : '') + ')';
       }
 
       if (ping) { ping.style.display = 'inline-block'; ping.style.background = '#10b981'; }
@@ -311,6 +323,11 @@
       }
       if (navDot) navDot.style.background = '#f59e0b';
       if (navText) navText.textContent = 'Browser: Awaiting OTP';
+      if (ribDeptDot) {
+        ribDeptDot.style.background = '#f59e0b';
+        ribDeptDot.style.boxShadow = '0 0 6px #f59e0b';
+      }
+      if (ribDeptText) ribDeptText.textContent = 'OTP Pending';
     } else {
       if (ping) ping.style.display = 'none';
       if (dot) dot.style.background = '#9ca3af';
@@ -336,6 +353,15 @@
       if (deptBtn) {
         deptBtn.style.background = 'linear-gradient(135deg, #059669, #047857)';
         deptBtn.title = 'Click to connect official e-Panchayat Departmental Login';
+      }
+      if (ribDeptDot) {
+        ribDeptDot.style.background = '#fcd34d';
+        ribDeptDot.style.boxShadow = 'none';
+      }
+      if (ribDeptText) ribDeptText.textContent = 'Dept Login';
+      if (ribDeptBtn) {
+        ribDeptBtn.style.background = 'rgba(16, 185, 129, 0.25)';
+        ribDeptBtn.title = 'Connect e-Panchayat Department Login';
       }
       if (navDot) navDot.style.background = '#9ca3af';
       if (navText) navText.textContent = 'Department Login';

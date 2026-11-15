@@ -4,9 +4,245 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="doc-page-title">e-Panchayat Automation</title>
-  <link rel="stylesheet" href="/static/css/common.css?v=15">
+  <link rel="stylesheet" href="/static/css/common.css?v=16">
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1398778605171697"
      crossorigin="anonymous"></script>
+  <style>
+    /* Fixed Top Navigation Ribbon: Cyan Top Stripe (#00A2E8) + Vibrant Red Bar (#ED1C24) */
+    .site-top-ribbon {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      width: 100%;
+      z-index: 99999;
+      box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+    }
+    .ribbon-cyan-stripe {
+      height: 4px;
+      background-color: #00A2E8;
+      width: 100%;
+    }
+    .ribbon-main-bar {
+      background-color: #ED1C24;
+      height: 50px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+    }
+    .ribbon-inner {
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .ribbon-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 800;
+      font-size: 0.95rem;
+      letter-spacing: -0.2px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+    }
+    .ribbon-brand:hover {
+      opacity: 0.92;
+    }
+    .ribbon-brand-icon {
+      font-size: 1.25rem;
+      line-height: 1;
+    }
+    .ribbon-modules-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 2px 4px;
+    }
+    .ribbon-modules-nav::-webkit-scrollbar {
+      display: none;
+    }
+    .ribbon-mod-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.18);
+      color: #ffffff;
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.18s ease;
+      user-select: none;
+      line-height: 1.2;
+    }
+    .ribbon-mod-btn:hover {
+      background: rgba(255, 255, 255, 0.32);
+      border-color: #ffffff;
+      transform: translateY(-1px);
+    }
+    .ribbon-mod-btn.active {
+      background: #ffffff !important;
+      color: #c81e1e !important;
+      border-color: #ffffff !important;
+      font-weight: 800 !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    }
+    .ribbon-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .ribbon-pill-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 18px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.16);
+      color: #ffffff;
+      text-decoration: none;
+      transition: all 0.18s ease;
+      line-height: 1.2;
+    }
+    .ribbon-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.28);
+      border-color: #ffffff;
+    }
+    .ribbon-pill-btn.admin {
+      background: rgba(251, 191, 36, 0.22);
+      color: #fef08a;
+      border-color: rgba(253, 224, 71, 0.55);
+    }
+    .ribbon-pill-btn.dept {
+      background: rgba(16, 185, 129, 0.25);
+      color: #a7f3d0;
+      border-color: rgba(52, 211, 153, 0.5);
+    }
+    .ribbon-pill-btn.signin {
+      background: #ffffff;
+      color: #b91c1c;
+      border-color: #ffffff;
+      font-weight: 800;
+    }
+    .ribbon-pill-btn.logout {
+      background: rgba(0, 0, 0, 0.25);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #fee2e2;
+      padding: 5px 9px;
+    }
+    .ribbon-officer-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 18px;
+      padding: 3px 10px;
+      color: #ffffff;
+    }
+    .ribbon-user-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1.5px solid #ffffff;
+      object-fit: cover;
+    }
+    .ribbon-user-icon {
+      font-size: 1rem;
+      line-height: 1;
+    }
+    .ribbon-user-info {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+    .ribbon-user-name-line {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .ribbon-user-name {
+      font-size: 0.8rem;
+      font-weight: 800;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ribbon-user-desig {
+      background: #f59e0b;
+      color: #1e293b;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    .ribbon-user-email {
+      font-size: 0.68rem;
+      color: #fed7aa;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ribbon-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #fcd34d;
+      display: inline-block;
+    }
+    body {
+      padding-top: 56px !important;
+    }
+    @media (max-width: 900px) {
+      .ribbon-brand-text {
+        display: none;
+      }
+      .ribbon-user-email {
+        display: none;
+      }
+    }
+    @media (max-width: 640px) {
+      .ribbon-main-bar {
+        height: 46px;
+      }
+      .ribbon-inner {
+        padding: 0 8px;
+        gap: 6px;
+      }
+      .ribbon-mod-btn {
+        padding: 4px 10px;
+        font-size: 0.75rem;
+      }
+      .ribbon-user-desig {
+        display: none;
+      }
+      body {
+        padding-top: 52px !important;
+      }
+    }
+  </style>
 </head>
 <body class="state-home-login">
   <script>
@@ -24,6 +260,78 @@
       } catch (e) {}
     })();
   </script>
+
+  <!-- Fixed Top Navigation Ribbon: Cyan Top Stripe (#00A2E8) + Vibrant Red Bar (#ED1C24) + 4 Modules Switcher -->
+  <header id="site-top-ribbon" class="site-top-ribbon">
+    <div class="ribbon-cyan-stripe"></div>
+    <div class="ribbon-main-bar">
+      <div class="ribbon-inner">
+        <!-- Left: Brand / Home Link -->
+        <a href="javascript:void(0)" onclick="handleHomeNavigation()" class="ribbon-brand" title="e-Panchayat Automation Home">
+          <span class="ribbon-brand-icon">🏛️</span>
+          <span class="ribbon-brand-text">e-Panchayat Automation</span>
+        </a>
+
+        <!-- Center: 4 Modules Switcher -->
+        <nav class="ribbon-modules-nav" id="ribbon-modules-nav" aria-label="Portal Modules Switcher">
+          <button type="button" class="ribbon-mod-btn" id="ribbon-mod-manual" data-nav-mode="manual" onclick="window.switchPlatformModule('manual')" title="Switch to Manual Excel Reports">
+            <span class="ribbon-mod-icon">📊</span>
+            <span class="ribbon-mod-label">Manual Reports</span>
+          </button>
+          <button type="button" class="ribbon-mod-btn" id="ribbon-mod-automated" data-nav-mode="automated" onclick="window.switchPlatformModule('automated')" title="Switch to Automated Reports Console">
+            <span class="ribbon-mod-icon">⚡</span>
+            <span class="ribbon-mod-label">Automated Reports</span>
+          </button>
+          <button type="button" class="ribbon-mod-btn" id="ribbon-mod-tools" data-nav-mode="tools" onclick="window.switchPlatformModule('tools')" title="Switch to Tools & Utilities Studio">
+            <span class="ribbon-mod-icon">🧰</span>
+            <span class="ribbon-mod-label">Tools Studio</span>
+          </button>
+          <button type="button" class="ribbon-mod-btn" id="ribbon-mod-softwares" data-nav-mode="softwares" onclick="window.switchPlatformModule('softwares')" title="Switch to Official Softwares & Drivers">
+            <span class="ribbon-mod-icon">💻</span>
+            <span class="ribbon-mod-label">Softwares Hub</span>
+          </button>
+        </nav>
+
+        <!-- Right: Officer Profile, Dept Login, Admin & Logout Actions -->
+        <div class="ribbon-actions" id="ribbon-actions">
+          <!-- Department Login Status / Action -->
+          <button type="button" id="ribbon-btn-dept-login" onclick="handleNavDeptLoginClick()" class="ribbon-pill-btn dept" style="display:none;" title="Connect e-Panchayat Department Login">
+            <span id="ribbon-dept-dot" class="ribbon-dot"></span>
+            <span id="ribbon-dept-text">Dept Login</span>
+          </button>
+
+          <!-- Admin Dashboard Link -->
+          <a href="javascript:void(0)" onclick="openAdminDashboardStation()" id="ribbon-btn-admin" class="ribbon-pill-btn admin" style="display:none;" title="Administrator Control Center">
+            <span>🛡️</span> Admin
+          </a>
+
+          <!-- Officer Profile Display (NO User Level) -->
+          <div id="ribbon-officer-pill" class="ribbon-officer-pill" style="display:none;">
+            <img id="ribbon-user-avatar" src="" alt="Officer Profile" class="ribbon-user-avatar" style="display:none;" onerror="this.style.display='none'; document.getElementById('ribbon-user-icon').style.display='inline';">
+            <span id="ribbon-user-icon" class="ribbon-user-icon">👤</span>
+            <div class="ribbon-user-info">
+              <div class="ribbon-user-name-line">
+                <span id="ribbon-user-name" class="ribbon-user-name">Officer</span>
+                <span id="ribbon-user-desig" class="ribbon-user-desig">OFFICER</span>
+              </div>
+              <div id="ribbon-user-email" class="ribbon-user-email">officer@gmail.com</div>
+            </div>
+          </div>
+
+          <!-- Sign In Trigger (when not logged in) -->
+          <button type="button" id="ribbon-btn-signin" onclick="triggerGoogleSignIn()" class="ribbon-pill-btn signin" style="display:none;" title="Sign in with Google">
+            <svg width="14" height="14" viewBox="0 0 24 24" style="flex-shrink:0;"><path fill="#c81e1e" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#c81e1e" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#c81e1e" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#c81e1e" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+            <span>Sign In</span>
+          </button>
+
+          <!-- Logout Button -->
+          <button type="button" id="ribbon-btn-logout" onclick="logoutPortalApp()" class="ribbon-pill-btn logout" style="display:none;" title="Sign out of e-Panchayat Automation">
+            <span>🚪</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
 
   <!-- Main Content -->
   <main class="container" style="padding-top: 24px;">
@@ -88,8 +396,6 @@
               <span id="nav-user-desig" style="background:#f59e0b; color:#064e3b; font-size:0.7rem; font-weight:800; padding:1px 6px; border-radius:4px;">OFFICER</span>
             </div>
             <div style="display:flex; align-items:center; gap:6px; font-size:0.72rem; color:#a7f3d0;">
-              <span id="nav-user-role" style="font-weight:700;">Mandal Level</span>
-              <span>•</span>
               <span id="nav-user-gmail" style="color:#e2e8f0; opacity:0.9;">officer@gmail.com</span>
             </div>
           </div>

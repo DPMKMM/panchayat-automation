@@ -1125,33 +1125,117 @@
   // Header UI, Dashboard Toggle & Scoped Logout
   // ---------------------------------------------------------------------------
 
+  window.updateRibbonActiveModule = function (mode) {
+    var raw = String(mode || '').trim().toLowerCase();
+    var target = (raw === 'automated' || raw === 'tools' || raw === 'softwares') ? raw : 'manual';
+    var modBtns = document.querySelectorAll('.ribbon-mod-btn');
+    if (modBtns && modBtns.length) {
+      modBtns.forEach(function (btn) {
+        var m = btn.getAttribute('data-nav-mode');
+        if (m === target) {
+          btn.classList.add('active');
+          btn.setAttribute('aria-current', 'page');
+        } else {
+          btn.classList.remove('active');
+          btn.removeAttribute('aria-current');
+        }
+      });
+    }
+  };
+
+  window.switchPlatformModule = function (mode) {
+    var raw = String(mode || '').trim().toLowerCase();
+    var m = (raw === 'automated' || raw === 'tools' || raw === 'softwares') ? raw : 'manual';
+
+    if (window.isPortalAuthenticated) {
+      window.selectWorkspaceMode(m, { isDirectClick: true });
+      window.updateRibbonActiveModule(m);
+    } else {
+      try {
+        sessionStorage.setItem('epts_workspace_mode', m);
+        localStorage.setItem('epts_workspace_mode', m);
+      } catch (e) {}
+      window.updateRibbonActiveModule(m);
+      try {
+        if (window.history && typeof window.history.pushState === 'function') {
+          var path = m === 'automated' ? '/autoreports' : (m === 'tools' ? '/tools' : (m === 'softwares' ? '/softwares' : '/manualreports'));
+          window.history.pushState(null, '', path);
+        }
+      } catch (e) {}
+      var titles = {
+        manual: 'Manual Reports',
+        automated: 'Automated Reports',
+        tools: 'Tools Studio',
+        softwares: 'Official Softwares Hub'
+      };
+      if (typeof window.showPortalNotice === 'function') {
+        window.showPortalNotice('Sign in with your Google account to access ' + (titles[m] || 'this workspace') + '.', 'info');
+      }
+      var hero = document.getElementById('portal-hero-card');
+      if (hero && typeof hero.scrollIntoView === 'function') {
+        hero.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
   window.updateHeaderUserInfo = function (user) {
     var bar = document.getElementById('nav-officer-profile-bar');
-    if (!bar) return;
+    var ribbonPill = document.getElementById('ribbon-officer-pill');
+
     if (!user) {
-      bar.style.display = 'none';
+      if (bar) bar.style.display = 'none';
+      if (ribbonPill) ribbonPill.style.display = 'none';
       return;
     }
-    bar.style.display = 'flex';
-    var nameEl = document.getElementById('nav-user-name');
-    var desigEl = document.getElementById('nav-user-desig');
-    var roleEl = document.getElementById('nav-user-role');
-    var gmailEl = document.getElementById('nav-user-gmail');
-    var avatarEl = document.getElementById('nav-user-avatar');
-    var iconFallback = document.getElementById('nav-user-icon-fallback');
 
-    if (nameEl) nameEl.textContent = user.name || 'Officer';
-    if (desigEl) desigEl.textContent = user.designation || 'OFFICER';
-    if (roleEl) roleEl.textContent = user.role || 'Mandal Level';
-    if (gmailEl) gmailEl.textContent = user.gmail || user.email || '';
+    var name = user.name || 'Officer';
+    var desig = user.designation || 'OFFICER';
+    var gmail = user.gmail || user.email || '';
 
-    if (user.profile_picture && avatarEl) {
-      avatarEl.src = user.profile_picture;
-      avatarEl.style.display = 'inline-block';
-      if (iconFallback) iconFallback.style.display = 'none';
-    } else {
-      if (avatarEl) avatarEl.style.display = 'none';
-      if (iconFallback) iconFallback.style.display = 'inline';
+    // Legacy / In-Flow Header Bar (User Level removed)
+    if (bar) {
+      bar.style.display = 'flex';
+      var nameEl = document.getElementById('nav-user-name');
+      var desigEl = document.getElementById('nav-user-desig');
+      var gmailEl = document.getElementById('nav-user-gmail');
+      var avatarEl = document.getElementById('nav-user-avatar');
+      var iconFallback = document.getElementById('nav-user-icon-fallback');
+
+      if (nameEl) nameEl.textContent = name;
+      if (desigEl) desigEl.textContent = desig;
+      if (gmailEl) gmailEl.textContent = gmail;
+
+      if (user.profile_picture && avatarEl) {
+        avatarEl.src = user.profile_picture;
+        avatarEl.style.display = 'inline-block';
+        if (iconFallback) iconFallback.style.display = 'none';
+      } else {
+        if (avatarEl) avatarEl.style.display = 'none';
+        if (iconFallback) iconFallback.style.display = 'inline';
+      }
+    }
+
+    // Fixed Top Ribbon Officer Pill (NO User Level)
+    if (ribbonPill) {
+      ribbonPill.style.display = 'inline-flex';
+      var ribName = document.getElementById('ribbon-user-name');
+      var ribDesig = document.getElementById('ribbon-user-desig');
+      var ribEmail = document.getElementById('ribbon-user-email');
+      var ribAvatar = document.getElementById('ribbon-user-avatar');
+      var ribIcon = document.getElementById('ribbon-user-icon');
+
+      if (ribName) ribName.textContent = name;
+      if (ribDesig) ribDesig.textContent = desig;
+      if (ribEmail) ribEmail.textContent = gmail;
+
+      if (user.profile_picture && ribAvatar) {
+        ribAvatar.src = user.profile_picture;
+        ribAvatar.style.display = 'inline-block';
+        if (ribIcon) ribIcon.style.display = 'none';
+      } else {
+        if (ribAvatar) ribAvatar.style.display = 'none';
+        if (ribIcon) ribIcon.style.display = 'inline';
+      }
     }
   };
 
@@ -1261,6 +1345,35 @@
     }
 
     var profileDone = Boolean(isAuth && user);
+
+    // Sync Fixed Top Ribbon Actions & Officer Display
+    var ribPill = document.getElementById('ribbon-officer-pill');
+    var ribLogout = document.getElementById('ribbon-btn-logout');
+    var ribSignin = document.getElementById('ribbon-btn-signin');
+    var ribAdmin = document.getElementById('ribbon-btn-admin');
+    var ribDept = document.getElementById('ribbon-btn-dept-login');
+
+    if (isAuth && profileDone) {
+      if (ribPill) ribPill.style.display = 'inline-flex';
+      if (ribLogout) ribLogout.style.display = 'inline-flex';
+      if (ribSignin) ribSignin.style.display = 'none';
+      if (ribAdmin) ribAdmin.style.display = (user && user.is_admin) ? 'inline-flex' : 'none';
+      if (ribDept) {
+        var deptActive = sessionStorage.getItem('epts_portal_auth') === 'true' || window.isDeptAuthenticated === true;
+        ribDept.style.display = (window.currentWorkspaceMode === 'automated' || deptActive) ? 'inline-flex' : 'none';
+      }
+    } else {
+      if (ribPill) ribPill.style.display = 'none';
+      if (ribLogout) ribLogout.style.display = 'none';
+      if (ribSignin) ribSignin.style.display = 'inline-flex';
+      if (ribAdmin) ribAdmin.style.display = 'none';
+      if (ribDept) ribDept.style.display = 'none';
+    }
+
+    var activeRibbonMode = window.currentWorkspaceMode || window.getDedicatedPageSection() || 'manual';
+    if (typeof window.updateRibbonActiveModule === 'function') {
+      window.updateRibbonActiveModule(activeRibbonMode);
+    }
 
     if (document.body) {
       document.body.classList.remove('state-auth-resolving');
@@ -1483,6 +1596,7 @@
         window.history.pushState(null, '', path);
       }
     } catch (e) {}
+    var isDirectClick = Boolean(options && options.isDirectClick);
     if (m === 'automated' && isDirectClick) {
       Promise.resolve(
         typeof window.initConsoleAfterPortalAuth === 'function'
@@ -1497,6 +1611,9 @@
           window.openDepartmentLoginModal();
         }
       });
+    }
+    if (typeof window.updateRibbonActiveModule === 'function') {
+      window.updateRibbonActiveModule(m);
     }
     return true;
   };
