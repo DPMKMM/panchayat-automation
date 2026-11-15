@@ -140,7 +140,7 @@ def test_apex_homepage_and_google_login_branding():
         assert 'id="hero-welcome-message"' not in html
 
         # Dashboard, profile, loading & empty states carry platform name
-        assert "nav-officer-profile-bar" in html
+        assert "ribbon-officer-pill" in html
         assert "openOfficerProfileView" not in html
         assert "officer-profile-modal" not in html
         assert 'id="dash-welcome-eyebrow"' in html

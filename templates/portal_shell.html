@@ -140,6 +140,16 @@
       color: #a7f3d0;
       border-color: rgba(52, 211, 153, 0.5);
     }
+    .ribbon-pill-btn.disconnect {
+      background: rgba(239, 68, 68, 0.22);
+      color: #fca5a5;
+      border-color: rgba(248, 113, 113, 0.45);
+    }
+    .ribbon-pill-btn.disconnect:hover {
+      background: rgba(239, 68, 68, 0.38);
+      color: #ffffff;
+      border-color: rgba(248, 113, 113, 0.75);
+    }
     .ribbon-pill-btn.signin {
       background: #ffffff;
       color: #064e3b;
@@ -299,7 +309,12 @@
           <!-- Department Login Status / Action -->
           <button type="button" id="ribbon-btn-dept-login" onclick="handleNavDeptLoginClick()" class="ribbon-pill-btn dept" style="display:none;" title="Connect e-Panchayat Department Login">
             <span id="ribbon-dept-dot" class="ribbon-dot"></span>
-            <span id="ribbon-dept-text">Dept Login</span>
+            <span id="ribbon-dept-text">Department Login</span>
+          </button>
+
+          <!-- Disconnect Department Session (visible when department session is active) -->
+          <button type="button" id="ribbon-btn-disconnect-epts" onclick="disconnectEptsSession();" class="ribbon-pill-btn disconnect" style="display:none;" title="Disconnect official e-Panchayat departmental session">
+            <span>🔒</span> Disconnect
           </button>
 
           <!-- Admin Dashboard Link -->
@@ -342,71 +357,6 @@
     <div id="portal-notice-banner" class="portal-notice-banner" role="status" aria-live="polite">
       <span id="portal-notice-text"></span>
       <button type="button" onclick="clearPortalNotice()" style="background:none; border:none; font-size:1.25rem; cursor:pointer; color:inherit; line-height:1; padding:0 4px;" aria-label="Dismiss">&times;</button>
-    </div>
-
-    <!-- Global Persistent Header Bar (Styled distinctly by screen state: Workspace Hub vs Automation Engine) -->
-    <div id="global-browser-status-bar" class="global-status-bar" style="display: none;">
-      <div id="workspace-hub-brand-left" class="hub-brand-left" style="display: none; align-items: center; gap: 12px;">
-        <div class="hub-brand-emblem">🏛️</div>
-        <div>
-          <div class="hub-brand-title" id="hub-bar-title">e-Panchayat Automation &bull; Officer Workspace</div>
-          <div class="hub-brand-sub" id="hub-bar-sub">Choose Manual Reports, Automated Portal Robots, or Document Tools below.</div>
-        </div>
-      </div>
-      <div id="telemetry-engine-bar-left" style="display: flex; align-items: center; gap: 12px;">
-        <div style="position: relative; width: 12px; height: 12px; flex-shrink: 0;">
-          <span id="browser-status-ping" style="display:none; position: absolute; width: 100%; height: 100%; border-radius: 50%; background: #10b981; opacity: 0.75; animation: livePing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;"></span>
-          <span id="browser-status-dot" style="position: relative; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #9ca3af;"></span>
-        </div>
-        <div>
-          <div style="font-size: 0.88rem; font-weight: 800; color: #ffffff; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <span>e-Panchayat Automation &bull; Background Browser Engine:</span>
-            <span id="browser-status-pill" style="background: rgba(255,255,255,0.15); color: #e2e8f0; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.5px;">STANDBY · NOT LOGGED IN</span>
-          </div>
-          <div id="browser-status-desc" style="font-size: 0.8rem; color: #a7f3d0; margin-top: 2px;">
-            e-Panchayat Automation browser engine ready. Click "Department Login" to connect and authenticate.
-          </div>
-        </div>
-      </div>
-      <div id="browser-status-action" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-        <button type="button" id="btn-active-sessions" onclick="openSessionsModal()" style="display:none; background:rgba(255,255,255,0.12); color:#a7f3d0; border:1px solid rgba(255,255,255,0.25); border-radius:6px; font-size:0.75rem; font-weight:700; padding:4px 10px; cursor:pointer; align-items:center; gap:5px;" title="View all connected officers and background sessions">👥 Active Sessions</button>
-        <span id="browser-status-officer" style="font-size: 0.82rem; font-weight: 700; color: #fbbf24;">🔒 Login Required</span>
-
-        <button type="button" id="nav-btn-dept-login" onclick="handleNavDeptLoginClick()" style="display:none; align-items:center; gap:8px; font-size:0.8rem; font-weight:800; background:linear-gradient(135deg, #059669, #047857); border:1.5px solid rgba(255,255,255,0.35); padding:6px 14px; border-radius:20px; color:#ffffff; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.25);" title="Connect official e-Panchayat Departmental Login">
-          <span id="nav-dept-login-dot" style="width:8px; height:8px; border-radius:50%; background:#fcd34d; display:inline-block;"></span>
-          <span id="nav-dept-login-text">Department Login</span>
-        </button>
-
-        <a class="nav-link" href="javascript:void(0)" onclick="disconnectEptsSession();" id="nav-btn-disconnect-epts" style="display:none; align-items:center; gap:5px; font-size:0.78rem; font-weight:700; color:#fde68a; border:1px solid rgba(251,191,36,0.3); border-radius:8px; padding:4px 10px; background:rgba(245,158,11,0.12);" title="Disconnect e-Panchayat departmental session">
-          <span>🔒</span> Disconnect ePanchayat
-        </a>
-
-        <a class="nav-link" href="javascript:void(0)" onclick="handleHomeNavigation();" id="nav-btn-home" style="display:none; align-items:center; gap:6px; font-weight:700;">
-          <span>🏠</span> Dashboard
-        </a>
-
-        <a class="nav-link" href="javascript:void(0)" onclick="openAdminDashboardStation();" id="nav-btn-admin-dashboard" style="display:none; align-items:center; gap:6px; font-weight:700; color:#fde68a; border:1px solid rgba(251,191,36,0.45); background:rgba(245,158,11,0.14);">
-          <span>🛡️</span> Admin Dashboard
-        </a>
-
-        <div id="nav-officer-profile-bar" style="display:none; align-items:center; gap:10px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.25); padding:4px 12px; border-radius:12px; cursor:default;">
-          <img id="nav-user-avatar" src="" alt="Profile" style="width:30px; height:30px; border-radius:50%; border:1.5px solid #10b981; object-fit:cover; display:none;" onerror="this.style.display='none'; document.getElementById('nav-user-icon-fallback').style.display='inline';">
-          <span id="nav-user-icon-fallback" style="font-size:1.15rem; display:inline;">👤</span>
-          <div style="display:flex; flex-direction:column; line-height:1.2;">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span id="nav-user-name" style="font-weight:800; font-size:0.84rem; color:#ffffff;">Officer Name</span>
-              <span id="nav-user-desig" style="background:#f59e0b; color:#064e3b; font-size:0.7rem; font-weight:800; padding:1px 6px; border-radius:4px;">OFFICER</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px; font-size:0.72rem; color:#a7f3d0;">
-              <span id="nav-user-gmail" style="color:#e2e8f0; opacity:0.9;">officer@gmail.com</span>
-            </div>
-          </div>
-        </div>
-
-        <a class="nav-link" href="javascript:void(0)" onclick="logoutPortalApp();" id="nav-btn-portal-logout" style="display:none; align-items:center; gap:5px; font-size:0.78rem; font-weight:700; color:#fca5a5; border:1px solid rgba(248,113,113,0.3); border-radius:8px; padding:4px 12px; background:rgba(239,68,68,0.12);" title="Logout from current session">
-          <span>🚪</span> Logout
-        </a>
-      </div>
     </div>
 
     <!-- Home Screen: Official Google Authentication Login Card -->

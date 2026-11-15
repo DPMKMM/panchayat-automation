@@ -566,11 +566,14 @@ def test_top_fixed_ribbon_and_4_modules_switcher():
     assert "window.switchPlatformModule('tools')" in html
     assert "window.switchPlatformModule('softwares')" in html
 
-    # 3. Officer Profile Pill (No User Level)
+    # 3. Officer Profile Pill (No User Level) & Disconnect Button
     assert 'id="ribbon-officer-pill"' in html
     assert 'id="ribbon-user-name"' in html
     assert 'id="ribbon-user-email"' in html
-    # Ensure user level role display is removed
+    assert 'id="ribbon-btn-disconnect-epts"' in html
+    assert "disconnectEptsSession()" in html
+    # Ensure redundant in-page global status bar and user level role display are completely removed
+    assert 'id="global-browser-status-bar"' not in html
     assert 'id="nav-user-role"' not in html
 
     # 4. JavaScript Functions in auth.js

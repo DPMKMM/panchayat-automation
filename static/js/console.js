@@ -254,8 +254,10 @@
     var ribDeptDot = document.getElementById('ribbon-dept-dot');
     var ribDeptText = document.getElementById('ribbon-dept-text');
     var ribDeptBtn = document.getElementById('ribbon-btn-dept-login');
+    var ribDisconnBtn = document.getElementById('ribbon-btn-disconnect-epts');
 
     if (data && data.authenticated) {
+      if (ribDisconnBtn) ribDisconnBtn.style.display = 'inline-flex';
       var off = '';
       try { off = sessionStorage.getItem('epts_officer_id') || ''; } catch (e) {}
       off = String(data.user_id || off || 'Officer').trim();
@@ -358,11 +360,12 @@
         ribDeptDot.style.background = '#fcd34d';
         ribDeptDot.style.boxShadow = 'none';
       }
-      if (ribDeptText) ribDeptText.textContent = 'Dept Login';
+      if (ribDeptText) ribDeptText.textContent = 'Department Login';
       if (ribDeptBtn) {
         ribDeptBtn.style.background = 'rgba(16, 185, 129, 0.25)';
         ribDeptBtn.title = 'Connect e-Panchayat Department Login';
       }
+      if (ribDisconnBtn) ribDisconnBtn.style.display = 'none';
       if (navDot) navDot.style.background = '#9ca3af';
       if (navText) navText.textContent = 'Department Login';
     }
@@ -373,6 +376,8 @@
     var btnSessions = document.getElementById('btn-active-sessions');
     var navPill = document.getElementById('nav-browser-pill');
     var btnDisconn = document.getElementById('nav-btn-disconnect-epts');
+    var ribDisconn = document.getElementById('ribbon-btn-disconnect-epts');
+    if (ribDisconn) ribDisconn.style.display = isAuth ? 'inline-flex' : 'none';
     var dashBadge = document.getElementById('dash-session-badge');
     var officerBanner = document.getElementById('dash-officer-banner');
     var dashOffId = document.getElementById('dash-officer-id');

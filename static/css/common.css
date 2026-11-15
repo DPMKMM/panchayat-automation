@@ -182,6 +182,18 @@ body {
   border-color: rgba(52, 211, 153, 0.5);
 }
 
+.ribbon-pill-btn.disconnect {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.ribbon-pill-btn.disconnect:hover {
+  background: rgba(239, 68, 68, 0.38);
+  color: #ffffff;
+  border-color: rgba(248, 113, 113, 0.75);
+}
+
 .ribbon-pill-btn.signin {
   background: #ffffff;
   color: #064e3b;

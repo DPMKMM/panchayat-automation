@@ -1352,15 +1352,19 @@
     var ribSignin = document.getElementById('ribbon-btn-signin');
     var ribAdmin = document.getElementById('ribbon-btn-admin');
     var ribDept = document.getElementById('ribbon-btn-dept-login');
+    var ribDisconn = document.getElementById('ribbon-btn-disconnect-epts');
 
     if (isAuth && profileDone) {
       if (ribPill) ribPill.style.display = 'inline-flex';
       if (ribLogout) ribLogout.style.display = 'inline-flex';
       if (ribSignin) ribSignin.style.display = 'none';
       if (ribAdmin) ribAdmin.style.display = (user && user.is_admin) ? 'inline-flex' : 'none';
+      var deptActive = sessionStorage.getItem('epts_portal_auth') === 'true' || window.isDeptAuthenticated === true;
       if (ribDept) {
-        var deptActive = sessionStorage.getItem('epts_portal_auth') === 'true' || window.isDeptAuthenticated === true;
         ribDept.style.display = (window.currentWorkspaceMode === 'automated' || deptActive) ? 'inline-flex' : 'none';
+      }
+      if (ribDisconn) {
+        ribDisconn.style.display = deptActive ? 'inline-flex' : 'none';
       }
     } else {
       if (ribPill) ribPill.style.display = 'none';
@@ -1368,6 +1372,7 @@
       if (ribSignin) ribSignin.style.display = 'inline-flex';
       if (ribAdmin) ribAdmin.style.display = 'none';
       if (ribDept) ribDept.style.display = 'none';
+      if (ribDisconn) ribDisconn.style.display = 'none';
     }
 
     var activeRibbonMode = window.currentWorkspaceMode || window.getDedicatedPageSection() || 'manual';
