@@ -21,21 +21,28 @@ _LOCK = threading.Lock()
 _JOBS: dict[str, dict[str, Any]] = {}
 
 
-def _df_to_records(df: pd.DataFrame, include_time_styles: bool = False) -> list[dict[str, Any]]:
+def _df_to_records(
+    df: pd.DataFrame,
+    include_time_styles: bool = False,
+    include_pct_styles: bool = False,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     fixed_non_time = {
         "S.No",
         "Mandal Name",
         "Panchayat Name",
+        "Total GPs",
         "Present",
         "On Leave",
         "Not Marked Attendance",
         "Training / Meeting",
         "No. of Days Before 9 AM",
     }
+    non_pct_cols = {"S.No", "Mandal Name", "Total GPs", "Panchayat Name"}
     for _, r in df.iterrows():
         item: dict[str, Any] = {}
         t_styles: dict[str, dict[str, str]] = {}
+        p_styles: dict[str, dict[str, str]] = {}
         for col in df.columns:
             v = r[col]
             if pd.isna(v):
@@ -46,9 +53,13 @@ def _df_to_records(df: pd.DataFrame, include_time_styles: bool = False) -> list[
                 item[col] = v
             if include_time_styles and col not in fixed_non_time:
                 t_styles[col] = classify_time_style(item[col])
+            if include_pct_styles and col not in non_pct_cols:
+                p_styles[col] = highlight_percentage(item[col])
         item["_before9_style"] = highlight_percentage(item.get("Before 9 AM %"))
         if include_time_styles:
             item["_time_styles"] = t_styles
+        if include_pct_styles:
+            item["_pct_styles"] = p_styles
         rows.append(item)
     return rows
 
@@ -71,6 +82,7 @@ def analyze_uploaded_files(
         "all": f"{safe_dist}_MultiDays_DSR_Full_Report_{ts_download}.pdf",
         "district": f"{safe_dist}_MultiDays_DSR_District_Level_{ts_download}.pdf",
         "mandal": f"{safe_dist}_MultiDays_DSR_Mandal_Level_{ts_download}.pdf",
+        "mandal_abstract": f"{safe_dist}_MultiDays_DSR_Mandal_Abstract_{ts_download}.pdf",
         "gp": f"{safe_dist}_MultiDays_DSR_GP_Summary_{ts_download}.pdf",
         "time_matrix": f"{safe_dist}_MultiDays_DSR_Exact_Time_{ts_download}.pdf",
     }
@@ -88,6 +100,7 @@ def analyze_uploaded_files(
 
     dist_rows = _df_to_records(result.district)
     mandal_rows = _df_to_records(result.mandal)
+    mandal_abs_rows = _df_to_records(result.mandal_abstract, include_pct_styles=True)
     gp_rows = _df_to_records(result.gp_summary)
     tm_rows = _df_to_records(result.time_matrix, include_time_styles=True) if include_time_matrix else []
 
@@ -125,16 +138,19 @@ def analyze_uploaded_files(
         },
         "district_columns": list(result.district.columns),
         "mandal_columns": list(result.mandal.columns),
+        "mandal_abstract_columns": list(result.mandal_abstract.columns),
         "gp_columns": list(result.gp_summary.columns),
         "time_matrix_columns": list(result.time_matrix.columns) if include_time_matrix else [],
         "district_rows": dist_rows,
         "mandal_rows": mandal_rows,
+        "mandal_abstract_rows": mandal_abs_rows,
         "gp_rows": gp_rows,
         "time_matrix_rows": tm_rows,
         "download_filenames": {
             "pdf": pdf_filenames["all"],
             "pdf_district": pdf_filenames["district"],
             "pdf_mandal": pdf_filenames["mandal"],
+            "pdf_mandal_abstract": pdf_filenames["mandal_abstract"],
             "pdf_gp": pdf_filenames["gp"],
             "pdf_time_matrix": pdf_filenames["time_matrix"],
             "excel": excel_filename,
@@ -143,6 +159,7 @@ def analyze_uploaded_files(
             "pdf": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=all",
             "pdf_district": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=district",
             "pdf_mandal": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=mandal",
+            "pdf_mandal_abstract": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=mandal_abstract",
             "pdf_gp": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=gp",
             "pdf_time_matrix": f"/api/multiday-dsr/jobs/{job_id}/download-pdf?level=time_matrix",
             "excel": f"/api/multiday-dsr/jobs/{job_id}/download-excel",
@@ -164,6 +181,8 @@ def get_job_artifact(job_id: str, kind: str, level: str = "all") -> tuple[str, b
         lvl = (level or "all").strip().lower()
         if lvl in ("exact_time", "time"):
             lvl = "time_matrix"
+        if lvl in ("mandal_abstract", "mandal_matrix", "abstract"):
+            lvl = "mandal_abstract"
         if lvl not in entry["pdf_paths"]:
             lvl = "all"
         p = Path(entry["pdf_paths"][lvl])

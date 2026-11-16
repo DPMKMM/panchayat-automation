@@ -149,6 +149,7 @@ class AutoMultiDsrJobRecord:
                 "pdf": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=all",
                 "pdf_district": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=district",
                 "pdf_mandal": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=mandal",
+                "pdf_mandal_abstract": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=mandal_abstract",
                 "pdf_gp": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=gp",
                 "pdf_time_matrix": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=time_matrix",
                 "excel": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-excel",

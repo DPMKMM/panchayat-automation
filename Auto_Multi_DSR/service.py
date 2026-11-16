@@ -199,6 +199,7 @@ def _execute_job_thread(job_id: str, session_id: str, include_time_matrix: bool)
             "all": f"{safe_dist}_Auto_MultiDays_DSR_Full_Report_{ts_download}.pdf",
             "district": f"{safe_dist}_Auto_MultiDays_DSR_District_{ts_download}.pdf",
             "mandal": f"{safe_dist}_Auto_MultiDays_DSR_Mandal_{ts_download}.pdf",
+            "mandal_abstract": f"{safe_dist}_Auto_MultiDays_DSR_Mandal_Abstract_{ts_download}.pdf",
             "gp": f"{safe_dist}_Auto_MultiDays_DSR_GP_Summary_{ts_download}.pdf",
             "time_matrix": f"{safe_dist}_Auto_MultiDays_DSR_Exact_Time_{ts_download}.pdf",
         }
@@ -217,6 +218,7 @@ def _execute_job_thread(job_id: str, session_id: str, include_time_matrix: bool)
 
         dist_rows = _df_to_records(result.district)
         mandal_rows = _df_to_records(result.mandal)
+        mandal_abs_rows = _df_to_records(result.mandal_abstract, include_pct_styles=True)
         gp_rows = _df_to_records(result.gp_summary)
         tm_rows = _df_to_records(result.time_matrix, include_time_styles=True) if include_time_matrix else []
 
@@ -241,16 +243,19 @@ def _execute_job_thread(job_id: str, session_id: str, include_time_matrix: bool)
             },
             "district_columns": list(result.district.columns),
             "mandal_columns": list(result.mandal.columns),
+            "mandal_abstract_columns": list(result.mandal_abstract.columns),
             "gp_columns": list(result.gp_summary.columns),
             "time_matrix_columns": list(result.time_matrix.columns) if include_time_matrix else [],
             "district_rows": dist_rows,
             "mandal_rows": mandal_rows,
+            "mandal_abstract_rows": mandal_abs_rows,
             "gp_rows": gp_rows,
             "time_matrix_rows": tm_rows,
             "download_filenames": {
                 "pdf": pdf_filenames["all"],
                 "pdf_district": pdf_filenames["district"],
                 "pdf_mandal": pdf_filenames["mandal"],
+                "pdf_mandal_abstract": pdf_filenames["mandal_abstract"],
                 "pdf_gp": pdf_filenames["gp"],
                 "pdf_time_matrix": pdf_filenames["time_matrix"],
                 "excel": excel_filename,
@@ -329,6 +334,8 @@ def get_job_artifact(job_id: str, session_id: str, kind: str, level: str = "all"
         lvl = (level or "all").strip().lower()
         if lvl in ("exact_time", "time"):
             lvl = "time_matrix"
+        if lvl in ("mandal_abstract", "mandal_matrix", "abstract"):
+            lvl = "mandal_abstract"
         if lvl not in job.pdf_paths:
             lvl = "all"
         p = Path(job.pdf_paths[lvl])

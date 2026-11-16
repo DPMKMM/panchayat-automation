@@ -4549,6 +4549,7 @@
     var dlExcelLbl = document.getElementById('btn-auto-multi-dl-excel-label');
     var dlDistPdf = document.getElementById('btn-auto-multi-dl-dist-pdf');
     var dlMandalPdf = document.getElementById('btn-auto-multi-dl-mandal-pdf');
+    var dlMandalAbsPdf = document.getElementById('btn-auto-multi-dl-mandal-abs-pdf');
     var dlGpPdf = document.getElementById('btn-auto-multi-dl-gp-pdf');
     var dlTimePdf = document.getElementById('btn-auto-multi-dl-time-pdf');
     var timeTabBtn = document.getElementById('btn-auto-multi-tab-time');
@@ -4556,9 +4557,10 @@
     var baseUrls = job.download_urls || {};
     if (dlFullPdf) dlFullPdf.href = baseUrls.pdf || '#';
     if (dlExcel) dlExcel.href = baseUrls.excel || '#';
-    if (dlExcelLbl) dlExcelLbl.textContent = (data.time_matrix_columns && data.time_matrix_columns.length) ? 'Download Excel (5 Sheets)' : 'Download Excel (4 Sheets)';
+    if (dlExcelLbl) dlExcelLbl.textContent = (data.time_matrix_columns && data.time_matrix_columns.length) ? 'Download Excel (6 Sheets)' : 'Download Excel (5 Sheets)';
     if (dlDistPdf) dlDistPdf.href = baseUrls.pdf_district || '#';
     if (dlMandalPdf) dlMandalPdf.href = baseUrls.pdf_mandal || '#';
+    if (dlMandalAbsPdf) dlMandalAbsPdf.href = baseUrls.pdf_mandal_abstract || '#';
     if (dlGpPdf) dlGpPdf.href = baseUrls.pdf_gp || '#';
     if (dlTimePdf) {
       dlTimePdf.href = baseUrls.pdf_time_matrix || '#';
@@ -4613,7 +4615,7 @@
     document.querySelectorAll('[data-auto-pdf]').forEach(function (lnk) {
       lnk.classList.toggle('active-pdf', lnk.getAttribute('data-auto-pdf') === autoMultiActiveTab);
     });
-    var showFilter = (autoMultiActiveTab === 'mandal' || autoMultiActiveTab === 'gp' || autoMultiActiveTab === 'time_matrix');
+    var showFilter = (autoMultiActiveTab === 'mandal' || autoMultiActiveTab === 'mandal_abstract' || autoMultiActiveTab === 'gp' || autoMultiActiveTab === 'time_matrix');
     var mSel = document.getElementById('auto-multi-mandal-filter');
     var qInp = document.getElementById('auto-multi-search-input');
     if (mSel) mSel.style.display = showFilter ? 'inline-block' : 'none';
@@ -4631,6 +4633,9 @@
     if (autoMultiActiveTab === 'mandal') {
       cols = data.mandal_columns || [];
       rows = data.mandal_rows || [];
+    } else if (autoMultiActiveTab === 'mandal_abstract') {
+      cols = data.mandal_abstract_columns || [];
+      rows = data.mandal_abstract_rows || [];
     } else if (autoMultiActiveTab === 'gp') {
       cols = data.gp_columns || [];
       rows = data.gp_rows || [];
@@ -4671,11 +4676,18 @@
     if (tbody) {
       var leftCols = { 'Mandal Name': true, 'Panchayat Name': true };
       tbody.innerHTML = rows.map(function (r) {
-        return '<tr>' + cols.map(function (c) {
+        var isDistAvg = (String(r['Mandal Name'] || '').trim() === 'District Average');
+        var trStyle = isDistAvg ? 'background:#f1f5f9; font-weight:700; border-top:2px solid #0f4c3a;' : '';
+        return '<tr style="' + trStyle + '">' + cols.map(function (c) {
           var val = r[c];
           if (c === 'Before 9 AM %') {
             var st = r._before9_style || {};
             return '<td><span class="md-pct-pill" style="' + esc(st.css || '') + '">' + esc(Number(val || 0).toFixed(2) + '%') + '</span></td>';
+          }
+          if (autoMultiActiveTab === 'mandal_abstract' && r._pct_styles && r._pct_styles[c]) {
+            var ps = r._pct_styles[c] || {};
+            var numVal = typeof val === 'number' ? val.toFixed(2) + '%' : (val !== undefined && val !== null && val !== '' ? String(val) : '0.00%');
+            return '<td><span class="md-pct-pill" style="min-width:58px; font-variant-numeric:tabular-nums; font-weight:700; ' + esc(ps.css || '') + '">' + esc(numVal) + '</span></td>';
           }
           if (autoMultiActiveTab === 'time_matrix' && r._time_styles && r._time_styles[c]) {
             var ts = r._time_styles[c] || {};

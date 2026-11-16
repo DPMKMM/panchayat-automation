@@ -59,9 +59,11 @@ def _df_to_pdf_table(
     time_cols: set[str] | None = None,
     compact: bool = False,
     header_aliases: dict[str, str] | None = None,
+    highlight_pct_cols: set[str] | None = None,
 ) -> Table:
     cols = list(df.columns)
     t_cols = time_cols or set()
+    hl_pct_cols = highlight_pct_cols or {"Before 9 AM %"}
     aliases = header_aliases or {}
     th_style = styles.get("th_compact", styles["th"]) if compact else styles["th"]
     td_c_style = styles.get("td_c_compact", styles["td_c"]) if compact else styles["td_c"]
@@ -102,10 +104,13 @@ def _df_to_pdf_table(
         bg_row = _ALT_ROW if r_idx % 2 == 0 else colors.white
         ts_cmds.append(("BACKGROUND", (0, r_idx), (-1, r_idx), bg_row))
         cells = []
+        is_dist_avg_row = False
         for c_idx, (col_name, val) in enumerate(zip(cols, row_vals)):
+            if col_name == "Mandal Name" and str(val).strip() == "District Average":
+                is_dist_avg_row = True
             is_pct = col_name in pct_cols
             txt = html.escape(_fmt_cell(val, is_pct=is_pct))
-            if col_name == "Before 9 AM %":
+            if col_name == "Before 9 AM %" or col_name in hl_pct_cols:
                 hl = highlight_percentage(val)
                 if hl["bg"]:
                     ts_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), HexColor(hl["bg"])))
@@ -116,13 +121,17 @@ def _df_to_pdf_table(
                     ts_cmds.append(("BACKGROUND", (c_idx, r_idx), (c_idx, r_idx), HexColor(st["bg"])))
                 cells.append(Paragraph(txt, _get_dyn_style(st["fg"], col_name == "Average Time")))
             elif col_name in left_cols:
-                cells.append(Paragraph(txt, td_l_style))
+                st_l = styles.get("td_l_bold", td_l_style) if is_dist_avg_row else td_l_style
+                cells.append(Paragraph(txt, st_l))
             else:
                 cells.append(Paragraph(txt, td_c_style))
+        if is_dist_avg_row:
+            ts_cmds.append(("LINEABOVE", (0, r_idx), (-1, r_idx), 1.0, _NAVY))
         data.append(cells)
 
     tbl = Table(data, colWidths=col_widths, repeatRows=1)
     tbl.setStyle(TableStyle(ts_cmds))
+    return tbl
     return tbl
 
 
@@ -139,13 +148,16 @@ def generate_multiday_dsr_pdf(
     lvl = (level or "all").strip().lower()
     if lvl in ("exact_time", "time"):
         lvl = "time_matrix"
-    if lvl not in ("all", "district", "mandal", "gp", "time_matrix"):
+    if lvl in ("mandal_abstract", "mandal_matrix", "abstract"):
+        lvl = "mandal_abstract"
+    if lvl not in ("all", "district", "mandal", "mandal_abstract", "gp", "time_matrix"):
         lvl = "all"
 
     level_titles = {
         "all": "CONSOLIDATED MULTI-DAYS PS ATTENDANCE & DSR ABSTRACT",
         "district": "DISTRICT LEVEL — DATE-WISE ATTENDANCE & DSR ABSTRACT",
         "mandal": "MANDAL LEVEL — MANDAL & DATE-WISE ATTENDANCE & DSR ABSTRACT",
+        "mandal_abstract": "MANDAL ABSTRACT — DATE-WISE % OF PS ATTENDANCE BEFORE 9 AM",
         "gp": "GRAM PANCHAYAT LEVEL — PERIOD ATTENDANCE & DSR SUMMARY",
         "time_matrix": "GRAM PANCHAYAT DAY-WISE EXACT ATTENDANCE TIME & AVERAGE TIME",
     }
@@ -260,10 +272,60 @@ def generate_multiday_dsr_pdf(
             )
         )
 
-    # 3. GP Level (Period Summary) — 15 columns
+    # 3. Mandal Abstract (Date-Wise % of PS Attendance Before 9 AM Matrix)
+    if lvl in ("all", "mandal_abstract") and not result.mandal_abstract.empty:
+        _need_break()
+        sec_title = "3. Mandal Abstract — Date-Wise % of PS Attendance Before 9 AM" if lvl == "all" else "Mandal Abstract — Date-Wise % of PS Attendance Before 9 AM"
+        story.append(Paragraph(sec_title, styles["sec"]))
+
+        m_abs_df = result.mandal_abstract
+        fixed_left = ["S.No", "Mandal Name", "Total GPs"]
+        summary_right = ["Average % Before 9 AM"]
+        date_cols = [c for c in m_abs_df.columns if c not in fixed_left and c not in summary_right]
+
+        chunk_size = 14
+        date_chunks = [date_cols[i : i + chunk_size] for i in range(0, max(1, len(date_cols)), chunk_size)] or [[]]
+        compact_mode = len(date_cols) > 6
+        pdf_aliases = {"Average % Before 9 AM": "Avg % <9AM"}
+
+        for ch_idx, d_chunk in enumerate(date_chunks, start=1):
+            sub_cols = fixed_left + d_chunk + (summary_right if ch_idx == len(date_chunks) else [])
+            sub_df = m_abs_df[sub_cols]
+
+            w_sno = 20.0 if compact_mode else 24.0
+            w_mandal = 80.0 if compact_mode else 95.0
+            w_gps = 35.0 if compact_mode else 42.0
+            w_avg = (50.0 if compact_mode else 60.0) if (summary_right[0] in sub_cols) else 0.0
+
+            rem_w = usable_w - (w_sno + w_mandal + w_gps + w_avg)
+            n_dates = max(1, len(d_chunk))
+            w_date = max(30.0, rem_w / n_dates)
+
+            c_widths = [w_sno, w_mandal, w_gps] + [w_date] * len(d_chunk) + ([w_avg] if w_avg > 0 else [])
+            hl_cols = set(d_chunk) | set(summary_right)
+
+            if len(date_chunks) > 1:
+                story.append(Paragraph(f"Part {ch_idx} of {len(date_chunks)} ({d_chunk[0]} to {d_chunk[-1]})", styles["meta"]))
+
+            story.append(
+                _df_to_pdf_table(
+                    sub_df,
+                    c_widths,
+                    pct_cols=hl_cols,
+                    left_cols={"Mandal Name"},
+                    styles=styles,
+                    compact=compact_mode,
+                    header_aliases=pdf_aliases,
+                    highlight_pct_cols=hl_cols,
+                )
+            )
+            story.append(Spacer(1, 6))
+
+    # 4. GP Level (Period Summary) — 15 columns
     if lvl in ("all", "gp"):
         _need_break()
-        story.append(Paragraph("3. Gram Panchayat Level — Period Attendance & DSR Summary", styles["sec"]))
+        sec_num = "4" if lvl == "all" else "3"
+        story.append(Paragraph(f"{sec_num}. Gram Panchayat Level — Period Attendance & DSR Summary", styles["sec"]))
         gp_widths = [
             usable_w * r
             for r in (0.036, 0.105, 0.115, 0.062, 0.065, 0.055, 0.055, 0.055, 0.055, 0.065, 0.065, 0.065, 0.065, 0.068, 0.069)
@@ -278,8 +340,10 @@ def generate_multiday_dsr_pdf(
             )
         )
 
-    # 4. Day-Wise Exact Attendance Time + Status Counts + Average Time & No. of Days Before 9 AM
+    # 5. Day-Wise Exact Attendance Time + Status Counts + Average Time & No. of Days Before 9 AM
     if (lvl == "time_matrix" or (lvl == "all" and include_time_matrix)) and not result.time_matrix.empty:
+        sec_num_tm = "5" if lvl == "all" else "4"
+        story.append(Paragraph(f"{sec_num_tm}. Day-Wise Exact Attendance Time & Average Time", styles["sec"]))
         tm_df = result.time_matrix
         fixed_left = ["S.No", "Mandal Name", "Panchayat Name"]
         summary_right = [
@@ -353,9 +417,11 @@ def _write_styled_sheet(
     pct_cols: set[str],
     left_cols: set[str],
     time_cols: set[str] | None = None,
+    highlight_pct_cols: set[str] | None = None,
 ) -> None:
     cols = list(df.columns)
     max_col = max(1, len(cols))
+    hl_cols = highlight_pct_cols or {"Before 9 AM %"}
 
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
     c1 = ws.cell(row=1, column=1, value=title)
@@ -383,6 +449,7 @@ def _write_styled_sheet(
     for r_offset, (_, row) in enumerate(df.iterrows(), start=1):
         excel_row = hdr_row_idx + r_offset
         row_bg = "F8FAFC" if r_offset % 2 == 0 else "FFFFFF"
+        is_dist_avg = str(row.get("Mandal Name", "")).strip() == "District Average"
         for col_idx, col_name in enumerate(cols, start=1):
             val = row[col_name]
             clean_val = "" if pd.isna(val) else val.item() if hasattr(val, "item") else val
@@ -392,7 +459,7 @@ def _write_styled_sheet(
                 horizontal="left" if col_name in left_cols else "center",
                 vertical="center",
             )
-            if col_name == "Before 9 AM %":
+            if col_name == "Before 9 AM %" or col_name in hl_cols:
                 hl = highlight_percentage(clean_val)
                 bg_hex = hl["bg"].lstrip("#") if hl["bg"] else row_bg
                 fg_hex = hl["fg"].lstrip("#")
@@ -407,11 +474,11 @@ def _write_styled_sheet(
                 cell.font = Font(name="Calibri", size=10, bold=(col_name == "Average Time"), color=fg_hex)
             elif col_name in pct_cols:
                 cell.fill = PatternFill(start_color=row_bg, end_color=row_bg, fill_type="solid")
-                cell.font = Font(name="Calibri", size=10, color="1E293B")
+                cell.font = Font(name="Calibri", size=10, bold=is_dist_avg, color="1E293B")
                 cell.number_format = "0.00"
             else:
                 cell.fill = PatternFill(start_color=row_bg, end_color=row_bg, fill_type="solid")
-                cell.font = Font(name="Calibri", size=10, color="1E293B")
+                cell.font = Font(name="Calibri", size=10, bold=is_dist_avg, color="1E293B")
 
     ws.freeze_panes = f"A{hdr_row_idx + 1}"
     for col_idx, col_name in enumerate(cols, start=1):
@@ -456,6 +523,21 @@ def generate_multiday_dsr_excel(
         pct_cols={"Before 9 AM %", "After 9 AM %"},
         left_cols={"Mandal Name"},
     )
+
+    if not result.mandal_abstract.empty:
+        m_abs_df = result.mandal_abstract
+        non_pct_m_abs = {"S.No", "Mandal Name", "Total GPs"}
+        hl_pct_cols = {c for c in m_abs_df.columns if c not in non_pct_m_abs}
+        ws_mandal_abs = wb.create_sheet("Mandal Abstract")
+        _write_styled_sheet(
+            ws_mandal_abs,
+            f"Mandal Abstract — Date-Wise % of PS Submitted Attendance Before 9 AM ({result.dist_name})",
+            subtitle,
+            m_abs_df,
+            pct_cols=hl_pct_cols,
+            left_cols={"Mandal Name"},
+            highlight_pct_cols=hl_pct_cols,
+        )
 
     ws_gp = wb.create_sheet("GP Level Summary")
     _write_styled_sheet(
@@ -511,6 +593,8 @@ def generate_multiday_dsr_csv(result: MultiDayDsrResult, level: str = "district"
     key = (level or "district").strip().lower()
     if key == "mandal":
         df = result.mandal
+    elif key in ("mandal_abstract", "mandal_matrix", "abstract"):
+        df = result.mandal_abstract
     elif key in ("gp", "gp_summary"):
         df = result.gp_summary
     elif key in ("time_matrix", "exact_time", "time"):

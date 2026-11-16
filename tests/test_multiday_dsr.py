@@ -234,7 +234,7 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     xlsx_path = tmp_path / "md.xlsx"
     generate_multiday_dsr_excel(res, xlsx_path)
     wb = openpyxl.load_workbook(xlsx_path)
-    assert wb.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Day-Wise Exact Time", "Master Data"]
+    assert wb.sheetnames == ["District Level", "Mandal Level", "Mandal Abstract", "GP Level Summary", "Day-Wise Exact Time", "Master Data"]
 
     # Individual single-level PDFs render only their requested report section
     gp_pdf_path = tmp_path / "md_gp.pdf"
@@ -242,6 +242,11 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     gp_pdf_txt = "\n".join(p.extract_text() for p in PdfReader(str(gp_pdf_path)).pages)
     assert "Gram Panchayat Level" in gp_pdf_txt
     assert "District Level — Date-Wise" not in gp_pdf_txt
+
+    abs_pdf_path = tmp_path / "md_abs.pdf"
+    generate_multiday_dsr_pdf(res, abs_pdf_path, level="mandal_abstract")
+    abs_pdf_txt = "\n".join(p.extract_text() for p in PdfReader(str(abs_pdf_path)).pages)
+    assert "Mandal Abstract" in abs_pdf_txt
 
     # Live HTTP API & page route tests (CSV removed, Full + Per-Report PDFs + Excel present)
     client = TestClient(app)
@@ -251,6 +256,7 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     assert 'id="md-opt-time-matrix"' in page.text
     assert 'id="md-dl-pdf-district"' in page.text
     assert 'id="md-dl-pdf-mandal"' in page.text
+    assert 'id="md-dl-pdf-mandal-abs"' in page.text
     assert 'id="md-dl-pdf-gp"' in page.text
     assert 'id="md-dl-pdf-time"' in page.text
     assert "Download Active CSV" not in page.text
@@ -264,6 +270,9 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     body = resp.json()
     assert body["success"] is True
     assert body["summary"]["dist_name"] == "Khammam"
+    assert "mandal_abstract_columns" in body
+    assert "mandal_abstract_rows" in body
+    assert "Average % Before 9 AM" in body["mandal_abstract_columns"]
     assert "Average Time" in body["time_matrix_columns"]
     assert "No. of Days Before 9 AM" in body["time_matrix_columns"]
     job_id = body["job_id"]
@@ -274,6 +283,7 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
         ("all", "District Level"),
         ("district", "District Level"),
         ("mandal", "Mandal Level"),
+        ("mandal_abstract", "Mandal Abstract"),
         ("gp", "Gram Panchayat Level"),
         ("time_matrix", "Average Time"),
     ):
@@ -300,7 +310,7 @@ def test_multiday_dsr_exports_and_endpoints(tmp_path: Path):
     assert resp_no_tm.json()["time_matrix_columns"] == []
     dl_xlsx_4 = client.get(f"/api/multiday-dsr/jobs/{resp_no_tm.json()['job_id']}/download-excel")
     wb4 = openpyxl.load_workbook(io.BytesIO(dl_xlsx_4.content))
-    assert wb4.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Master Data"]
+    assert wb4.sheetnames == ["District Level", "Mandal Level", "Mandal Abstract", "GP Level Summary", "Master Data"]
 
     # Different client without job cookie is blocked (403)
     other_client = TestClient(app)

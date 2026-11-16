@@ -7,7 +7,7 @@ exports (.xls), Excel (.xlsx), and CSV files, ignoring matplotlib charts as requ
 from __future__ import annotations
 
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -54,6 +54,7 @@ class MultiDayDsrResult:
     total_gps: int
     total_reporting_days: int
     generated_at: datetime
+    mandal_abstract: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 def classify_time_style(val: Any, cutoff: time | None = None) -> dict[str, str]:
@@ -490,6 +491,53 @@ def process_dsr(
     tm_cols = ["S.No", "Mandal Name", "Panchayat Name"] + date_labels + tm_summary_cols
     time_matrix = pd.DataFrame(tm_rows, columns=tm_cols)
 
+    # 5. Mandal Abstract (Date-wise % of PS Attendance Before 9 AM Matrix)
+    m_abs_rows: list[dict[str, Any]] = []
+    m_sorted_names = sorted(gp_master["Mandal Name"].dropna().unique().tolist())
+
+    mandal_lookup: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in mandal.to_dict(orient="records"):
+        mandal_lookup[(str(r["Mandal Name"]).strip(), str(r["Date"]).strip())] = r
+
+    for idx, m_name in enumerate(m_sorted_names, start=1):
+        gps_cnt = int(mandal_gp_counts.get(m_name, 0))
+        item: dict[str, Any] = {
+            "S.No": idx,
+            "Mandal Name": m_name,
+            "Total GPs": gps_cnt,
+        }
+        m_b9_tot = 0
+        m_rep_tot = 0
+        for d_lbl in date_labels:
+            m_rec = mandal_lookup.get((m_name, d_lbl))
+            if m_rec:
+                b9_pct = float(m_rec.get("Before 9 AM %") or 0.0)
+                m_rep_tot += int(m_rec.get("Total Reported") or 0)
+                m_b9_tot += int(m_rec.get("Before 9 AM") or 0)
+                item[d_lbl] = b9_pct
+            else:
+                item[d_lbl] = 0.0
+        item["Average % Before 9 AM"] = round((m_b9_tot / m_rep_tot) * 100.0, 2) if m_rep_tot > 0 else 0.0
+        m_abs_rows.append(item)
+
+    # District Average row at bottom of Mandal Abstract
+    dist_tot_rep = int(district["Total Reported"].sum()) if not district.empty else 0
+    dist_tot_b9 = int(district["Before 9 AM"].sum()) if not district.empty else 0
+    dist_avg_pct = round((dist_tot_b9 / dist_tot_rep) * 100.0, 2) if dist_tot_rep > 0 else 0.0
+    dist_lookup = {str(r["Date"]).strip(): float(r["Before 9 AM %"] or 0.0) for r in district.to_dict(orient="records")}
+    dist_row: dict[str, Any] = {
+        "S.No": "",
+        "Mandal Name": "District Average",
+        "Total GPs": total_gps,
+    }
+    for d_lbl in date_labels:
+        dist_row[d_lbl] = dist_lookup.get(d_lbl, 0.0)
+    dist_row["Average % Before 9 AM"] = dist_avg_pct
+    m_abs_rows.append(dist_row)
+
+    m_abs_cols = ["S.No", "Mandal Name", "Total GPs"] + date_labels + ["Average % Before 9 AM"]
+    mandal_abstract = pd.DataFrame(m_abs_rows, columns=m_abs_cols)
+
     return MultiDayDsrResult(
         master_data=master_data.reset_index(drop=True),
         district=district.reset_index(drop=True),
@@ -504,4 +552,5 @@ def process_dsr(
         total_gps=total_gps,
         total_reporting_days=total_reporting_days,
         generated_at=datetime.now(IST),
+        mandal_abstract=mandal_abstract.reset_index(drop=True),
     )

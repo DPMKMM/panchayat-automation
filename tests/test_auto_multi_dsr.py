@@ -253,6 +253,8 @@ def test_auto_multi_dsr_pipeline_execution_and_deliverables(monkeypatch, tmp_pat
     assert rep["summary"]["dist_name"] == "Khammam"
     assert rep["summary"]["total_gps"] == 2
     assert "Average Time" in rep["time_matrix_columns"]
+    assert "mandal_abstract_columns" in rep
+    assert "Average % Before 9 AM" in rep["mandal_abstract_columns"]
 
     # Verify artifacts download
     pdf_fname, pdf_raw, pdf_mime = auto_multi_service.get_job_artifact(job_id, sid, "pdf", level="all")
@@ -267,10 +269,16 @@ def test_auto_multi_dsr_pipeline_execution_and_deliverables(monkeypatch, tmp_pat
     assert "Gram Panchayat Level" in gp_txt
     assert "District Level — Date-Wise" not in gp_txt
 
+    m_abs_fname, m_abs_raw, _ = auto_multi_service.get_job_artifact(job_id, sid, "pdf", level="mandal_abstract")
+    assert "_Auto_MultiDays_DSR_Mandal_Abstract_" in m_abs_fname
+    reader_abs = PdfReader(io.BytesIO(m_abs_raw))
+    abs_txt = "\n".join(p.extract_text() for p in reader_abs.pages)
+    assert "Mandal Abstract" in abs_txt
+
     xl_fname, xl_raw, xl_mime = auto_multi_service.get_job_artifact(job_id, sid, "excel")
     assert "openxmlformats" in xl_mime
     wb = openpyxl.load_workbook(io.BytesIO(xl_raw))
-    assert wb.sheetnames == ["District Level", "Mandal Level", "GP Level Summary", "Day-Wise Exact Time", "Master Data"]
+    assert wb.sheetnames == ["District Level", "Mandal Level", "Mandal Abstract", "GP Level Summary", "Day-Wise Exact Time", "Master Data"]
 
 
 def test_auto_multi_dsr_fastapi_endpoints_and_security(monkeypatch):
@@ -335,6 +343,103 @@ def test_auto_multi_dsr_fastapi_endpoints_and_security(monkeypatch):
     assert 'id="btn-auto-multi-dl-full-pdf"' in main_page.text
     assert 'id="btn-auto-multi-dl-dist-pdf"' in main_page.text
     assert 'id="btn-auto-multi-dl-mandal-pdf"' in main_page.text
+    assert 'id="btn-auto-multi-dl-mandal-abs-pdf"' in main_page.text
+    assert 'id="btn-auto-multi-tab-mandal-abs"' in main_page.text
     assert 'id="btn-auto-multi-dl-gp-pdf"' in main_page.text
     assert 'id="btn-auto-multi-dl-time-pdf"' in main_page.text
     assert 'openAutoMultiDsrStation' in main_page.text
+
+
+def test_auto_multi_dsr_mandal_abstract_report(tmp_path):
+    """Verify calculation, excel formatting, pdf output, and UI contract for the new Mandal Abstract Report."""
+    from multiday_dsr.processor import process_dsr
+    from multiday_dsr.reports import generate_multiday_dsr_excel, generate_multiday_dsr_pdf
+    from tests.test_multiday_dsr import _make_epts_html_report
+
+    # Day 1: 10-11-2026
+    day1_raw = _make_epts_html_report([
+        # Mandal A
+        {"District Name": "Khammam", "Mandal Name": "Mandal A", "Panchayat Name": "GP A1", "Panchayat LGD": "101",
+         "First Attendence Status": "Present", "First Attendence Datetime": "10-11-2026 08:30:00", "DSR Entry Status": "Entered", "DSR Submited Datetime": "10-11-2026 10:00:00"},
+        {"District Name": "Khammam", "Mandal Name": "Mandal A", "Panchayat Name": "GP A2", "Panchayat LGD": "102",
+         "First Attendence Status": "Present", "First Attendence Datetime": "10-11-2026 09:15:00", "DSR Entry Status": "Entered", "DSR Submited Datetime": "10-11-2026 10:00:00"},
+        # Mandal B
+        {"District Name": "Khammam", "Mandal Name": "Mandal B", "Panchayat Name": "GP B1", "Panchayat LGD": "201",
+         "First Attendence Status": "Present", "First Attendence Datetime": "10-11-2026 08:20:00", "DSR Entry Status": "Entered", "DSR Submited Datetime": "10-11-2026 10:00:00"},
+    ])
+
+    # Day 2: 11-11-2026
+    day2_raw = _make_epts_html_report([
+        # Mandal A
+        {"District Name": "Khammam", "Mandal Name": "Mandal A", "Panchayat Name": "GP A1", "Panchayat LGD": "101",
+         "First Attendence Status": "Present", "First Attendence Datetime": "11-11-2026 08:45:00", "DSR Entry Status": "Entered", "DSR Submited Datetime": "11-11-2026 10:00:00"},
+        {"District Name": "Khammam", "Mandal Name": "Mandal A", "Panchayat Name": "GP A2", "Panchayat LGD": "102",
+         "First Attendence Status": "Present", "First Attendence Datetime": "11-11-2026 08:50:00", "DSR Entry Status": "Entered", "DSR Submited Datetime": "11-11-2026 10:00:00"},
+        # Mandal B
+        {"District Name": "Khammam", "Mandal Name": "Mandal B", "Panchayat Name": "GP B1", "Panchayat LGD": "201",
+         "First Attendence Status": "Present", "First Attendence Datetime": "11-11-2026 09:10:00", "DSR Entry Status": "Entered", "DSR Submited Datetime": "11-11-2026 10:00:00"},
+    ])
+
+    result = process_dsr([("day1.xls", day1_raw), ("day2.xls", day2_raw)])
+    abs_df = result.mandal_abstract
+    assert not abs_df.empty
+    assert list(abs_df.columns) == ["S.No", "Mandal Name", "Total GPs", "10-11-2026", "11-11-2026", "Average % Before 9 AM"]
+
+    # Mandal A: Day 1 (1/2 = 50%), Day 2 (2/2 = 100%), Period (3/4 = 75%)
+    row_a = abs_df[abs_df["Mandal Name"] == "Mandal A"].iloc[0]
+    assert row_a["Total GPs"] == 2
+    assert row_a["10-11-2026"] == 50.0
+    assert row_a["11-11-2026"] == 100.0
+    assert row_a["Average % Before 9 AM"] == 75.0
+
+    # Mandal B: Day 1 (1/1 = 100%), Day 2 (0/1 = 0%), Period (1/2 = 50%)
+    row_b = abs_df[abs_df["Mandal Name"] == "Mandal B"].iloc[0]
+    assert row_b["Total GPs"] == 1
+    assert row_b["10-11-2026"] == 100.0
+    assert row_b["11-11-2026"] == 0.0
+    assert row_b["Average % Before 9 AM"] == 50.0
+
+    # District Average row
+    row_dist = abs_df[abs_df["Mandal Name"] == "District Average"].iloc[0]
+    assert row_dist["Total GPs"] == 3
+    assert row_dist["10-11-2026"] == 66.67
+    assert row_dist["11-11-2026"] == 66.67
+    assert row_dist["Average % Before 9 AM"] == 66.67
+
+    # Excel Generation
+    xl_path = tmp_path / "mandal_abs.xlsx"
+    generate_multiday_dsr_excel(result, xl_path)
+    wb = openpyxl.load_workbook(xl_path)
+    assert "Mandal Abstract" in wb.sheetnames
+    ws_abs = wb["Mandal Abstract"]
+    # Row 5 is Mandal A data row
+    assert ws_abs.cell(row=5, column=2).value == "Mandal A"
+    assert ws_abs.cell(row=5, column=3).value == 2
+    # Verify fill is applied to date columns
+    fill_d1 = ws_abs.cell(row=5, column=4).fill
+    assert fill_d1.fill_type == "solid"
+    wb.close()
+
+    # PDF Generation
+    pdf_path = tmp_path / "mandal_abs.pdf"
+    generate_multiday_dsr_pdf(result, pdf_path, level="mandal_abstract")
+    assert pdf_path.exists() and pdf_path.stat().st_size > 0
+    reader = PdfReader(str(pdf_path))
+    pdf_text = "\n".join(p.extract_text() for p in reader.pages)
+    assert "MANDAL ABSTRACT" in pdf_text
+    assert "Mandal A" in pdf_text
+    assert "Mandal B" in pdf_text
+    assert "District Average" in pdf_text
+
+    # Web UI contract
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    portal_html = (root / "templates" / "portal_shell.html").read_text(encoding="utf-8")
+    assert 'data-auto-tab="mandal_abstract"' in portal_html
+    assert 'id="btn-auto-multi-dl-mandal-abs-pdf"' in portal_html
+
+    console_js = (root / "static" / "js" / "console.js").read_text(encoding="utf-8")
+    assert "autoMultiActiveTab === 'mandal_abstract'" in console_js
+    assert "mandal_abstract_columns" in console_js
+    assert "mandal_abstract_rows" in console_js
+
