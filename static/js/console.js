@@ -4204,14 +4204,42 @@
     }
     wrap.style.display = 'block';
     chips.innerHTML = autoMultiPublicHolidays.map(function (d) {
+      var parts = d.split('-');
+      var disp = parts.length === 3 ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : d;
       return (
-        '<span style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:6px;">' +
-          '<span>' + esc(d) + '</span>' +
-          '<button type="button" onclick="removeAutoMultiDsrPublicHoliday(\'' + esc(d) + '\')" style="background:none; border:none; cursor:pointer; color:#b45309; font-weight:800; font-size:0.9rem; line-height:1; padding:0;">&times;</button>' +
+        '<span style="background:#f5f3ff; border:1.5px solid #a78bfa; color:#5b21b6; padding:4px 10px; border-radius:999px; font-size:0.8rem; font-weight:700; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(124,58,237,0.08);">' +
+          '<span>🟣 ' + esc(disp) + '</span>' +
+          '<button type="button" onclick="removeAutoMultiDsrPublicHoliday(\'' + esc(d) + '\')" title="Remove this holiday" style="background:none; border:none; cursor:pointer; color:#7c3aed; font-weight:800; font-size:0.95rem; line-height:1; padding:0 2px;">&times;</button>' +
         '</span>'
       );
     }).join('');
   }
+
+  window.toggleAutoMultiHolidaysList = function () {
+    var content = document.getElementById('auto-multi-holidays-content');
+    var icon = document.getElementById('auto-multi-holidays-toggle-icon');
+    var text = document.getElementById('auto-multi-holidays-toggle-text');
+    var btn = document.getElementById('btn-toggle-auto-multi-holidays');
+    if (!content) return;
+    var isHidden = content.style.display === 'none' || !content.style.display;
+    if (isHidden) {
+      content.style.display = 'block';
+      if (icon) icon.textContent = '▼';
+      if (text) text.textContent = '(Click to Collapse)';
+      if (btn) {
+        btn.style.background = '#e2e8f0';
+        btn.style.borderColor = '#94a3b8';
+      }
+    } else {
+      content.style.display = 'none';
+      if (icon) icon.textContent = '▶';
+      if (text) text.textContent = '(Click to Expand)';
+      if (btn) {
+        btn.style.background = '#ffffff';
+        btn.style.borderColor = '#cbd5e1';
+      }
+    }
+  };
 
   window.fetchAutoMultiDsrPreview = async function () {
     var sInput = document.getElementById('auto-multi-start-date');
@@ -4243,6 +4271,9 @@
         if (elSat) elSat.textContent = a.excluded_second_saturdays_count;
         if (elPub) elPub.textContent = a.excluded_public_holidays_count;
 
+        var elWkList = document.getElementById('val-working-days-list-count');
+        if (elWkList) elWkList.textContent = a.working_days_count;
+
         if (listEl) {
           listEl.innerHTML = (a.working_day_items || []).map(function (item) {
             return (
@@ -4251,6 +4282,78 @@
               '</span>'
             );
           }).join('') || '<span style="color:#991b1b; font-size:0.8rem; font-weight:700;">No working days in range!</span>';
+        }
+
+        // Excluded Holidays calculation and lists
+        var totalHolidays = (a.excluded_sundays_count || 0) + (a.excluded_second_saturdays_count || 0) + (a.excluded_public_holidays_count || 0);
+        var elTotHolidays = document.getElementById('val-total-holidays-count');
+        var elSunList = document.getElementById('val-sundays-list-count');
+        var elSatList = document.getElementById('val-second-saturdays-list-count');
+        var elPubList = document.getElementById('val-public-holidays-list-count');
+
+        if (elTotHolidays) elTotHolidays.textContent = totalHolidays;
+        if (elSunList) elSunList.textContent = a.excluded_sundays_count || 0;
+        if (elSatList) elSatList.textContent = a.excluded_second_saturdays_count || 0;
+        if (elPubList) elPubList.textContent = a.excluded_public_holidays_count || 0;
+
+        // Render Sunday Chips (Red)
+        var sunChipsEl = document.getElementById('auto-multi-sundays-chips');
+        if (sunChipsEl) {
+          var sunItems = a.excluded_sunday_items || (a.excluded_sundays || []).map(function (d) {
+            var parts = d.split('-');
+            return { display: parts.length === 3 ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : d, day_name: 'Sunday' };
+          });
+          if (sunItems.length > 0) {
+            sunChipsEl.innerHTML = sunItems.map(function (item) {
+              return (
+                '<span style="background:#fef2f2; border:1px solid #fca5a5; color:#991b1b; padding:3px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">' +
+                  '<span>🔴 ' + esc(item.display) + ' (' + esc((item.day_name || 'Sun').slice(0, 3)) + ')</span>' +
+                '</span>'
+              );
+            }).join('');
+          } else {
+            sunChipsEl.innerHTML = '<span style="color:#94a3b8; font-size:0.75rem; font-style:italic;">None in selected date range</span>';
+          }
+        }
+
+        // Render Second Saturday Chips (Amber / Gold)
+        var satChipsEl = document.getElementById('auto-multi-second-saturdays-chips');
+        if (satChipsEl) {
+          var satItems = a.excluded_second_saturday_items || (a.excluded_second_saturdays || []).map(function (d) {
+            var parts = d.split('-');
+            return { display: parts.length === 3 ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : d, day_name: '2nd Saturday' };
+          });
+          if (satItems.length > 0) {
+            satChipsEl.innerHTML = satItems.map(function (item) {
+              return (
+                '<span style="background:#fffbeb; border:1px solid #fcd34d; color:#92400e; padding:3px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">' +
+                  '<span>🟠 ' + esc(item.display) + ' (2nd Sat)</span>' +
+                '</span>'
+              );
+            }).join('');
+          } else {
+            satChipsEl.innerHTML = '<span style="color:#94a3b8; font-size:0.75rem; font-style:italic;">None in selected date range</span>';
+          }
+        }
+
+        // Render Public Holiday Chips (Vibrant Purple / Violet - Distinct Color)
+        var pubChipsEl = document.getElementById('auto-multi-public-holidays-chips');
+        if (pubChipsEl) {
+          var pubItems = a.excluded_public_holiday_items || (a.excluded_public_holidays || []).map(function (d) {
+            var parts = d.split('-');
+            return { display: parts.length === 3 ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : d, day_name: 'Public Holiday' };
+          });
+          if (pubItems.length > 0) {
+            pubChipsEl.innerHTML = pubItems.map(function (item) {
+              return (
+                '<span style="background:#f5f3ff; border:1.5px solid #8b5cf6; color:#5b21b6; padding:3px 9px; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-flex; align-items:center; gap:4px;">' +
+                  '<span>🟣 ' + esc(item.display) + ' (Public Holiday)</span>' +
+                '</span>'
+              );
+            }).join('');
+          } else {
+            pubChipsEl.innerHTML = '<span style="color:#94a3b8; font-size:0.75rem; font-style:italic;">None added in selected date range</span>';
+          }
         }
       }
     } catch (e) {}

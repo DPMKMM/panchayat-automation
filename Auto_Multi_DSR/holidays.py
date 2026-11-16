@@ -82,8 +82,12 @@ def analyze_working_days(
     working_days: list[str] = []
     working_day_items: list[dict[str, str]] = []
     excluded_sundays: list[str] = []
+    excluded_sunday_items: list[dict[str, str]] = []
     excluded_second_saturdays: list[str] = []
+    excluded_second_saturday_items: list[dict[str, str]] = []
     excluded_public_holidays: list[str] = []
+    excluded_public_holiday_items: list[dict[str, str]] = []
+    all_holiday_items: list[dict[str, str]] = []
     holiday_map: dict[str, str] = {}
 
     curr = d_start
@@ -96,12 +100,42 @@ def analyze_working_days(
         if is_sunday(curr):
             excluded_sundays.append(iso_str)
             holiday_map[iso_str] = f"Sunday ({disp_str})"
+            item = {
+                "iso": iso_str,
+                "display": disp_str,
+                "portal": portal_str,
+                "day_name": day_name,
+                "type": "sunday",
+                "label": "Sunday",
+            }
+            excluded_sunday_items.append(item)
+            all_holiday_items.append(item)
         elif is_second_saturday(curr):
             excluded_second_saturdays.append(iso_str)
             holiday_map[iso_str] = f"Second Saturday ({disp_str})"
+            item = {
+                "iso": iso_str,
+                "display": disp_str,
+                "portal": portal_str,
+                "day_name": day_name,
+                "type": "second_saturday",
+                "label": "Second Saturday",
+            }
+            excluded_second_saturday_items.append(item)
+            all_holiday_items.append(item)
         elif curr in pub_holidays_set:
             excluded_public_holidays.append(iso_str)
             holiday_map[iso_str] = f"Public Holiday ({disp_str})"
+            item = {
+                "iso": iso_str,
+                "display": disp_str,
+                "portal": portal_str,
+                "day_name": day_name,
+                "type": "public_holiday",
+                "label": "Public Holiday",
+            }
+            excluded_public_holiday_items.append(item)
+            all_holiday_items.append(item)
         else:
             working_days.append(iso_str)
             working_day_items.append({
@@ -119,7 +153,11 @@ def analyze_working_days(
         working_days=working_days,
         working_day_items=working_day_items,
         excluded_sundays=excluded_sundays,
+        excluded_sunday_items=excluded_sunday_items,
         excluded_second_saturdays=excluded_second_saturdays,
+        excluded_second_saturday_items=excluded_second_saturday_items,
         excluded_public_holidays=excluded_public_holidays,
+        excluded_public_holiday_items=excluded_public_holiday_items,
+        all_holiday_items=all_holiday_items,
         holiday_map=holiday_map,
     )

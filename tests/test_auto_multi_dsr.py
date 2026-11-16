@@ -303,6 +303,12 @@ def test_auto_multi_dsr_fastapi_endpoints_and_security(monkeypatch):
     assert pdata["date_analysis"]["excluded_second_saturdays_count"] == 1
     assert pdata["date_analysis"]["excluded_public_holidays_count"] == 1
     assert pdata["date_analysis"]["working_days_count"] == 6
+    assert len(pdata["date_analysis"]["excluded_sunday_items"]) == 2
+    assert len(pdata["date_analysis"]["excluded_second_saturday_items"]) == 1
+    assert len(pdata["date_analysis"]["excluded_public_holiday_items"]) == 1
+    assert pdata["date_analysis"]["excluded_sunday_items"][0]["type"] == "sunday"
+    assert pdata["date_analysis"]["excluded_second_saturday_items"][0]["type"] == "second_saturday"
+    assert pdata["date_analysis"]["excluded_public_holiday_items"][0]["type"] == "public_holiday"
 
     # Missing dates returns 400
     assert c.post("/api/auto-multi-dsr/preview-dates", headers=hdrs, json={"start_date": ""}).status_code == 400
@@ -318,6 +324,13 @@ def test_auto_multi_dsr_fastapi_endpoints_and_security(monkeypatch):
     assert 'id="auto-multi-dsr-station"' in main_page.text
     assert 'id="auto-multi-elapsed-time"' in main_page.text
     assert 'id="auto-multi-estimated-time"' in main_page.text
+    assert 'id="auto-multi-holidays-section"' in main_page.text
+    assert 'id="btn-toggle-auto-multi-holidays"' in main_page.text
+    assert 'id="auto-multi-holidays-content"' in main_page.text
+    assert 'id="auto-multi-sundays-chips"' in main_page.text
+    assert 'id="auto-multi-second-saturdays-chips"' in main_page.text
+    assert 'id="auto-multi-public-holidays-chips"' in main_page.text
+    assert 'toggleAutoMultiHolidaysList' in main_page.text
     assert 'id="btn-run-auto-multi-robot"' in main_page.text
     assert 'id="btn-auto-multi-dl-full-pdf"' in main_page.text
     assert 'id="btn-auto-multi-dl-dist-pdf"' in main_page.text

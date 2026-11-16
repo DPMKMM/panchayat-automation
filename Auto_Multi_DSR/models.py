@@ -18,8 +18,12 @@ class DateAnalysis:
     working_days: list[str]  # List of YYYY-MM-DD strings
     working_day_items: list[dict[str, str]] = field(default_factory=list)
     excluded_sundays: list[str] = field(default_factory=list)
+    excluded_sunday_items: list[dict[str, str]] = field(default_factory=list)
     excluded_second_saturdays: list[str] = field(default_factory=list)
+    excluded_second_saturday_items: list[dict[str, str]] = field(default_factory=list)
     excluded_public_holidays: list[str] = field(default_factory=list)
+    excluded_public_holiday_items: list[dict[str, str]] = field(default_factory=list)
+    all_holiday_items: list[dict[str, str]] = field(default_factory=list)
     holiday_map: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -32,10 +36,14 @@ class DateAnalysis:
             "working_day_items": list(self.working_day_items),
             "excluded_sundays_count": len(self.excluded_sundays),
             "excluded_sundays": list(self.excluded_sundays),
+            "excluded_sunday_items": list(self.excluded_sunday_items),
             "excluded_second_saturdays_count": len(self.excluded_second_saturdays),
             "excluded_second_saturdays": list(self.excluded_second_saturdays),
+            "excluded_second_saturday_items": list(self.excluded_second_saturday_items),
             "excluded_public_holidays_count": len(self.excluded_public_holidays),
             "excluded_public_holidays": list(self.excluded_public_holidays),
+            "excluded_public_holiday_items": list(self.excluded_public_holiday_items),
+            "all_holiday_items": list(self.all_holiday_items),
             "total_excluded_holidays": (
                 len(self.excluded_sundays)
                 + len(self.excluded_second_saturdays)
