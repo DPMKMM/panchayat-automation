@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 from typing import Any, Literal, Optional
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from fastapi import HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 
 from core.access_policy import can_user_access_automated_reports
 from core.config import REVOKED_ADMIN_EMAILS, is_admin_email
@@ -255,6 +256,46 @@ def require_portal_or_console_user(request: Request) -> dict[str, Any]:
     if user is not None:
         return user
     raise HTTPException(status_code=401, detail="Authentication required. Please sign in with Google.")
+
+
+def is_production_request(request: Request) -> bool:
+    """Return True if running in production mode or if request host is the live production domain."""
+    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+        return True
+    raw_host = str(request.headers.get("x-forwarded-host") or request.headers.get("host") or "").strip().lower()
+    host = raw_host.split(":")[0]
+    return bool(host == "panchayatautomation.in" or host.endswith(".panchayatautomation.in"))
+
+
+def get_auth_redirect_for_page(
+    request: Request,
+    app_scope: Optional[ScopeType] = None,
+    enforce_in_dev: bool = False,
+) -> Optional[RedirectResponse]:
+    """Check if the user is authenticated; if not, return an HTTP 303 Redirect to login.
+
+    In production (or when enforce_in_dev=True or query ?auth=1 / header X-Enforce-Auth is present),
+    unauthenticated browser requests to protected modules are redirected to the login view
+    with an authorization warning alert and return redirect target.
+    """
+    user = get_current_user_optional(request, app_scope=app_scope)
+    if user is not None:
+        return None
+
+    # Check whether authentication is enforced
+    explicit_enforce = (
+        request.headers.get("X-Enforce-Auth") == "1"
+        or request.query_params.get("auth") == "1"
+    )
+    if not (enforce_in_dev or explicit_enforce or is_production_request(request)):
+        return None
+
+    path = request.url.path or "/"
+    query = str(request.url.query or "").strip()
+    full_target = f"{path}?{query}" if query else path
+    encoded_target = quote(full_target, safe="")
+    redirect_url = f"/?auth_required=1&redirect={encoded_target}"
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 
 def _is_disallowed_admin_host(request: Request) -> bool:

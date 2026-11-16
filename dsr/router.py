@@ -33,9 +33,11 @@ from core.dependencies import (
     enforce_console_api_access,
     enforce_department_api_access,
     extract_epts_session_id,
+    get_auth_redirect_for_page,
     get_current_user_optional,
     get_scoped_token,
     is_https_request,
+    is_production_request,
     require_admin_user,
     require_portal_or_console_user,
 )
@@ -295,8 +297,11 @@ def _process_job(
 
 
 @router.get("/reports/ps-attendance", response_class=HTMLResponse, include_in_schema=False)
-def ps_attendance_page(request: Request) -> HTMLResponse:
+def ps_attendance_page(request: Request) -> Response:
     """Renders the manual attendance file upload and report generation page."""
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     return HTMLResponse(apply_subpage_console_branding(UPLOAD_PAGE_HTML, request))
 
 
@@ -661,7 +666,7 @@ def create_web_report(
             status_code=403,
             detail="Daily PS Attendance & DSR manual upload is currently paused by administrator policy.",
         )
-    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    if is_production_request(request):
         require_portal_or_console_user(request)
     _check_web_upload_rate_limit(request)
     current_user = get_current_user_optional(request)
@@ -738,7 +743,7 @@ def create_multiday_web_report(
             status_code=403,
             detail="Multiple Days DSR reporting is currently paused by administrator policy.",
         )
-    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    if is_production_request(request):
         require_portal_or_console_user(request)
     _check_web_upload_rate_limit(request)
     if not files:

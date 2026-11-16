@@ -14,7 +14,12 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from core.access_policy import is_module_enabled
 from core.branding import PLATFORM_NAME, TAGLINE, apply_subpage_console_branding, render_canonical_footer_html
 from core.config import BASE_DIR, MAX_UPLOAD_BYTES, is_admin_email
-from core.dependencies import get_current_user_optional, require_portal_or_console_user
+from core.dependencies import (
+    get_auth_redirect_for_page,
+    get_current_user_optional,
+    is_production_request,
+    require_portal_or_console_user,
+)
 from mobile_updation import service as mu_service
 
 router = APIRouter(tags=["Updation of Mobile Numbers to Assessments"])
@@ -36,7 +41,10 @@ def _check_rate_limit(request: Request) -> None:
 
 
 @router.get("/reports/mobile-updation", response_class=HTMLResponse, include_in_schema=False)
-def mobile_updation_page(request: Request) -> HTMLResponse:
+def mobile_updation_page(request: Request) -> Response:
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     tpl_path: Path = TEMPLATES_DIR / "mobile_updation.html"
     if not tpl_path.exists():
         raise HTTPException(status_code=404, detail="Mobile Updation page template not found.")
@@ -60,7 +68,7 @@ def generate_pending_mobile_assessments(
             detail="The Updation of Mobile Numbers to Assessments module is currently paused by administrator policy.",
         )
 
-    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    if is_production_request(request):
         require_portal_or_console_user(request)
 
     _check_rate_limit(request)

@@ -616,4 +616,49 @@ def test_admin_option_exclusively_restricted_to_admin_host():
     assert "https://admin.panchayatautomation.in/" in admin_js
 
 
+def test_all_modules_require_authorization_on_direct_urls(monkeypatch):
+    """Verify that all direct module URLs require Firebase/SSO authentication in production,
+
+    redirecting unauthenticated visitors to login with an authorization warning, and allowing
+    seamless access once authenticated.
+    """
+    protected_urls = [
+        "/reports/mobile-updation",
+        "/reports/ps-attendance",
+        "/reports/multi-day-dsr",
+        "/reports/tax-dcb",
+        "/reports/mas",
+        "/mas",
+        "/tools/excel",
+        "/tools/pdf",
+    ]
+
+    c = TestClient(create_app())
+    prod_headers = {"Host": "panchayatautomation.in"}
+
+    # 1. Unauthenticated requests must redirect to login with auth_required=1 and return path
+    for url in protected_urls:
+        resp = c.get(url, headers=prod_headers, follow_redirects=False)
+        assert resp.status_code == 303, f"{url} did not redirect (got {resp.status_code})"
+        loc = resp.headers.get("location") or ""
+        assert loc.startswith("/?auth_required=1&redirect="), f"{url} redirect location unexpected: {loc}"
+        assert "%2F" in loc, f"{url} target path was not URL-encoded in redirect: {loc}"
+
+    # 2. Verify login landing page renders the authorization warning alert
+    login_alert_resp = c.get("/?auth_required=1&redirect=%2Freports%2Fmobile-updation", headers=prod_headers)
+    assert login_alert_resp.status_code == 200
+    assert "Authorization Required" in login_alert_resp.text
+
+    # 3. Authenticate with Firebase
+    ts = int(time.time() * 1000)
+    auth_resp = _firebase_login(c, monkeypatch, firebase_uid=f"auth_uid_{ts}", gmail=f"officer_{ts}@panchayat.gov.in")
+    assert auth_resp.status_code == 200
+
+    # 4. Authenticated requests must now succeed with 200 OK for every module
+    for url in protected_urls:
+        resp = c.get(url, headers=prod_headers, follow_redirects=False)
+        assert resp.status_code == 200, f"{url} failed after authentication (got {resp.status_code})"
+
+
+
 

@@ -10,6 +10,8 @@ from core.branding import apply_subpage_console_branding
 from core.dependencies import (
     enforce_department_api_access,
     extract_epts_session_id,
+    get_auth_redirect_for_page,
+    is_production_request,
     require_portal_or_console_user,
     resolve_platform_scope,
 )
@@ -24,7 +26,7 @@ def _enforce_dcb_scope_access(request: Request) -> None:
     """Enforce centralized Stage-1 + Stage-2 auth on Console scope, and require active user auth on production."""
     if resolve_platform_scope(request) == "console":
         enforce_department_api_access(request)
-    elif os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    elif is_production_request(request):
         require_portal_or_console_user(request)
 
 
@@ -49,8 +51,11 @@ router = APIRouter(tags=["Demand Collection Balance (DCB)"])
 
 
 @router.get("/reports/tax-dcb", response_class=HTMLResponse, include_in_schema=False)
-def tax_dcb_page(request: Request, district: str = "Khammam") -> HTMLResponse:
+def tax_dcb_page(request: Request, district: str = "Khammam") -> Response:
     """Renders the interactive House Tax DCB Web Dashboard."""
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     return HTMLResponse(apply_subpage_console_branding(TAX_PAGE_HTML, request))
 
 

@@ -24,7 +24,12 @@ from pydantic import BaseModel
 
 from core.branding import apply_subpage_console_branding
 from core.config import get_reports_dir
-from core.dependencies import enforce_console_api_access, enforce_department_api_access
+from core.dependencies import (
+    enforce_console_api_access,
+    enforce_department_api_access,
+    get_auth_redirect_for_page,
+    is_production_request,
+)
 from core.firebase_store import log_usage
 from dsr import service as automation_service
 from mas import service as mas_service
@@ -247,8 +252,11 @@ def _download_mas_file_impl(request: Request, file_type: str) -> FileResponse:
 
 @web_router.get("/reports/mas", response_class=HTMLResponse, include_in_schema=False)
 @web_router.get("/mas", response_class=HTMLResponse, include_in_schema=False)
-def mas_dashboard_page(request: Request) -> HTMLResponse:
+def mas_dashboard_page(request: Request) -> Response:
     """Render the Monthly Activity Statement (MAS) Consolidated Report workspace."""
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     return HTMLResponse(apply_subpage_console_branding(MAS_PAGE_HTML, request))
 
 

@@ -14,11 +14,13 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from core.access_policy import is_module_enabled
-from core.branding import PLATFORM_NAME, TAGLINE, render_canonical_footer_html
+from core.branding import PLATFORM_NAME, TAGLINE, apply_subpage_console_branding, render_canonical_footer_html
 from core.config import BASE_DIR, MAX_UPLOAD_BYTES, WEB_SESSION_SECRET, is_admin_email
 from core.dependencies import (
+    get_auth_redirect_for_page,
     get_current_user_optional,
     is_https_request,
+    is_production_request,
     require_portal_or_console_user,
 )
 from multiday_dsr import service as md_service
@@ -99,7 +101,10 @@ def _check_rate_limit(request: Request) -> None:
 
 
 @router.get("/reports/multi-day-dsr", response_class=HTMLResponse, include_in_schema=False)
-def multiday_dsr_page() -> HTMLResponse:
+def multiday_dsr_page(request: Request) -> Response:
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     tpl_path: Path = TEMPLATES_DIR / "multiday_dsr.html"
     if not tpl_path.exists():
         raise HTTPException(status_code=404, detail="Multi-Days DSR page template not found.")
@@ -107,7 +112,8 @@ def multiday_dsr_page() -> HTMLResponse:
     html_text = html_text.replace("{{PLATFORM_NAME}}", PLATFORM_NAME)
     html_text = html_text.replace("{{TAGLINE}}", TAGLINE)
     html_text = html_text.replace("{{CANONICAL_FOOTER}}", render_canonical_footer_html())
-    return HTMLResponse(html_text)
+    branded_html = apply_subpage_console_branding(html_text, request)
+    return HTMLResponse(branded_html)
 
 
 @router.post("/api/multiday-dsr/analyze", include_in_schema=False)
@@ -118,7 +124,7 @@ def analyze_multiday_dsr(
 ) -> JSONResponse:
     if not is_module_enabled("module_dsr_multiday"):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
-    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    if is_production_request(request):
         require_portal_or_console_user(request)
     _check_rate_limit(request)
 
@@ -169,7 +175,7 @@ def analyze_multiday_dsr(
 def _download_artifact_response(request: Request, job_id: str, kind: str, level: str = "district", inline: bool = False) -> Response:
     if not is_module_enabled("module_dsr_multiday"):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
-    if os.getenv("ENVIRONMENT", "").strip().lower() == "production":
+    if is_production_request(request):
         require_portal_or_console_user(request)
     _enforce_job_access(request, job_id)
     try:

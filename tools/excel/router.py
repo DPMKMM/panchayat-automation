@@ -19,7 +19,12 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Request, B
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 
 from core.branding import PLATFORM_NAME, render_canonical_footer_html
-from core.dependencies import resolve_sso_session
+from core.dependencies import (
+    get_auth_redirect_for_page,
+    is_production_request,
+    require_portal_or_console_user,
+    resolve_sso_session,
+)
 from core.firebase_store import log_usage
 from tools.excel.converter_web import convert_file_universal, LibreOfficeEngine, normalize_to_xlsx
 import tools.excel.engine.converters_to_excel as to_excel
@@ -160,7 +165,10 @@ def list_tools():
 
 
 @router.get("/tools/excel", response_class=HTMLResponse, include_in_schema=False)
-def index_page():
+def index_page(request: Request):
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     tools_json = json.dumps(TOOLS)
     categories_json = json.dumps(CATEGORIES)
 
@@ -985,6 +993,7 @@ def index_page():
       }} catch (e) {{}}
     }})();
   </script>
+  <script src="/static/js/page_auth_guard.js?v=1"></script>
 </body>
 </html>"""
 

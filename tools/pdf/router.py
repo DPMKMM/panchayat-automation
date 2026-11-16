@@ -14,9 +14,10 @@ import pymupdf4llm
 from pdf2docx import Converter
 from PIL import Image
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
 from core.branding import PLATFORM_NAME, render_canonical_footer_html
+from core.dependencies import get_auth_redirect_for_page, is_production_request
 
 router = APIRouter(tags=["tools-pdf"])
 
@@ -807,7 +808,10 @@ async def api_organize(file: UploadFile = File(...), delete_pages: str = Form(""
 # Modern Front-End UI
 # ==============================================================================
 @router.get("/tools/pdf", response_class=HTMLResponse, include_in_schema=False)
-async def home():
+async def home(request: Request) -> Response:
+    redirect_resp = get_auth_redirect_for_page(request)
+    if redirect_resp:
+        return redirect_resp
     html = """
 <!DOCTYPE html>
 <html lang="en">
@@ -2610,6 +2614,7 @@ async def home():
       } catch (e) {}
     })();
   </script>
+  <script src="/static/js/page_auth_guard.js?v=1"></script>
 </body>
 </html>
 """

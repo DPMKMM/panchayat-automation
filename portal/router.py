@@ -184,6 +184,12 @@ def portal_home_page(request: Request) -> HTMLResponse:
             '<div id="portal-hero-card" class="gov-login-wrapper" style="display:none; margin-bottom: 24px;">',
             1,
         )
+    elif request.query_params.get("auth_required") == "1":
+        html = html.replace(
+            '<div id="portal-login-alert" style="display:none; padding:10px 14px; border-radius:8px; margin-bottom:18px; font-size:0.86rem; font-weight:700;"></div>',
+            '<div id="portal-login-alert" style="display:block; background:#fffbeb; border:1.5px solid #fcd34d; color:#92400e; padding:10px 14px; border-radius:8px; margin-bottom:18px; font-size:0.86rem; font-weight:700;">🔒 Authorization Required: Please sign in with Google or your registered email to access this module.</div>',
+            1,
+        )
     resp = HTMLResponse(html)
     try:
         sync_sso_cookie_if_needed(request, resp, user, tok)

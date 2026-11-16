@@ -1253,5 +1253,6 @@ UPLOAD_PAGE_HTML = r"""<!doctype html>
       } catch (e) {}
     })();
   </script>
+  <script src="/static/js/page_auth_guard.js?v=1"></script>
 </body>
 </html>"""

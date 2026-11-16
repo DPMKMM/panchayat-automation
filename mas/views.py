@@ -1432,6 +1432,7 @@ MAS_PAGE_HTML = (
     document.addEventListener('DOMContentLoaded', bootMasWorkspace);
     setInterval(refreshMasAuthStatus, 15000);
   </script>
+  <script src="/static/js/page_auth_guard.js?v=1"></script>
 </body>
 </html>
 """

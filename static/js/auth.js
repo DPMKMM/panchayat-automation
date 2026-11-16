@@ -1086,6 +1086,12 @@
 
   window.proceedAfterPortalAuth = async function () {
     var urlSp = new URLSearchParams(window.location.search || '');
+    var redirectTarget = (urlSp.get('redirect') || urlSp.get('next') || '').trim();
+    if (redirectTarget && redirectTarget.startsWith('/') && !redirectTarget.startsWith('//') && !redirectTarget.includes('\\')) {
+      window.location.replace(redirectTarget);
+      return;
+    }
+
     var mgr = window.DeptSessionManager;
     var pending = mgr ? mgr.peekPendingAction() : null;
     if (!pending && urlSp.get('dept_login') === '1') {
@@ -1541,6 +1547,7 @@
         if (typeof window.checkAndShowFirstLoginProfilePrompt === 'function') {
           window.checkAndShowFirstLoginProfilePrompt(res.user, isFirst);
         }
+        await window.proceedAfterPortalAuth();
       } else {
         var msg = (res && res.message) || 'Sign-in failed. Please verify credentials.';
         showLoginAlert(msg, false);
@@ -1646,6 +1653,7 @@
         if (typeof window.showPortalNotice === 'function') {
           window.showPortalNotice(res.message || 'Account registered successfully!', 'success');
         }
+        await window.proceedAfterPortalAuth();
       } else {
         showRegAlert((res && res.message) || 'Registration failed. Please check your details.');
       }
@@ -2843,6 +2851,9 @@
     }
 
     if (!isPortalAuth) {
+      if (urlParams.get('auth_required') === '1') {
+        showLoginAlert('🔒 Authorization Required: Please sign in with Google or your registered email to access this module.', 'warning');
+      }
       return;
     }
 
