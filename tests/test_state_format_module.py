@@ -299,8 +299,11 @@ def test_pdf_generation(tmp_path):
 def test_excel_generation(tmp_path):
     lookup = {
         "101": {"lgd_code": "101", "emp_id": "EMP1", "ps_name": "Sec 1", "designation": "PS", "nature_of_posting": "Regular", "is_regular": True, "mobile": "9000000001"},
+        "102": {"lgd_code": "102", "emp_id": "EMP2", "ps_name": "Sec 2", "designation": "PS", "nature_of_posting": "Regular", "is_regular": True, "mobile": "9000000002"},
+        "103": {"lgd_code": "103", "emp_id": "EMP3", "ps_name": "Sec 3", "designation": "PS", "nature_of_posting": "Regular", "is_regular": True, "mobile": "9000000003"},
     }
     raw_rows = [
+        # Mandal A: 100% before 9 AM, 0 not reported
         {
             "District Name": "Khammam",
             "Mandal Name": "Mandal A",
@@ -308,7 +311,24 @@ def test_excel_generation(tmp_path):
             "Panchayat LGD": "101",
             "First Attendence Status": "Present",
             "First Attendence Datetime": "12-Nov-2026 08:30:00",
-        }
+        },
+        # Mandal B: 0% before 9 AM, 1 not reported
+        {
+            "District Name": "Khammam",
+            "Mandal Name": "Mandal B",
+            "Panchayat Name": "GP 2",
+            "Panchayat LGD": "102",
+            "First Attendence Status": "Present",
+            "First Attendence Datetime": "12-Nov-2026 10:15:00",
+        },
+        {
+            "District Name": "Khammam",
+            "Mandal Name": "Mandal B",
+            "Panchayat Name": "GP 3",
+            "Panchayat LGD": "103",
+            "First Attendence Status": "Absent",
+            "First Attendence Datetime": "",
+        },
     ]
     raw_df = pd.DataFrame(raw_rows)
     enriched_df = enrich_raw_data(raw_df, lookup)
@@ -327,6 +347,28 @@ def test_excel_generation(tmp_path):
     ws = wb.active
     assert ws.title == "PS Attendance State Format"
     assert ws.max_column == 14
+
+    # Row 8: First Mandal (Mandal A, 100% before 9, 0 not reported)
+    assert ws.cell(row=8, column=2).alignment.horizontal == "center"
+    # Column 10: Heatmap fill (100% -> dark green #14532D)
+    fill_a = ws.cell(row=8, column=10).fill
+    assert fill_a.fill_type == "solid"
+    assert "14532D" in str(fill_a.fgColor.rgb).upper()
+    # Column 14: Not reported == 0, font should not be red
+    font_a_14 = ws.cell(row=8, column=14).font
+    assert font_a_14.color is None or "DC2626" not in str(font_a_14.color.rgb).upper()
+
+    # Row 9: Second Mandal (Mandal B, 0% before 9, 1 not reported)
+    assert ws.cell(row=9, column=2).alignment.horizontal == "center"
+    # Column 10: Heatmap fill (0% -> red #DC2626)
+    fill_b = ws.cell(row=9, column=10).fill
+    assert fill_b.fill_type == "solid"
+    assert "DC2626" in str(fill_b.fgColor.rgb).upper()
+    # Column 14: Not reported > 0, font MUST be bold red
+    font_b_14 = ws.cell(row=9, column=14).font
+    assert font_b_14.bold is True
+    assert "DC2626" in str(font_b_14.color.rgb).upper()
+
     wb.close()
 
 
@@ -686,6 +728,19 @@ def test_state_format_all_three_reports_receive_matching_user_date(monkeypatch, 
     assert download_calls[0] == {"code": "1.2.7", "date": expected_portal_date}
     assert download_calls[1] == {"code": "1.2.11", "date": expected_portal_date}
     assert download_calls[2] == {"code": "1.2.10", "date": expected_portal_date}
+
+
+def test_state_format_styling_contract():
+    # Verify console.js contains the heatmap calculation and center alignment
+    console_js = (ROOT / "static" / "js" / "console.js").read_text(encoding="utf-8")
+    assert "getStateFormatHeatmapStyle" in console_js
+    assert "notRepNum > 0 ? 'color:#dc2626; font-weight:800;'" in console_js
+    assert "text-align:center;" in console_js
+
+    # Verify portal_shell.html header centers Mandal Name
+    portal_html = (ROOT / "templates" / "portal_shell.html").read_text(encoding="utf-8")
+    assert 'text-align:center;">Mandal Name</th>' in portal_html
+
 
 
 def test_find_form_frame_and_safe_button_selectors():

@@ -4925,6 +4925,37 @@
     }
   };
 
+  window.getStateFormatHeatmapStyle = function (pct) {
+    var val = typeof pct === 'number' ? pct : parseFloat(pct);
+    if (isNaN(val)) val = 0;
+    val = Math.max(0, Math.min(100, val));
+
+    var r, g, b, textCol;
+    if (val >= 100) {
+      // 100% Completed -> Dark Green
+      r = 20; g = 83; b = 45; // #14532d
+      textCol = '#ffffff';
+    } else if (val <= 0) {
+      // Lowest -> Red
+      r = 220; g = 38; b = 38; // #dc2626
+      textCol = '#ffffff';
+    } else if (val < 50) {
+      var ratio = val / 50;
+      r = Math.round(220 + (245 - 220) * ratio);
+      g = Math.round(38 + (158 - 38) * ratio);
+      b = Math.round(38 + (11 - 38) * ratio);
+      textCol = val < 25 ? '#ffffff' : '#0f172a';
+    } else {
+      var ratio = (val - 50) / 50;
+      r = Math.round(245 + (20 - 245) * ratio);
+      g = Math.round(158 + (83 - 158) * ratio);
+      b = Math.round(11 + (45 - 11) * ratio);
+      textCol = val > 75 ? '#ffffff' : '#0f172a';
+    }
+    var hexBg = '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    return { bg: hexBg, color: textCol };
+  };
+
   window.renderStateFormatTable = function (data) {
     if (!data) return;
     var mandals = data.mandals || (data.data && data.data.mandals);
@@ -4960,30 +4991,35 @@
         var bAfter12 = (m.b_after_12 !== undefined ? m.b_after_12 : (m.reported_after_12_noon !== undefined ? m.reported_after_12_noon : 0));
         
         var rawPct = (m.pct_before_9 !== undefined ? m.pct_before_9 : m.pct_reported_before_9_am);
+        var numPct = typeof rawPct === 'number' ? rawPct : (parseFloat(rawPct) || 0);
         var pctFormatted = typeof rawPct === 'number'
           ? rawPct.toFixed(2) + '%'
           : (rawPct !== undefined && rawPct !== null && rawPct !== '' ? String(rawPct) : '0.00%');
+        var hm = window.getStateFormatHeatmapStyle(numPct);
 
         var attGp = (m.attended_gp !== undefined ? m.attended_gp : (m.total_attended_gp !== undefined ? m.total_attended_gp : 0));
         var mtg = (m.mtg_trng !== undefined ? m.mtg_trng : (m.reported_meeting_training !== undefined ? m.reported_meeting_training : 0));
         var lev = (m.leave !== undefined ? m.leave : (m.on_leave !== undefined ? m.on_leave : 0));
+        
         var notRep = (m.not_reported !== undefined && m.not_reported !== null) ? m.not_reported : 0;
+        var notRepNum = typeof notRep === 'number' ? notRep : (parseInt(notRep, 10) || 0);
+        var notRepStyle = notRepNum > 0 ? 'color:#dc2626; font-weight:800;' : 'color:#0f172a;';
 
         rowsHtml += '<tr style="border-bottom:1px solid #e2e8f0; height:34px;">' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600;">' + sNo + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:left; font-weight:700; color:#1e293b;">' + escapeHtml(mandalName) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + totGps + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700;">' + fullTime + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b69 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b910 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b1011 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + b1112 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + bAfter12 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fef2f2; color:#b91c1c; font-weight:800;">' + pctFormatted + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + attGp + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + mtg + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + lev + '</td>' +
-          '<td style="padding:6px 4px;">' + notRep + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:600; text-align:center;">' + sNo + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:700; color:#1e293b;">' + escapeHtml(mandalName) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + totGps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; font-weight:700; text-align:center;">' + fullTime + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + b69 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + b910 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + b1011 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + b1112 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + bAfter12 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center; background:' + hm.bg + '; color:' + hm.color + '; font-weight:800;">' + pctFormatted + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + attGp + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + mtg + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + lev + '</td>' +
+          '<td style="padding:6px 4px; text-align:center; ' + notRepStyle + '">' + notRep + '</td>' +
         '</tr>';
       });
       tbody.innerHTML = rowsHtml;
@@ -5004,10 +5040,16 @@
       var tB1112 = (t.b_11_12 !== undefined ? t.b_11_12 : (t.reported_11_12_noon !== undefined ? t.reported_11_12_noon : 0));
       var tBAfter12 = (t.b_after_12 !== undefined ? t.b_after_12 : (t.reported_after_12_noon !== undefined ? t.reported_after_12_noon : 0));
       var tPct = (t.pct_before_9 !== undefined ? t.pct_before_9 : t.pct_reported_before_9_am);
+      var tPctNum = typeof tPct === 'number' ? tPct : (parseFloat(tPct) || 0);
+      var totHm = window.getStateFormatHeatmapStyle(tPctNum);
+
       var tAttGp = (t.attended_gp !== undefined ? t.attended_gp : (t.total_attended_gp !== undefined ? t.total_attended_gp : 0));
       var tMtg = (t.mtg_trng !== undefined ? t.mtg_trng : (t.reported_meeting_training !== undefined ? t.reported_meeting_training : 0));
       var tLev = (t.leave !== undefined ? t.leave : (t.on_leave !== undefined ? t.on_leave : 0));
+      
       var tNotRep = (t.not_reported !== undefined ? t.not_reported : 0);
+      var tNotRepNum = typeof tNotRep === 'number' ? tNotRep : (parseInt(tNotRep, 10) || 0);
+      var tNotRepStyle = tNotRepNum > 0 ? 'color:#dc2626; font-weight:800;' : 'color:#0f172a; font-weight:800;';
 
       var pB69 = (p.b_6_9 !== undefined ? p.b_6_9 : p.reported_6_9_am);
       var pB910 = (p.b_9_10 !== undefined ? p.b_9_10 : p.reported_9_10_am);
@@ -5019,38 +5061,41 @@
       var pAttGp = (p.attended_gp !== undefined ? p.attended_gp : p.total_attended_gp);
       var pMtg = (p.mtg_trng !== undefined ? p.mtg_trng : p.reported_meeting_training);
       var pLev = (p.leave !== undefined ? p.leave : p.on_leave);
+      
       var pNotRep = (p.not_reported !== undefined ? p.not_reported : 0);
+      var pNotRepNum = typeof pNotRep === 'number' ? pNotRep : (parseFloat(pNotRep) || 0);
+      var pNotRepStyle = pNotRepNum > 0 ? 'color:#dc2626; font-weight:800;' : 'color:#0f172a; font-weight:800;';
 
       var tfootHtml =
         '<tr style="background:#f8fafc; font-weight:800; border-top:1.5px solid #1e293b; border-bottom:1px solid #cbd5e1; height:36px;">' +
           '<td colspan="2" style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:800; color:#0f172a;">Total</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tTotGps + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tFullTime + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB69 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB910 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB1011 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tB1112 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tBAfter12 + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(tPct) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tAttGp + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tMtg + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + tLev + '</td>' +
-          '<td style="padding:6px 4px;">' + tNotRep + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tTotGps + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tFullTime + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tB69 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tB910 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tB1011 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tB1112 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tBAfter12 + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center; background:' + totHm.bg + '; color:' + totHm.color + '; font-weight:800;">' + fmtPct(tPct) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tAttGp + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tMtg + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + tLev + '</td>' +
+          '<td style="padding:6px 4px; text-align:center; ' + tNotRepStyle + '">' + tNotRep + '</td>' +
         '</tr>' +
         '<tr style="background:#f1f5f9; font-weight:800; border-bottom:2px double #1e293b; height:36px;">' +
           '<td colspan="2" style="border-right:1px solid #cbd5e1; padding:6px 8px; text-align:center; font-weight:800; color:#0f172a;">%</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">-</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">-</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB69) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB910) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB1011) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pB1112) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pBAfter12) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; background:#fee2e2; color:#b91c1c; font-weight:800;">' + fmtPct(tPct) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pAttGp) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pMtg) + '</td>' +
-          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px;">' + fmtPct(pLev) + '</td>' +
-          '<td style="padding:6px 4px;">' + fmtPct(pNotRep) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">-</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">-</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pB69) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pB910) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pB1011) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pB1112) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pBAfter12) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center; background:' + totHm.bg + '; color:' + totHm.color + '; font-weight:800;">' + fmtPct(tPct) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pAttGp) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pMtg) + '</td>' +
+          '<td style="border-right:1px solid #cbd5e1; padding:6px 4px; text-align:center;">' + fmtPct(pLev) + '</td>' +
+          '<td style="padding:6px 4px; text-align:center; ' + pNotRepStyle + '">' + fmtPct(pNotRep) + '</td>' +
         '</tr>';
 
       tfoot.innerHTML = tfootHtml;

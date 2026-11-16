@@ -15,6 +15,35 @@ from openpyxl.utils import get_column_letter
 from DSR_State_Format.calculations.aggregator import StateFormatReport
 
 
+def get_heatmap_excel(pct: float) -> tuple[PatternFill, Font]:
+    """Return background fill and font color representing heatmap for % Completed (100% Dark Green, lowest Red)."""
+    val = max(0.0, min(100.0, float(pct or 0.0)))
+    if val >= 100.0:
+        # 100% Completed -> Dark Green
+        r, g, b = 20, 83, 45
+        text_hex = "FFFFFF"
+    elif val <= 0.0:
+        # Lowest -> Red
+        r, g, b = 220, 38, 38
+        text_hex = "FFFFFF"
+    elif val < 50.0:
+        ratio = val / 50.0
+        r = int(round(220 + (245 - 220) * ratio))
+        g = int(round(38 + (158 - 38) * ratio))
+        b = int(round(38 + (11 - 38) * ratio))
+        text_hex = "FFFFFF" if val < 25.0 else "0F172A"
+    else:
+        ratio = (val - 50.0) / 50.0
+        r = int(round(245 + (20 - 245) * ratio))
+        g = int(round(158 + (83 - 158) * ratio))
+        b = int(round(11 + (45 - 11) * ratio))
+        text_hex = "FFFFFF" if val > 75.0 else "0F172A"
+    hex_bg = f"{r:02X}{g:02X}{b:02X}"
+    fill = PatternFill(fill_type="solid", start_color=hex_bg, end_color=hex_bg)
+    font = Font(name="Calibri", size=10, bold=True, color=text_hex)
+    return fill, font
+
+
 def generate_state_format_excel(report: StateFormatReport, output_path: Path) -> Path:
     """
     Renders StateFormatReport to an Excel (.xlsx) workbook.
@@ -123,10 +152,12 @@ def generate_state_format_excel(report: StateFormatReport, output_path: Path) ->
 
     current_row = 8
 
+    font_not_rep_red = Font(name="Calibri", size=10, bold=True, color="DC2626")
+
     # 5. Data Rows
     for row in report.mandal_rows:
         ws.cell(row=current_row, column=1, value=row["sl_no"]).alignment = align_center
-        ws.cell(row=current_row, column=2, value=row["mandal_name"]).alignment = align_left
+        ws.cell(row=current_row, column=2, value=row["mandal_name"]).alignment = align_center
         ws.cell(row=current_row, column=3, value=row["tot_gps"]).alignment = align_center
         ws.cell(row=current_row, column=4, value=row["full_time"]).alignment = align_center
 
@@ -136,21 +167,30 @@ def generate_state_format_excel(report: StateFormatReport, output_path: Path) ->
         ws.cell(row=current_row, column=8, value=row["b_11_12"] if row["b_11_12"] > 0 else "").alignment = align_center
         ws.cell(row=current_row, column=9, value=row["b_after_12"] if row["b_after_12"] > 0 else "").alignment = align_center
 
-        pct_cell = ws.cell(row=current_row, column=10, value=row["pct_before_9"])
+        pct_val = row["pct_before_9"]
+        pct_fill, pct_font = get_heatmap_excel(pct_val)
+        pct_cell = ws.cell(row=current_row, column=10, value=pct_val)
         pct_cell.number_format = "0.00"
-        pct_cell.font = font_pct
-        pct_cell.fill = fill_pct_col
+        pct_cell.font = pct_font
+        pct_cell.fill = pct_fill
         pct_cell.alignment = align_center
 
         ws.cell(row=current_row, column=11, value=row["attended_gp"] if row["attended_gp"] > 0 else "").alignment = align_center
         ws.cell(row=current_row, column=12, value=row["mtg_trng"] if row["mtg_trng"] > 0 else "").alignment = align_center
         ws.cell(row=current_row, column=13, value=row["leave"] if row["leave"] > 0 else "").alignment = align_center
-        ws.cell(row=current_row, column=14, value=row["not_reported"]).alignment = align_center
+        
+        not_rep_val = row["not_reported"]
+        c14 = ws.cell(row=current_row, column=14, value=not_rep_val)
+        c14.alignment = align_center
+        if not_rep_val and not_rep_val > 0:
+            c14.font = font_not_rep_red
+        else:
+            c14.font = font_td
 
         for col_idx in range(1, 15):
             c = ws.cell(row=current_row, column=col_idx)
             c.border = cell_border
-            if col_idx != 10:
+            if col_idx not in (10, 14):
                 c.font = font_td
 
         current_row += 1
@@ -170,22 +210,32 @@ def generate_state_format_excel(report: StateFormatReport, output_path: Path) ->
     ws.cell(row=current_row, column=8, value=tot["b_11_12"]).alignment = align_center
     ws.cell(row=current_row, column=9, value=tot["b_after_12"]).alignment = align_center
 
-    tot_pct_cell = ws.cell(row=current_row, column=10, value=tot["pct_before_9"])
+    tot_pct_val = tot["pct_before_9"]
+    tot_pct_fill, tot_pct_font = get_heatmap_excel(tot_pct_val)
+    tot_pct_cell = ws.cell(row=current_row, column=10, value=tot_pct_val)
     tot_pct_cell.number_format = "0.00"
-    tot_pct_cell.font = font_pct
-    tot_pct_cell.fill = fill_pct_col
+    tot_pct_cell.font = tot_pct_font
+    tot_pct_cell.fill = tot_pct_fill
     tot_pct_cell.alignment = align_center
 
     ws.cell(row=current_row, column=11, value=tot["attended_gp"]).alignment = align_center
     ws.cell(row=current_row, column=12, value=tot["mtg_trng"]).alignment = align_center
     ws.cell(row=current_row, column=13, value=tot["leave"]).alignment = align_center
-    ws.cell(row=current_row, column=14, value=tot["not_reported"]).alignment = align_center
+    
+    tot_not_rep = tot["not_reported"]
+    c_tot_14 = ws.cell(row=current_row, column=14, value=tot_not_rep)
+    c_tot_14.alignment = align_center
+    if tot_not_rep and tot_not_rep > 0:
+        c_tot_14.font = font_not_rep_red
+    else:
+        c_tot_14.font = font_tot
 
     for col_idx in range(1, 15):
         c = ws.cell(row=current_row, column=col_idx)
-        c.fill = fill_pct_col if col_idx == 10 else fill_tot
-        c.border = cell_border
         if col_idx != 10:
+            c.fill = fill_tot
+        c.border = cell_border
+        if col_idx not in (10, 14):
             c.font = font_tot
 
     current_row += 1
@@ -215,7 +265,10 @@ def generate_state_format_excel(report: StateFormatReport, output_path: Path) ->
     ):
         c = ws.cell(row=current_row, column=col_idx, value=pct_r[key])
         c.number_format = "0.00"
-        c.font = font_pct
+        if col_idx == 14 and pct_r[key] and pct_r[key] > 0:
+            c.font = font_not_rep_red
+        else:
+            c.font = font_pct
         c.fill = fill_pct_row
         c.alignment = align_center
         c.border = cell_border

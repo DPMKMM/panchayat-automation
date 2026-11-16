@@ -23,6 +23,33 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from DSR_State_Format.calculations.aggregator import StateFormatReport
 
 
+def get_heatmap_color_pdf(pct: float) -> tuple[colors.HexColor, str]:
+    """Return background HexColor and text hex color for percentage heatmap."""
+    val = max(0.0, min(100.0, float(pct or 0.0)))
+    if val >= 100.0:
+        # 100% Completed -> Dark Green
+        r, g, b = 20, 83, 45
+        text_hex = "#ffffff"
+    elif val <= 0.0:
+        # Lowest -> Red
+        r, g, b = 220, 38, 38
+        text_hex = "#ffffff"
+    elif val < 50.0:
+        ratio = val / 50.0
+        r = int(round(220 + (245 - 220) * ratio))
+        g = int(round(38 + (158 - 38) * ratio))
+        b = int(round(38 + (11 - 38) * ratio))
+        text_hex = "#ffffff" if val < 25.0 else "#0f172a"
+    else:
+        ratio = (val - 50.0) / 50.0
+        r = int(round(245 + (20 - 245) * ratio))
+        g = int(round(158 + (83 - 158) * ratio))
+        b = int(round(11 + (45 - 11) * ratio))
+        text_hex = "#ffffff" if val > 75.0 else "#0f172a"
+    hex_bg = f"#{r:02x}{g:02x}{b:02x}"
+    return colors.HexColor(hex_bg), text_hex
+
+
 def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> Path:
     """
     Renders StateFormatReport to official Landscape A4 PDF.
@@ -151,8 +178,17 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> P
         fontName="Helvetica",
         fontSize=7.2,
         leading=8.5,
-        alignment=TA_LEFT,
+        alignment=TA_CENTER,
         textColor=colors.HexColor("#0f172a"),
+    )
+    td_red_num_style = ParagraphStyle(
+        "TDNumRed",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=7.2,
+        leading=8.5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#dc2626"),
     )
     td_pct_style = ParagraphStyle(
         "TDPct",
@@ -228,8 +264,29 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> P
     ])
 
     # Data Rows
-    for row in report.mandal_rows:
+    row_bg_styles = []
+    current_tbl_row = 3
+    for idx, row in enumerate(report.mandal_rows):
         pct_val = f"{row['pct_before_9']:.2f}"
+        bg_col, text_hex = get_heatmap_color_pdf(row["pct_before_9"])
+        row_bg_styles.append(("BACKGROUND", (9, current_tbl_row), (9, current_tbl_row), bg_col))
+
+        row_pct_style = ParagraphStyle(
+            f"TDPct_{idx}",
+            parent=styles["Normal"],
+            fontName="Helvetica-Bold",
+            fontSize=7.2,
+            leading=8.5,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor(text_hex),
+        )
+
+        not_rep_val = row["not_reported"]
+        not_rep_para = Paragraph(
+            str(not_rep_val),
+            td_red_num_style if (not_rep_val and not_rep_val > 0) else td_num_style,
+        )
+
         table_data.append([
             Paragraph(str(row["sl_no"]), td_num_style),
             Paragraph(str(row["mandal_name"]), td_txt_style),
@@ -240,16 +297,33 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> P
             Paragraph(str(row["b_10_11"]) if row["b_10_11"] > 0 else "", td_num_style),
             Paragraph(str(row["b_11_12"]) if row["b_11_12"] > 0 else "", td_num_style),
             Paragraph(str(row["b_after_12"]) if row["b_after_12"] > 0 else "", td_num_style),
-            Paragraph(pct_val, td_pct_style),
+            Paragraph(pct_val, row_pct_style),
             Paragraph(str(row["attended_gp"]) if row["attended_gp"] > 0 else "", td_num_style),
             Paragraph(str(row["mtg_trng"]) if row["mtg_trng"] > 0 else "", td_num_style),
             Paragraph(str(row["leave"]) if row["leave"] > 0 else "", td_num_style),
-            Paragraph(str(row["not_reported"]), td_num_style),
+            not_rep_para,
         ])
+        current_tbl_row += 1
 
     # Total Row
     tot = report.total_row
     tot_pct_val = f"{tot['pct_before_9']:.2f}"
+    tot_bg_col, tot_text_hex = get_heatmap_color_pdf(tot["pct_before_9"])
+    tot_pct_style = ParagraphStyle(
+        "TotPct",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
+        fontSize=7.2,
+        leading=8.5,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor(tot_text_hex),
+    )
+    tot_not_rep_val = tot["not_reported"]
+    tot_not_rep_para = Paragraph(
+        str(tot_not_rep_val),
+        td_red_num_style if (tot_not_rep_val and tot_not_rep_val > 0) else tot_txt_style,
+    )
+
     table_data.append([
         Paragraph("Total", tot_txt_style),
         "",
@@ -264,11 +338,18 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> P
         Paragraph(str(tot["attended_gp"]), tot_txt_style),
         Paragraph(str(tot["mtg_trng"]), tot_txt_style),
         Paragraph(str(tot["leave"]), tot_txt_style),
-        Paragraph(str(tot["not_reported"]), tot_txt_style),
+        tot_not_rep_para,
     ])
 
     # Percentage Row
     pct_r = report.percentage_row
+    pct_not_rep_val = pct_r.get("not_reported", 0.0)
+    pct_not_rep_str = f"{pct_not_rep_val:.2f}"
+    pct_not_rep_para = Paragraph(
+        pct_not_rep_str,
+        td_red_num_style if (pct_not_rep_val and pct_not_rep_val > 0) else tot_pct_style,
+    )
+
     table_data.append([
         Paragraph("Percentage", tot_txt_style),
         "",
@@ -283,7 +364,7 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> P
         Paragraph(f"{pct_r['attended_gp']:.2f}", tot_pct_style),
         Paragraph(f"{pct_r['mtg_trng']:.2f}", tot_pct_style),
         Paragraph(f"{pct_r['leave']:.2f}", tot_pct_style),
-        Paragraph(f"{pct_r['not_reported']:.2f}", tot_pct_style),
+        pct_not_rep_para,
     ])
 
     # Table Styles
@@ -310,10 +391,11 @@ def generate_state_format_pdf(report: StateFormatReport, output_path: Path) -> P
         ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#e2e8f0")),
         # Column 9 (% before 9 AM) special styling
         ("BACKGROUND", (9, 1), (9, 2), colors.HexColor("#e0f2fe")),
-        ("BACKGROUND", (9, 3), (9, tot_idx), colors.HexColor("#e0f2fe")),
+        *row_bg_styles,
         # Total Row Span and Background
         ("SPAN", (0, tot_idx), (1, tot_idx)),
         ("BACKGROUND", (0, tot_idx), (-1, tot_idx), colors.HexColor("#ebf3fa")),
+        ("BACKGROUND", (9, tot_idx), (9, tot_idx), tot_bg_col),
         # Percentage Row Span and Background
         ("SPAN", (0, pct_idx), (1, pct_idx)),
         ("BACKGROUND", (0, pct_idx), (-1, pct_idx), colors.HexColor("#f8fafc")),
