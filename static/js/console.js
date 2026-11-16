@@ -4080,6 +4080,38 @@
   var autoMultiCurrentReport = null;
   var autoMultiActiveTab = 'district';
   var autoMultiPollTimer = null;
+  var autoMultiTickerTimer = null;
+  var autoMultiStartTime = 0;
+  var autoMultiEstimatedSec = 30;
+  var autoMultiTotalDays = 1;
+  var autoMultiDoneCount = 0;
+  var autoMultiLatestPct = 0;
+
+  function updateAutoMultiTimerDisplay() {
+    var elapEl = document.getElementById('auto-multi-elapsed-time');
+    var estEl = document.getElementById('auto-multi-estimated-time');
+    if (!elapEl || !estEl || !autoMultiStartTime) return;
+
+    var elapsed = Math.max(0, Math.floor((Date.now() - autoMultiStartTime) / 1000));
+    elapEl.textContent = formatMinSec(elapsed);
+
+    var total = Math.max(1, autoMultiTotalDays || 1);
+    var done = Math.max(0, autoMultiDoneCount || 0);
+
+    var remSec = 0;
+    if (done > 0) {
+      var avgSec = elapsed / done;
+      var remDays = Math.max(0, total - done);
+      var consolidationSec = (autoMultiLatestPct >= 95 || remDays === 0) ? 3 : 6;
+      remSec = Math.max(2, Math.round(remDays * avgSec + consolidationSec));
+    } else {
+      if (elapsed >= autoMultiEstimatedSec - 3) {
+        autoMultiEstimatedSec = elapsed + 6;
+      }
+      remSec = Math.max(4, autoMultiEstimatedSec - elapsed);
+    }
+    estEl.textContent = formatMinSec(remSec);
+  }
 
   window.openAutoMultiDsrStation = async function (options) {
     var opts = options || {};
@@ -4125,9 +4157,10 @@
       if (sessRes && sessRes.success && sessRes.job) {
         var j = sessRes.job;
         if (j.status === 'running' || j.status === 'queued') {
-          window.startAutoMultiDsrPolling(j.job_id);
+          if (j.started_at) autoMultiStartTime = j.started_at * 1000;
+          window.startAutoMultiDsrPolling(j.job_id, j.total_working_days);
         } else if (j.status === 'completed' && j.report_data) {
-          window.renderAutoMultiDsrResults(j);
+          window.renderAutoMultiDsrResults(j, j.elapsed_seconds);
         }
       }
     } catch (e) {}
@@ -4243,6 +4276,16 @@
     if (progCard) progCard.style.display = 'block';
     if (resCard) resCard.style.display = 'none';
 
+    autoMultiStartTime = Date.now();
+    autoMultiTotalDays = 1;
+    autoMultiDoneCount = 0;
+    autoMultiLatestPct = 0;
+    autoMultiEstimatedSec = 30;
+    var elapEl = document.getElementById('auto-multi-elapsed-time');
+    var estEl = document.getElementById('auto-multi-estimated-time');
+    if (elapEl) elapEl.textContent = '00:00';
+    if (estEl) estEl.textContent = 'Calculating...';
+
     try {
       var res = await window.safeFetchJson('/api/auto-multi-dsr/start-job', {
         method: 'POST',
@@ -4259,7 +4302,7 @@
         throw new Error(res.error || res.detail || 'Could not start robot job.');
       }
       showNotice('Multi-Days DSR Robot started for ' + res.total_working_days + ' working day(s).', 'success');
-      window.startAutoMultiDsrPolling(res.job_id);
+      window.startAutoMultiDsrPolling(res.job_id, res.total_working_days);
     } catch (err) {
       if (btn) {
         btn.disabled = false;
@@ -4271,20 +4314,35 @@
     }
   };
 
-  window.startAutoMultiDsrPolling = function (jobId) {
+  window.startAutoMultiDsrPolling = function (jobId, totalDays) {
     if (autoMultiPollTimer) clearInterval(autoMultiPollTimer);
+    if (autoMultiTickerTimer) clearInterval(autoMultiTickerTimer);
     var btn = document.getElementById('btn-run-auto-multi-robot');
     if (btn) {
       btn.disabled = true;
       btn.textContent = '⏳ Robot Running...';
     }
 
+    if (!autoMultiStartTime) autoMultiStartTime = Date.now();
+    if (totalDays) autoMultiTotalDays = totalDays;
+    autoMultiEstimatedSec = Math.max(18, autoMultiTotalDays * 12 + 6);
+
+    autoMultiTickerTimer = setInterval(updateAutoMultiTimerDisplay, 1000);
+    updateAutoMultiTimerDisplay();
+
     autoMultiPollTimer = setInterval(async function () {
       try {
         var job = await window.safeFetchJson('/api/auto-multi-dsr/jobs/' + encodeURIComponent(jobId));
         if (!job) return;
 
+        if (job.started_at && (!autoMultiStartTime || Math.abs((job.started_at * 1000) - autoMultiStartTime) > 3000)) {
+          autoMultiStartTime = job.started_at * 1000;
+        }
+        if (job.total_working_days) autoMultiTotalDays = job.total_working_days;
+        autoMultiDoneCount = job.completed_count || 0;
         var pct = job.progress_pct || 0;
+        autoMultiLatestPct = pct;
+
         var fillEl = document.getElementById('auto-multi-progress-fill');
         var badgeEl = document.getElementById('auto-multi-progress-pct-badge');
         var statusEl = document.getElementById('auto-multi-progress-status');
@@ -4298,6 +4356,8 @@
         if (statTot) statTot.textContent = job.total_working_days || 0;
         if (statDone) statDone.textContent = job.completed_count || 0;
         if (statFail) statFail.textContent = job.failed_count || 0;
+
+        updateAutoMultiTimerDisplay();
 
         // Render download logs table
         var tbody = document.getElementById('auto-multi-logs-tbody');
@@ -4326,15 +4386,29 @@
         if (job.status === 'completed') {
           clearInterval(autoMultiPollTimer);
           autoMultiPollTimer = null;
+          if (autoMultiTickerTimer) {
+            clearInterval(autoMultiTickerTimer);
+            autoMultiTickerTimer = null;
+          }
+          var finalElapsed = job.elapsed_seconds ? Math.round(job.elapsed_seconds) : Math.floor((Date.now() - autoMultiStartTime) / 1000);
+          var elapEl = document.getElementById('auto-multi-elapsed-time');
+          var estEl = document.getElementById('auto-multi-estimated-time');
+          if (elapEl) elapEl.textContent = formatMinSec(finalElapsed);
+          if (estEl) estEl.textContent = '00:00';
+
           if (btn) {
             btn.disabled = false;
             btn.textContent = '⚡ Run Multi-Days DSR Robot';
           }
-          showNotice('✅ Multi-Days DSR Robot finished: ' + (job.completed_count || 0) + ' day(s) consolidated successfully.', 'success');
-          window.renderAutoMultiDsrResults(job);
+          showNotice('✅ Multi-Days DSR Robot finished in ' + formatMinSec(finalElapsed) + ': ' + (job.completed_count || 0) + ' day(s) consolidated successfully.', 'success');
+          window.renderAutoMultiDsrResults(job, finalElapsed);
         } else if (job.status === 'failed') {
           clearInterval(autoMultiPollTimer);
           autoMultiPollTimer = null;
+          if (autoMultiTickerTimer) {
+            clearInterval(autoMultiTickerTimer);
+            autoMultiTickerTimer = null;
+          }
           if (btn) {
             btn.disabled = false;
             btn.textContent = '⚡ Run Multi-Days DSR Robot';
@@ -4345,7 +4419,7 @@
     }, 1500);
   };
 
-  window.renderAutoMultiDsrResults = function (job) {
+  window.renderAutoMultiDsrResults = function (job, elapsedSec) {
     if (!job || !job.report_data) return;
     autoMultiCurrentReport = job.report_data;
     var data = job.report_data;
@@ -4358,7 +4432,12 @@
     var subEl = document.getElementById('auto-multi-res-subheading');
     if (hEl) hEl.textContent = (s.dist_name || 'District') + ' — Automated Multi-Days PS Attendance & DSR Abstract';
     if (subEl) {
-      subEl.textContent = 'Period: ' + s.start_date + ' to ' + s.end_date + ' • Report Generated On: ' + s.generated_on + ' • Working Days Downloaded: ' + s.working_days_downloaded + '/' + (job.total_working_days || s.total_reporting_days);
+      var timeTxt = '';
+      var dur = elapsedSec !== undefined ? elapsedSec : (job.elapsed_seconds || 0);
+      if (dur > 0) {
+        timeTxt = ' • Elapsed Time: ' + formatMinSec(dur);
+      }
+      subEl.textContent = 'Period: ' + s.start_date + ' to ' + s.end_date + ' • Report Generated On: ' + s.generated_on + ' • Working Days Downloaded: ' + s.working_days_downloaded + '/' + (job.total_working_days || s.total_reporting_days) + timeTxt;
     }
 
     // Set download button URLs

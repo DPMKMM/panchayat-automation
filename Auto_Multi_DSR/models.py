@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
+import time
 from typing import Any
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -95,6 +96,24 @@ class AutoMultiDsrJobRecord:
     completed_at: float | None = None
 
     def to_public_dict(self) -> dict[str, Any]:
+        now = time.time()
+        start = self.started_at or now
+        if self.completed_at:
+            elapsed = max(0.0, self.completed_at - start)
+            est_remaining = 0.0
+        else:
+            elapsed = max(0.0, now - start)
+            total_days = len(self.date_analysis.working_days)
+            done_days = len(self.successful_dates)
+            if self.status == "completed":
+                est_remaining = 0.0
+            elif done_days > 0:
+                avg_per_day = elapsed / done_days
+                remaining_days = max(0, total_days - done_days)
+                est_remaining = max(2.0, (remaining_days * avg_per_day) + (2.0 if self.progress_pct >= 95 else 6.0))
+            else:
+                est_remaining = max(4.0, (total_days * 12.0 + 6.0) - elapsed)
+
         return {
             "job_id": self.job_id,
             "session_id": self.session_id,
@@ -116,6 +135,8 @@ class AutoMultiDsrJobRecord:
             "error": self.error,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
+            "elapsed_seconds": round(elapsed, 1),
+            "estimated_remaining_seconds": round(est_remaining, 1),
             "download_urls": {
                 "pdf": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=all",
                 "pdf_district": f"/api/auto-multi-dsr/jobs/{self.job_id}/download-pdf?level=district",

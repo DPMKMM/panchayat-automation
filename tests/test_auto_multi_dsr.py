@@ -243,6 +243,9 @@ def test_auto_multi_dsr_pipeline_execution_and_deliverables(monkeypatch, tmp_pat
     assert status["status"] == "completed"
     assert status["completed_count"] == 2
     assert status["failed_count"] == 0
+    assert "elapsed_seconds" in status
+    assert "estimated_remaining_seconds" in status
+    assert status["elapsed_seconds"] >= 0
     assert download_calls == ["2026-11-09", "2026-11-10"]
 
     # Verify report data structure
@@ -313,6 +316,8 @@ def test_auto_multi_dsr_fastapi_endpoints_and_security(monkeypatch):
     assert main_page.status_code == 200
     assert 'id="card-console-auto-multi-dsr"' in main_page.text
     assert 'id="auto-multi-dsr-station"' in main_page.text
+    assert 'id="auto-multi-elapsed-time"' in main_page.text
+    assert 'id="auto-multi-estimated-time"' in main_page.text
     assert 'id="btn-run-auto-multi-robot"' in main_page.text
     assert 'id="btn-auto-multi-dl-full-pdf"' in main_page.text
     assert 'id="btn-auto-multi-dl-dist-pdf"' in main_page.text
