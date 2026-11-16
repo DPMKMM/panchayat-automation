@@ -249,6 +249,71 @@ body.state-logged-in {
   padding: 5px 9px;
 }
 
+/* Right Corner Cluster: Stacks Logout on top with Dept Session Dock directly below */
+.ribbon-right-corner-cluster {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.ribbon-dept-session-dock {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  z-index: 100000;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.ribbon-dept-session-dock > * {
+  pointer-events: auto;
+}
+
+.ribbon-corner-pill {
+  font-size: 0.72rem !important;
+  padding: 3px 9px !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.18s ease;
+}
+
+.ribbon-corner-pill.dept {
+  background: rgba(6, 78, 59, 0.95);
+  color: #a7f3d0;
+  border-color: rgba(52, 211, 153, 0.55);
+}
+
+.ribbon-corner-pill.dept:hover {
+  background: rgba(4, 120, 87, 0.98);
+  color: #ffffff;
+  border-color: #34d399;
+  transform: translateY(-1px);
+}
+
+.ribbon-corner-pill.disconnect {
+  background: rgba(127, 29, 29, 0.92);
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.ribbon-corner-pill.disconnect:hover {
+  background: rgba(185, 28, 28, 0.95);
+  color: #ffffff;
+  border-color: #f87171;
+  transform: translateY(-1px);
+}
+
 .ribbon-officer-pill {
   display: inline-flex;
   align-items: center;

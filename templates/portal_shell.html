@@ -183,6 +183,63 @@
     .ribbon-pill-btn.logout:active {
       transform: translateY(0) scale(0.98);
     }
+    /* Right Corner Cluster: Stacks Logout on top with Dept Session Dock directly below */
+    .ribbon-right-corner-cluster {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .ribbon-dept-session-dock {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 5px;
+      z-index: 100000;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .ribbon-dept-session-dock > * {
+      pointer-events: auto;
+    }
+    .ribbon-corner-pill {
+      font-size: 0.72rem !important;
+      padding: 3px 9px !important;
+      border-radius: 12px !important;
+      font-weight: 700 !important;
+      line-height: 1.2 !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+      border: 1px solid rgba(255, 255, 255, 0.22) !important;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.18s ease;
+    }
+    .ribbon-corner-pill.dept {
+      background: rgba(6, 78, 59, 0.95);
+      color: #a7f3d0;
+      border-color: rgba(52, 211, 153, 0.55);
+    }
+    .ribbon-corner-pill.dept:hover {
+      background: rgba(4, 120, 87, 0.98);
+      color: #ffffff;
+      border-color: #34d399;
+      transform: translateY(-1px);
+    }
+    .ribbon-corner-pill.disconnect {
+      background: rgba(127, 29, 29, 0.92);
+      color: #fca5a5;
+      border-color: rgba(248, 113, 113, 0.55);
+    }
+    .ribbon-corner-pill.disconnect:hover {
+      background: rgba(185, 28, 28, 0.95);
+      color: #ffffff;
+      border-color: #f87171;
+      transform: translateY(-1px);
+    }
     .ribbon-mobile-quick-logout {
       padding: 5px 12px !important;
       font-size: 0.78rem !important;
@@ -731,19 +788,8 @@
           </button>
         </nav>
 
-        <!-- Right: Officer Profile, Dept Login, Admin & Logout Actions -->
+        <!-- Right: Officer Profile, Feedback, Admin & Logout / Dept Session Corner Cluster -->
         <div class="ribbon-actions" id="ribbon-actions">
-          <!-- Department Login Status / Action -->
-          <button type="button" id="ribbon-btn-dept-login" onclick="handleNavDeptLoginClick()" class="ribbon-pill-btn dept" style="display:none;" title="Connect e-Panchayat Department Login">
-            <span id="ribbon-dept-dot" class="ribbon-dot"></span>
-            <span id="ribbon-dept-text">Department Login</span>
-          </button>
-
-          <!-- Disconnect Department Session (visible when department session is active) -->
-          <button type="button" id="ribbon-btn-disconnect-epts" onclick="disconnectEptsSession();" class="ribbon-pill-btn disconnect" style="display:none;" title="Disconnect official e-Panchayat departmental session">
-            <span>🔒</span> Disconnect
-          </button>
-
           <!-- Admin Dashboard Link -->
           <a href="javascript:void(0)" onclick="openAdminDashboardStation()" id="ribbon-btn-admin" class="ribbon-pill-btn admin" style="display:none;" title="Administrator Control Center">
             <span>🛡️</span> Admin
@@ -774,11 +820,28 @@
             <span>Sign In</span>
           </button>
 
-          <!-- Logout Button -->
-          <button type="button" id="ribbon-btn-logout" onclick="logoutPortalApp()" class="ribbon-pill-btn logout" style="display:none;" title="Sign out of e-Panchayat Automation">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            <span class="ribbon-logout-text">Logout</span>
-          </button>
+          <!-- Right Corner Cluster: Stacks Logout on top with Dept Login Status & Disconnect Button Below -->
+          <div class="ribbon-right-corner-cluster" id="ribbon-right-corner-cluster">
+            <!-- Logout Button -->
+            <button type="button" id="ribbon-btn-logout" onclick="logoutPortalApp()" class="ribbon-pill-btn logout" style="display:none;" title="Sign out of e-Panchayat Automation">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              <span class="ribbon-logout-text">Logout</span>
+            </button>
+
+            <!-- Department Session Status & Disconnect Dock (Docked at Right Corner Below Logout) -->
+            <div id="ribbon-dept-session-dock" class="ribbon-dept-session-dock">
+              <!-- Department Login Status / Action -->
+              <button type="button" id="ribbon-btn-dept-login" onclick="handleNavDeptLoginClick()" class="ribbon-pill-btn dept ribbon-corner-pill" style="display:none;" title="Connect e-Panchayat Department Login">
+                <span id="ribbon-dept-dot" class="ribbon-dot"></span>
+                <span id="ribbon-dept-text">Department Login</span>
+              </button>
+
+              <!-- Disconnect Department Session (visible when department session is active) -->
+              <button type="button" id="ribbon-btn-disconnect-epts" onclick="disconnectEptsSession();" class="ribbon-pill-btn disconnect ribbon-corner-pill" style="display:none;" title="Disconnect official e-Panchayat departmental session">
+                <span>🔒</span> Disconnect
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Mobile Header Bar: Quick Actions & Hamburger (Visible on mobile/tablet <= 860px) -->
