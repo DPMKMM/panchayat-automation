@@ -582,10 +582,15 @@ def _normalize_user_doc(doc_id: str, raw: Optional[dict[str, Any]]) -> Optional[
     desig_other = str(d.get("designation_other") or "").strip()
     role = str(d.get("role") or "").strip() or designation_to_role(desig)
     uid = str(d.get("firebase_uid") or d.get("google_uid") or "").strip()
+    username = str(d.get("username") or "").strip().lower()
     if gmail in REVOKED_ADMIN_EMAILS:
         is_adm = False
     else:
-        is_adm = bool(d.get("is_admin", False)) or is_admin_email(gmail)
+        is_adm = (
+            bool(d.get("is_admin", False))
+            or is_admin_email(gmail)
+            or is_admin_email(username)
+        )
     has_sub = bool(d.get("has_automated_subscription", False))
     sub_status = str(d.get("subscription_status") or ("active" if has_sub else "free_preview")).strip().lower()
     if sub_status not in VALID_SUBSCRIPTION_STATUSES:
@@ -690,17 +695,22 @@ get_user_by_google_uid = get_user_by_firebase_uid
 
 
 def get_user_by_gmail(gmail: str) -> Optional[dict[str, Any]]:
-    """Retrieve officer record by authenticated Gmail address."""
-    clean_email = str(gmail or "").strip().lower()
+    """Retrieve officer record by authenticated Gmail address, email, or username."""
+    raw_val = str(gmail or "").strip()
+    clean_email = raw_val.lower()
     if not clean_email:
         return None
+    candidates = [clean_email]
+    if raw_val != clean_email:
+        candidates.append(raw_val)
     try:
         col = _db().collection(COL_USERS)
-        for field_name in ("gmail", "email"):
-            snaps = list(col.where(filter=FieldFilter(field_name, "==", clean_email)).stream())
-            picked = _pick_best_user_doc(snaps)
-            if picked is not None:
-                return picked
+        for val in candidates:
+            for field_name in ("gmail", "email", "username", "display_name"):
+                snaps = list(col.where(filter=FieldFilter(field_name, "==", val)).stream())
+                picked = _pick_best_user_doc(snaps)
+                if picked is not None:
+                    return picked
     except Exception as exc:
         logger.warning("Could not query user by gmail from Firestore: %s", exc)
     return None
@@ -1053,11 +1063,11 @@ def authenticate_email_password_user(
     clean_email = str(email or "").strip().lower()
     clean_pwd = str(password or "")
     if not clean_email or not clean_pwd:
-        raise ValueError("Please provide both registered email address and password.")
+        raise ValueError("Please provide both registered email/username and password.")
 
     user = get_user_by_gmail(clean_email)
     if user is None:
-        raise ValueError("No account found with this email. Please check your email or click 'Sign Up' to create an account.")
+        raise ValueError("No account found with this email or username. Please check your credentials or click 'Sign Up' to create an account.")
 
     if user.get("account_status") != "Active":
         raise PermissionError("Your account has been disabled by an administrator. Please contact district support.")
@@ -1086,6 +1096,99 @@ def authenticate_email_password_user(
     user["updated_at"] = now
     _update_cached_user_sessions(user["user_id"], user)
     return user
+
+
+def seed_admin_user(
+    username: str = "nareshdpm",
+    password: str = "Kushi@7159",
+    email: str = "nareshdpm@panchayatautomation.in",
+    full_name: str = "Naresh DPM",
+    designation: str = "ADMIN",
+    role: str = "ADMIN",
+) -> dict[str, Any]:
+    """Ensure standard platform administrator account exists with configured credentials."""
+    clean_username = str(username or "nareshdpm").strip().lower()
+    clean_email = str(email or f"{clean_username}@panchayatautomation.in").strip().lower()
+    clean_pwd = str(password or "Kushi@7159")
+    pwd_hash, pwd_salt = hash_password(clean_pwd)
+    now = _utc_now_iso()
+
+    col = _db().collection(COL_USERS)
+
+    # Check if user already exists by username or email
+    existing = get_user_by_gmail(clean_username) or get_user_by_gmail(clean_email)
+    if existing:
+        doc_id = _resolve_user_doc_id(col, existing["user_id"]) or existing["user_id"]
+        update_data = {
+            "username": clean_username,
+            "display_name": clean_username,
+            "email": clean_email,
+            "gmail": clean_email,
+            "password_hash": pwd_hash,
+            "password_salt": pwd_salt,
+            "account_status": "Active",
+            "is_admin": True,
+            "can_access_portal": True,
+            "can_access_console": True,
+            "has_automated_subscription": True,
+            "subscription_status": "active",
+            "profile_completed": True,
+            "updated_at": now,
+        }
+        col.document(doc_id).update(update_data)
+        updated = get_user_by_id(existing["user_id"])
+        if updated:
+            _update_cached_user_sessions(existing["user_id"], updated)
+            return updated
+        existing.update(update_data)
+        return existing
+
+    new_user_id = f"usr_admin_{clean_username}"
+    payload = {
+        "user_id": new_user_id,
+        "firebase_uid": f"email:{clean_email}",
+        "google_uid": f"email:{clean_email}",
+        "email": clean_email,
+        "gmail": clean_email,
+        "full_name": full_name,
+        "name": full_name.split()[0] if full_name else clean_username,
+        "surname": "DPM",
+        "display_name": clean_username,
+        "username": clean_username,
+        "gender": "Male",
+        "mobile_number": "9999999999",
+        "state": "Telangana",
+        "district": "Khammam",
+        "mandal": "Khammam",
+        "village_gp": "Khammam",
+        "village": "Khammam",
+        "designation": designation,
+        "designation_other": "",
+        "role": role,
+        "password_hash": pwd_hash,
+        "password_salt": pwd_salt,
+        "auth_provider": "email",
+        "profile_picture": "",
+        "registration_date": now,
+        "last_login": now,
+        "previous_last_login": "",
+        "updated_at": now,
+        "account_status": "Active",
+        "profile_completed": True,
+        "is_admin": True,
+        "can_access_portal": True,
+        "can_access_console": True,
+        "has_automated_subscription": True,
+        "subscription_status": "active",
+        "subscription_plan_id": "plan_annual",
+        "subscription_plan_name": "Annual Governance Pass",
+        "subscription_expires_at": "2035-12-31T23:59:59Z",
+        "razorpay_customer_id": "",
+        "razorpay_subscription_id": "",
+    }
+    col.document(new_user_id).set(payload)
+    created = get_user_by_id(new_user_id)
+    return created or payload
 
 
 def update_user_profile_details(

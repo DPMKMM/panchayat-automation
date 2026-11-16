@@ -162,16 +162,18 @@ REVOKED_ADMIN_EMAILS: frozenset[str] = frozenset({
 
 DEFAULT_ADMIN_EMAILS: frozenset[str] = frozenset({
     "dpmkmm7@gmail.com",
+    "nareshdpm@panchayatautomation.in",
+    "nareshdpm",
 })
 
 
 def get_admin_emails() -> set[str]:
-    """Return configured lowercase administrator email addresses (default + ADMIN_EMAILS env)."""
+    """Return configured lowercase administrator email addresses or usernames (default + ADMIN_EMAILS env)."""
     raw = os.getenv("ADMIN_EMAILS", "")
     configured = {
         e.strip().lower()
         for e in raw.split(",")
-        if e.strip() and "@" in e
+        if e.strip()
     }
     return {
         e for e in (DEFAULT_ADMIN_EMAILS | configured)

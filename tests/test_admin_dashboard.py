@@ -573,3 +573,54 @@ def test_community_feedback_and_admin_direct_reply(monkeypatch):
     assert matched2[0]["status"] == "replied"
     assert matched2[0]["admin_name"] != ""
 
+
+def test_nareshdpm_admin_login_and_access():
+    from core.firebase_store import seed_admin_user
+    seed_admin_user()
+
+    c = TestClient(app)
+
+    # 1. Test incorrect password
+    bad_login = c.post(
+        "/api/auth/email-login",
+        json={"email": "nareshdpm", "password": "WrongPassword"},
+    )
+    assert bad_login.status_code == 400
+    assert "Incorrect password" in bad_login.json()["message"]
+
+    # 2. Test login with username 'nareshdpm'
+    login_user = c.post(
+        "/api/auth/email-login",
+        json={"email": "nareshdpm", "password": "Kushi@7159"},
+    )
+    assert login_user.status_code == 200
+    res_data = login_user.json()
+    assert res_data["success"] is True
+    assert res_data["user"]["is_admin"] is True
+    assert res_data["user"]["username"] == "nareshdpm"
+
+    # 3. Test admin dashboard access with session cookie on admin host
+    headers = {"Host": "admin.panchayatautomation.in"}
+    overview = c.get("/api/admin/overview", headers=headers)
+    assert overview.status_code == 200
+    assert overview.json()["success"] is True
+    assert overview.json()["admin"]["username"] == "nareshdpm"
+
+    users_res = c.get("/api/admin/users", headers=headers)
+    assert users_res.status_code == 200
+
+    policy_res = c.get("/api/admin/policy", headers=headers)
+    assert policy_res.status_code == 200
+
+    # 4. Test login with email alias 'nareshdpm@panchayatautomation.in'
+    c2 = TestClient(app)
+    login_email = c2.post(
+        "/api/auth/email-login",
+        json={"email": "nareshdpm@panchayatautomation.in", "password": "Kushi@7159"},
+    )
+    assert login_email.status_code == 200
+    assert login_email.json()["user"]["is_admin"] is True
+    overview2 = c2.get("/api/admin/overview", headers=headers)
+    assert overview2.status_code == 200
+
+

@@ -325,10 +325,15 @@ def require_admin_user(request: Request) -> dict[str, Any]:
     if not tok or user is None:
         raise HTTPException(status_code=401, detail="Administrator sign-in required.")
 
-    clean_gmail = str(user.get("gmail") or "").strip().lower()
+    clean_gmail = str(user.get("gmail") or user.get("email") or "").strip().lower()
+    clean_username = str(user.get("username") or "").strip().lower()
     is_adm = (
         clean_gmail not in REVOKED_ADMIN_EMAILS
-        and (bool(user.get("is_admin")) or is_admin_email(clean_gmail))
+        and (
+            bool(user.get("is_admin"))
+            or is_admin_email(clean_gmail)
+            or is_admin_email(clean_username)
+        )
     )
     if not is_adm:
         raise HTTPException(status_code=403, detail="Administrator privileges required.")

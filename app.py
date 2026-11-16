@@ -10,6 +10,7 @@ Unified backend server cleanly mounting modular sub-applications:
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import logging
 import os
 import re
@@ -96,6 +97,15 @@ def create_app() -> FastAPI:
     is_production = os.getenv("ENVIRONMENT", "").lower() == "production"
     enable_docs = os.getenv("ENABLE_DOCS", "false" if is_production else "true").lower() in ("true", "1")
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        try:
+            from core.firebase_store import seed_admin_user
+            seed_admin_user()
+        except Exception as exc:
+            logger.warning("Could not auto-seed admin user on startup: %s", exc)
+        yield
+
     app = FastAPI(
         title=f"{PLATFORM_NAME} · {CONSOLE_NAME}",
         version="4.0.0",
@@ -103,6 +113,7 @@ def create_app() -> FastAPI:
         docs_url="/api/docs" if enable_docs else None,
         redoc_url=None,
         openapi_url="/api/openapi.json" if enable_docs else None,
+        lifespan=lifespan,
     )
 
     # Security Patch 2: Restrict CORS to authorized production and local domains

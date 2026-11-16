@@ -67,9 +67,14 @@ def _format_ist_datetime(iso_str: str) -> str:
 
 def serialize_user_payload(user: dict[str, Any]) -> dict[str, Any]:
     clean_gmail = str(user.get("gmail") or user.get("email") or "").strip().lower()
+    clean_username = str(user.get("username") or "").strip().lower()
     is_adm = (
         clean_gmail not in REVOKED_ADMIN_EMAILS
-        and (bool(user.get("is_admin")) or is_admin_email(clean_gmail))
+        and (
+            bool(user.get("is_admin"))
+            or is_admin_email(clean_gmail)
+            or is_admin_email(clean_username)
+        )
     )
     desig = str(user.get("designation") or "").strip()
     desig_other = str(user.get("designation_other") or "").strip()
@@ -503,7 +508,7 @@ async def api_auth_register(request: Request, response: Response):
     except Exception:
         pass
 
-    email = str(data.get("email") or data.get("gmail") or "").strip().lower()
+    email = str(data.get("email") or data.get("gmail") or data.get("username") or "").strip().lower()
     password = str(data.get("password") or "")
     full_name = str(data.get("full_name") or data.get("name") or "").strip()
     surname = str(data.get("surname") or "").strip()
@@ -606,7 +611,7 @@ async def api_auth_email_login(request: Request, response: Response):
     except Exception:
         pass
 
-    email = str(data.get("email") or data.get("gmail") or "").strip().lower()
+    email = str(data.get("email") or data.get("gmail") or data.get("username") or "").strip().lower()
     password = str(data.get("password") or "")
 
     try:

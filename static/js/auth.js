@@ -1515,7 +1515,7 @@
     }
 
     if (!email || !pwd) {
-      showLoginAlert('Please enter both your registered email address and password.', false);
+      showLoginAlert('Please enter both your registered email or username and password.', false);
       return;
     }
 
