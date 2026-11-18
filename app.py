@@ -285,25 +285,10 @@ def create_app() -> FastAPI:
 
     # High-speed static software package downloads & release CDN fallback
     RELEASE_CDN_FALLBACK: dict[str, str] = {
-        # Legacy ZIP packages
         "jdk-8u351-windows-x32bit.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u351-windows-x32bit.zip",
         "jdk-8u191-windows-x64.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u191-windows-x64.zip",
         "Office_ProPlus_2010w_SP2_W32_English_August_2016.iso": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso",
         "AdbeRdr11007_en_US.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip",
-        "GoogleInputTelugu.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/GoogleInputTelugu.zip",
-        "OpenInternetExplorer.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/OpenInternetExplorer.zip",
-        "UBD_newdigisigncomp.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/UBD_newdigisigncomp.zip",
-        # Official Software Bundle Installers (.exe, .msi)
-        "AdbeRdr11007_en_US.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.exe",
-        "HyperPKI_HYP2003_Setup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/HyperPKI_HYP2003_Setup.exe",
-        "JAVA-x32.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/JAVA-x32.exe",
-        "JAVA-x64.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/JAVA-x64.exe",
-        "ndp48-web.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/ndp48-web.exe",
-        "NEW-NIC-AP-DIGISIGNER.msi": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/NEW-NIC-AP-DIGISIGNER.msi",
-        "NICDSign_3.1.3_x64-setup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/NICDSign_3.1.3_x64-setup.exe",
-        "vc_redist.x64.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/vc_redist.x64.exe",
-        "vc_redist.x86.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/vc_redist.x86.exe",
-        "WD_PROXKey.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/WD_PROXKey.exe",
     }
 
     @app.api_route("/static/softwares/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
