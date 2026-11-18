@@ -1,0 +1,76 @@
+{
+  "name": "Panchayat Automation",
+  "short_name": "Panchayat",
+  "description": "Panchayat Automation Platform - Real-time Attendance, DSR & Governance Analytics",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#064e3b",
+  "theme_color": "#064e3b",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["government", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Automated Reports",
+      "short_name": "Auto Reports",
+      "description": "Daily PS Attendance, State Format & Multi-Days DSR",
+      "url": "/autoreports",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Manual Reports",
+      "short_name": "Manual Reports",
+      "description": "Manual DSR & Mobile Number Updation Reports",
+      "url": "/manualreports",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tools Studio",
+      "short_name": "Tools",
+      "description": "85+ PDF, Excel & Office Governance Utilities",
+      "url": "/tools",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Softwares Hub",
+      "short_name": "Softwares",
+      "description": "Official Governance Software Downloads",
+      "url": "/softwares",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
