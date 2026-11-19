@@ -423,9 +423,135 @@ def generate_inspections_excel(report: InspectionReport, output_path: str | Path
         max_len = max((len(str(c.value or "")) for c in col), default=10)
         ws_data.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 36)
 
+    # Sheet 3: Pending GPs Data
+    ws_pend = wb.create_sheet("Pending GPs Data")
+    pend_headers = [
+        "Sl No", "Week", "Designation", "District", "Division",
+        "Mandal", "Gram Panchayat", "Panchayat ID", "Date of Inspection",
+        "Attendance Date-Time", "Attendance Status", "Inspecting Officer / Note", "Final Submit Status",
+    ]
+    ws_pend.append(pend_headers)
+    pend_hdr_fill = PatternFill("solid", fgColor="B91C1C")
+    for col_idx in range(1, len(pend_headers) + 1):
+        c = ws_pend.cell(row=1, column=col_idx)
+        c.fill = pend_hdr_fill
+        c.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+
+    for idx, rec in enumerate(report.pending_records, start=1):
+        ws_pend.append([
+            idx,
+            rec.week_label,
+            rec.designation,
+            rec.district_name,
+            rec.division_name,
+            rec.mandal_name,
+            rec.gp_name,
+            rec.panchayat_id,
+            rec.inspection_date,
+            rec.attendance_datetime,
+            rec.attendance_status,
+            rec.officer_name,
+            rec.final_submit_status,
+        ])
+    for col in ws_pend.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws_pend.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 36)
+
+    # Sheet 4: Total GPs Inspection Status (All Records)
+    ws_all = wb.create_sheet("Total GPs Inspection Status")
+    all_headers = [
+        "Sl No", "Week", "Designation", "District", "Division",
+        "Mandal", "Gram Panchayat", "Panchayat ID", "Date of Inspection",
+        "Attendance Date-Time", "Attendance Status", "Inspecting Officer / Note", "Final Submit Status",
+    ]
+    ws_all.append(all_headers)
+    all_hdr_fill = PatternFill("solid", fgColor="065F46")
+    for col_idx in range(1, len(all_headers) + 1):
+        c = ws_all.cell(row=1, column=col_idx)
+        c.fill = all_hdr_fill
+        c.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+
+    for idx, rec in enumerate(report.all_records, start=1):
+        ws_all.append([
+            idx,
+            rec.week_label,
+            rec.designation,
+            rec.district_name,
+            rec.division_name,
+            rec.mandal_name,
+            rec.gp_name,
+            rec.panchayat_id,
+            rec.inspection_date,
+            rec.attendance_datetime,
+            rec.attendance_status,
+            rec.officer_name,
+            rec.final_submit_status,
+        ])
+    for col in ws_all.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws_all.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 36)
+
     apply_openpyxl_branding(wb)
     wb.save(str(out))
     return out
+
+
+def generate_pending_gps_csv(report: InspectionReport) -> bytes:
+    """Export pending/draft GPs data with Attendance Status and Final Submit Status."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Sl No", "Week", "Designation", "District", "Division",
+        "Mandal", "Gram Panchayat", "Date of Inspection",
+        "Attendance Date-Time", "Attendance Status", "Inspecting Officer", "Final Submit Status",
+    ])
+    for idx, rec in enumerate(report.pending_records, start=1):
+        writer.writerow([
+            idx,
+            rec.week_label,
+            rec.designation,
+            rec.district_name,
+            rec.division_name,
+            rec.mandal_name,
+            rec.gp_name,
+            rec.inspection_date,
+            rec.attendance_datetime,
+            rec.attendance_status,
+            rec.officer_name,
+            rec.final_submit_status,
+        ])
+    return buf.getvalue().encode("utf-8-sig")
+
+
+def generate_total_gps_csv(report: InspectionReport) -> bytes:
+    """Export total GPs data with Attendance Status and Final Submit Status."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Sl No", "Week", "Designation", "District", "Division",
+        "Mandal", "Gram Panchayat", "Date of Inspection",
+        "Attendance Date-Time", "Attendance Status", "Inspecting Officer", "Final Submit Status",
+    ])
+    for idx, rec in enumerate(report.all_records, start=1):
+        writer.writerow([
+            idx,
+            rec.week_label,
+            rec.designation,
+            rec.district_name,
+            rec.division_name,
+            rec.mandal_name,
+            rec.gp_name,
+            rec.inspection_date,
+            rec.attendance_datetime,
+            rec.attendance_status,
+            rec.officer_name,
+            rec.final_submit_status,
+        ])
+    return buf.getvalue().encode("utf-8-sig")
 
 
 def generate_inspections_csv(report: InspectionReport) -> bytes:
@@ -883,6 +1009,60 @@ def generate_monthwise_inspections_excel(report: InspectionReport, output_path: 
     for col in ws_data.columns:
         max_len = max((len(str(c.value or "")) for c in col), default=10)
         ws_data.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 34)
+
+    # Pending GPs Data with Allocated Month
+    ws_m_pend = wb.create_sheet("Pending GPs Data")
+    p_hdrs = [
+        "Sl No", "Allocated Month", "Week", "Designation", "District", "Division",
+        "Mandal", "Gram Panchayat", "Panchayat ID", "Date of Inspection",
+        "Attendance Date-Time", "Attendance Status", "Inspecting Officer", "Final Submit Status",
+    ]
+    ws_m_pend.append(p_hdrs)
+    p_fill = PatternFill("solid", fgColor="B91C1C")
+    for col_idx in range(1, len(p_hdrs) + 1):
+        c = ws_m_pend.cell(row=1, column=col_idx)
+        c.fill = p_fill
+        c.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+    for idx, rec in enumerate(report.pending_records, start=1):
+        ym = assign_week_to_month(rec.week_label) or assign_week_to_month(rec.inspection_date)
+        m_lbl = format_month_key_label(ym) if ym else ""
+        ws_m_pend.append([
+            idx, m_lbl, rec.week_label, rec.designation, rec.district_name, rec.division_name,
+            rec.mandal_name, rec.gp_name, rec.panchayat_id, rec.inspection_date,
+            rec.attendance_datetime, rec.attendance_status, rec.officer_name, rec.final_submit_status,
+        ])
+    for col in ws_m_pend.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws_m_pend.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 34)
+
+    # Total GPs Inspection Status
+    ws_m_all = wb.create_sheet("Total GPs Inspection Status")
+    a_hdrs = [
+        "Sl No", "Allocated Month", "Week", "Designation", "District", "Division",
+        "Mandal", "Gram Panchayat", "Panchayat ID", "Date of Inspection",
+        "Attendance Date-Time", "Attendance Status", "Inspecting Officer", "Final Submit Status",
+    ]
+    ws_m_all.append(a_hdrs)
+    a_fill = PatternFill("solid", fgColor="065F46")
+    for col_idx in range(1, len(a_hdrs) + 1):
+        c = ws_m_all.cell(row=1, column=col_idx)
+        c.fill = a_fill
+        c.font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+    for idx, rec in enumerate(report.all_records, start=1):
+        ym = assign_week_to_month(rec.week_label) or assign_week_to_month(rec.inspection_date)
+        m_lbl = format_month_key_label(ym) if ym else ""
+        ws_m_all.append([
+            idx, m_lbl, rec.week_label, rec.designation, rec.district_name, rec.division_name,
+            rec.mandal_name, rec.gp_name, rec.panchayat_id, rec.inspection_date,
+            rec.attendance_datetime, rec.attendance_status, rec.officer_name, rec.final_submit_status,
+        ])
+    for col in ws_m_all.columns:
+        max_len = max((len(str(c.value or "")) for c in col), default=10)
+        ws_m_all.column_dimensions[col[0].column_letter].width = min(max(max_len + 4, 12), 34)
 
     apply_openpyxl_branding(wb)
     wb.save(str(out))

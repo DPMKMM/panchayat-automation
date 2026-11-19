@@ -224,12 +224,15 @@ def parse_inspection_file(
     raw_df = _read_raw_tables(filename, raw_bytes)
     if raw_df.empty:
         return {
+            "all_records": [],
             "submitted_records": [],
+            "pending_records": [],
             "observed_units": set(),
             "district_names": set(),
             "detected_weeks": [],
             "raw_row_count": 0,
             "submitted_row_count": 0,
+            "pending_row_count": 0,
             "excluded_non_submitted_count": 0,
         }
 
@@ -269,7 +272,9 @@ def parse_inspection_file(
     )
     col_desig = _find_col(headers, ("Designation", "Officer Designation"))
 
+    all_records: list[InspectionRecord] = []
     submitted_records: list[InspectionRecord] = []
+    pending_records: list[InspectionRecord] = []
     observed_units: set[str] = set()
     district_names: set[str] = set()
     detected_weeks: list[str] = []
@@ -337,11 +342,6 @@ def parse_inspection_file(
         if dist_clean:
             district_names.add(dist_clean)
 
-        # Strict Rule: Consider ONLY Final Submit Status == 'Submitted'
-        if status_val.strip().casefold() != "submitted":
-            excluded_non_submitted += 1
-            continue
-
         # Count Entered / Not Entered parameter columns if present
         entered_cnt = 0
         param_total = 0
@@ -359,33 +359,44 @@ def parse_inspection_file(
         effective_week = (week_label or "").strip() or row_week or filename
         effective_officer = officer_val or (f"Attendance: {att_val}" if att_val else canon_desig)
 
-        submitted_records.append(
-            InspectionRecord(
-                week_label=effective_week,
-                designation=row_desig or canon_desig,
-                district_name=dist_clean,
-                division_name=div_clean,
-                mandal_name=mandal_clean,
-                gp_name=gp_val,
-                officer_name=effective_officer,
-                inspection_date=date_val,
-                final_submit_status="Submitted",
-                unit_name=unit_clean,
-                mandal_lgd_code=mandal_lgd_val,
-                panchayat_id=gp_id_val,
-                attendance_datetime=att_val,
-                inspection_from_date=from_dt_val,
-                inspection_to_date=to_dt_val,
-                checklist_entered=checklist_str,
-            )
+        is_sub = (status_val.strip().casefold() == "submitted")
+        effective_status = "Submitted" if is_sub else (status_val.strip() or "Pending")
+
+        record = InspectionRecord(
+            week_label=effective_week,
+            designation=row_desig or canon_desig,
+            district_name=dist_clean,
+            division_name=div_clean,
+            mandal_name=mandal_clean,
+            gp_name=gp_val,
+            officer_name=effective_officer,
+            inspection_date=date_val,
+            final_submit_status=effective_status,
+            unit_name=unit_clean,
+            mandal_lgd_code=mandal_lgd_val,
+            panchayat_id=gp_id_val,
+            attendance_datetime=att_val,
+            inspection_from_date=from_dt_val,
+            inspection_to_date=to_dt_val,
+            checklist_entered=checklist_str,
         )
 
+        all_records.append(record)
+        if is_sub:
+            submitted_records.append(record)
+        else:
+            pending_records.append(record)
+            excluded_non_submitted += 1
+
     return {
+        "all_records": all_records,
         "submitted_records": submitted_records,
+        "pending_records": pending_records,
         "observed_units": observed_units,
         "district_names": district_names,
         "detected_weeks": detected_weeks,
         "raw_row_count": raw_row_count,
         "submitted_row_count": len(submitted_records),
+        "pending_row_count": len(pending_records),
         "excluded_non_submitted_count": excluded_non_submitted,
     }

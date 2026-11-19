@@ -27,6 +27,7 @@ DESIGNATION_SPECS: dict[str, dict[str, Any]] = {
         "group_label": "Mandal",
         "period_type": "weekly",
         "target_per_period": 4,
+        "max_target_per_month": 16,
     },
     "MPDO": {
         "designation": "MPDO",
@@ -35,6 +36,7 @@ DESIGNATION_SPECS: dict[str, dict[str, Any]] = {
         "group_label": "Mandal",
         "period_type": "weekly",
         "target_per_period": 4,
+        "max_target_per_month": 16,
     },
     "DLPO": {
         "designation": "DLPO",
@@ -304,7 +306,35 @@ def compute_designation_target(
 
     per_period = int(spec["target_per_period"])
     if spec["period_type"] == "weekly":
-        target = per_period * n_weeks
+        max_monthly = int(spec.get("max_target_per_month") or 16)
+        if week_labels:
+            by_month: dict[tuple[int, int], int] = {}
+            unassigned_count = 0
+            for w in week_labels:
+                ym = assign_week_to_month(w)
+                if ym:
+                    by_month[ym] = by_month.get(ym, 0) + 1
+                else:
+                    unassigned_count += 1
+            if by_month:
+                target = sum(min(max_monthly, per_period * cnt) for cnt in by_month.values())
+                if unassigned_count:
+                    target += min(max_monthly, per_period * unassigned_count)
+            else:
+                if n_weeks <= 5:
+                    target = min(max_monthly, per_period * n_weeks)
+                else:
+                    m_cnt = max(1, (n_weeks + 3) // 4)
+                    target = min(m_cnt * max_monthly, per_period * n_weeks)
+        else:
+            if n_weeks <= 5:
+                target = min(max_monthly, per_period * n_weeks)
+            else:
+                m_cnt = max(1, (n_weeks + 3) // 4)
+                target = min(m_cnt * max_monthly, per_period * n_weeks)
+
+        if target < per_period * n_weeks:
+            return target, f"{spec['designation']}s Inspection Target: Weekly {per_period} x {n_weeks} Week(s) = {target} (Max {max_monthly}/Month)"
         return target, f"{spec['designation']}s Inspection Target: Weekly {per_period} x {n_weeks} Week(s) = {target}"
 
     n_months = count_distinct_week_months(list(week_labels or [])) if week_labels else max(1, (n_weeks + 3) // 4)
@@ -334,6 +364,17 @@ class InspectionRecord:
     checklist_entered: str = ""
     month_key: str = ""
     month_label: str = ""
+
+    @property
+    def is_submitted(self) -> bool:
+        return self.final_submit_status.strip().casefold() == "submitted"
+
+    @property
+    def attendance_status(self) -> str:
+        att = (self.attendance_datetime or "").strip()
+        if att:
+            return f"Marked ({att})"
+        return "Not Marked / Pending"
 
 
 @dataclass
@@ -370,6 +411,9 @@ class MonthInspectionSection:
     excluded_non_submitted_count: int = 0
     counting_mode: str = "attendance"
     submitted_records: list[InspectionRecord] = field(default_factory=list)
+    pending_records: list[InspectionRecord] = field(default_factory=list)
+    all_records: list[InspectionRecord] = field(default_factory=list)
+    pending_row_count: int = 0
 
 
 @dataclass
@@ -393,8 +437,11 @@ class InspectionReport:
     total_balance: int = 0
     total_pct_completed: float = 0.0
     submitted_records: list[InspectionRecord] = field(default_factory=list)
+    pending_records: list[InspectionRecord] = field(default_factory=list)
+    all_records: list[InspectionRecord] = field(default_factory=list)
     raw_row_count: int = 0
     submitted_row_count: int = 0
+    pending_row_count: int = 0
     excluded_non_submitted_count: int = 0
     week_download_logs: list[dict[str, Any]] = field(default_factory=list)
     monthly_sections: list[MonthInspectionSection] = field(default_factory=list)

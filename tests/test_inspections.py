@@ -748,11 +748,16 @@ def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
     )
     secs = {s.month_key: s for s in rep.monthly_sections}
     assert list(secs.keys()) == ["2026-07", "2026-08", "2026-09"]
-    # August 2026 gets 5 weeks (target 4 * 5 = 20), and GP_Aug31 on 2026-09-03 counts inside August!
+    # August 2026 gets 5 weeks, but MPO monthly target is strictly 16 only even with 5 weeks!
     assert secs["2026-08"].week_count == 5
-    assert secs["2026-08"].target_per_unit == 20
+    assert secs["2026-08"].target_per_unit == 16
     aug_bonakal = {r.unit_name: r for r in secs["2026-08"].abstract_rows}["Bonakal"]
-    assert aug_bonakal.completed == 2 and aug_bonakal.balance == 18
+    assert aug_bonakal.completed == 2 and aug_bonakal.balance == 14
+    assert secs["2026-08"].pending_row_count == 1
+    assert len(secs["2026-08"].pending_records) == 1
+    assert secs["2026-08"].pending_records[0].gp_name == "GP_Wyra_Draft"
+    assert rep.pending_row_count == 1
+    assert len(rep.pending_records) == 1
     # September 2026 gets ONLY 1 week (target 4 * 1 = 4) and ONLY 1 completed (GP_Sep1)
     assert secs["2026-09"].week_count == 1
     assert secs["2026-09"].target_per_unit == 4
@@ -776,6 +781,8 @@ def test_monthwise_monday_allocation_rules_and_downloads(tmp_path, monkeypatch):
     assert "Consolidated Abstract" in wb.sheetnames
     assert "Unit x Month Matrix" in wb.sheetnames
     assert "Aug 2026" in wb.sheetnames
+    assert "Pending GPs Data" in wb.sheetnames
+    assert "Total GPs Inspection Status" in wb.sheetnames
 
     mw_csv = generate_monthwise_inspections_csv(rep).decode("utf-8-sig")
     assert "Aug 2026,5," in mw_csv
@@ -1076,6 +1083,161 @@ def test_inspection_default_counting_mode_is_attendance(monkeypatch):
     res_data = up_res.json()
     assert res_data["counting_mode"] == "attendance"
     assert res_data["counting_mode_label"] == "Attendence Date-Time"
+
+
+def test_mpo_five_week_month_target_cap_and_pending_total_gps(tmp_path, monkeypatch):
+    """Verify MPO 5-week month target is strictly capped at 16 and pending/total GPs data is preserved."""
+    from inspections.reports import (
+        generate_pending_gps_csv,
+        generate_total_gps_csv,
+    )
+
+    # 1. Target computation for 5-week month must be capped at 16
+    five_weeks_nov = [
+        "2026-11-02 to 2026-11-07",
+        "2026-11-09 to 2026-11-14",
+        "2026-11-16 to 2026-11-21",
+        "2026-11-23 to 2026-11-28",
+        "2026-11-30 to 2026-12-05",  # Monday in Nov 2026
+    ]
+    t_5w, desc_5w = compute_designation_target("MPO", week_labels=five_weeks_nov)
+    assert t_5w == 16
+    assert "Weekly 4 x 5 Week(s) = 16 (Max 16/Month)" in desc_5w
+
+    t_cnt5, desc_cnt5 = compute_designation_target("MPO", week_count=5)
+    assert t_cnt5 == 16
+    assert "Weekly 4 x 5 Week(s) = 16 (Max 16/Month)" in desc_cnt5
+
+    # Target computation for 4-week month remains 16
+    t_4w, desc_4w = compute_designation_target("MPO", week_labels=five_weeks_nov[:4])
+    assert t_4w == 16
+    assert "Weekly 4 x 4 Week(s) = 16" in desc_4w
+
+    # Target computation for 3-week remains 12
+    t_3w, desc_3w = compute_designation_target("MPO", week_labels=five_weeks_nov[:3])
+    assert t_3w == 12
+
+    # 2. Consolidation with Submitted, Draft, Pending, and Incomplete records
+    w1_html = (
+        "<html><body><table>"
+        "<tr><td colspan='10'>GM-R 39.1 MPO Inspection Data Entry Report</td></tr>"
+        "<tr><th>Sl.No</th><th>District Name</th><th>Division Name</th><th>Mandal Name</th>"
+        "<th>Gram Panchayat Name</th><th>Designation</th><th>Officer Name</th>"
+        "<th>Inspection Date</th><th>Attendence Date-Time</th><th>Final Submit Status</th></tr>"
+        "<tr><td>1</td><td>User District</td><td>Div A</td><td>Mandal A</td><td>GP Alpha</td><td>MPO</td><td>Officer 1</td><td>04-11-2026</td><td>04-11-2026 10:30 AM</td><td>Submitted</td></tr>"
+        "<tr><td>2</td><td>User District</td><td>Div A</td><td>Mandal A</td><td>GP Beta</td><td>MPO</td><td>Officer 1</td><td>05-11-2026</td><td>05-11-2026 11:15 AM</td><td>Draft</td></tr>"
+        "<tr><td>3</td><td>User District</td><td>Div A</td><td>Mandal A</td><td>GP Gamma</td><td>MPO</td><td>Officer 1</td><td>06-11-2026</td><td></td><td>Pending</td></tr>"
+        "<tr><td>4</td><td>User District</td><td>Div A</td><td>Mandal B</td><td>GP Delta</td><td>MPO</td><td>Officer 2</td><td>07-11-2026</td><td>07-11-2026 02:45 PM</td><td>Incomplete</td></tr>"
+        "<tr><td>5</td><td>User District</td><td>Div A</td><td>Mandal B</td><td>GP Epsilon</td><td>MPO</td><td>Officer 2</td><td>08-11-2026</td><td>08-11-2026 09:00 AM</td><td>Submitted</td></tr>"
+        "</table></body></html>"
+    ).encode("utf-8")
+
+    report = consolidate_inspection_files(
+        week_files=[{"week_label": "02-11-2026 to 07-11-2026", "filename": "w1.xls", "raw_bytes": w1_html}],
+        designation="MPO",
+        district_name="User District",
+    )
+
+    assert report.raw_row_count == 5
+    assert report.submitted_row_count == 2
+    assert report.pending_row_count == 3
+    assert len(report.submitted_records) == 2
+    assert len(report.pending_records) == 3
+    assert len(report.all_records) == 5
+
+    # Check attendance status & final submit status properties
+    submitted_gps = {r.gp_name: r for r in report.submitted_records}
+    pending_gps = {r.gp_name: r for r in report.pending_records}
+    all_gps = {r.gp_name: r for r in report.all_records}
+
+    assert submitted_gps["GP Alpha"].is_submitted is True
+    assert "Marked (04-11-2026 10:30 AM)" in submitted_gps["GP Alpha"].attendance_status
+
+    assert pending_gps["GP Beta"].is_submitted is False
+    assert pending_gps["GP Beta"].final_submit_status == "Draft"
+    assert "Marked (05-11-2026 11:15 AM)" in pending_gps["GP Beta"].attendance_status
+
+    assert pending_gps["GP Gamma"].is_submitted is False
+    assert pending_gps["GP Gamma"].final_submit_status == "Pending"
+    assert pending_gps["GP Gamma"].attendance_status == "Not Marked / Pending"
+
+    assert pending_gps["GP Delta"].is_submitted is False
+    assert pending_gps["GP Delta"].final_submit_status == "Incomplete"
+    assert "Marked (07-11-2026 02:45 PM)" in pending_gps["GP Delta"].attendance_status
+
+    # 3. Excel report contains all 4 sheets
+    xl_path = tmp_path / "inspections_with_pending.xlsx"
+    generate_inspections_excel(report, xl_path)
+    wb = openpyxl.load_workbook(xl_path)
+    assert "Inspection Abstract" in wb.sheetnames
+    assert "Submitted Inspections Data" in wb.sheetnames
+    assert "Pending GPs Data" in wb.sheetnames
+    assert "Total GPs Inspection Status" in wb.sheetnames
+
+    # Check Pending sheet rows
+    ws_pend = wb["Pending GPs Data"]
+    assert ws_pend.cell(row=1, column=10).value == "Attendance Date-Time"
+    assert ws_pend.cell(row=1, column=11).value == "Attendance Status"
+    assert ws_pend.cell(row=1, column=13).value == "Final Submit Status"
+    assert ws_pend.max_row == 4  # Header + 3 pending rows
+
+    # Check Total sheet rows
+    ws_total = wb["Total GPs Inspection Status"]
+    assert ws_total.max_row == 6  # Header + 5 all rows
+
+    # 4. Pending & Total CSV generators
+    pend_csv = generate_pending_gps_csv(report).decode("utf-8-sig")
+    assert "GP Beta" in pend_csv
+    assert "Draft" in pend_csv
+    assert "GP Alpha" not in pend_csv
+
+    tot_csv = generate_total_gps_csv(report).decode("utf-8-sig")
+    assert "GP Alpha" in tot_csv
+    assert "GP Beta" in tot_csv
+    assert "GP Gamma" in tot_csv
+    assert "GP Delta" in tot_csv
+    assert "GP Epsilon" in tot_csv
+
+    # 5. API test for upload-consolidate, pending-csv and total-csv downloads
+    client = TestClient(create_app())
+    tok = _console_login(client, monkeypatch, "insp_pnd")
+    sid = "sess_pending_test"
+    up_res = client.post(
+        "/api/inspections/upload-consolidate",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid},
+        data={"designation": "MPO", "district_name": "User District"},
+        files=[("files", ("w1.xls", w1_html, "application/vnd.ms-excel"))],
+    )
+    assert up_res.status_code == 200
+    up_data = up_res.json()
+    assert up_data["totals"]["pending_row_count"] == 3
+    assert up_data["totals"]["submitted_row_count"] == 2
+    assert up_data["totals"]["raw_row_count"] == 5
+    assert len(up_data["pending_records"]) == 3
+    assert len(up_data["all_records"]) == 5
+
+    # Download pending CSV endpoint
+    pend_res = client.get(
+        "/api/inspections/download-pending-csv",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid},
+    )
+    assert pend_res.status_code == 200
+    assert "attachment;" in pend_res.headers.get("Content-Disposition", "")
+    assert "GP Beta" in pend_res.text
+    assert "Draft" in pend_res.text
+    assert "GP Alpha" not in pend_res.text
+
+    # Download total CSV endpoint
+    total_res = client.get(
+        "/api/inspections/download-total-csv",
+        headers={"Host": "autoreports.panchayatautomation.in", "Authorization": f"Bearer {tok}", "X-Session-ID": sid},
+    )
+    assert total_res.status_code == 200
+    assert "attachment;" in total_res.headers.get("Content-Disposition", "")
+    assert "GP Alpha" in total_res.text
+    assert "GP Beta" in total_res.text
+    assert "Submitted" in total_res.text
+
 
 
 

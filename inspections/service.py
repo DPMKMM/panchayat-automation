@@ -27,6 +27,8 @@ from inspections.reports import (
     generate_monthwise_inspections_csv,
     generate_monthwise_inspections_excel,
     generate_monthwise_inspections_pdf,
+    generate_pending_gps_csv,
+    generate_total_gps_csv,
 )
 
 logger = logging.getLogger("inspections_service")
@@ -85,28 +87,43 @@ def clear_inspection_progress(session_id: str) -> None:
         _INSP_PROGRESS_MAP.pop(sid, None)
 
 
+def _insp_rec_to_dict(rec: InspectionRecord) -> dict[str, Any]:
+    return {
+        "week": rec.week_label,
+        "designation": rec.designation,
+        "district": rec.district_name,
+        "division": rec.division_name,
+        "mandal": rec.mandal_name,
+        "gp_name": rec.gp_name,
+        "officer_name": rec.officer_name,
+        "inspection_date": rec.inspection_date,
+        "attendance_datetime": rec.attendance_datetime,
+        "attendance_status": rec.attendance_status,
+        "final_submit_status": rec.final_submit_status,
+        "is_submitted": rec.is_submitted,
+        "month_key": rec.month_key,
+        "month_label": rec.month_label,
+    }
+
+
 def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
     """Serialize consolidated InspectionReport for JSON responses & frontend rendering."""
-    records_by_unit: dict[str, list[dict[str, str]]] = {}
-    for rec in report.submitted_records:
+    records_by_unit: dict[str, list[dict[str, Any]]] = {}
+    pending_by_unit: dict[str, list[dict[str, Any]]] = {}
+    all_by_unit: dict[str, list[dict[str, Any]]] = {}
+
+    for rec in report.all_records:
         key = rec.unit_name.casefold()
-        records_by_unit.setdefault(key, []).append({
-            "week": rec.week_label,
-            "designation": rec.designation,
-            "district": rec.district_name,
-            "division": rec.division_name,
-            "mandal": rec.mandal_name,
-            "gp_name": rec.gp_name,
-            "officer_name": rec.officer_name,
-            "inspection_date": rec.inspection_date,
-            "attendance_datetime": rec.attendance_datetime,
-            "final_submit_status": rec.final_submit_status,
-            "month_key": rec.month_key,
-            "month_label": rec.month_label,
-        })
+        d = _insp_rec_to_dict(rec)
+        all_by_unit.setdefault(key, []).append(d)
+        if rec.is_submitted:
+            records_by_unit.setdefault(key, []).append(d)
+        else:
+            pending_by_unit.setdefault(key, []).append(d)
 
     rows_payload = []
     for row in report.abstract_rows:
+        key = row.unit_name.casefold()
         rows_payload.append({
             "sl_no": row.serial,
             "unit_name": row.unit_name,
@@ -114,34 +131,33 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
             "completed": row.completed,
             "balance": row.balance,
             "pct_completed": row.pct_completed,
-            "details": records_by_unit.get(row.unit_name.casefold(), []),
+            "details": records_by_unit.get(key, []),
+            "pending_details": pending_by_unit.get(key, []),
+            "all_details": all_by_unit.get(key, []),
         })
 
     monthly_payload = []
     for sec in report.monthly_sections or []:
         m_rows = []
-        sec_recs_by_unit: dict[str, list[dict[str, str]]] = {}
-        src_recs = sec.submitted_records or [
-            r for r in report.submitted_records
+        sec_recs_by_unit: dict[str, list[dict[str, Any]]] = {}
+        sec_pending_by_unit: dict[str, list[dict[str, Any]]] = {}
+        sec_all_by_unit: dict[str, list[dict[str, Any]]] = {}
+
+        src_all = sec.all_records or [
+            r for r in report.all_records
             if (r.month_key and r.month_key == sec.month_key) or r.week_label in sec.weeks_included
         ]
-        for rec in src_recs:
-            sec_recs_by_unit.setdefault(rec.unit_name.casefold(), []).append({
-                "week": rec.week_label,
-                "designation": rec.designation,
-                "district": rec.district_name,
-                "division": rec.division_name,
-                "mandal": rec.mandal_name,
-                "gp_name": rec.gp_name,
-                "officer_name": rec.officer_name,
-                "inspection_date": rec.inspection_date,
-                "attendance_datetime": rec.attendance_datetime,
-                "final_submit_status": rec.final_submit_status,
-                "month_key": rec.month_key or sec.month_key,
-                "month_label": rec.month_label or sec.month_label,
-            })
+        for rec in src_all:
+            k = rec.unit_name.casefold()
+            d = _insp_rec_to_dict(rec)
+            sec_all_by_unit.setdefault(k, []).append(d)
+            if rec.is_submitted:
+                sec_recs_by_unit.setdefault(k, []).append(d)
+            else:
+                sec_pending_by_unit.setdefault(k, []).append(d)
 
         for r in sec.abstract_rows:
+            k = r.unit_name.casefold()
             m_rows.append({
                 "sl_no": r.serial,
                 "unit_name": r.unit_name,
@@ -149,7 +165,9 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
                 "completed": r.completed,
                 "balance": r.balance,
                 "pct_completed": r.pct_completed,
-                "details": sec_recs_by_unit.get(r.unit_name.casefold(), []),
+                "details": sec_recs_by_unit.get(k, []),
+                "pending_details": sec_pending_by_unit.get(k, []),
+                "all_details": sec_all_by_unit.get(k, []),
             })
         monthly_payload.append({
             "year": sec.year,
@@ -169,11 +187,16 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
                 "pct_completed": sec.total_pct_completed,
                 "raw_row_count": sec.raw_row_count,
                 "submitted_row_count": sec.submitted_row_count,
+                "pending_row_count": sec.pending_row_count,
                 "excluded_non_submitted_count": sec.excluded_non_submitted_count,
             },
             "rows": m_rows,
+            "submitted_records": [_insp_rec_to_dict(r) for r in sec.submitted_records],
+            "pending_records": [_insp_rec_to_dict(r) for r in sec.pending_records],
+            "all_records": [_insp_rec_to_dict(r) for r in sec.all_records],
         })
 
+    pending_count = report.pending_row_count if getattr(report, "pending_row_count", 0) > 0 else len(report.pending_records)
     return {
         "success": True,
         "module": "gp_inspections",
@@ -200,9 +223,13 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
             "pct_completed": report.total_pct_completed,
             "raw_row_count": report.raw_row_count,
             "submitted_row_count": report.submitted_row_count,
+            "pending_row_count": pending_count,
             "excluded_non_submitted_count": report.excluded_non_submitted_count,
         },
         "rows": rows_payload,
+        "submitted_records": [_insp_rec_to_dict(r) for r in report.submitted_records],
+        "pending_records": [_insp_rec_to_dict(r) for r in report.pending_records],
+        "all_records": [_insp_rec_to_dict(r) for r in report.all_records],
         "monthly_sections": monthly_payload,
         "week_logs": report.week_download_logs,
         "pdf_url": "/api/inspections/report.pdf",
@@ -212,6 +239,8 @@ def serialize_inspection_report(report: InspectionReport) -> dict[str, Any]:
         "monthwise_pdf_url": "/api/inspections/download-monthwise-pdf",
         "monthwise_excel_url": "/api/inspections/download-monthwise-excel",
         "monthwise_csv_url": "/api/inspections/download-monthwise-csv",
+        "pending_csv_url": "/api/inspections/download-pending-csv",
+        "total_csv_url": "/api/inspections/download-total-csv",
     }
 
 
@@ -227,6 +256,8 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
     pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts_download}.pdf"
     xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Consolidated_{ts_download}.xlsx"
     csv_name = f"{safe_dist}_{safe_desig}_GP_Inspections_Abstract_{ts_download}.csv"
+    pending_csv_name = f"{safe_dist}_{safe_desig}_Pending_GPs_Data_{ts_download}.csv"
+    total_csv_name = f"{safe_dist}_{safe_desig}_Total_GPs_Inspection_Status_{ts_download}.csv"
     mw_pdf_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_download}.pdf"
     mw_xlsx_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_download}.xlsx"
     mw_csv_name = f"{safe_dist}_{safe_desig}_GP_Inspections_MonthWise_{ts_download}.csv"
@@ -239,6 +270,8 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
     generate_inspections_pdf(report, pdf_path)
     generate_inspections_excel(report, xlsx_path)
     csv_bytes = generate_inspections_csv(report)
+    pending_csv_bytes = generate_pending_gps_csv(report)
+    total_csv_bytes = generate_total_gps_csv(report)
     generate_monthwise_inspections_pdf(report, mw_pdf_path)
     generate_monthwise_inspections_excel(report, mw_xlsx_path)
     mw_csv_bytes = generate_monthwise_inspections_csv(report)
@@ -254,6 +287,10 @@ def _persist_artifacts_for_session(session_id: str, report: InspectionReport) ->
             "xlsx_filename": xlsx_name,
             "csv_bytes": csv_bytes,
             "csv_filename": csv_name,
+            "pending_csv_bytes": pending_csv_bytes,
+            "pending_csv_filename": pending_csv_name,
+            "total_csv_bytes": total_csv_bytes,
+            "total_csv_filename": total_csv_name,
             "mw_pdf_path": str(mw_pdf_path),
             "mw_pdf_filename": mw_pdf_name,
             "mw_xlsx_path": str(mw_xlsx_path),
@@ -496,6 +533,10 @@ def get_session_download_artifact(session_id: str, kind: str) -> tuple[str, byte
         )
     if kind == "csv":
         return entry["csv_filename"], entry["csv_bytes"], "text/csv; charset=utf-8"
+    if kind == "pending-csv":
+        return entry["pending_csv_filename"], entry["pending_csv_bytes"], "text/csv; charset=utf-8"
+    if kind == "total-csv":
+        return entry["total_csv_filename"], entry["total_csv_bytes"], "text/csv; charset=utf-8"
     if kind == "monthwise-pdf":
         p = Path(entry["mw_pdf_path"])
         if not p.exists():

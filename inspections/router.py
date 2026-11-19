@@ -221,3 +221,13 @@ def download_monthwise_inspections_excel(request: Request) -> Response:
 @router.get("/download-monthwise-csv", include_in_schema=False)
 def download_monthwise_inspections_csv(request: Request) -> Response:
     return _artifact_download_response(request, "monthwise-csv")
+
+
+@router.get("/download-pending-csv", include_in_schema=False)
+def download_pending_inspections_csv(request: Request) -> Response:
+    return _artifact_download_response(request, "pending-csv")
+
+
+@router.get("/download-total-csv", include_in_schema=False)
+def download_total_inspections_csv(request: Request) -> Response:
+    return _artifact_download_response(request, "total-csv")

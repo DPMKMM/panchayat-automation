@@ -3324,10 +3324,15 @@
     }
   };
 
+  var inspActiveViewMode = 'abstract';
+  var inspGpsFilteredCache = [];
+
   window.resetInspectionsView = function () {
     inspCurrentReport = null;
     inspFilteredCache = [];
+    inspGpsFilteredCache = [];
     inspActiveMonthKey = 'all';
+    inspActiveViewMode = 'abstract';
 
     var actionsWrap = document.getElementById('insp-actions-wrap');
     if (actionsWrap) actionsWrap.style.display = 'none';
@@ -3337,6 +3342,20 @@
       monthTabs.style.display = 'none';
       monthTabs.innerHTML = '';
     }
+
+    var tabAbs = document.getElementById('insp-tab-abstract');
+    var tabPend = document.getElementById('insp-tab-pending');
+    var tabTot = document.getElementById('insp-tab-total');
+    if (tabAbs) { tabAbs.style.background = '#064e3b'; tabAbs.style.color = '#ffffff'; tabAbs.style.borderColor = '#064e3b'; }
+    if (tabPend) { tabPend.style.background = '#ffffff'; tabPend.style.color = '#c2410c'; tabPend.style.borderColor = '#fed7aa'; }
+    if (tabTot) { tabTot.style.background = '#ffffff'; tabTot.style.color = '#0369a1'; tabTot.style.borderColor = '#bae6fd'; }
+
+    var bPend = document.getElementById('insp-count-pending-badge'); if (bPend) bPend.textContent = '0';
+    var bTot = document.getElementById('insp-count-total-badge'); if (bTot) bTot.textContent = '0';
+
+    var absWrap = document.getElementById('insp-abstract-container'); if (absWrap) absWrap.style.display = 'block';
+    var gpsWrap = document.getElementById('insp-gps-container'); if (gpsWrap) gpsWrap.style.display = 'none';
+    var fWrap = document.getElementById('insp-gps-filter-wrap'); if (fWrap) fWrap.style.display = 'none';
 
     var el;
     el = document.getElementById('insp-kpi-mandals'); if (el) el.textContent = '0';
@@ -3351,6 +3370,11 @@
     var tbody = document.getElementById('insp-table-body');
     if (tbody) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:28px; color:#64748b;">Select Designation &amp; From–To Weeks above and click <strong>⚡ Run Inspections Robot</strong> (or upload weekly Excel files).</td></tr>';
+    }
+
+    var gpsTbody = document.getElementById('insp-gps-table-body');
+    if (gpsTbody) {
+      gpsTbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:28px; color:#64748b;">No Gram Panchayat inspection records found for the selected view.</td></tr>';
     }
 
     var searchEl = document.getElementById('insp-search-input');
@@ -3798,11 +3822,163 @@
       el.textContent = distHeading + ' — ' + (data.designation || '') + ' Inspections Abstract (Submitted Only)';
     }
 
+    var pendCount = totals.pending_row_count || (data.pending_records ? data.pending_records.length : 0);
+    var totCount = totals.raw_row_count || (data.all_records ? data.all_records.length : 0);
+    var bPend = document.getElementById('insp-count-pending-badge'); if (bPend) bPend.textContent = pendCount;
+    var bTot = document.getElementById('insp-count-total-badge'); if (bTot) bTot.textContent = totCount;
+
     window.renderInspectionMonthTabs();
-    window.filterInspectionsTable();
+    window.switchInspectionViewMode(inspActiveViewMode || 'abstract');
+  };
+
+  window.switchInspectionViewMode = function (mode) {
+    inspActiveViewMode = mode || 'abstract';
+    var tabAbs = document.getElementById('insp-tab-abstract');
+    var tabPend = document.getElementById('insp-tab-pending');
+    var tabTot = document.getElementById('insp-tab-total');
+    var absWrap = document.getElementById('insp-abstract-container');
+    var gpsWrap = document.getElementById('insp-gps-container');
+    var fWrap = document.getElementById('insp-gps-filter-wrap');
+    var sFilter = document.getElementById('insp-gps-status-filter');
+
+    if (tabAbs) {
+      var isA = inspActiveViewMode === 'abstract';
+      tabAbs.style.background = isA ? '#064e3b' : '#ffffff';
+      tabAbs.style.color = isA ? '#ffffff' : '#064e3b';
+      tabAbs.style.borderColor = '#064e3b';
+    }
+    if (tabPend) {
+      var isP = inspActiveViewMode === 'pending';
+      tabPend.style.background = isP ? '#c2410c' : '#ffffff';
+      tabPend.style.color = isP ? '#ffffff' : '#c2410c';
+      tabPend.style.borderColor = isP ? '#c2410c' : '#fed7aa';
+    }
+    if (tabTot) {
+      var isT = inspActiveViewMode === 'total';
+      tabTot.style.background = isT ? '#0284c7' : '#ffffff';
+      tabTot.style.color = isT ? '#ffffff' : '#0284c7';
+      tabTot.style.borderColor = isT ? '#0284c7' : '#bae6fd';
+    }
+
+    if (inspActiveViewMode === 'abstract') {
+      if (absWrap) absWrap.style.display = 'block';
+      if (gpsWrap) gpsWrap.style.display = 'none';
+      if (fWrap) fWrap.style.display = 'none';
+      window.filterInspectionsTable();
+    } else {
+      if (absWrap) absWrap.style.display = 'none';
+      if (gpsWrap) gpsWrap.style.display = 'block';
+      if (fWrap) fWrap.style.display = 'flex';
+      if (sFilter) {
+        sFilter.value = (inspActiveViewMode === 'pending') ? 'pending' : 'all';
+      }
+      window.filterInspectionGpsTable();
+    }
+  };
+
+  window.filterInspectionGpsTable = function () {
+    if (!inspCurrentReport) return;
+    var allList = [];
+    if (inspActiveMonthKey !== 'all' && Array.isArray(inspCurrentReport.monthly_sections)) {
+      var foundSec = inspCurrentReport.monthly_sections.find(function (s) { return s.month_key === inspActiveMonthKey; });
+      if (foundSec) {
+        allList = foundSec.all_records || [];
+      }
+    }
+    if (!allList.length) {
+      allList = inspCurrentReport.all_records || [];
+    }
+
+    var sFilter = (document.getElementById('insp-gps-status-filter') && document.getElementById('insp-gps-status-filter').value) || (inspActiveViewMode === 'pending' ? 'pending' : 'all');
+    var searchEl = document.getElementById('insp-search-input');
+    var q = (searchEl ? searchEl.value : '').toLowerCase().trim();
+
+    var filtered = allList.filter(function (r) {
+      var isSub = r.is_submitted === true || String(r.final_submit_status || '').toLowerCase() === 'submitted';
+      var hasAtt = Boolean(r.attendance_datetime && String(r.attendance_datetime).trim());
+
+      if (sFilter === 'pending' && isSub) return false;
+      if (sFilter === 'submitted' && !isSub) return false;
+      if (sFilter === 'with_attendance' && !hasAtt) return false;
+      if (sFilter === 'without_attendance' && hasAtt) return false;
+
+      if (!q) return true;
+      var haystack = [
+        r.mandal, r.gp_name, r.officer_name, r.final_submit_status, r.inspection_date, r.attendance_datetime
+      ].join(' ').toLowerCase();
+      return haystack.indexOf(q) !== -1;
+    });
+
+    inspGpsFilteredCache = filtered;
+
+    var titleEl = document.getElementById('insp-table-title');
+    var counterEl = document.getElementById('insp-table-counter');
+    var dName = String(inspCurrentReport.district_name || 'District').trim();
+    var distHeading = /district/i.test(dName) ? dName : (dName + ' District');
+    var desig = inspCurrentReport.designation || '';
+
+    if (inspActiveViewMode === 'pending') {
+      if (titleEl) titleEl.textContent = distHeading + ' — ' + desig + ' Pending / Non-Submitted GPs Data';
+    } else {
+      if (titleEl) titleEl.textContent = distHeading + ' — ' + desig + ' Total Gram Panchayats Inspection Status';
+    }
+    if (counterEl) counterEl.textContent = 'Showing ' + filtered.length + ' GPs';
+
+    var tbody = document.getElementById('insp-gps-table-body');
+    if (!tbody) return;
+
+    if (!filtered.length) {
+      var emptyMsg = (sFilter === 'pending')
+        ? 'No pending / non-submitted GP inspections found for the selected period.'
+        : 'No Gram Panchayat records found matching the current filter/search.';
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:24px; color:#64748b; font-weight:600;">' + esc(emptyMsg) + '</td></tr>';
+      return;
+    }
+
+    var rowsHtml = filtered.map(function (rec, idx) {
+      var rowBg = idx % 2 === 0 ? 'background:#ffffff;' : 'background:#f8fafc;';
+      var isSub = rec.is_submitted === true || String(rec.final_submit_status || '').toLowerCase() === 'submitted';
+      var hasAtt = Boolean(rec.attendance_datetime && String(rec.attendance_datetime).trim());
+
+      var attBadge = hasAtt
+        ? '<span style="background:#dbeafe; color:#1e40af; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:700;">📱 Marked</span>'
+        : '<span style="background:#fee2e2; color:#991b1b; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:700;">⚠️ Not Marked</span>';
+
+      var rawStatus = String(rec.final_submit_status || (isSub ? 'Submitted' : 'Pending')).trim();
+      var statusBadge;
+      if (isSub) {
+        statusBadge = '<span style="background:#dcfce7; color:#15803d; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:800;">✅ Submitted</span>';
+      } else if (/draft/i.test(rawStatus)) {
+        statusBadge = '<span style="background:#fef3c7; color:#b45309; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:800;">📝 Draft</span>';
+      } else {
+        statusBadge = '<span style="background:#ffedd5; color:#c2410c; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:800;">⏳ ' + esc(rawStatus) + '</span>';
+      }
+
+      var attTimeDisplay = rec.attendance_datetime || '—';
+
+      return (
+        '<tr style="border-bottom:1px solid #e2e8f0; ' + rowBg + '">' +
+          '<td style="padding:10px 12px; text-align:center; font-weight:700; color:#64748b;">' + (idx + 1) + '</td>' +
+          '<td style="padding:10px 12px; font-size:0.8rem; color:#475569;">' + esc(rec.week || '—') + '</td>' +
+          '<td style="padding:10px 12px; font-weight:700; color:#0f172a;">' + esc(rec.mandal || '—') + '</td>' +
+          '<td style="padding:10px 12px; font-weight:700; color:#1e293b;">' + esc(rec.gp_name || '—') + '</td>' +
+          '<td style="padding:10px 12px; color:#334155;">' + esc(rec.officer_name || '—') + '</td>' +
+          '<td style="padding:10px 12px; text-align:center; color:#0f172a;">' + esc(rec.inspection_date || '—') + '</td>' +
+          '<td style="padding:10px 12px; text-align:center; font-weight:600; color:#0f172a;">' + esc(attTimeDisplay) + '</td>' +
+          '<td style="padding:10px 12px; text-align:center;">' + attBadge + '</td>' +
+          '<td style="padding:10px 12px; text-align:center;">' + statusBadge + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+
+    tbody.innerHTML = rowsHtml;
   };
 
   window.filterInspectionsTable = function () {
+    if (inspActiveViewMode && inspActiveViewMode !== 'abstract') {
+      window.filterInspectionGpsTable();
+      return;
+    }
     var rows = [];
     if (inspCurrentReport) {
       if (inspActiveMonthKey !== 'all' && Array.isArray(inspCurrentReport.monthly_sections)) {
@@ -3911,56 +4087,113 @@
     tbody.innerHTML = rowsHtml;
   };
 
+  window._activeModalSubTab = 'submitted';
+  window.switchInspModalSubTab = function (tabName) {
+    window._activeModalSubTab = tabName;
+    if (window._currModalRow) {
+      window._renderModalTab(tabName);
+    }
+  };
+
+  window._renderModalTab = function (tabName) {
+    var row = window._currModalRow;
+    if (!row) return;
+    var content = document.getElementById('insp-modal-content');
+    if (!content) return;
+
+    var subList = row.details || [];
+    var pendList = row.pending_details || [];
+    var allList = row.all_details || (subList.concat(pendList));
+
+    var activeList = (tabName === 'pending') ? pendList : (tabName === 'all' ? allList : subList);
+
+    var tabBtns =
+      '<div style="display:flex; gap:8px; margin-bottom:14px; border-bottom:1.5px solid #e2e8f0; padding-bottom:10px;">' +
+        '<button type="button" onclick="switchInspModalSubTab(\'submitted\')" class="btn btn-sm" style="padding:5px 12px; border-radius:6px; font-weight:800; font-size:0.8rem; cursor:pointer; ' +
+        (tabName === 'submitted' ? 'background:#15803d; color:#ffffff; border:1px solid #15803d;' : 'background:#ffffff; color:#15803d; border:1px solid #bbf7d0;') +
+        '">✅ Submitted (' + subList.length + ')</button>' +
+        '<button type="button" onclick="switchInspModalSubTab(\'pending\')" class="btn btn-sm" style="padding:5px 12px; border-radius:6px; font-weight:800; font-size:0.8rem; cursor:pointer; ' +
+        (tabName === 'pending' ? 'background:#c2410c; color:#ffffff; border:1px solid #c2410c;' : 'background:#ffffff; color:#c2410c; border:1px solid #fed7aa;') +
+        '">⚠️ Pending / Draft (' + pendList.length + ')</button>' +
+        '<button type="button" onclick="switchInspModalSubTab(\'all\')" class="btn btn-sm" style="padding:5px 12px; border-radius:6px; font-weight:800; font-size:0.8rem; cursor:pointer; ' +
+        (tabName === 'all' ? 'background:#0369a1; color:#ffffff; border:1px solid #0369a1;' : 'background:#ffffff; color:#0369a1; border:1px solid #bae6fd;') +
+        '">📋 All (' + allList.length + ')</button>' +
+      '</div>';
+
+    if (!activeList.length) {
+      content.innerHTML = tabBtns + '<div style="padding:20px; text-align:center; color:#64748b; font-weight:600;">No records found for this category.</div>';
+      return;
+    }
+
+    var trs = activeList.map(function (rec, idx) {
+      var isSub = rec.is_submitted === true || String(rec.final_submit_status || '').toLowerCase() === 'submitted';
+      var hasAtt = Boolean(rec.attendance_datetime && String(rec.attendance_datetime).trim());
+      var attDt = rec.attendance_datetime || rec.inspection_date || '—';
+      var attBadge = hasAtt
+        ? '<span style="background:#dbeafe; color:#1e40af; padding:2px 7px; border-radius:10px; font-size:0.72rem; font-weight:700;">📱 Marked</span>'
+        : '<span style="background:#fee2e2; color:#991b1b; padding:2px 7px; border-radius:10px; font-size:0.72rem; font-weight:700;">⚠️ Not Marked</span>';
+
+      var rawStatus = String(rec.final_submit_status || (isSub ? 'Submitted' : 'Pending')).trim();
+      var statusBadge;
+      if (isSub) {
+        statusBadge = '<span style="background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:800;">Submitted</span>';
+      } else if (/draft/i.test(rawStatus)) {
+        statusBadge = '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:800;">Draft</span>';
+      } else {
+        statusBadge = '<span style="background:#ffedd5; color:#c2410c; padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:800;">' + esc(rawStatus) + '</span>';
+      }
+
+      return (
+        '<tr style="border-bottom:1px solid #f1f5f9;">' +
+          '<td style="padding:8px 10px; text-align:center; font-weight:700; color:#64748b;">' + (idx + 1) + '</td>' +
+          '<td style="padding:8px 10px; font-weight:600; color:#0f172a;">' + esc(rec.week || '—') + '</td>' +
+          '<td style="padding:8px 10px; font-weight:700; color:#0f172a;">' + esc(rec.gp_name || rec.mandal || row.unit_name) + '</td>' +
+          '<td style="padding:8px 10px; color:#334155;">' + esc(rec.officer_name || rec.designation || '—') + '</td>' +
+          '<td style="padding:8px 10px; text-align:center; color:#0f172a; font-weight:600;">' + esc(attDt) + '</td>' +
+          '<td style="padding:8px 10px; text-align:center;">' + attBadge + '</td>' +
+          '<td style="padding:8px 10px; text-align:center;">' + statusBadge + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+
+    content.innerHTML =
+      tabBtns +
+      '<div style="overflow-x:auto;">' +
+        '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">' +
+          '<thead><tr style="background:#0f172a; color:#ffffff; font-weight:700;">' +
+            '<th style="padding:8px 10px; text-align:center; width:40px;">#</th>' +
+            '<th style="padding:8px 10px;">Week</th>' +
+            '<th style="padding:8px 10px;">Gram Panchayat</th>' +
+            '<th style="padding:8px 10px;">Officer</th>' +
+            '<th style="padding:8px 10px; text-align:center;">Attendence Date-Time</th>' +
+            '<th style="padding:8px 10px; text-align:center;">Attendance Status</th>' +
+            '<th style="padding:8px 10px; text-align:center;">Final Submit Status</th>' +
+          '</tr></thead>' +
+          '<tbody>' + trs + '</tbody>' +
+        '</table>' +
+      '</div>';
+  };
+
   window.viewInspectionUnitDetails = function (row) {
     var modal = document.getElementById('insp-detail-modal');
     var title = document.getElementById('insp-modal-title');
     var sub = document.getElementById('insp-modal-subtitle');
-    var content = document.getElementById('insp-modal-content');
-    if (!modal || !content) return;
+    if (!modal) return;
 
     var levelLabel = (inspCurrentReport && inspCurrentReport.group_label) || 'Mandal';
-    var details = row.details || [];
-    if (title) title.textContent = row.unit_name + ' ' + levelLabel + ' — Submitted GP Inspections';
+    var pendCount = (row.pending_details || []).length;
+    if (title) title.textContent = row.unit_name + ' ' + levelLabel + ' — GP Inspections Details';
     if (sub) {
       var modeBadge = (inspCurrentReport && inspCurrentReport.counting_mode_label)
         ? (' | Mode: ' + inspCurrentReport.counting_mode_label)
         : '';
       sub.textContent =
-        'Target: ' + row.target + ' | Completed (Submitted): ' + row.completed +
-        ' | Balance: ' + row.balance + ' | ' + Number(row.pct_completed || 0).toFixed(2) + '%' + modeBadge;
+        'Target: ' + row.target + ' | Completed: ' + row.completed +
+        ' | Pending: ' + (row.balance || pendCount) + ' | ' + Number(row.pct_completed || 0).toFixed(2) + '%' + modeBadge;
     }
 
-    if (!details.length) {
-      content.innerHTML = '<div style="padding:20px; text-align:center; color:#64748b; font-weight:600;">No Final Submit Status = Submitted records found for ' + esc(row.unit_name) + ' in the selected weeks.</div>';
-    } else {
-      var trs = details.map(function (rec, idx) {
-        var attDt = rec.attendance_datetime || rec.inspection_date || '—';
-        return (
-          '<tr style="border-bottom:1px solid #f1f5f9;">' +
-            '<td style="padding:8px 10px; text-align:center; font-weight:700; color:#64748b;">' + (idx + 1) + '</td>' +
-            '<td style="padding:8px 10px; font-weight:600; color:#0f172a;">' + esc(rec.week || '—') + '</td>' +
-            '<td style="padding:8px 10px; font-weight:700; color:#0f172a;">' + esc(rec.gp_name || rec.mandal || row.unit_name) + '</td>' +
-            '<td style="padding:8px 10px; color:#334155;">' + esc(rec.officer_name || rec.designation || '—') + '</td>' +
-            '<td style="padding:8px 10px; text-align:center; color:#0f172a; font-weight:600;">' + esc(attDt) + '</td>' +
-            '<td style="padding:8px 10px; text-align:center;"><span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:12px; font-size:0.75rem; font-weight:800;">Submitted</span></td>' +
-          '</tr>'
-        );
-      }).join('');
-      content.innerHTML =
-        '<div style="overflow-x:auto;">' +
-          '<table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">' +
-            '<thead><tr style="background:#0f172a; color:#ffffff; font-weight:700;">' +
-              '<th style="padding:8px 10px; text-align:center; width:45px;">#</th>' +
-              '<th style="padding:8px 10px;">Week</th>' +
-              '<th style="padding:8px 10px;">Gram Panchayat</th>' +
-              '<th style="padding:8px 10px;">Officer</th>' +
-              '<th style="padding:8px 10px; text-align:center;">Attendence Date-Time</th>' +
-              '<th style="padding:8px 10px; text-align:center;">Status</th>' +
-            '</tr></thead>' +
-            '<tbody>' + trs + '</tbody>' +
-          '</table>' +
-        '</div>';
-    }
+    window._currModalRow = row;
+    window._renderModalTab('submitted');
     modal.style.display = 'flex';
   };
 

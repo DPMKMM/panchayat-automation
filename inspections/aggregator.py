@@ -76,8 +76,9 @@ def consolidate_inspection_files(
     canon_desig = spec["designation"]
     canon_mode = "attendance" if str(counting_mode or "").lower() in ("attendance", "attendance_date", "datetime") else "monday"
 
+    all_records: list[InspectionRecord] = []
     all_submitted: list[InspectionRecord] = []
-    seen_record_keys: set[tuple[str, str, str, str, str, str]] = set()
+    seen_record_keys: set[tuple[str, str, str, str, str, str, str]] = set()
     observed_units: dict[str, str] = {}
     observed_districts: set[str] = set()
     detected_weeks_all: list[str] = []
@@ -118,7 +119,8 @@ def consolidate_inspection_files(
                 seen_detected_weeks.add(dw)
                 detected_weeks_all.append(dw)
 
-        for rec in parsed["submitted_records"]:
+        source_records = parsed.get("all_records") or parsed.get("submitted_records", [])
+        for rec in source_records:
             rec_key = (
                 rec.district_name.casefold(),
                 rec.mandal_name.casefold(),
@@ -126,10 +128,13 @@ def consolidate_inspection_files(
                 rec.week_label.casefold(),
                 rec.inspection_date.casefold(),
                 rec.attendance_datetime.casefold(),
+                rec.final_submit_status.casefold(),
             )
             if rec_key not in seen_record_keys:
                 seen_record_keys.add(rec_key)
-                all_submitted.append(rec)
+                all_records.append(rec)
+                if rec.is_submitted:
+                    all_submitted.append(rec)
 
         raw_total += parsed["raw_row_count"]
         excluded_total += parsed["excluded_non_submitted_count"]
@@ -145,6 +150,8 @@ def consolidate_inspection_files(
             "submitted_rows": parsed["submitted_row_count"],
             "excluded_rows": parsed["excluded_non_submitted_count"],
         })
+
+    all_pending = [r for r in all_records if not r.is_submitted]
 
     from inspections.models import extract_week_dates
 
@@ -198,22 +205,25 @@ def consolidate_inspection_files(
     # - 'attendance': strictly based on Attendence Date-Time (e.g. 31-Oct in October, 03-Oct in October)
     # - 'monday': strictly based on week's Monday start date (e.g. 28-Sep to 03-Oct has Monday in September)
     records_by_ym: dict[tuple[int, int], list[InspectionRecord]] = {}
-    for rec in all_submitted:
+    all_records_by_ym: dict[tuple[int, int], list[InspectionRecord]] = {}
+    for rec in all_records:
         ym = assign_record_to_month(rec, counting_mode=canon_mode)
         if ym is not None:
             rec.month_key = f"{ym[0]:04d}-{ym[1]:02d}"
             rec.month_label = format_month_key_label(ym)
-            records_by_ym.setdefault(ym, []).append(rec)
+            all_records_by_ym.setdefault(ym, []).append(rec)
+            if rec.is_submitted:
+                records_by_ym.setdefault(ym, []).append(rec)
 
     weeks_by_ym: dict[tuple[int, int], list[str]] = {}
     if canon_mode == "attendance":
-        for ym in records_by_ym.keys():
+        for ym in all_records_by_ym.keys():
             weeks_by_ym.setdefault(ym, [])
             for w_lbl in effective_weeks:
                 if week_overlaps_month(w_lbl, ym):
                     if w_lbl not in weeks_by_ym[ym]:
                         weeks_by_ym[ym].append(w_lbl)
-            for rec in records_by_ym[ym]:
+            for rec in all_records_by_ym[ym]:
                 if rec.week_label and rec.week_label not in weeks_by_ym[ym]:
                     weeks_by_ym[ym].append(rec.week_label)
         assigned_weeks = {w for w_list in weeks_by_ym.values() for w in w_list}
@@ -231,7 +241,7 @@ def consolidate_inspection_files(
                 weeks_by_ym.setdefault(ym, [])
                 if w_lbl not in weeks_by_ym[ym]:
                     weeks_by_ym[ym].append(w_lbl)
-        for ym in records_by_ym.keys():
+        for ym in all_records_by_ym.keys():
             weeks_by_ym.setdefault(ym, [])
 
     raw_by_ym: dict[tuple[int, int], tuple[int, int]] = {}
@@ -249,6 +259,8 @@ def consolidate_inspection_files(
             key=lambda w: (extract_week_dates(w)[0] or datetime.max.date(), w),
         )
         m_recs = records_by_ym.get(ym, [])
+        m_all_recs = all_records_by_ym.get(ym, [])
+        m_pending_recs = [r for r in m_all_recs if not r.is_submitted]
         m_counts: dict[str, int] = {}
         for rec in m_recs:
             k = rec.unit_name.casefold()
@@ -265,7 +277,7 @@ def consolidate_inspection_files(
             m_counts,
             m_target,
         )
-        m_raw, m_excl = raw_by_ym.get(ym, (len(m_recs), 0))
+        m_raw, m_excl = raw_by_ym.get(ym, (len(m_all_recs), len(m_pending_recs)))
         monthly_sections.append(
             MonthInspectionSection(
                 year=ym[0],
@@ -283,9 +295,12 @@ def consolidate_inspection_files(
                 total_pct_completed=m_tot_p,
                 raw_row_count=m_raw,
                 submitted_row_count=len(m_recs),
+                pending_row_count=len(m_pending_recs),
                 excluded_non_submitted_count=m_excl,
                 counting_mode=canon_mode,
                 submitted_records=m_recs,
+                pending_records=m_pending_recs,
+                all_records=m_all_recs,
             )
         )
 
@@ -307,8 +322,11 @@ def consolidate_inspection_files(
         total_balance=tot_balance,
         total_pct_completed=tot_pct,
         submitted_records=all_submitted,
+        pending_records=all_pending,
+        all_records=all_records,
         raw_row_count=raw_total,
         submitted_row_count=len(all_submitted),
+        pending_row_count=len(all_pending),
         excluded_non_submitted_count=excluded_total,
         week_download_logs=week_logs,
         monthly_sections=monthly_sections,
