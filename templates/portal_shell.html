@@ -2289,8 +2289,8 @@
               <input type="text" id="software-search-input" placeholder="Search software, drivers, tokens, fonts..." onkeyup="filterSoftwaresGrid()" style="width:100%; border:1px solid #cbd5e1; border-radius:8px; padding:8px 12px; font-size:0.86rem; outline:none; transition:border-color 0.2s;" onfocus="this.style.borderColor='#0284c7'" onblur="this.style.borderColor='#cbd5e1'">
             </div>
             <div id="software-category-filters" style="display:flex; gap:6px; flex-wrap:wrap;">
-              <button type="button" class="btn btn-sm btn-primary active-cat-btn" data-cat="all" onclick="filterSoftwaresCategory('all', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; background:#0284c7; border-color:#0284c7; color:#fff;">All (15)</button>
-              <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="dsc" onclick="filterSoftwaresCategory('dsc', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">🔑 DSC &amp; Java (6)</button>
+              <button type="button" class="btn btn-sm btn-primary active-cat-btn" data-cat="all" onclick="filterSoftwaresCategory('all', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; background:#0284c7; border-color:#0284c7; color:#fff;">All (14)</button>
+              <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="dsc" onclick="filterSoftwaresCategory('dsc', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">🔑 DSC &amp; Java (5)</button>
               <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="telugu" onclick="filterSoftwaresCategory('telugu', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">⌨️ Telugu Typing (2)</button>
               <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="system" onclick="filterSoftwaresCategory('system', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">🛠️ System &amp; Office Tools (3)</button>
               <button type="button" class="btn btn-sm btn-outline cat-btn" data-cat="biometric" onclick="filterSoftwaresCategory('biometric', this)" style="font-size:0.78rem; padding:4px 10px; border-radius:20px; color:#475569; border-color:#cbd5e1;">👆 Biometrics (4)</button>
@@ -2298,51 +2298,31 @@
           </div>
 
           <div class="modules-grid" id="softwares-grid">
-            <!-- 0A. DSC Signer Bundle - Cloud Lite Edition -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="dsc signer bundle softwares cloud lite online installer epass2003 hyp2003 proxkey watchdata java jre 8 ubd pfms egramswaraj" style="border: 2px solid #0284c7; background: linear-gradient(180deg, #f0f9ff 0%, #ffffff 100%); box-shadow: 0 6px 20px rgba(2, 132, 199, 0.12);">
+            <!-- 0. DSC Signer Bundle Softwares (All-In-One Suite) -->
+            <div class="module-card featured software-card" data-category="dsc" data-keywords="dsc signer bundle softwares all-in-one automated installer epass2003 hyp2003 proxkey watchdata java jre 8 ubd pfms egramswaraj nicdsign adobe acrobat auto-updater" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.12);">
               <div>
                 <div class="module-card-header">
-                  <div class="module-icon" style="background:#0284c7; color:#ffffff; font-size:1.3rem;">⚡</div>
-                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd; font-weight:700;">● Cloud Lite (Fast ~29 MB)</span>
+                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔑</div>
+                  <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● All-In-One DSC Bundle</span>
                 </div>
-                <h3>DSC Signer Bundle (Cloud Lite)</h3>
-                <div style="font-size:0.74rem; color:#0284c7; background:#e0f2fe; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
-                  v1.0.0 &bull; Auto-Updating &bull; High-Speed Installation
+                <h3>DSC Signer Bundle Softwares</h3>
+                <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
+                  v1.0.0 &bull; Auto-Updating &bull; Offline (128 MB) &amp; Cloud Lite (29 MB)
                 </div>
                 <p>
-                  Lightweight 29 MB installer with intelligent background auto-updater. Installs WatchData ProxKey &amp; HYP2003 drivers, ActiveX COM ProgIDs, UBD Portal configuration, and downloads runtimes on demand.
+                  Automated digital signature setup for e-GramSwaraj (eGS), PFMS &amp; UBD Portal. Embeds Java 8 (x86/x64), .NET 4.8, VC++, NICDSign 3.1.3, ProxKey &amp; HYP2003 drivers, ActiveX COM ProgIDs, and native Internet Explorer runner.
                 </p>
               </div>
               <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-                <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.exe" download="DSC.Signer.Bundle.Softwares.exe" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; font-weight:800; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); border:none; box-shadow:0 4px 12px rgba(2, 132, 199, 0.25);">
-                  ⚡ Download Cloud Lite (~29 MB) ⬇
-                </a>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                  <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe" download="DSC.Signer.Bundle.Softwares.Offline.exe" class="btn btn-primary btn-sm" style="text-align:center; padding:9px 6px; font-size:0.78rem; font-weight:800; display:inline-block; background:linear-gradient(135deg, #059669 0%, #047857 100%); border-color:#059669;">
+                    📦 Offline (128 MB) ⬇
+                  </a>
+                  <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.exe" download="DSC.Signer.Bundle.Softwares.exe" class="btn btn-primary btn-sm" style="text-align:center; padding:9px 6px; font-size:0.78rem; font-weight:800; display:inline-block; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); border-color:#0284c7;">
+                    ⚡ Cloud Lite (29 MB) ⬇
+                  </a>
+                </div>
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('dsc_bundle')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
-                  📖 What's Included &amp; Setup Guide
-                </button>
-              </div>
-            </div>
-
-            <!-- 0B. DSC Signer Bundle - Air-Gapped Offline Edition -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="dsc signer bundle softwares offline air-gapped full installer epass2003 hyp2003 proxkey watchdata java jre 8 ubd pfms egramswaraj" style="border: 2px solid #059669; background: linear-gradient(180deg, #ecfdf5 0%, #ffffff 100%); box-shadow: 0 6px 20px rgba(5, 150, 105, 0.12);">
-              <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#059669; color:#ffffff; font-size:1.3rem;">📦</div>
-                  <span class="badge-pill-live" style="background:#ecfdf5; color:#047857; border-color:#6ee7b7; font-weight:700;">● 100% Offline (~128 MB)</span>
-                </div>
-                <h3>DSC Signer Bundle (Offline Suite)</h3>
-                <div style="font-size:0.74rem; color:#047857; background:#d1fae5; border:1px solid #a7f3d0; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
-                  v1.0.0 &bull; Complete Offline &bull; No Internet Required
-                </div>
-                <p>
-                  Full standalone installer with all runtimes, token drivers, and utilities pre-bundled inside. Ideal for remote Gram Panchayat computers with slow or no internet. Zero web downloads during installation.
-                </p>
-              </div>
-              <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
-                <a href="https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe" download="DSC.Signer.Bundle.Softwares.Offline.exe" class="btn btn-primary" style="width:100%; text-align:center; display:inline-block; font-weight:800; background:linear-gradient(135deg, #059669 0%, #047857 100%); border-color:#059669; box-shadow:0 4px 12px rgba(5, 150, 105, 0.25);">
-                  📦 Download Offline Suite (~128 MB) ⬇
-                </a>
-                <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('dsc_bundle')" style="color:#047857; border-color:#a7f3d0; background:#ecfdf5;">
                   📖 What's Included &amp; Setup Guide
                 </button>
               </div>
