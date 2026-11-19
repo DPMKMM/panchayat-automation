@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "downloadUrl": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.exe",
+  "offlineDownloadUrl": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe",
+  "releaseNotes": "Stable Release v1.0.0: Automatic in-app background updater, silent HyperPKI & WatchData ProxKey setup, ActiveX IE runner, and unattended UBD/PFMS configuration."
+}
