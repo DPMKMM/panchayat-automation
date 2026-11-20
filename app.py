@@ -320,8 +320,9 @@ def create_app() -> FastAPI:
                 filename=file_name,
                 media_type="application/octet-stream",
             )
-        if file_name in RELEASE_CDN_FALLBACK:
-            target_url = RELEASE_CDN_FALLBACK[file_name]
+        lookup_name = file_name if file_name in RELEASE_CDN_FALLBACK else file_name.replace(" ", ".")
+        if lookup_name in RELEASE_CDN_FALLBACK:
+            target_url = RELEASE_CDN_FALLBACK[lookup_name]
             try:
                 import urllib.request
                 from starlette.responses import StreamingResponse
