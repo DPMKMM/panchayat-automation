@@ -2911,6 +2911,20 @@ def _get_github_release_downloads() -> dict[str, int]:
         return dict(_GH_DOWNLOADS_CACHE.get("data") or {"cloud_lite": 0, "offline_suite": 0, "total": 0})
 
 
+def _normalize_os_name(os_name: str, os_version: str) -> str:
+    name = str(os_name or "Windows").strip()
+    ver = str(os_version or "").strip()
+    match = re.search(r"\b10\.0\.(\d{5,})\b", ver) or re.search(r"\b10\.0\.(\d{5,})\b", name)
+    if match:
+        build_num = int(match.group(1))
+        if build_num >= 22000 and "Windows 10" in name:
+            name = name.replace("Windows 10", "Windows 11")
+    elif "10.0.22" in ver or "10.0.26" in ver or "10.0.23" in ver or "10.0.25" in ver:
+        if "Windows 10" in name:
+            name = name.replace("Windows 10", "Windows 11")
+    return name
+
+
 def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[str, Any]:
     """Upsert a machine's heartbeat / installation telemetry into local disk & Firestore."""
     now_ts = time.time()
@@ -2922,8 +2936,8 @@ def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[s
         raw_sys_id = f"SYS_{pc_name}" if pc_name else f"SYS_UNKNOWN_{int(now_ts)}"
 
     clean_sys_id = re.sub(r"[^A-Za-z0-9_\-\.]", "_", raw_sys_id)[:64]
-    os_name = str(payload.get("os_name") or "")[:64]
     os_version = str(payload.get("os_version") or "")[:64]
+    os_name = _normalize_os_name(str(payload.get("os_name") or "")[:64], os_version)
     cfg_version = str(payload.get("config_version") or "").strip()[:32]
     if cfg_version.startswith("2026.11"):
         cfg_version = "1.0.0"
@@ -2987,6 +3001,7 @@ def get_dsc_telemetry_summary() -> dict[str, Any]:
             m["config_version"] = "1.0.0"
         else:
             m["config_version"] = re.sub(r"^[vV]+", "", cv) or "1.0.0"
+        m["os_name"] = _normalize_os_name(m.get("os_name", ""), m.get("os_version", ""))
     machines_list.sort(key=lambda m: float(m.get("last_seen_ts") or 0), reverse=True)
 
     active_24h = sum(1 for m in machines_list if float(m.get("last_seen_ts") or 0) >= cutoff_24h)
