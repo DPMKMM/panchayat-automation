@@ -227,26 +227,30 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
     submit_btn.click()
     time.sleep(4)
 
-    # 7. Ensure table entries dropdown shows all (select 32 or 50 or 100)
+    # 7. Ensure table entries dropdown shows all (select 32, 50, 100 or -1 All)
     try:
         iframe.evaluate("""() => {
-            const lenSel = document.querySelector("select[name*='length' i], select[name*='entries' i]");
+            const lenSel = document.querySelector(".dataTables_length select, select[name*='length' i], select[name*='entries' i]");
             if (lenSel) {
-                // Find highest value
-                const vals = Array.from(lenSel.options).map(o => parseInt(o.value)).filter(n => !isNaN(n));
-                const maxVal = Math.max(...vals);
-                lenSel.value = maxVal.toString();
-                lenSel.dispatchEvent(new Event('change', { bubbles: true }));
-                    if (window.$) window.$(lenSel).trigger('change');
+                const allOpt = Array.from(lenSel.options).find(o => o.value === "-1" || (o.innerText || '').toLowerCase().includes("all"));
+                if (allOpt) {
+                    lenSel.value = allOpt.value;
+                } else {
+                    const vals = Array.from(lenSel.options).map(o => parseInt(o.value)).filter(n => !isNaN(n) && n > 0);
+                    if (vals.length > 0) {
+                        lenSel.value = Math.max(...vals).toString();
+                    }
                 }
+                lenSel.dispatchEvent(new Event('change', { bubbles: true }));
+                if (window.$) window.$(lenSel).trigger('change');
             }
             if (window.$ && window.$.fn && window.$.fn.dataTable) {
                 try { window.$('table').DataTable().page.len(-1).draw(false); } catch(e) {}
             }
         }""")
         time.sleep(2)
-    except Exception:
-        pass
+    except Exception as e_len:
+        logger.debug("Length expand error: %s", e_len)
 
     # 8. Scrape Mandal Summary Table
     print("[*] Extracting Mandal Summary Table from page DOM...", flush=True)
@@ -440,7 +444,7 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
             if clicked:
                 # Wait for GP Drilldown Table to load (confirmed by 'Panchayat Name' header or green 'Mandal:' header)
                 gp_table_loaded = False
-                for _ in range(16):
+                for _ in range(20):
                     time.sleep(0.5)
                     gp_table_loaded = iframe.evaluate("""() => {
                         const text = document.body ? document.body.innerText : '';
@@ -449,12 +453,28 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     if gp_table_loaded:
                         break
 
-                # Clear any lingering search filter in GP table
+                if not gp_table_loaded:
+                    print(f"[-] Mandal {m.mandal_name}: GP drilldown table did not load after clicking link. Skipping.", flush=True)
+                    continue
+
+                # Clear any lingering search filter in GP table so no Mandal filter hides GPs
                 try:
+                    iframe.evaluate("""() => {
+                        const inp = document.querySelector("input[type='search'], .dataTables_filter input");
+                        if (inp) {
+                            inp.value = "";
+                            inp.dispatchEvent(new Event('input', { bubbles: true }));
+                            inp.dispatchEvent(new Event('keyup', { bubbles: true }));
+                            inp.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                            try { window.$('table').DataTable().search('').draw(); } catch(e) {}
+                        }
+                    }""")
                     gp_search = iframe.locator("input[type='search'], .dataTables_filter input").first
-                    if gp_search.is_visible(timeout=1000):
+                    if gp_search.is_visible(timeout=800):
                         gp_search.fill("")
-                        time.sleep(0.3)
+                    time.sleep(0.4)
                 except Exception:
                     pass
 
@@ -628,9 +648,6 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
             except Exception:
                 pass
 
-    # Ensure all mandals with pending GPs have concrete GP records populated
-    populate_pending_gps_from_directory(mandals_list, district_name=district_name, include_pmagy=include_pmagy)
-
     # 10. Enrich Secretary Details using in-memory live portal data
     match_secretary_details(mandals_list)
 
@@ -646,127 +663,14 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
 
 
 def populate_pending_gps_from_directory(mandals: list[MandalBalanceSummary], district_name: str = "", include_pmagy: bool = False) -> None:
-    """Ensures that every mandal with not_entered_gps > 0 has its pending_gps list populated.
-    Uses in-memory live portal data from tax_service (zero offline files) as fallback if web drilldown timed out.
-    STRICT RULE: NEVER synthesize placeholder names like '<Mandal> GP-1' or '<Mandal> GP-2'.
-    Always use real Gram Panchayat names and assign ONLY the specific bank accounts that are pending in that mandal.
+    """Strictly enforces live portal scraping only.
+    Offline DCB list is NEVER used to synthesize pending GP names.
+    Any pending GPs must originate directly from live portal scraping.
     """
-    dir_gps_by_mandal: dict[str, list[str]] = {}
-    try:
-        import sys
-        if str(ROOT_DIR) not in sys.path:
-            sys.path.insert(0, str(ROOT_DIR))
-        try:
-            from dcb import service as tax_service
-        except (ImportError, ModuleNotFoundError):
-            import tax_service
-        df = tax_service.get_df()
-        clean_dist = district_name.strip().lower()
-        if clean_dist and clean_dist != "district":
-            df_filtered = df[df["district"].str.lower().str.contains(clean_dist, na=False)]
-            if df_filtered.empty:
-                df_filtered = df
-        else:
-            df_filtered = df
-
-        for _, row in df_filtered.iterrows():
-            m_val = str(row.get("mandal", "")).strip()
-            gp_val = str(row.get("panchayat", "")).strip().title()
-            if m_val and gp_val:
-                key = normalize_mandal_key(m_val)
-                dir_gps_by_mandal.setdefault(key, []).append(gp_val)
-    except Exception as exc:
-        logger.debug("In-memory directory loading note: %s", exc)
-
-    global_counter = 1
     for m in mandals:
-        # Check if mandal has any pending accounts OR not_entered_gps > 0
-        if m.has_pending and len(m.pending_gps) == 0:
-            m_key = normalize_mandal_key(m.mandal_name)
-            avail_gps = dir_gps_by_mandal.get(m_key, [])
-            if not avail_gps:
-                for k, v in dir_gps_by_mandal.items():
-                    if k in m_key or m_key in k:
-                        avail_gps = v
-                        break
-
-            # Build list of missing accounts SPECIFICALLY for this mandal
-            # ONLY include accounts where pending count > 0!
-            missing = []
-            if m.gp_pd_pending > 0: missing.append("GP PD Account (General Fund, 15th FC, SFC)")
-            if m.tgbpass_pending > 0: missing.append("State Matching Grant (TG-bPASS)")
-            if m.fc15_tied_pending > 0: missing.append("15th FC Tied (e-Gram Swaraj)")
-            if m.fc15_untied_pending > 0: missing.append("15th FC Untied (e-Gram Swaraj)")
-            if include_pmagy and m.pmagy_pending > 0: missing.append("PMAGY (Adarsh Gram Yojana)")
-            if m.vwsc_pending > 0: missing.append("VWSC (SBM)")
-            if m.mgnregs_pending > 0: missing.append("MGNREGS (Material Component)")
-            if not missing:
-                missing = ["Pending Thursday Balance Entry"]
-
-            # Deduplicate avail_gps while preserving order
-            seen_gps = set()
-            unique_avail_gps = [g for g in avail_gps if not (g in seen_gps or seen_gps.add(g))]
-
-            needed_count = max(
-                m.not_entered_gps,
-                m.gp_pd_pending,
-                m.tgbpass_pending,
-                m.fc15_tied_pending,
-                m.fc15_untied_pending,
-                m.pmagy_pending if include_pmagy else 0,
-                m.vwsc_pending,
-                m.mgnregs_pending,
-                1,
-            )
-            needed_count = min(needed_count, len(unique_avail_gps)) if unique_avail_gps else needed_count
-            selected_gps = unique_avail_gps[:needed_count]
-
-            m.all_gps = []
-            # First, add the pending GPs
-            for gp_name in selected_gps:
-                gp_detail = GPBalanceDetail(
-                    s_no=global_counter,
-                    mandal_name=m.mandal_name,
-                    panchayat_name=gp_name,
-                    entered=False,
-                    gp_pd="No" if "GP PD" in " ".join(missing) else "Yes",
-                    tgbpass="No" if "TG-bPASS" in " ".join(missing) else "Yes",
-                    fc15_tied="No" if "Tied" in " ".join(missing) else "Yes",
-                    fc15_untied="No" if "Untied" in " ".join(missing) else "Yes",
-                    pmagy="No" if "PMAGY" in " ".join(missing) else "Yes",
-                    vwsc="No" if "VWSC" in " ".join(missing) else "Yes",
-                    mgnregs="No" if "MGNREGS" in " ".join(missing) else "Yes",
-                    missing_accounts=list(missing),
-                    is_pending=True,
-                    secretary_name="Panchayat Secretary",
-                    secretary_phone="—",
-                )
-                m.pending_gps.append(gp_detail)
-                m.all_gps.append(gp_detail)
-                global_counter += 1
-
-            # Next, add the entered GPs to m.all_gps so all GPs are present
-            entered_names = [g for g in unique_avail_gps if g not in selected_gps]
-            for ent_name in entered_names:
-                ent_detail = GPBalanceDetail(
-                    s_no=len(m.all_gps) + 1,
-                    mandal_name=m.mandal_name,
-                    panchayat_name=ent_name,
-                    entered=True,
-                    gp_pd="Yes",
-                    tgbpass="Yes",
-                    fc15_tied="Yes",
-                    fc15_untied="Yes",
-                    vwsc="Yes",
-                    mgnregs="Yes",
-                    missing_accounts=[],
-                    is_pending=False,
-                    secretary_name="Panchayat Secretary",
-                    secretary_phone="—",
-                )
-                m.all_gps.append(ent_detail)
-
-            m.has_pending = True
+        if m.all_gps:
+            m.pending_gps = [g for g in m.all_gps if g.is_pending]
+            m.has_pending = len(m.pending_gps) > 0
 
 def match_secretary_details(mandals: list[MandalBalanceSummary]) -> None:
     """Enriches pending GP records with secretary details if present in in-memory live portal data."""

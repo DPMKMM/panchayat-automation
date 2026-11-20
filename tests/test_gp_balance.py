@@ -236,7 +236,23 @@ def test_sathupally_partial_pending_shown_in_pdf():
     assert m.fc15_untied_pending == 1
     assert m.vwsc_pending == 1
 
-    # Test directory fallback if web drilldown didn't populate
+    # Live portal scraped GP has 15th FC Untied and VWSC marked No
+    gp_scraped = GPBalanceDetail(
+        s_no=1,
+        mandal_name="Sathupally",
+        panchayat_name="Kakarlapalli",
+        entered=True,
+        gp_pd="Yes",
+        tgbpass="Yes",
+        fc15_tied="Yes",
+        fc15_untied="No",
+        vwsc="No",
+        mgnregs="Yes",
+    )
+    gp_scraped.evaluate_pending()
+    m.all_gps = [gp_scraped]
+
+    # Ensure pending GPs strictly originate from scraped portal data
     populate_pending_gps_from_directory([m], district_name="")
     assert len(m.pending_gps) == 1
     gp = m.pending_gps[0]
