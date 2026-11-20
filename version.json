@@ -1,6 +1,6 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.2",
   "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Update v1.0.1: Live launch heartbeat telemetry, automatic offline queue drainage, streamlined UI audit checklist, and enhanced UBD Portal & e-GramSwaraj compatibility."
+  "releaseNotes": "Update v1.0.2: Windows 7 SChannel & EdgeUpdate compatibility, automatic entry-point error suppression, username (whoami) identity detection, and streamlined bundle verification."
 }
