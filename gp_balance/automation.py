@@ -376,16 +376,20 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                         if (window.$) window.$(lenSel).trigger('change');
                     }
                     if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                        try { window.$('table').DataTable().page.len(-1).draw(false); } catch(e) {}
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
+                            } else {
+                                window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
+                            }
+                        } catch(e) {}
                     }
                 }""")
-                time.sleep(0.5)
+                time.sleep(0.4)
             except Exception:
                 pass
 
-            clicked = False
-
-            # Ensure search box is clear on Mandal Abstract table for all mandals
+            # Ensure search box is clear on Mandal Abstract table
             try:
                 iframe.evaluate("""() => {
                     const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
@@ -396,53 +400,27 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                         inp.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                     if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                        try { window.$('table').DataTable().search('').draw(false); } catch(e) {}
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).search('').draw(false);
+                            } else {
+                                window.$('table.dataTable, table').DataTable().search('').draw(false);
+                            }
+                        } catch(e) {}
                     }
                 }""")
                 search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
-                if search_box.is_visible(timeout=800):
+                if search_box.is_visible(timeout=600):
                     search_box.fill("")
                 time.sleep(0.3)
             except Exception:
                 pass
 
-            # Step A: Filter by mandal name using DataTables API and search input
             clicked = False
-            try:
-                iframe.evaluate("""(targetMandal) => {
-                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                        try {
-                            if (window.$.fn.dataTable.tables) {
-                                window.$.fn.dataTable.tables({ api: true }).search(targetMandal).draw();
-                            } else {
-                                window.$('table.dataTable, table').DataTable().search(targetMandal).draw();
-                            }
-                        } catch(e) {}
-                    }
-                    const inp = document.querySelector("input[type='search'], .dataTables_filter input");
-                    if (inp) {
-                        inp.value = targetMandal;
-                        inp.dispatchEvent(new Event('input', { bubbles: true }));
-                        inp.dispatchEvent(new Event('keyup', { bubbles: true }));
-                        inp.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                }""", m.mandal_name)
-                time.sleep(0.5)
-            except Exception:
-                pass
 
-            # Step B: Click the matching link in the filtered table
+            # Strategy 1: Direct DOM match across currently rendered rows
             try:
-                m_link = iframe.locator(f"table tbody tr a:has-text('{m.mandal_name}')").first
-                if m_link.is_visible(timeout=1200):
-                    m_link.click()
-                    clicked = True
-            except Exception:
-                pass
-
-            # Step C: If not clicked, try fuzzy stem match across visible rows
-            if not clicked:
-                clicked = iframe.evaluate("""(targetMandal) => {
+                click_info = iframe.evaluate("""(targetMandal) => {
                     function clean(s) { return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
                     function stem(s) {
                         let c = clean(s).replace('th', 't').replace('w', 'v');
@@ -456,268 +434,335 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     }
                     const cleanTarget = clean(targetMandal);
                     const targetStem = stem(targetMandal);
-                    const rows = document.querySelectorAll("table tbody tr");
+                    const rows = Array.from(document.querySelectorAll("table tbody tr"));
                     for (const r of rows) {
-                        const cells = r.querySelectorAll("td");
+                        const cells = Array.from(r.querySelectorAll("td"));
                         if (cells.length >= 2) {
-                            const name = cells[1].innerText.trim();
+                            const name = (cells[1].innerText || '').trim();
                             const cName = clean(name);
-                            if (cName === cleanTarget || cName.includes(cleanTarget) || cleanTarget.includes(cName) || stem(name) === targetStem) {
-                                const link = r.querySelector("a") || cells[1].querySelector("a");
-                                if (link) { link.click(); return true; }
+                            if (cName === cleanTarget || cName.includes(cleanTarget) || cleanTarget.includes(cName) || (stem(name) === targetStem && targetStem.length >= 3)) {
+                                const link = cells[1].querySelector("a") || r.querySelector("a");
+                                if (link) {
+                                    link.click();
+                                    return { success: true, method: "direct_row", name: name };
+                                }
                             }
                         }
                     }
-                    return false;
+                    return { success: false, rowCount: rows.length };
                 }""", m.mandal_name)
+                if isinstance(click_info, dict) and click_info.get("success"):
+                    clicked = True
+                    print(f"[+] Mandal {m.mandal_name}: Clicked link via direct DOM row match ({click_info.get('name')})", flush=True)
+            except Exception as e_click1:
+                logger.debug("Strategy 1 click note for %s: %s", m.mandal_name, e_click1)
 
-            if clicked:
-                # Wait for GP Drilldown Table to load (confirmed by presence of Back button or GP indicators)
-                gp_table_loaded = False
-                for _ in range(24):
-                    time.sleep(0.5)
-                    gp_table_loaded = iframe.evaluate("""() => {
-                        const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
-                            .some(el => {
-                                const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                                return txt === 'back' || txt.includes('back');
-                            });
-                        const text = document.body ? document.body.innerText : '';
-                        const hasGpIndicators = text.includes("Panchayat") || text.includes("Gram Panchayat") || text.includes("Mandal:");
-                        const hasRows = document.querySelectorAll("table tbody tr").length > 0;
-                        return (hasBack || hasGpIndicators) && hasRows;
-                    }""")
-                    if gp_table_loaded:
-                        break
-
-                if not gp_table_loaded:
-                    print(f"[-] Mandal {m.mandal_name}: GP drilldown table did not load after clicking link. Skipping.", flush=True)
-                    continue
-
-                # Clear any lingering search filter in GP table so all GPs load
+            # Strategy 2: DataTables Search & Filter if not clicked via Strategy 1
+            if not clicked:
                 try:
-                    iframe.evaluate("""() => {
+                    click_info = iframe.evaluate("""(targetMandal) => {
                         if (window.$ && window.$.fn && window.$.fn.dataTable) {
                             try {
                                 if (window.$.fn.dataTable.tables) {
-                                    window.$.fn.dataTable.tables({ api: true }).search('').page.len(-1).draw();
+                                    window.$.fn.dataTable.tables({ api: true }).search(targetMandal).draw();
                                 } else {
-                                    window.$('table.dataTable, table').DataTable().search('').page.len(-1).draw();
+                                    window.$('table.dataTable, table').DataTable().search(targetMandal).draw();
                                 }
                             } catch(e) {}
                         }
                         const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
                         for (const inp of inps) {
-                            inp.value = "";
+                            inp.value = targetMandal;
                             inp.dispatchEvent(new Event('input', { bubbles: true }));
                             inp.dispatchEvent(new Event('keyup', { bubbles: true }));
                             inp.dispatchEvent(new Event('change', { bubbles: true }));
                         }
-                    }""")
-                    time.sleep(0.4)
-                except Exception:
-                    pass
-
-                # Ensure GP table displays all entries (set length selector to highest)
-                try:
-                    iframe.evaluate("""() => {
-                        const lenSel = document.querySelector(".dataTables_length select, select[name*='length' i], select[name*='entries' i]");
-                        if (lenSel) {
-                            const allOpt = Array.from(lenSel.options).find(o => o.value === "-1" || (o.innerText || '').toLowerCase().includes("all"));
-                            if (allOpt) {
-                                lenSel.value = allOpt.value;
-                            } else {
-                                const vals = Array.from(lenSel.options).map(o => parseInt(o.value)).filter(n => !isNaN(n) && n > 0);
-                                if (vals.length > 0) {
-                                    lenSel.value = Math.max(...vals).toString();
+                        const rows = Array.from(document.querySelectorAll("table tbody tr"));
+                        if (rows.length > 0) {
+                            for (const r of rows) {
+                                const link = r.querySelector("a");
+                                if (link) {
+                                    link.click();
+                                    return { success: true, method: "search_filter" };
                                 }
                             }
-                            lenSel.dispatchEvent(new Event('change', { bubbles: true }));
-                            if (window.$) window.$(lenSel).trigger('change');
                         }
-                        if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try {
-                                if (window.$.fn.dataTable.tables) {
-                                    window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
-                                } else {
-                                    window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
-                                }
-                            } catch(e) {}
-                        }
-                    }""")
-                    time.sleep(0.8)
-                except Exception:
-                    pass
+                        return { success: false };
+                    }""", m.mandal_name)
+                    if isinstance(click_info, dict) and click_info.get("success"):
+                        clicked = True
+                        print(f"[+] Mandal {m.mandal_name}: Clicked link via DataTables search filter", flush=True)
+                except Exception as e_click2:
+                    logger.debug("Strategy 2 click note for %s: %s", m.mandal_name, e_click2)
 
-                # Step E: Scrape all GP rows directly from GP table DOM
-                gp_rows_raw = iframe.evaluate("""() => {
-                    const rows = document.querySelectorAll("table tbody tr");
-                    const gps = [];
-                    for (const r of rows) {
-                        const cells = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
-                        if (cells.length >= 10 && cells[0].match(/^\\d+$/)) {
-                            const sNo = parseInt(cells[0]) || 0;
-                            const gpName = cells[1];
-                            if (!gpName || gpName.toUpperCase().includes("TOTAL")) continue;
-
-                            const enteredVal = cells[2];
-                            const notEnteredVal = cells[3];
-                            const isEntered = (enteredVal === "1" || enteredVal.toLowerCase() === "yes") && notEnteredVal !== "1";
-
-                            gps.push({
-                                s_no: sNo,
-                                panchayat_name: gpName,
-                                entered: isEntered,
-                                not_entered: !isEntered,
-                                gp_pd: cells[4],
-                                tgbpass: cells[5],
-                                fc15_tied: cells[6],
-                                fc15_untied: cells[7],
-                                pmagy: cells[8], // Ignored by default
-                                vwsc: cells[9],
-                                mgnregs: cells[10]
-                            });
-                        }
-                    }
-                    return gps;
-                }""")
-
-                m.pending_gps = []
-                m.all_gps = []
-                for gp_raw in gp_rows_raw:
-                    gp = GPBalanceDetail(
-                        s_no=gp_raw["s_no"],
-                        mandal_name=m.mandal_name,
-                        panchayat_name=gp_raw["panchayat_name"],
-                        entered=gp_raw["entered"],
-                        gp_pd=gp_raw["gp_pd"],
-                        tgbpass=gp_raw["tgbpass"],
-                        fc15_tied=gp_raw["fc15_tied"],
-                        fc15_untied=gp_raw["fc15_untied"],
-                        pmagy=gp_raw.get("pmagy", "Yes"),
-                        vwsc=gp_raw["vwsc"],
-                        mgnregs=gp_raw["mgnregs"],
-                    )
-                    gp.evaluate_pending(include_pmagy=include_pmagy)
-                    m.all_gps.append(gp)
-                    if gp.is_pending:
-                        m.pending_gps.append(gp)
-
-                print(f"[+] Mandal {m.mandal_name}: Scraped {len(gp_rows_raw)} total GPs. Found {len(m.pending_gps)} pending GP(s): {[g.panchayat_name for g in m.pending_gps]}", flush=True)
-
-                # Step F: Click Back button to return to Mandal Abstract table
-                back_clicked = False
+            # Strategy 3: Playwright locator fallback
+            if not clicked:
                 try:
-                    back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
-                    if back_btn.is_visible(timeout=1500):
-                        back_btn.click()
-                        back_clicked = True
+                    m_link = iframe.locator(f"table tbody tr a:has-text('{m.mandal_name}')").first
+                    if m_link.is_visible(timeout=3000):
+                        m_link.click()
+                        clicked = True
+                        print(f"[+] Mandal {m.mandal_name}: Clicked link via Playwright locator", flush=True)
                 except Exception:
                     pass
 
-                if not back_clicked:
-                    back_clicked = iframe.evaluate("""() => {
-                        const btns = Array.from(document.querySelectorAll("button, input[value='Back'], a, input[type='button'], input[type='submit']"));
-                        const b = btns.find(el => {
+            if not clicked:
+                print(f"[-] Mandal {m.mandal_name}: Link NOT found across all strategies! Skipping.", flush=True)
+                continue
+
+            # Wait for GP Drilldown Table to load (confirmed by presence of Back button or Panchayat header)
+            gp_table_loaded = False
+            for _ in range(30):
+                time.sleep(0.5)
+                gp_table_loaded = iframe.evaluate("""() => {
+                    const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
+                        .some(el => {
                             const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
                             return txt === 'back' || txt.includes('back');
                         });
-                        if (b) {
-                            b.click();
-                            return true;
-                        }
-                        return false;
-                    }""")
+                    const hasGpHdr = Array.from(document.querySelectorAll("table thead th"))
+                        .some(th => {
+                            const t = (th.innerText || '').toLowerCase();
+                            return t.includes("panchayat") || t.includes("gram panchayat");
+                        });
+                    const text = document.body ? document.body.innerText : '';
+                    const hasGpIndicators = text.includes("Mandal:") || text.includes("Panchayat Name");
+                    const hasRows = document.querySelectorAll("table tbody tr").length > 0;
+                    return (hasBack || hasGpHdr || hasGpIndicators) && hasRows;
+                }""")
+                if gp_table_loaded:
+                    break
 
-                # Confirm Mandal Abstract table is restored (no Back button, no GP-specific headers, and table rows present)
-                restored = False
-                for _ in range(20):
-                    time.sleep(0.5)
-                    restored = iframe.evaluate("""() => {
-                        const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
-                            .some(el => {
-                                const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                                return txt === 'back' || txt.includes('back');
-                            });
-                        const text = document.body ? document.body.innerText : '';
-                        const hasGpSpecific = text.includes("Gram Panchayat") || text.includes("Panchayat Name");
-                        const rowCount = document.querySelectorAll("table tbody tr").length;
-                        return !hasBack && !hasGpSpecific && rowCount > 0;
-                    }""")
-                    if restored:
-                        break
+            if not gp_table_loaded:
+                print(f"[-] Mandal {m.mandal_name}: GP drilldown table did not load after clicking link. Skipping.", flush=True)
+                continue
 
-                if not restored:
-                    submit_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
-                    if submit_btn.is_visible(timeout=3000):
-                        submit_btn.click()
-                        for _ in range(20):
-                            time.sleep(0.5)
-                            restored = iframe.evaluate("""() => {
-                                const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
-                                    .some(el => {
-                                        const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                                        return txt === 'back' || txt.includes('back');
-                                    });
-                                const rowCount = document.querySelectorAll("table tbody tr").length;
-                                return !hasBack && rowCount > 0;
-                            }""")
-                            if restored:
-                                break
-
-                # Clear search input on restored Mandal table for all mandals and re-expand page length to max
-                try:
-                    iframe.evaluate("""() => {
-                        const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
-                        for (const inp of inps) {
-                            inp.value = "";
-                            inp.dispatchEvent(new Event('input', { bubbles: true }));
-                            inp.dispatchEvent(new Event('keyup', { bubbles: true }));
-                            inp.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                        if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try {
-                                if (window.$.fn.dataTable.tables) {
-                                    window.$.fn.dataTable.tables({ api: true }).search('').draw(false);
-                                } else {
-                                    window.$('table.dataTable, table').DataTable().search('').draw(false);
-                                }
-                            } catch(e) {}
-                        }
-                    }""")
-                    search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
-                    if search_box.is_visible(timeout=800):
-                        search_box.fill("")
-                    time.sleep(0.4)
-
-                    iframe.evaluate("""() => {
-                        const lenSel = document.querySelector(".dataTables_length select, select[name*='length' i], select[name*='entries' i]");
-                        if (lenSel) {
-                            const allOpt = Array.from(lenSel.options).find(o => o.value === "-1" || (o.innerText || '').toLowerCase().includes("all"));
-                            if (allOpt) {
-                                lenSel.value = allOpt.value;
+            # Clear any lingering search filter in GP table so all GPs load
+            try:
+                iframe.evaluate("""() => {
+                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).search('').page.len(-1).draw();
                             } else {
-                                const vals = Array.from(lenSel.options).map(o => parseInt(o.value)).filter(n => !isNaN(n) && n > 0);
-                                if (vals.length > 0) {
-                                    lenSel.value = Math.max(...vals).toString();
-                                }
+                                window.$('table.dataTable, table').DataTable().search('').page.len(-1).draw();
                             }
-                            lenSel.dispatchEvent(new Event('change', { bubbles: true }));
-                            if (window.$) window.$(lenSel).trigger('change');
+                        } catch(e) {}
+                    }
+                    const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
+                    for (const inp of inps) {
+                        inp.value = "";
+                        inp.dispatchEvent(new Event('input', { bubbles: true }));
+                        inp.dispatchEvent(new Event('keyup', { bubbles: true }));
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }""")
+                time.sleep(0.4)
+            except Exception:
+                pass
+
+            # Ensure GP table displays all entries (set length selector to highest)
+            try:
+                iframe.evaluate("""() => {
+                    const lenSel = document.querySelector(".dataTables_length select, select[name*='length' i], select[name*='entries' i]");
+                    if (lenSel) {
+                        const allOpt = Array.from(lenSel.options).find(o => o.value === "-1" || (o.innerText || '').toLowerCase().includes("all"));
+                        if (allOpt) {
+                            lenSel.value = allOpt.value;
+                        } else {
+                            const vals = Array.from(lenSel.options).map(o => parseInt(o.value)).filter(n => !isNaN(n) && n > 0);
+                            if (vals.length > 0) {
+                                lenSel.value = Math.max(...vals).toString();
+                            }
                         }
-                        if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try {
-                                if (window.$.fn.dataTable.tables) {
-                                    window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
-                                } else {
-                                    window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
-                                }
-                            } catch(e) {}
+                        lenSel.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (window.$) window.$(lenSel).trigger('change');
+                    }
+                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
+                            } else {
+                                window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
+                            }
+                        } catch(e) {}
+                    }
+                }""")
+                time.sleep(0.8)
+            except Exception:
+                pass
+
+            # Step E: Scrape all GP rows directly from GP table DOM
+            gp_rows_raw = iframe.evaluate("""() => {
+                const rows = document.querySelectorAll("table tbody tr");
+                const gps = [];
+                for (const r of rows) {
+                    const cells = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
+                    if (cells.length >= 10 && cells[0].match(/^\\d+$/)) {
+                        const sNo = parseInt(cells[0]) || 0;
+                        const gpName = cells[1];
+                        if (!gpName || gpName.toUpperCase().includes("TOTAL")) continue;
+
+                        const enteredVal = cells[2];
+                        const notEnteredVal = cells[3];
+                        const isEntered = (enteredVal === "1" || enteredVal.toLowerCase() === "yes") && notEnteredVal !== "1";
+
+                        gps.push({
+                            s_no: sNo,
+                            panchayat_name: gpName,
+                            entered: isEntered,
+                            not_entered: !isEntered,
+                            gp_pd: cells[4],
+                            tgbpass: cells[5],
+                            fc15_tied: cells[6],
+                            fc15_untied: cells[7],
+                            pmagy: cells[8], // Ignored by default
+                            vwsc: cells[9],
+                            mgnregs: cells[10]
+                        });
+                    }
+                }
+                return gps;
+            }""")
+
+            m.pending_gps = []
+            m.all_gps = []
+            for gp_raw in gp_rows_raw:
+                gp = GPBalanceDetail(
+                    s_no=gp_raw["s_no"],
+                    mandal_name=m.mandal_name,
+                    panchayat_name=gp_raw["panchayat_name"],
+                    entered=gp_raw["entered"],
+                    gp_pd=gp_raw["gp_pd"],
+                    tgbpass=gp_raw["tgbpass"],
+                    fc15_tied=gp_raw["fc15_tied"],
+                    fc15_untied=gp_raw["fc15_untied"],
+                    pmagy=gp_raw.get("pmagy", "Yes"),
+                    vwsc=gp_raw["vwsc"],
+                    mgnregs=gp_raw["mgnregs"],
+                )
+                gp.evaluate_pending(include_pmagy=include_pmagy)
+                m.all_gps.append(gp)
+                if gp.is_pending:
+                    m.pending_gps.append(gp)
+
+            print(f"[+] Mandal {m.mandal_name}: Scraped {len(gp_rows_raw)} total GPs. Found {len(m.pending_gps)} pending GP(s): {[g.panchayat_name for g in m.pending_gps]}", flush=True)
+
+            # Step F: Click Back button to return to Mandal Abstract table
+            back_clicked = False
+            try:
+                back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
+                if back_btn.is_visible(timeout=2000):
+                    back_btn.click()
+                    back_clicked = True
+            except Exception:
+                pass
+
+            if not back_clicked:
+                back_clicked = iframe.evaluate("""() => {
+                    const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
+                    const b = btns.find(el => {
+                        const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                        return txt === 'back' || txt.includes('back');
+                    });
+                    if (b) {
+                        b.click();
+                        return true;
+                    }
+                    return false;
+                }""")
+
+            # Confirm Mandal Abstract table is restored (header contains 'Mandal', no Back button, and rows present)
+            restored = False
+            for _ in range(24):
+                time.sleep(0.5)
+                restored = iframe.evaluate("""() => {
+                    const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
+                        .some(el => {
+                            const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                            return txt === 'back' || txt.includes('back');
+                        });
+                    const hasMandalCol = Array.from(document.querySelectorAll("table thead th"))
+                        .some(th => (th.innerText || '').toLowerCase().includes("mandal"));
+                    const rowCount = document.querySelectorAll("table tbody tr").length;
+                    return !hasBack && hasMandalCol && rowCount > 0;
+                }""")
+                if restored:
+                    break
+
+            if restored:
+                print(f"[*] Mandal Abstract table restored successfully after {m.mandal_name}.", flush=True)
+            else:
+                print(f"[!] Mandal Abstract table not restored via Back button for {m.mandal_name}. Using Submit reload fallback...", flush=True)
+                submit_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
+                if submit_btn.is_visible(timeout=3000):
+                    submit_btn.click()
+                    time.sleep(4)
+                    for _ in range(20):
+                        time.sleep(0.5)
+                        restored = iframe.evaluate("""() => {
+                            const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
+                                .some(el => {
+                                    const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                                    return txt === 'back' || txt.includes('back');
+                                });
+                            const hasMandalCol = Array.from(document.querySelectorAll("table thead th"))
+                                .some(th => (th.innerText || '').toLowerCase().includes("mandal"));
+                            const rowCount = document.querySelectorAll("table tbody tr").length;
+                            return !hasBack && hasMandalCol && rowCount > 0;
+                        }""")
+                        if restored:
+                            break
+
+            # Clear search input on restored Mandal table and re-expand page length to max
+            try:
+                iframe.evaluate("""() => {
+                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).search('').draw(false);
+                            } else {
+                                window.$('table.dataTable, table').DataTable().search('').draw(false);
+                            }
+                        } catch(e) {}
+                    }
+                    const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
+                    for (const inp of inps) {
+                        inp.value = "";
+                        inp.dispatchEvent(new Event('input', { bubbles: true }));
+                        inp.dispatchEvent(new Event('keyup', { bubbles: true }));
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    const lenSel = document.querySelector(".dataTables_length select, select[name*='length' i], select[name*='entries' i]");
+                    if (lenSel) {
+                        const allOpt = Array.from(lenSel.options).find(o => o.value === "-1" || (o.innerText || '').toLowerCase().includes("all"));
+                        if (allOpt) {
+                            lenSel.value = allOpt.value;
+                        } else {
+                            const vals = Array.from(lenSel.options).map(o => parseInt(o.value)).filter(n => !isNaN(n) && n > 0);
+                            if (vals.length > 0) {
+                                lenSel.value = Math.max(...vals).toString();
+                            }
                         }
-                    }""")
-                    time.sleep(0.5)
-                except Exception:
-                    pass
+                        lenSel.dispatchEvent(new Event('change', { bubbles: true }));
+                        if (window.$) window.$(lenSel).trigger('change');
+                    }
+                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
+                            } else {
+                                window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
+                            }
+                        } catch(e) {}
+                    }
+                }""")
+                search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
+                if search_box.is_visible(timeout=600):
+                    search_box.fill("")
+                time.sleep(0.4)
+            except Exception:
+                pass
 
         except Exception as drill_err:
             logger.warning("Error drilling down into %s: %s", m.mandal_name, drill_err)
@@ -727,7 +772,7 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     back_btn.click()
                 else:
                     iframe.evaluate("""() => {
-                        const btns = Array.from(document.querySelectorAll("button, input[value='Back'], a, input[type='button'], input[type='submit']"));
+                        const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
                         const b = btns.find(el => {
                             const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
                             return txt === 'back' || txt.includes('back');
@@ -736,7 +781,7 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     }""")
                 time.sleep(1.5)
 
-                # Clear lingering search filter on recovery across all mandals
+                # Clear lingering search filter on recovery
                 iframe.evaluate("""() => {
                     const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
                     for (const inp of inps) {
@@ -757,6 +802,9 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                 }""")
             except Exception:
                 pass
+
+    total_scraped_pending = sum(len(m.pending_gps) for m in mandals_list)
+    print(f"[✓] DRILLDOWN FINISHED: Scraped {total_scraped_pending} pending GP(s) across all {len(pending_mandals)} mandals.", flush=True)
 
     # 10. Enrich Secretary Details using in-memory live portal data
     match_secretary_details(mandals_list)
