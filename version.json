@@ -2,5 +2,5 @@
   "version": "1.0.2",
   "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Update v1.0.2: Windows 7 SChannel & EdgeUpdate compatibility, automatic entry-point error suppression, username (whoami) identity detection, and streamlined bundle verification."
+  "releaseNotes": "Update v1.0.2: Bundled Edge & WebView2 detection with strict clean-install protection, Windows 7 SChannel & EdgeUpdate compatibility, automatic entry-point error suppression, and whoami username identification."
 }
