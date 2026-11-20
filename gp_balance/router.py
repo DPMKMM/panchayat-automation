@@ -46,9 +46,63 @@ def get_balance_data(request: Request, date: str = "", mandal: str = "", include
     return gp_balance_service.get_balance_data_dict(date_str=date, session_id=sid, mandal=mandal, include_pmagy=include_pmagy)
 
 
+@router.post("/api/balance/start-job", include_in_schema=False)
+def start_balance_job_api(request: Request, date: str = Form(default=""), include_pmagy: bool = Form(default=False)) -> dict[str, Any]:
+    """Starts asynchronous GP Balance Report compilation job and returns job_id immediately."""
+    console_user, sid = enforce_department_api_access(request, always_require=True)
+    user_id = console_user["user_id"] if console_user else ""
+    try:
+        job = gp_balance_service.start_balance_job(
+            session_id=sid,
+            date_str=date,
+            include_pmagy=bool(include_pmagy),
+            user_id=user_id,
+        )
+        return {
+            "success": True,
+            "job_id": job["job_id"],
+            "status": job["status"],
+            "progress_pct": job["progress_pct"],
+            "message": job["message"],
+        }
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc), headers={"X-Dept-Auth-Required": "true"}) from None
+    except Exception as exc:
+        logger.exception("start_balance_job_api failed for date=%s sid=%s: %s", date, sid, exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.get("/api/balance/jobs/{job_id}", include_in_schema=False)
+def get_balance_job_api(request: Request, job_id: str) -> dict[str, Any]:
+    """Returns the live status, progress percentage, and results of a GP Balance compilation job."""
+    enforce_console_api_access(request)
+    job = gp_balance_service.get_balance_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Balance compilation job not found.")
+    return job
+
+
+@router.get("/api/balance/session-job", include_in_schema=False)
+def get_session_balance_job_api(request: Request) -> dict[str, Any]:
+    """Returns the most recent or active GP Balance compilation job for this session."""
+    _, sid = enforce_department_api_access(request)
+    job = gp_balance_service.get_session_balance_job(sid)
+    if not job:
+        return {"has_job": False}
+    return {"has_job": True, "job": job}
+
+
 @router.post("/api/balance/generate", include_in_schema=False)
-def generate_balance_api(request: Request, date: str = Form(default=""), include_pmagy: bool = Form(default=False)) -> dict[str, Any]:
+def generate_balance_api(
+    request: Request,
+    date: str = Form(default=""),
+    include_pmagy: bool = Form(default=False),
+    async_mode: bool = Form(default=False),
+) -> dict[str, Any]:
     """Triggers live browser automation to scrape Thursday balance data for chosen date."""
+    if async_mode:
+        return start_balance_job_api(request, date=date, include_pmagy=include_pmagy)
+
     console_user, sid = enforce_department_api_access(request, always_require=True)
     try:
         from dsr import service as automation_service

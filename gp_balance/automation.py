@@ -394,11 +394,35 @@ def _scrape_balance_report(
 
     # 9. Drill Down for Mandals with Pending Entries
     pending_mandals = [m for m in mandals_list if m.has_pending]
-    print(f"[*] Found {len(pending_mandals)} Mandal(s) with pending balance entries to drill down: {[m.mandal_name for m in pending_mandals]}", flush=True)
+    num_pending = len(pending_mandals)
+    notify(30, f"Found {num_pending} Mandal(s) with pending balance entries to drill down.")
+    print(f"[*] Found {num_pending} Mandal(s) with pending balance entries to drill down: {[m.mandal_name for m in pending_mandals]}", flush=True)
 
-    for m in pending_mandals:
+    # JS function to verify Mandal Abstract table is active (no Back button, mandal col present, panchayat col absent, rows present)
+    is_mandal_table_js = """() => {
+        const hasBack = Array.from(document.querySelectorAll("button, input, a")).some(el => {
+            const val = (el.value || '').trim().toLowerCase();
+            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+            return /^(?:<|<<|←)?\\s*back\\s*$/i.test(val) || /^(?:<|<<|←)?\\s*back\\s*$/i.test(txt);
+        });
+        if (hasBack) return false;
+
+        const ths = Array.from(document.querySelectorAll("table thead th"))
+            .map(th => (th.innerText || th.textContent || '').trim().toLowerCase());
+        if (ths.length < 4) return false;
+
+        const hasMandal = ths.some(t => t.includes('mandal'));
+        const hasGpCol = ths.some(t => t.includes('panchayat') || t.includes('gp name'));
+        const rowCount = document.querySelectorAll("table tbody tr").length;
+        return hasMandal && !hasGpCol && rowCount > 0;
+    }"""
+
+    for idx, m in enumerate(pending_mandals, 1):
         if "TOTAL" in m.mandal_name.strip().upper() or "DISTRICT" in m.mandal_name.strip().upper():
             continue
+
+        pct_val = 30 + int((idx / max(1, num_pending)) * 58)
+        notify(pct_val, f"Drilling down {m.mandal_name} ({idx} of {num_pending})...")
 
         try:
             print(f"[*] Drilling down into Mandal: {m.mandal_name} ...", flush=True)
@@ -430,7 +454,7 @@ def _scrape_balance_report(
                         } catch(e) {}
                     }
                 }""")
-                time.sleep(0.4)
+                time.sleep(0.2)
             except Exception:
                 pass
 
@@ -455,9 +479,9 @@ def _scrape_balance_report(
                     }
                 }""")
                 search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
-                if search_box.is_visible(timeout=600):
+                if search_box.is_visible(timeout=400):
                     search_box.fill("")
-                time.sleep(0.3)
+                time.sleep(0.2)
             except Exception:
                 pass
 
@@ -544,7 +568,7 @@ def _scrape_balance_report(
             if not clicked:
                 try:
                     m_link = iframe.locator(f"table tbody tr a:has-text('{m.mandal_name}')").first
-                    if m_link.is_visible(timeout=3000):
+                    if m_link.is_visible(timeout=2000):
                         m_link.click()
                         clicked = True
                         print(f"[+] Mandal {m.mandal_name}: Clicked link via Playwright locator", flush=True)
@@ -557,8 +581,8 @@ def _scrape_balance_report(
 
             # Wait for GP Drilldown Table to load (confirmed by presence of Back button or Panchayat header)
             gp_table_loaded = False
-            for _ in range(30):
-                time.sleep(0.5)
+            for _ in range(25):
+                time.sleep(0.2)
                 gp_table_loaded = iframe.evaluate("""() => {
                     const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
                         .some(el => {
@@ -602,7 +626,7 @@ def _scrape_balance_report(
                         inp.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                 }""")
-                time.sleep(0.4)
+                time.sleep(0.2)
             except Exception:
                 pass
 
@@ -633,7 +657,7 @@ def _scrape_balance_report(
                         } catch(e) {}
                     }
                 }""")
-                time.sleep(0.8)
+                time.sleep(0.4)
             except Exception:
                 pass
 
@@ -694,22 +718,10 @@ def _scrape_balance_report(
             print(f"[+] Mandal {m.mandal_name}: Scraped {len(gp_rows_raw)} total GPs. Found {len(m.pending_gps)} pending GP(s): {[g.panchayat_name for g in m.pending_gps]}", flush=True)
 
             # Step F: Return to Mandal Abstract table
-            # Verify we are on Mandal Abstract table (Header has Mandal & Total GPs, no GP Name col, and rows present)
-            is_mandal_table_js = """() => {
-                const ths = Array.from(document.querySelectorAll("table thead th"))
-                    .map(th => (th.innerText || th.textContent || '').trim().toLowerCase());
-                if (ths.length < 5) return false;
-                const hasMandal = ths.some(t => t === 'mandal' || t.includes('mandal name') || t === 'mandal name');
-                const hasTotalGps = ths.some(t => t.includes('total gp') || t.includes('total gps'));
-                const hasGpCol = ths.some(t => t.includes('panchayat') || t.includes('gp name'));
-                const rowCount = document.querySelectorAll("table tbody tr").length;
-                return hasMandal && hasTotalGps && !hasGpCol && rowCount > 0;
-            }"""
-
             back_clicked = False
             try:
                 back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
-                if back_btn.is_visible(timeout=1500):
+                if back_btn.is_visible(timeout=1000):
                     back_btn.click()
                     back_clicked = True
             except Exception:
@@ -739,8 +751,8 @@ def _scrape_balance_report(
 
             # Confirm Mandal Abstract table is restored
             restored = False
-            for _ in range(16):
-                time.sleep(0.5)
+            for _ in range(12):
+                time.sleep(0.25)
                 try:
                     if iframe.evaluate(is_mandal_table_js):
                         restored = True
@@ -762,14 +774,14 @@ def _scrape_balance_report(
                                 if (window.$) window.$(sel).trigger('change');
                             }}
                         }}""")
-                        time.sleep(0.8)
+                        time.sleep(0.3)
 
                     submit_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
-                    if submit_btn.is_visible(timeout=3000):
+                    if submit_btn.is_visible(timeout=2000):
                         submit_btn.click()
-                        time.sleep(3)
-                        for _ in range(16):
-                            time.sleep(0.5)
+                        time.sleep(1.5)
+                        for _ in range(8):
+                            time.sleep(0.25)
                             if iframe.evaluate(is_mandal_table_js):
                                 restored = True
                                 break
@@ -820,9 +832,9 @@ def _scrape_balance_report(
                     }
                 }""")
                 search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
-                if search_box.is_visible(timeout=600):
+                if search_box.is_visible(timeout=400):
                     search_box.fill("")
-                time.sleep(0.3)
+                time.sleep(0.2)
             except Exception:
                 pass
 
@@ -839,7 +851,7 @@ def _scrape_balance_report(
                     if (b) b.click();
                     else if (window.history && window.history.length > 1) window.history.back();
                 }""")
-                time.sleep(1.5)
+                time.sleep(0.5)
 
                 if not iframe.evaluate(is_mandal_table_js) and target_date_val:
                     iframe.evaluate(f"""() => {{
@@ -850,11 +862,11 @@ def _scrape_balance_report(
                             if (window.$) window.$(sel).trigger('change');
                         }}
                     }}""")
-                    time.sleep(0.8)
+                    time.sleep(0.3)
                     sub = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
-                    if sub.is_visible(timeout=3000):
+                    if sub.is_visible(timeout=2000):
                         sub.click()
-                        time.sleep(3)
+                        time.sleep(1.5)
 
                 # Clear lingering search filter on recovery
                 iframe.evaluate("""() => {
@@ -881,6 +893,7 @@ def _scrape_balance_report(
     total_scraped_pending = sum(len(m.pending_gps) for m in mandals_list)
     print(f"[✓] DRILLDOWN FINISHED: Scraped {total_scraped_pending} pending GP(s) across all {len(pending_mandals)} mandals.", flush=True)
 
+    notify(92, "Enriching Secretary contact details...")
     # 10. Enrich Secretary Details using in-memory live portal data
     match_secretary_details(mandals_list)
 
@@ -892,6 +905,7 @@ def _scrape_balance_report(
         include_pmagy=include_pmagy,
     )
     report.compute_totals()
+    notify(100, f"Balance report compiled: {total_scraped_pending} pending GP(s) identified.")
     return report
 
 

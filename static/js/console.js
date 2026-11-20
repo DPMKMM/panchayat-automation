@@ -2390,6 +2390,15 @@
   };
 
   var balProgressInterval = null;
+  var balPollInterval = null;
+
+  function stopBalancePolling() {
+    if (balPollInterval) {
+      clearInterval(balPollInterval);
+      balPollInterval = null;
+    }
+  }
+
   function startBalanceProgressTimer(estSeconds) {
     if (balProgressInterval) clearInterval(balProgressInterval);
     var card = document.getElementById('balance-progress-card');
@@ -2413,17 +2422,15 @@
       if (elapEl) elapEl.textContent = formatMinSec(elapsed);
       if (elapsed >= targetSec - 2) targetSec = elapsed + 5;
       if (estEl) estEl.textContent = formatMinSec(Math.max(0, targetSec - elapsed));
-      var pct = Math.min(96, Math.round((elapsed / Math.max(1, targetSec)) * 96));
-      if (pctEl) pctEl.textContent = pct + '%';
-      if (fillEl) fillEl.style.width = pct + '%';
     }, 250);
   }
 
-  function finishBalanceProgressTimer(success) {
+  function finishBalanceProgressTimer(success, customMsg) {
     if (balProgressInterval) {
       clearInterval(balProgressInterval);
       balProgressInterval = null;
     }
+    stopBalancePolling();
     var estEl = document.getElementById('balance-estimated-time');
     var pctEl = document.getElementById('balance-progress-pct');
     var fillEl = document.getElementById('balance-progress-fill');
@@ -2433,13 +2440,13 @@
       if (estEl) estEl.textContent = '00:00';
       if (pctEl) pctEl.textContent = '100%';
       if (fillEl) fillEl.style.width = '100%';
-      if (statusEl) statusEl.textContent = 'Balance report compiled successfully!';
+      if (statusEl) statusEl.textContent = customMsg || 'Balance report compiled successfully!';
       setTimeout(function () {
         if (card) card.style.display = 'none';
       }, 1500);
     } else {
       if (estEl) estEl.textContent = '--:--';
-      if (statusEl) statusEl.textContent = 'Balance compilation halted.';
+      if (statusEl) statusEl.textContent = customMsg || 'Balance compilation halted.';
     }
   }
 
@@ -2461,29 +2468,83 @@
     var btn = document.getElementById('btn-run-balance-robot');
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '⏳ Fetching Thursday balance data from Portal...';
+      btn.textContent = '⏳ Compiling Thursday balances from Portal...';
     }
+
     try {
       var fd = new FormData();
       fd.append('date', dateVal);
       fd.append('include_pmagy', incPmagy ? 'true' : 'false');
-      var res = await window.safeFetchJson('/api/balance/generate', {
+
+      // Start asynchronous compilation job - returns immediately in ~100ms
+      var startRes = await window.safeFetchJson('/api/balance/start-job', {
         method: 'POST',
         body: fd,
       });
-      finishBalanceProgressTimer(true);
-      showNotice(res.message || 'Balance report compiled successfully!', 'success');
-      await window.loadBalanceData(dateVal);
-    } catch (err) {
-      finishBalanceProgressTimer(false);
-      if (!handleDepartmentSessionExpiredError(err, 'balance', { balance_date: dateVal, include_pmagy: incPmagy })) {
-        showNotice('Balance robot: ' + (err.message || 'Balance pipeline failed.'), 'error');
+
+      if (!startRes || !startRes.job_id) {
+        throw new Error((startRes && (startRes.detail || startRes.error)) || 'Failed to start balance compilation job.');
       }
-    } finally {
+
+      var jobId = startRes.job_id;
+      stopBalancePolling();
+
+      balPollInterval = setInterval(async function () {
+        try {
+          var job = await window.safeFetchJson('/api/balance/jobs/' + encodeURIComponent(jobId));
+          if (!job) return;
+
+          var pctEl = document.getElementById('balance-progress-pct');
+          var fillEl = document.getElementById('balance-progress-fill');
+          var statusEl = document.getElementById('balance-status-text');
+
+          if (job.progress_pct != null) {
+            var pctVal = Math.min(99, Math.max(10, Math.round(job.progress_pct)));
+            if (pctEl) pctEl.textContent = pctVal + '%';
+            if (fillEl) fillEl.style.width = pctVal + '%';
+          }
+          if (job.message && statusEl) {
+            statusEl.textContent = job.message;
+          }
+
+          if (job.status === 'completed') {
+            stopBalancePolling();
+            finishBalanceProgressTimer(true, job.message);
+            showNotice((job.result && job.result.message) || 'Balance report compiled successfully!', 'success');
+            await window.loadBalanceData(dateVal);
+            balanceGenerationInFlight = false;
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = '⚡ Run Balance Robot';
+            }
+          } else if (job.status === 'failed') {
+            stopBalancePolling();
+            finishBalanceProgressTimer(false, job.error || 'Balance compilation failed.');
+            var errDetail = job.error || 'Balance compilation failed.';
+            if (!handleDepartmentSessionExpiredError(new Error(errDetail), 'balance', { balance_date: dateVal, include_pmagy: incPmagy })) {
+              showNotice('Balance robot: ' + errDetail, 'error');
+            }
+            balanceGenerationInFlight = false;
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = '⚡ Run Balance Robot';
+            }
+          }
+        } catch (pollErr) {
+          console.warn('Balance job poll note:', pollErr);
+        }
+      }, 1000);
+
+    } catch (err) {
+      stopBalancePolling();
+      finishBalanceProgressTimer(false);
       balanceGenerationInFlight = false;
       if (btn) {
         btn.disabled = false;
         btn.textContent = '⚡ Run Balance Robot';
+      }
+      if (!handleDepartmentSessionExpiredError(err, 'balance', { balance_date: dateVal, include_pmagy: incPmagy })) {
+        showNotice('Balance robot: ' + (err.message || 'Balance pipeline failed.'), 'error');
       }
     }
   };

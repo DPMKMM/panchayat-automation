@@ -480,3 +480,60 @@ def test_yerrupalem_live_portal_drilldown_gatla_gowraram_and_jamalapuram():
         assert "Banigandlapadu" not in str(row)
     assert found_gatla is True
     assert found_jamala is True
+
+
+def test_balance_job_endpoints():
+    """Verify start-job, job status polling, and session-job endpoints."""
+    from fastapi.testclient import TestClient
+    from app import app
+    from gp_balance import service as gp_balance_service
+    from dsr import service as automation_service
+
+    client = TestClient(app)
+
+    # Initialize a test session
+    sess_id = "test_balance_async_job_sess"
+    sess = automation_service.get_or_create_session(sess_id)
+    sess["status"] = "authenticated"
+    sess["user_level"] = "district"
+    sess["district_name"] = "Khammam"
+
+    # Pre-populate a fake balance job
+    fake_job_id = "fake_job_123"
+    with gp_balance_service._balance_jobs_lock:
+        gp_balance_service._balance_jobs[fake_job_id] = {
+            "job_id": fake_job_id,
+            "session_id": sess_id,
+            "status": "running",
+            "progress_pct": 45,
+            "message": "Drilling down into Kamepally...",
+            "report_date": "19-11-2026",
+            "include_pmagy": False,
+            "started_at": 1000.0,
+            "completed_at": None,
+            "error": None,
+            "result": None,
+        }
+        gp_balance_service._balance_jobs[f"latest_{sess_id}"] = gp_balance_service._balance_jobs[fake_job_id]
+
+    # Test GET /api/balance/jobs/{job_id}
+    res = client.get(f"/api/balance/jobs/{fake_job_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["job_id"] == fake_job_id
+    assert data["status"] == "running"
+    assert data["progress_pct"] == 45
+    assert "Kamepally" in data["message"]
+
+    # Test GET /api/balance/session-job
+    client.cookies.set("epts_session", sess_id)
+    res_sess = client.get(f"/api/balance/session-job?session_id={sess_id}")
+    assert res_sess.status_code == 200
+    data_sess = res_sess.json()
+    assert data_sess["has_job"] is True
+    assert data_sess["job"]["job_id"] == fake_job_id
+
+    # Test non-existent job returns 404
+    res_404 = client.get("/api/balance/jobs/non_existent_id")
+    assert res_404.status_code == 404
+

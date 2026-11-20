@@ -3,9 +3,12 @@
 import json
 import logging
 import sys
+import threading
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 try:
     from gp_balance.models import DistrictBalanceReport
@@ -83,6 +86,7 @@ def generate_balance_report_pipeline(
     date_str: str = "",
     session_id: str = "",
     include_pmagy: bool = False,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
 ) -> DistrictBalanceReport:
     """Executes live portal scrape when officer clicks 'Run Balance Robot'."""
     global _session_reports
@@ -96,14 +100,14 @@ def generate_balance_report_pipeline(
             date_str,
             include_pmagy,
         )
-        report = run_balance_automation(bot, target_date=date_str, include_pmagy=bool(include_pmagy))
+        report = run_balance_automation(bot, target_date=date_str, include_pmagy=bool(include_pmagy), progress_callback=progress_callback)
     else:
         try:
             from core.session_manager import ensure_active_bot, get_or_create_session
             sess = get_or_create_session(clean_sid)
             restored = ensure_active_bot(sess)
             if restored and getattr(restored, "page", None):
-                report = run_balance_automation(restored, target_date=date_str, include_pmagy=bool(include_pmagy))
+                report = run_balance_automation(restored, target_date=date_str, include_pmagy=bool(include_pmagy), progress_callback=progress_callback)
         except Exception:
             restored = None
         if report is None:
@@ -133,6 +137,122 @@ def generate_balance_report_pipeline(
         pass
 
     return report
+
+
+_balance_jobs: dict[str, dict[str, Any]] = {}
+_balance_jobs_lock = threading.Lock()
+
+
+def start_balance_job(session_id: str = "", date_str: str = "", include_pmagy: bool = False, user_id: str = "") -> dict[str, Any]:
+    """Starts an asynchronous balance compilation job in the session worker thread."""
+    clean_sid = (session_id or "default").strip()
+    job_id = uuid.uuid4().hex
+
+    with _balance_jobs_lock:
+        job = {
+            "job_id": job_id,
+            "session_id": clean_sid,
+            "user_id": user_id,
+            "status": "running",
+            "progress_pct": 5,
+            "message": "Initializing GP Balance Entry Robot...",
+            "report_date": date_str,
+            "include_pmagy": bool(include_pmagy),
+            "started_at": time.time(),
+            "completed_at": None,
+            "error": None,
+            "result": None,
+        }
+        _balance_jobs[job_id] = job
+        _balance_jobs[f"latest_{clean_sid}"] = job
+
+    def _run_job():
+        def _on_progress(pct: int, msg: str):
+            with _balance_jobs_lock:
+                job["progress_pct"] = max(job.get("progress_pct", 0), pct)
+                job["message"] = msg
+
+        try:
+            from dsr import service as automation_service
+            session = automation_service.get_or_create_session(clean_sid)
+            is_auth = session.get("status") == "authenticated"
+            if not is_auth:
+                raise PermissionError("e-Panchayat session is not logged in. Please complete Login & OTP verification first.")
+
+            from core.session_manager import run_in_session_thread
+
+            def _thread_task():
+                bot = session.get("bot")
+                return generate_balance_report_pipeline(
+                    bot=bot,
+                    date_str=date_str,
+                    session_id=clean_sid,
+                    include_pmagy=bool(include_pmagy),
+                    progress_callback=_on_progress,
+                )
+
+            report = run_in_session_thread(session, _thread_task)
+
+            user_level = session.get("user_level", "district")
+            is_mandal_level = (user_level == "mandal")
+            target_mandal = (session.get("mandal_name") or "").strip() if is_mandal_level else ""
+            clean_date = report.report_date_str.replace("/", "-")
+            pmagy_q = f"&include_pmagy={'1' if report.include_pmagy else '0'}"
+
+            res_payload = {
+                "success": True,
+                "module": "gp_balance",
+                "is_mandal_level": is_mandal_level,
+                "user_level": user_level,
+                "district_name": report.district_name,
+                "report_date": report.report_date_str,
+                "include_pmagy": bool(report.include_pmagy),
+                "totals": {
+                    "total_mandals": report.total_mandals,
+                    "total_gps": report.total_gps,
+                    "total_entered_gps": report.total_entered_gps,
+                    "total_not_entered_gps": report.total_not_entered_gps,
+                    "overall_pct_entered": report.overall_pct_entered,
+                },
+                "message": f"GP Balance Entry Report compiled successfully for {report.report_date_str}! {report.total_entered_gps}/{report.total_gps} GPs completed ({report.overall_pct_entered:.1f}%).",
+                "pdf_url": f"/api/balance/report.pdf?date={clean_date}{pmagy_q}",
+                "excel_url": f"/api/balance/download-excel?date={clean_date}{pmagy_q}",
+            }
+            if user_id:
+                try:
+                    from core.firebase_store import log_usage
+                    log_usage(user_id=user_id, platform_scope="console", module="gp_balance_automation", action="generate_report")
+                except Exception:
+                    pass
+
+            with _balance_jobs_lock:
+                job["status"] = "completed"
+                job["progress_pct"] = 100
+                job["message"] = res_payload["message"]
+                job["result"] = res_payload
+                job["completed_at"] = time.time()
+
+        except Exception as exc:
+            logger.exception("Balance background job failed for sid=%s: %s", clean_sid, exc)
+            with _balance_jobs_lock:
+                job["status"] = "failed"
+                job["error"] = str(exc)
+                job["completed_at"] = time.time()
+
+    t = threading.Thread(target=_run_job, daemon=True, name=f"BalanceJob-{job_id[:8]}")
+    t.start()
+    return job
+
+
+def get_balance_job(job_id: str) -> Optional[dict[str, Any]]:
+    with _balance_jobs_lock:
+        return _balance_jobs.get(job_id)
+
+
+def get_session_balance_job(session_id: str) -> Optional[dict[str, Any]]:
+    clean_sid = (session_id or "default").strip()
+    with _balance_jobs_lock:
+        return _balance_jobs.get(f"latest_{clean_sid}")
 
 
 def get_balance_filename_prefix(report: DistrictBalanceReport) -> str:
