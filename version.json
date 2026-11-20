@@ -1,6 +1,6 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Update v1.0.3: Reordered installation pipeline to 1. JAVA, 2. .NET, 3. NIC-AP-DIGISIGNER, 4. EDGE, 5. EDGE WEB VIEW, 6. NICD Sign 3.1.3, ensuring reliable runtime dependencies and Edge v109 Windows 7 compatibility."
+  "releaseNotes": "Update v1.0.4: Streamlined UBD Digital Signer Edition (Telangana). Removed NICDSign 3.1.3, Edge & WebView2 for lightweight, rock-solid UBD Portal digital signature operations."
 }
