@@ -244,7 +244,7 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
 
     headers_p = [
         "S.No", "Mandal Name", "Panchayat Name", "Entry Status",
-        "Missing Account(s) (Marked 'No')", "Panchayat Secretary Name", "Secretary Mobile"
+        "Missing Account(s) (Marked 'No')"
     ]
     for col_idx, h in enumerate(headers_p, start=1):
         cell = ws2.cell(row=4, column=col_idx, value=h)
@@ -255,7 +255,7 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
     ws2.row_dimensions[4].height = 24
 
     if not report.pending_gps_all:
-        ws2.merge_cells("A5:G5")
+        ws2.merge_cells("A5:E5")
         c = ws2["A5"]
         c.value = "🎉 ALL GRAM PANCHAYATS HAVE COMPLETED DATA ENTRY! ZERO PENDING GPs."
         c.font = font_success
@@ -274,8 +274,6 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
                 (gp.panchayat_name, align_left, font_bold),
                 ("Pending Entry", align_center, font_pending),
                 (missing_txt, align_left, font_pending),
-                (gp.secretary_name or "PS", align_left, font_data),
-                (gp.secretary_phone or "-", align_center, font_data),
             ]
             for col_idx, (val, al, fnt) in enumerate(row_p, start=1):
                 cell = ws2.cell(row=r, column=col_idx, value=val)
@@ -288,11 +286,9 @@ def generate_balance_excel(report: DistrictBalanceReport, output_path: Optional[
 
     ws2.column_dimensions["A"].width = 7
     ws2.column_dimensions["B"].width = 20
-    ws2.column_dimensions["C"].width = 24
+    ws2.column_dimensions["C"].width = 25
     ws2.column_dimensions["D"].width = 16
-    ws2.column_dimensions["E"].width = 44
-    ws2.column_dimensions["F"].width = 24
-    ws2.column_dimensions["G"].width = 18
+    ws2.column_dimensions["E"].width = 60
 
     from core.branding import apply_openpyxl_branding
     apply_openpyxl_branding(wb)

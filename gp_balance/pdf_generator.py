@@ -612,11 +612,10 @@ def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[
     ])
 
     col_w = [
-        22,
-        115 if not include_pmagy else 105,
-        52 if not include_pmagy else 48,
+        24,
+        140 if not include_pmagy else 125,
+        55 if not include_pmagy else 50,
     ] + [w for _, _, _, w in mandal_acc_cols] + [
-        140 if not include_pmagy else 128,
         0,
     ]
     col_w[-1] = content_width - sum(col_w[:-1])
@@ -627,7 +626,6 @@ def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[
         Paragraph("Status", th_s),
     ] + [Paragraph(lbl, th_s) for lbl, _, _, _ in mandal_acc_cols] + [
         Paragraph("Missing Bank Account(s)", th_s),
-        Paragraph("Panchayat Secretary & Phone", th_s),
     ]
     t_data = [hdr]
     t_styles = [
@@ -649,8 +647,6 @@ def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[
         missing_str = ", ".join(gp.missing_accounts) if gp.missing_accounts else ("Data Not Entered" if is_p else "—")
         missing_p = Paragraph(missing_str, td_pend if is_p else td_c)
 
-        sec_contact = f"{gp.secretary_name or 'PS'}" + (f" ({gp.secretary_phone})" if gp.secretary_phone and gp.secretary_phone != '—' else "")
-
         def _ac_cell(v: str):
             is_y = str(v).strip().lower() in ("yes", "1", "true", "done", "y")
             return Paragraph("Yes", td_done) if is_y else Paragraph("No", td_pend)
@@ -662,7 +658,7 @@ def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[
                 status_p,
             ]
             + [_ac_cell(getattr(gp, attr, "Yes")) for _, attr, _, _ in mandal_acc_cols]
-            + [missing_p, Paragraph(sec_contact, td_l)]
+            + [missing_p]
         )
         t_styles.append(("BACKGROUND", (0, row_idx), (-1, row_idx), bg))
 
@@ -676,8 +672,7 @@ def generate_mandal_balance_pdf(report: DistrictBalanceReport, target: Optional[
         ]
         + [Paragraph(f"<b>{getattr(target_m, upd_attr, 0) if target_m else 0}</b>", th_s) for _, _, upd_attr, _ in mandal_acc_cols]
         + [
-            Paragraph(f"<b>Pending GPs: {not_ent}</b>", th_s),
-            Paragraph(f"<b>Compliance: {pct_ent:.1f}%</b>", th_s),
+            Paragraph(f"<b>Pending: {not_ent} GPs ({pct_ent:.1f}%)</b>", th_s),
         ]
     )
     t_styles.append(("BACKGROUND", (0, summary_row_idx), (-1, summary_row_idx), colors.HexColor("#0C3829")))

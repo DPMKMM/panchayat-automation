@@ -2602,13 +2602,12 @@
             '<th class="text-center">VWSC</th>' +
             '<th class="text-center">MGNREGS</th>' +
             '<th>Missing Bank Account(s)</th>' +
-            '<th>Panchayat Secretary &amp; Phone</th>' +
           '</tr>';
       }
 
       var rows = data.gp_rows || [];
       if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="' + (showPmagy ? 12 : 11) + '" class="text-center" style="padding:24px;">No GP records available for this mandal.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + (showPmagy ? 11 : 10) + '" class="text-center" style="padding:24px;">No GP records available for this mandal.</td></tr>';
       } else {
         tbody.innerHTML = rows.map(function (gp, idx) {
           var isDone = !gp.is_pending;
@@ -2625,11 +2624,6 @@
           var missTxt = missList.length > 0
             ? '<span style="color:#dc2626; font-weight:700; font-size:0.8rem;">' + esc(missList.join(', ')) + '</span>'
             : '<span style="color:#64748b; font-size:0.8rem;">—</span>';
-          var tel = sanitizeTel(gp.secretary_phone);
-          var phoneTxt = (tel && gp.secretary_phone !== '—')
-            ? '<a href="tel:' + esc(tel) + '" style="color:#0284c7; font-weight:600; text-decoration:none;">📞 ' + esc(gp.secretary_phone) + '</a>'
-            : '—';
-          var secTxt = '<div style="font-weight:700; font-size:0.82rem;">' + esc(gp.secretary_name || 'PS') + '</div><div style="font-size:0.75rem;">' + phoneTxt + '</div>';
 
           return (
             '<tr>' +
@@ -2644,7 +2638,6 @@
               '<td class="text-center">' + checkCell(gp.vwsc) + '</td>' +
               '<td class="text-center">' + checkCell(gp.mgnregs) + '</td>' +
               '<td>' + missTxt + '</td>' +
-              '<td>' + secTxt + '</td>' +
             '</tr>'
           );
         }).join('');

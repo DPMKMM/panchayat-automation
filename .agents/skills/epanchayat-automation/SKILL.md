@@ -39,7 +39,7 @@ This skill provides comprehensive operational context, architectural rules, and 
 - **Account Granularity**:
   - Inspects each bank account independently.
   - If a Gram Panchayat entered 5 accounts and only missed 1 (e.g. only `VWSC (SBM)`), the pending list displays ONLY that specific missed bank account, never an indiscriminate dump of all 6 accounts.
-- **Secretary Follow-Up**: Matches pending Gram Panchayats with secretary phone numbers from live portal directory for immediate telephonic follow-up.
+- **Secretary Details Excluded**: Secretary names and phone numbers are excluded from Balance Entry module reports and tables per user/departmental requirement (focused strictly on Gram Panchayat names, entry statuses, and specific missing bank accounts).
 
 ---
 

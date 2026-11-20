@@ -978,9 +978,7 @@ def _scrape_balance_report(
     total_scraped_pending = sum(len(m.pending_gps) for m in mandals_list)
     print(f"[✓] DRILLDOWN FINISHED: Scraped {total_scraped_pending} pending GP(s) across all {len(pending_mandals)} mandals.", flush=True)
 
-    notify(92, "Enriching Secretary contact details...")
-    # 10. Enrich Secretary Details using in-memory live portal data
-    match_secretary_details(mandals_list)
+    notify(95, "Compiling final consolidated balance report...")
 
     report = DistrictBalanceReport(
         district_name=district_name,

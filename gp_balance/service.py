@@ -72,11 +72,10 @@ def _resolve_report_view(report: DistrictBalanceReport, include_pmagy: Optional[
     view = report.clone_with_pmagy_option(bool(include_pmagy))
     if bool(include_pmagy):
         try:
-            from gp_balance.automation import match_secretary_details, populate_pending_gps_from_directory
+            from gp_balance.automation import populate_pending_gps_from_directory
         except (ImportError, ModuleNotFoundError):
-            from gp_balance_automation import match_secretary_details, populate_pending_gps_from_directory
+            from gp_balance_automation import populate_pending_gps_from_directory
         populate_pending_gps_from_directory(view.mandals, district_name=view.district_name, include_pmagy=True)
-        match_secretary_details(view.mandals)
         view.compute_totals()
     return view
 
@@ -417,8 +416,6 @@ def get_balance_data_dict(date_str: str = "", session_id: str = "", mandal: str 
                 "vwsc": gp.vwsc,
                 "mgnregs": gp.mgnregs,
                 "missing_accounts": gp.missing_accounts,
-                "secretary_name": gp.secretary_name,
-                "secretary_phone": gp.secretary_phone,
             })
 
         m_pending_data = []
@@ -429,8 +426,6 @@ def get_balance_data_dict(date_str: str = "", session_id: str = "", mandal: str 
                     "mandal_name": gp.mandal_name,
                     "panchayat_name": gp.panchayat_name,
                     "missing_accounts": gp.missing_accounts,
-                    "secretary_name": gp.secretary_name,
-                    "secretary_phone": gp.secretary_phone,
                 })
 
         return {
@@ -500,8 +495,6 @@ def get_balance_data_dict(date_str: str = "", session_id: str = "", mandal: str 
             "mandal_name": gp.mandal_name,
             "panchayat_name": p_name,
             "missing_accounts": gp.missing_accounts,
-            "secretary_name": gp.secretary_name,
-            "secretary_phone": gp.secretary_phone,
         })
 
     return {
