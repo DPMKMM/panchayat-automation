@@ -2924,7 +2924,10 @@ def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[s
     clean_sys_id = re.sub(r"[^A-Za-z0-9_\-\.]", "_", raw_sys_id)[:64]
     os_name = str(payload.get("os_name") or "")[:64]
     os_version = str(payload.get("os_version") or "")[:64]
-    cfg_version = str(payload.get("config_version") or "")[:32]
+    cfg_version = str(payload.get("config_version") or "").strip()[:32]
+    if cfg_version.startswith("2026.11"):
+        cfg_version = "1.0.0"
+    cfg_version = re.sub(r"^[vV]+", "", cfg_version) or "1.0.1"
     status = str(payload.get("deployment_status") or "ACTIVE")[:64]
     details = str(payload.get("details") or "")[:500]
 
@@ -2978,6 +2981,12 @@ def get_dsc_telemetry_summary() -> dict[str, Any]:
         logger.debug("Non-fatal Firestore dsc_bundle_telemetry read skip: %s", exc)
 
     machines_list = list(machines_map.values())
+    for m in machines_list:
+        cv = str(m.get("config_version") or "").strip()
+        if cv.startswith("2026.11"):
+            m["config_version"] = "1.0.0"
+        else:
+            m["config_version"] = re.sub(r"^[vV]+", "", cv) or "1.0.0"
     machines_list.sort(key=lambda m: float(m.get("last_seen_ts") or 0), reverse=True)
 
     active_24h = sum(1 for m in machines_list if float(m.get("last_seen_ts") or 0) >= cutoff_24h)

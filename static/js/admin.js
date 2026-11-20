@@ -1322,6 +1322,8 @@
         statusClass = 'badge-status-disabled';
       }
 
+      var rawVer = String(m.config_version || '1.0.1').replace(/^v+/i, '');
+      if (rawVer.indexOf('2026.11') === 0) rawVer = '1.0.0';
       return (
         '<tr>' +
           '<td><strong>' + esc(m.pc_name || 'Unknown PC') + '</strong>' +
@@ -1329,7 +1331,7 @@
           '</td>' +
           '<td><code style="font-size:0.75rem; background:#f1f5f9; padding:2px 6px; border-radius:4px;">' + esc(m.system_id || '—') + '</code></td>' +
           '<td>' + esc(m.os_name || 'Windows') + (m.os_version ? ' <span style="font-size:0.75rem; color:#64748b;">(' + esc(m.os_version) + ')</span>' : '') + '</td>' +
-          '<td><span style="font-size:0.78rem; font-weight:700; color:#0369a1;">v' + esc(m.config_version || '1.0.0') + '</span></td>' +
+          '<td><span style="font-size:0.78rem; font-weight:700; color:#0369a1;">v' + esc(rawVer) + '</span></td>' +
           '<td><span class="' + statusClass + '">' + esc(m.deployment_status || 'ACTIVE') + '</span>' +
             (m.details ? '<div style="font-size:0.72rem; color:#64748b; margin-top:2px;">' + esc(m.details) + '</div>' : '') +
           '</td>' +
