@@ -1332,10 +1332,45 @@
         osName = osName.replace('Windows 10', 'Windows 11');
       }
 
+      var uName = (m.user_name || '').trim();
+      var regOwner = (m.registered_owner || '').trim();
+      var whoami = (m.whoami || '').trim();
+      var alias = (m.custom_alias || '').trim();
+      var pcDisplay = esc(m.pc_name || 'Unknown PC');
+
+      var userBadge = '';
+      if (whoami || uName || regOwner) {
+        var primaryUser = whoami || uName || regOwner;
+        var subOwner = '';
+        if (regOwner && primaryUser.toLowerCase().indexOf(regOwner.toLowerCase()) === -1) {
+          subOwner = ' <span style="font-size:0.68rem; color:#64748b; font-weight:normal;" title="Registered Owner">(' + esc(regOwner) + ')</span>';
+        }
+        userBadge = '<div style="font-size:0.75rem; color:#0369a1; font-weight:600; margin-top:3px; display:inline-flex; align-items:center; gap:4px; background:#f0f9ff; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">' +
+                    '<span>👤</span> ' + esc(primaryUser) + subOwner + '</div>';
+      } else {
+        userBadge = '<div style="font-size:0.70rem; color:#94a3b8; margin-top:2px;">👤 <em>Awaiting v1.0.1+ ping</em></div>';
+      }
+
+      var nameHtml = '';
+      if (alias) {
+        nameHtml = '<div style="font-size:0.85rem; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:6px;">' +
+                   '🏷️ ' + esc(alias) +
+                   ' <button type="button" class="btn btn-ghost btn-xs" style="padding:0 4px; color:#64748b; font-size:0.72rem; border:none; background:transparent; cursor:pointer;" onclick="window.editDscMachineAlias(\'' + esc(m.system_id) + '\', \'' + esc(alias) + '\')" title="Edit friendly name">✏️</button>' +
+                   '</div>' +
+                   '<div style="font-size:0.74rem; color:#64748b;">PC: ' + pcDisplay + '</div>';
+      } else {
+        nameHtml = '<div style="font-size:0.85rem; font-weight:700; color:#0f172a; display:flex; align-items:center; gap:6px;">' +
+                   pcDisplay +
+                   ' <button type="button" class="btn btn-ghost btn-xs" style="padding:1px 6px; color:#64748b; font-size:0.70rem; border:1px dashed #cbd5e1; border-radius:4px; background:#fff; cursor:pointer;" onclick="window.editDscMachineAlias(\'' + esc(m.system_id) + '\', \'\')" title="Add GP Office name or Operator label">+ Label</button>' +
+                   '</div>';
+      }
+
       return (
         '<tr>' +
-          '<td><strong>' + esc(m.pc_name || 'Unknown PC') + '</strong>' +
-            (m.client_ip ? '<div style="font-size:0.72rem; color:#94a3b8;">IP: ' + esc(m.client_ip) + '</div>' : '') +
+          '<td>' +
+            nameHtml +
+            userBadge +
+            (m.client_ip ? '<div style="font-size:0.70rem; color:#94a3b8; margin-top:2px;">IP: ' + esc(m.client_ip) + '</div>' : '') +
           '</td>' +
           '<td><code style="font-size:0.75rem; background:#f1f5f9; padding:2px 6px; border-radius:4px;">' + esc(m.system_id || '—') + '</code></td>' +
           '<td>' + osName + (osVer ? ' <span style="font-size:0.75rem; color:#64748b;">(' + osVer + ')</span>' : '') + '</td>' +
@@ -1361,11 +1396,35 @@
     var filtered = all.filter(function (m) {
       return (
         (m.pc_name || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.whoami || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.user_name || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.registered_owner || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.custom_alias || '').toLowerCase().indexOf(search) !== -1 ||
         (m.system_id || '').toLowerCase().indexOf(search) !== -1 ||
         (m.os_name || '').toLowerCase().indexOf(search) !== -1 ||
         (m.deployment_status || '').toLowerCase().indexOf(search) !== -1
       );
     });
     window.renderAdminDscRows(filtered);
+  };
+
+  window.editDscMachineAlias = async function (sysId, currentAlias) {
+    var newAlias = prompt('Enter a friendly name or GP Office label for this PC (e.g., "Khammam GP Office - Naresh"):', currentAlias || '');
+    if (newAlias === null) return;
+    try {
+      var res = await window.safeFetchJson('/api/admin/dsc-machine-alias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_id: sysId, custom_alias: newAlias.trim() })
+      });
+      if (res && res.success) {
+        showAdminAlert('Machine label saved successfully!', 'success');
+        window.loadAdminDscTelemetry();
+      } else {
+        showAdminAlert('Could not save machine label: ' + (res.error || 'Server error'), 'error');
+      }
+    } catch (e) {
+      showAdminAlert('Error saving label: ' + e.message, 'error');
+    }
   };
 })();

@@ -2932,6 +2932,10 @@ def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[s
 
     raw_sys_id = str(payload.get("system_id") or "").strip()
     pc_name = str(payload.get("pc_name") or "").strip()
+    whoami = str(payload.get("whoami") or "").strip()[:80]
+    user_name = str(payload.get("user_name") or "").strip()[:64]
+    registered_owner = str(payload.get("registered_owner") or "").strip()[:100]
+    user_domain = str(payload.get("user_domain") or "").strip()[:64]
     if not raw_sys_id:
         raw_sys_id = f"SYS_{pc_name}" if pc_name else f"SYS_UNKNOWN_{int(now_ts)}"
 
@@ -2953,6 +2957,12 @@ def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[s
     machine_doc = {
         "system_id": clean_sys_id,
         "pc_name": pc_name or (existing or {}).get("pc_name") or "Unknown PC",
+        "whoami": whoami or (existing or {}).get("whoami") or "",
+        "user_name": user_name or (existing or {}).get("user_name") or "",
+        "registered_owner": registered_owner or (existing or {}).get("registered_owner") or "",
+        "user_domain": user_domain or (existing or {}).get("user_domain") or "",
+        "custom_alias": (existing or {}).get("custom_alias") or "",
+        "admin_note": (existing or {}).get("admin_note") or "",
         "os_name": os_name or (existing or {}).get("os_name") or "Windows",
         "os_version": os_version or (existing or {}).get("os_version") or "",
         "config_version": cfg_version or (existing or {}).get("config_version") or "1.0.0",
@@ -2974,6 +2984,36 @@ def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[s
         logger.debug("Non-fatal Firestore dsc_bundle_telemetry skip: %s", exc)
 
     return machine_doc
+
+
+def update_dsc_machine_alias(system_id: str, custom_alias: str = "", admin_note: str = "") -> dict[str, Any]:
+    """Allow an admin to tag a machine with a GP Office or user-friendly name."""
+    clean_sys_id = re.sub(r"[^A-Za-z0-9_\-\.]", "_", system_id)[:64]
+    machine = _get_local_dsc_machine(clean_sys_id)
+    if not machine:
+        try:
+            snap = _db().collection(COL_DSC_TELEMETRY).document(clean_sys_id).get()
+            if snap.exists:
+                machine = snap.to_dict() or {}
+        except Exception:
+            pass
+
+    if not machine:
+        machine = {"system_id": clean_sys_id}
+
+    if custom_alias is not None:
+        machine["custom_alias"] = str(custom_alias).strip()[:100]
+    if admin_note is not None:
+        machine["admin_note"] = str(admin_note).strip()[:200]
+
+    _save_local_dsc_machine(clean_sys_id, machine)
+
+    try:
+        _db().collection(COL_DSC_TELEMETRY).document(clean_sys_id).set(machine, merge=True)
+    except Exception as exc:
+        logger.debug("Non-fatal Firestore dsc_bundle_telemetry alias update skip: %s", exc)
+
+    return machine
 
 
 def get_dsc_telemetry_summary() -> dict[str, Any]:

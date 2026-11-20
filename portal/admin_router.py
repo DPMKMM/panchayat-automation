@@ -27,6 +27,7 @@ from core.firebase_store import (
     list_users,
     log_usage,
     revoke_user_subscription,
+    update_dsc_machine_alias,
     update_feedback_reply,
     update_user_admin,
     upsert_subscription_plan,
@@ -70,6 +71,25 @@ def admin_overview(admin_user: dict[str, Any] = Depends(require_admin_user)) -> 
 def admin_dsc_telemetry(admin_user: dict[str, Any] = Depends(require_admin_user)) -> dict[str, Any]:
     """Return aggregated machine telemetry, unique installations, and GitHub downloads for DSC Signer Bundle."""
     return get_dsc_telemetry_summary()
+
+
+@router.post("/dsc-machine-alias", include_in_schema=False)
+async def admin_set_dsc_machine_alias(
+    request: Request,
+    admin_user: dict[str, Any] = Depends(require_admin_user),
+) -> dict[str, Any]:
+    """Set custom alias or note for a registered DSC machine."""
+    try:
+        data = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON request body.")
+    sys_id = str(data.get("system_id") or "").strip()
+    if not sys_id:
+        raise HTTPException(status_code=400, detail="system_id is required.")
+    custom_alias = str(data.get("custom_alias") or "").strip()
+    admin_note = str(data.get("admin_note") or "").strip()
+    updated = update_dsc_machine_alias(sys_id, custom_alias=custom_alias, admin_note=admin_note)
+    return {"success": True, "machine": updated}
 
 
 @router.get("/users", include_in_schema=False)

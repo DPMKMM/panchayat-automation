@@ -3170,7 +3170,7 @@
               <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">Real-time hardware pings, computer names, OS versions, and deployment statuses from Gram Panchayat PCs</div>
             </div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <input type="text" id="admin-dsc-search" placeholder="Search by PC, Hardware ID, OS..." oninput="window.filterAdminDscRows()" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-size:0.8rem; background:#fff; min-width:220px;" />
+              <input type="text" id="admin-dsc-search" placeholder="Search by PC, User (whoami), Hardware ID, OS..." oninput="window.filterAdminDscRows()" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-size:0.8rem; background:#fff; min-width:260px;" />
               <button type="button" class="btn btn-white btn-sm" onclick="loadAdminDscTelemetry()">🔄 Refresh</button>
             </div>
           </div>
@@ -3178,7 +3178,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Computer Name</th>
+                  <th>Computer &amp; User</th>
                   <th>Hardware ID</th>
                   <th>Operating System</th>
                   <th>Bundle Version</th>
