@@ -492,10 +492,13 @@ def get_balance_data_dict(date_str: str = "", session_id: str = "", mandal: str 
 
     pending_gps_data = []
     for gp in report.pending_gps_all:
+        p_name = (gp.panchayat_name or "").strip()
+        if not p_name or p_name in ("-", "--") or not any(c.isalpha() for c in p_name):
+            continue
         pending_gps_data.append({
-            "s_no": gp.s_no,
+            "s_no": len(pending_gps_data) + 1,
             "mandal_name": gp.mandal_name,
-            "panchayat_name": gp.panchayat_name,
+            "panchayat_name": p_name,
             "missing_accounts": gp.missing_accounts,
             "secretary_name": gp.secretary_name,
             "secretary_phone": gp.secretary_phone,

@@ -537,3 +537,56 @@ def test_balance_job_endpoints():
     res_404 = client.get("/api/balance/jobs/non_existent_id")
     assert res_404.status_code == 404
 
+
+def test_account_updated_clamping_to_total_gps():
+    """Verify that updated account counts can never exceed total_gps (e.g. 363 in Kamepally with 24 GPs)."""
+    m = MandalBalanceSummary(
+        s_no=1,
+        mandal_name="Kamepally",
+        total_gps=24,
+        entered_gps=16,
+        not_entered_gps=8,
+        fc15_tied_updated=363,  # Raw anomalous portal value
+        vwsc_updated=43,        # Raw anomalous portal value
+    )
+    m.calculate_metrics()
+    assert m.fc15_tied_updated == 24
+    assert m.vwsc_updated == 24
+    assert m.fc15_tied_pending == 0
+    assert m.vwsc_pending == 0
+    assert m.not_entered_gps <= 24
+
+
+def test_footer_hyphen_gp_filtered_out():
+    """Verify that a dummy footer row with '-' is filtered out and never added to pending GPs."""
+    m = MandalBalanceSummary(
+        s_no=1,
+        mandal_name="Bonakal",
+        total_gps=22,
+        entered_gps=0,
+        not_entered_gps=22,
+    )
+    # Add 22 valid pending GPs and 1 fake footer row with '-'
+    gps = [
+        GPBalanceDetail(s_no=i, mandal_name="Bonakal", panchayat_name=f"GP_{i}", entered=False, is_pending=True)
+        for i in range(1, 23)
+    ]
+    fake_footer_gp = GPBalanceDetail(s_no=23, mandal_name="Bonakal", panchayat_name="-", entered=False, is_pending=True)
+    m.pending_gps = gps + [fake_footer_gp]
+
+    rep = DistrictBalanceReport(
+        district_name="Khammam",
+        report_date_str="19-11-2026",
+        generated_at="20-Nov-2026",
+        mandals=[m],
+    )
+    rep.compute_totals()
+
+    # The '-' fake GP must be removed!
+    assert len(m.pending_gps) == 22
+    assert m.not_entered_gps == 22
+    assert rep.total_not_entered_gps == 22
+    assert rep.total_gps == 22
+    assert all(g.panchayat_name != "-" for g in rep.pending_gps_all)
+
+

@@ -300,31 +300,57 @@ def _scrape_balance_report(
     # 8. Scrape Mandal Summary Table
     print("[*] Extracting Mandal Summary Table from page DOM...", flush=True)
     mandal_rows_raw = iframe.evaluate("""() => {
+        const ths = Array.from(document.querySelectorAll("table thead th")).map(th => (th.innerText || th.textContent || '').trim().toLowerCase());
+        const mandalCol = ths.findIndex(t => t.includes("mandal"));
+        const totalCol = ths.findIndex(t => t.includes("total") && t.includes("gp"));
+        const enteredCol = ths.findIndex(t => t.includes("entered") && !t.includes("not") && !t.includes("%"));
+        const notEnteredCol = ths.findIndex(t => t.includes("not entered"));
+        const gpPdCol = ths.findIndex(t => t.includes("pd") || t.includes("ifmis") || t.includes("general fund"));
+        const tgbpassCol = ths.findIndex(t => t.includes("bpass") || t.includes("state matching"));
+        const fc15TiedCol = ths.findIndex(t => t.includes("tied") && !t.includes("untied"));
+        const fc15UntiedCol = ths.findIndex(t => t.includes("untied"));
+        const pmagyCol = ths.findIndex(t => t.includes("pmagy") || t.includes("adarsh"));
+        const vwscCol = ths.findIndex(t => t.includes("vwsc") || t.includes("sbm"));
+        const mgnregsCol = ths.findIndex(t => t.includes("mgnregs") || t.includes("material"));
+
+        const idxMandal = mandalCol !== -1 ? mandalCol : 1;
+        const idxTotal = totalCol !== -1 ? totalCol : 2;
+        const idxEntered = enteredCol !== -1 ? enteredCol : 3;
+        const idxNotEntered = notEnteredCol !== -1 ? notEnteredCol : 4;
+        const idxGpPd = gpPdCol !== -1 ? gpPdCol : 5;
+        const idxTgbpass = tgbpassCol !== -1 ? tgbpassCol : 6;
+        const idxFc15Tied = fc15TiedCol !== -1 ? fc15TiedCol : 7;
+        const idxFc15Untied = fc15UntiedCol !== -1 ? fc15UntiedCol : 8;
+        const idxPmagy = pmagyCol !== -1 ? pmagyCol : 9;
+        const idxVwsc = vwscCol !== -1 ? vwscCol : 10;
+        const idxMgnregs = mgnregsCol !== -1 ? mgnregsCol : 11;
+
         const rows = document.querySelectorAll("table tbody tr");
         const results = [];
         for (const r of rows) {
             const cells = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
             if (cells.length >= 10 && cells[0].match(/^\\d+$/)) {
-                const name = cells[1].trim();
-                // STRICTLY skip the summary row (TOTAL / GRAND TOTAL / DISTRICT TOTAL) to avoid double-counting!
-                if (name.toUpperCase().includes("TOTAL") || name.toUpperCase().includes("DISTRICT")) {
+                const name = (cells[idxMandal] || '').trim();
+                // STRICTLY skip summary row or non-alphabetic footer
+                if (!name || name.toUpperCase().includes("TOTAL") || name.toUpperCase().includes("DISTRICT") || !/[a-zA-Z]/.test(name)) {
                     continue;
                 }
+                const totalGps = parseInt(cells[idxTotal]) || 0;
                 const mandalLink = r.querySelector("a");
                 results.push({
                     s_no: results.length + 1,
                     mandal_name: name,
                     has_link: !!mandalLink,
-                    total_gps: parseInt(cells[2]) || 0,
-                    entered_gps: parseInt(cells[3]) || 0,
-                    not_entered_gps: parseInt(cells[4]) || 0,
-                    gp_pd: parseInt(cells[5]) || 0,
-                    tgbpass: parseInt(cells[6]) || 0,
-                    fc15_tied: parseInt(cells[7]) || 0,
-                    fc15_untied: parseInt(cells[8]) || 0,
-                    pmagy: parseInt(cells[9]) || 0, // Ignored
-                    vwsc: parseInt(cells[10]) || 0,
-                    mgnregs: parseInt(cells[11]) || 0,
+                    total_gps: totalGps,
+                    entered_gps: Math.min(totalGps, parseInt(cells[idxEntered]) || 0),
+                    not_entered_gps: Math.min(totalGps, parseInt(cells[idxNotEntered]) || 0),
+                    gp_pd: Math.min(totalGps, parseInt(cells[idxGpPd]) || 0),
+                    tgbpass: Math.min(totalGps, parseInt(cells[idxTgbpass]) || 0),
+                    fc15_tied: Math.min(totalGps, parseInt(cells[idxFc15Tied]) || 0),
+                    fc15_untied: Math.min(totalGps, parseInt(cells[idxFc15Untied]) || 0),
+                    pmagy: Math.min(totalGps, parseInt(cells[idxPmagy]) || 0),
+                    vwsc: Math.min(totalGps, parseInt(cells[idxVwsc]) || 0),
+                    mgnregs: Math.min(totalGps, parseInt(cells[idxMgnregs]) || 0),
                 });
             }
         }
@@ -335,22 +361,23 @@ def _scrape_balance_report(
     for r in mandal_rows_raw:
         m_name = r["mandal_name"].strip()
         # Extra safety check against TOTAL / summary row
-        if "TOTAL" in m_name.upper() or "DISTRICT" in m_name.upper():
+        if "TOTAL" in m_name.upper() or "DISTRICT" in m_name.upper() or not any(c.isalpha() for c in m_name):
             continue
 
+        tot = r["total_gps"]
         m = MandalBalanceSummary(
             s_no=len(mandals_list) + 1,
             mandal_name=m_name,
-            total_gps=r["total_gps"],
-            entered_gps=r["entered_gps"],
-            not_entered_gps=r["not_entered_gps"],
-            gp_pd_updated=r["gp_pd"],
-            tgbpass_updated=r["tgbpass"],
-            fc15_tied_updated=r["fc15_tied"],
-            fc15_untied_updated=r["fc15_untied"],
-            pmagy_updated=r["pmagy"],
-            vwsc_updated=r["vwsc"],
-            mgnregs_updated=r["mgnregs"],
+            total_gps=tot,
+            entered_gps=min(tot, r["entered_gps"]),
+            not_entered_gps=min(tot, r["not_entered_gps"]),
+            gp_pd_updated=min(tot, r["gp_pd"]),
+            tgbpass_updated=min(tot, r["tgbpass"]),
+            fc15_tied_updated=min(tot, r["fc15_tied"]),
+            fc15_untied_updated=min(tot, r["fc15_untied"]),
+            pmagy_updated=min(tot, r["pmagy"]),
+            vwsc_updated=min(tot, r["vwsc"]),
+            mgnregs_updated=min(tot, r["mgnregs"]),
         )
         m.calculate_metrics(include_pmagy=include_pmagy)
         mandals_list.append(m)
@@ -426,6 +453,38 @@ def _scrape_balance_report(
 
         try:
             print(f"[*] Drilling down into Mandal: {m.mandal_name} ...", flush=True)
+
+            # Ensure we are actually on the Mandal Abstract table before attempting to search/click
+            try:
+                if not iframe.evaluate(is_mandal_table_js):
+                    print(f"[!] Warning: Not on Mandal Abstract table before drilling into {m.mandal_name}. Restoring table...", flush=True)
+                    iframe.evaluate(r"""() => {
+                        const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
+                        const b = btns.find(el => {
+                            const val = (el.value || '').trim().toLowerCase();
+                            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                            return /^(?:<|<<|←)?\s*back\s*$/i.test(val) || /^(?:<|<<|←)?\s*back\s*$/i.test(txt);
+                        });
+                        if (b) b.click();
+                    }""")
+                    time.sleep(0.4)
+                    if not iframe.evaluate(is_mandal_table_js):
+                        if target_date_val:
+                            iframe.evaluate(f"""() => {{
+                                const sel = document.querySelector("select");
+                                if (sel) {{
+                                    sel.value = "{target_date_val}";
+                                    sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    if (window.$) window.$(sel).trigger('change');
+                                }}
+                            }}""")
+                            time.sleep(0.2)
+                        sub_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
+                        if sub_btn.is_visible(timeout=1000):
+                            sub_btn.click()
+                            time.sleep(1.0)
+            except Exception as e_pre_restore:
+                logger.debug("Pre-drilldown restore note: %s", e_pre_restore)
 
             # Ensure entries dropdown shows maximum entries so all mandal rows are rendered
             try:
@@ -604,6 +663,19 @@ def _scrape_balance_report(
 
             if not gp_table_loaded:
                 print(f"[-] Mandal {m.mandal_name}: GP drilldown table did not load after clicking link. Skipping.", flush=True)
+                try:
+                    iframe.evaluate(r"""() => {
+                        const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
+                        const b = btns.find(el => {
+                            const val = (el.value || '').trim().toLowerCase();
+                            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                            return /^(?:<|<<|←)?\s*back\s*$/i.test(val) || /^(?:<|<<|←)?\s*back\s*$/i.test(txt);
+                        });
+                        if (b) b.click();
+                    }""")
+                    time.sleep(0.4)
+                except Exception:
+                    pass
                 continue
 
             # Clear any lingering search filter in GP table so all GPs load
@@ -669,8 +741,11 @@ def _scrape_balance_report(
                     const cells = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
                     if (cells.length >= 10 && cells[0].match(/^\\d+$/)) {
                         const sNo = parseInt(cells[0]) || 0;
-                        const gpName = cells[1];
-                        if (!gpName || gpName.toUpperCase().includes("TOTAL")) continue;
+                        const gpName = (cells[1] || '').trim();
+                        // STRICTLY filter out empty, '-', '--', summary, or non-alphabetic rows
+                        if (!gpName || gpName.toUpperCase().includes("TOTAL") || gpName.toUpperCase().includes("DISTRICT") || gpName === "-" || gpName === "--" || !/[a-zA-Z]/.test(gpName)) {
+                            continue;
+                        }
 
                         const enteredVal = cells[2];
                         const notEnteredVal = cells[3];
@@ -697,10 +772,13 @@ def _scrape_balance_report(
             m.pending_gps = []
             m.all_gps = []
             for gp_raw in gp_rows_raw:
+                p_name = gp_raw["panchayat_name"].strip()
+                if not p_name or p_name in ("-", "--") or not any(c.isalpha() for c in p_name):
+                    continue
                 gp = GPBalanceDetail(
-                    s_no=gp_raw["s_no"],
+                    s_no=len(m.all_gps) + 1,
                     mandal_name=m.mandal_name,
-                    panchayat_name=gp_raw["panchayat_name"],
+                    panchayat_name=p_name,
                     entered=gp_raw["entered"],
                     gp_pd=gp_raw["gp_pd"],
                     tgbpass=gp_raw["tgbpass"],
@@ -714,6 +792,13 @@ def _scrape_balance_report(
                 m.all_gps.append(gp)
                 if gp.is_pending:
                     m.pending_gps.append(gp)
+
+            # Ensure not_entered_gps is strictly capped at total_gps
+            if len(m.pending_gps) > m.not_entered_gps:
+                m.not_entered_gps = min(m.total_gps, len(m.pending_gps))
+                m.entered_gps = max(0, m.total_gps - m.not_entered_gps)
+                if m.total_gps > 0:
+                    m.pct_entered = round((m.entered_gps / m.total_gps) * 100.0, 2)
 
             print(f"[+] Mandal {m.mandal_name}: Scraped {len(gp_rows_raw)} total GPs. Found {len(m.pending_gps)} pending GP(s): {[g.panchayat_name for g in m.pending_gps]}", flush=True)
 

@@ -128,6 +128,15 @@ class MandalBalanceSummary:
         if self.raw_not_entered_gps is not None:
             self.not_entered_gps = self.raw_not_entered_gps
 
+        # Clamp account updated counts so they never exceed total_gps
+        self.gp_pd_updated = min(self.total_gps, max(0, self.gp_pd_updated))
+        self.tgbpass_updated = min(self.total_gps, max(0, self.tgbpass_updated))
+        self.fc15_tied_updated = min(self.total_gps, max(0, self.fc15_tied_updated))
+        self.fc15_untied_updated = min(self.total_gps, max(0, self.fc15_untied_updated))
+        self.vwsc_updated = min(self.total_gps, max(0, self.vwsc_updated))
+        self.mgnregs_updated = min(self.total_gps, max(0, self.mgnregs_updated))
+        self.pmagy_updated = min(self.total_gps, max(0, self.pmagy_updated))
+
         if self.total_gps > 0:
             self.pct_entered = round((self.entered_gps / self.total_gps) * 100.0, 2)
         else:
@@ -159,6 +168,8 @@ class MandalBalanceSummary:
             actual_pending = max(
                 [self.not_entered_gps, len(self.pending_gps), *pending_counts]
             )
+            # Never let pending exceed total_gps
+            actual_pending = min(self.total_gps, actual_pending)
             if actual_pending > self.not_entered_gps:
                 self.not_entered_gps = actual_pending
                 self.entered_gps = max(0, self.total_gps - self.not_entered_gps)
@@ -196,16 +207,23 @@ class DistrictBalanceReport:
         self.mandals = [m for m in self.mandals if "TOTAL" not in m.mandal_name.strip().upper() and "DISTRICT" not in m.mandal_name.strip().upper()]
         for idx, m in enumerate(self.mandals, start=1):
             m.s_no = idx
+            # Filter out any non-alphabetic or dummy "-" footer rows from pending_gps and all_gps
+            m.pending_gps = [g for g in m.pending_gps if any(c.isalpha() for c in g.panchayat_name.strip()) and g.panchayat_name.strip() not in ("-", "--")]
+            m.all_gps = [g for g in m.all_gps if any(c.isalpha() for c in g.panchayat_name.strip()) and g.panchayat_name.strip() not in ("-", "--")]
+
             if len(m.pending_gps) > m.not_entered_gps:
-                m.not_entered_gps = len(m.pending_gps)
+                m.not_entered_gps = min(m.total_gps, len(m.pending_gps))
                 m.entered_gps = max(0, m.total_gps - m.not_entered_gps)
                 if m.total_gps > 0:
                     m.pct_entered = round((m.entered_gps / m.total_gps) * 100.0, 2)
 
+            m.not_entered_gps = min(m.total_gps, m.not_entered_gps)
+            m.entered_gps = max(0, m.total_gps - m.not_entered_gps)
+
         self.total_mandals = len(self.mandals)
         self.total_gps = sum(m.total_gps for m in self.mandals)
         self.total_entered_gps = sum(m.entered_gps for m in self.mandals)
-        self.total_not_entered_gps = sum(m.not_entered_gps for m in self.mandals)
+        self.total_not_entered_gps = min(self.total_gps, sum(m.not_entered_gps for m in self.mandals))
         if self.total_gps > 0:
             self.overall_pct_entered = round((self.total_entered_gps / self.total_gps) * 100.0, 2)
         else:
@@ -223,9 +241,9 @@ class DistrictBalanceReport:
         for m in self.mandals:
             self.pending_gps_all.extend(m.pending_gps)
 
-        # Ensure total_not_entered_gps accurately reflects all pending GPs in the district
+        # Ensure total_not_entered_gps accurately reflects all pending GPs in the district (strictly capped at total_gps)
         if len(self.pending_gps_all) > self.total_not_entered_gps:
-            self.total_not_entered_gps = len(self.pending_gps_all)
+            self.total_not_entered_gps = min(self.total_gps, len(self.pending_gps_all))
             self.total_entered_gps = max(0, self.total_gps - self.total_not_entered_gps)
             if self.total_gps > 0:
                 self.overall_pct_entered = round((self.total_entered_gps / self.total_gps) * 100.0, 2)
