@@ -196,6 +196,7 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
     }""")
 
     selected_date_text = ""
+    target_date_val = ""
     if available_dates:
         # Match target_date or pick latest (first option)
         chosen_opt = available_dates[0]
@@ -206,13 +207,14 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     break
 
         selected_date_text = chosen_opt["text"]
-        val = chosen_opt["value"]
-        print(f"[+] Selecting Thursday Balance Date: {selected_date_text} (value={val})", flush=True)
+        target_date_val = chosen_opt["value"]
+        val = target_date_val
+        print(f"[+] Selecting Thursday Balance Date: {selected_date_text} (value={target_date_val})", flush=True)
 
         iframe.evaluate(f"""() => {{
             const sel = document.querySelector("select");
             if (sel) {{
-                sel.value = "{val}";
+                sel.value = "{target_date_val}";
                 sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
             }}
         }}""")
@@ -648,71 +650,88 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
 
             print(f"[+] Mandal {m.mandal_name}: Scraped {len(gp_rows_raw)} total GPs. Found {len(m.pending_gps)} pending GP(s): {[g.panchayat_name for g in m.pending_gps]}", flush=True)
 
-            # Step F: Click Back button to return to Mandal Abstract table
+            # Step F: Return to Mandal Abstract table
+            # Verify we are on Mandal Abstract table (Header has Mandal & Total GPs, no GP Name col, and rows present)
+            is_mandal_table_js = """() => {
+                const ths = Array.from(document.querySelectorAll("table thead th"))
+                    .map(th => (th.innerText || th.textContent || '').trim().toLowerCase());
+                if (ths.length < 5) return false;
+                const hasMandal = ths.some(t => t === 'mandal' || t.includes('mandal name') || t === 'mandal name');
+                const hasTotalGps = ths.some(t => t.includes('total gp') || t.includes('total gps'));
+                const hasGpCol = ths.some(t => t.includes('panchayat') || t.includes('gp name'));
+                const rowCount = document.querySelectorAll("table tbody tr").length;
+                return hasMandal && hasTotalGps && !hasGpCol && rowCount > 0;
+            }"""
+
             back_clicked = False
             try:
                 back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
-                if back_btn.is_visible(timeout=2000):
+                if back_btn.is_visible(timeout=1500):
                     back_btn.click()
                     back_clicked = True
             except Exception:
                 pass
 
             if not back_clicked:
-                back_clicked = iframe.evaluate("""() => {
-                    const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
-                    const b = btns.find(el => {
-                        const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                        return txt === 'back' || txt.includes('back');
-                    });
-                    if (b) {
-                        b.click();
-                        return true;
-                    }
-                    return false;
-                }""")
-
-            # Confirm Mandal Abstract table is restored (header contains 'Mandal', no Back button, and rows present)
-            restored = False
-            for _ in range(24):
-                time.sleep(0.5)
-                restored = iframe.evaluate("""() => {
-                    const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
-                        .some(el => {
-                            const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                            return txt === 'back' || txt.includes('back');
+                try:
+                    back_clicked = iframe.evaluate(r"""() => {
+                        const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
+                        const b = btns.find(el => {
+                            const val = (el.value || '').trim().toLowerCase();
+                            const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                            return /^(?:<|<<|←)?\s*back\s*$/i.test(val) || /^(?:<|<<|←)?\s*back\s*$/i.test(txt);
                         });
-                    const hasMandalCol = Array.from(document.querySelectorAll("table thead th"))
-                        .some(th => (th.innerText || '').toLowerCase().includes("mandal"));
-                    const rowCount = document.querySelectorAll("table tbody tr").length;
-                    return !hasBack && hasMandalCol && rowCount > 0;
-                }""")
-                if restored:
-                    break
+                        if (b) {
+                            b.click();
+                            return true;
+                        }
+                        if (window.history && window.history.length > 1) {
+                            window.history.back();
+                            return true;
+                        }
+                        return false;
+                    }""")
+                except Exception:
+                    pass
+
+            # Confirm Mandal Abstract table is restored
+            restored = False
+            for _ in range(16):
+                time.sleep(0.5)
+                try:
+                    if iframe.evaluate(is_mandal_table_js):
+                        restored = True
+                        break
+                except Exception:
+                    pass
 
             if restored:
                 print(f"[*] Mandal Abstract table restored successfully after {m.mandal_name}.", flush=True)
             else:
-                print(f"[!] Mandal Abstract table not restored via Back button for {m.mandal_name}. Using Submit reload fallback...", flush=True)
-                submit_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
-                if submit_btn.is_visible(timeout=3000):
-                    submit_btn.click()
-                    time.sleep(4)
-                    for _ in range(20):
-                        time.sleep(0.5)
-                        restored = iframe.evaluate("""() => {
-                            const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
-                                .some(el => {
-                                    const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                                    return txt === 'back' || txt.includes('back');
-                                });
-                            const hasMandalCol = Array.from(document.querySelectorAll("table thead th"))
-                                .some(th => (th.innerText || '').toLowerCase().includes("mandal"));
-                            const rowCount = document.querySelectorAll("table tbody tr").length;
-                            return !hasBack && hasMandalCol && rowCount > 0;
-                        }""")
-                        if restored:
-                            break
+                print(f"[!] Mandal Abstract table not restored via Back for {m.mandal_name}. Using Date Selection + Submit reload fallback...", flush=True)
+                try:
+                    if target_date_val:
+                        iframe.evaluate(f"""() => {{
+                            const sel = document.querySelector("select");
+                            if (sel) {{
+                                sel.value = "{target_date_val}";
+                                sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                if (window.$) window.$(sel).trigger('change');
+                            }}
+                        }}""")
+                        time.sleep(0.8)
+
+                    submit_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
+                    if submit_btn.is_visible(timeout=3000):
+                        submit_btn.click()
+                        time.sleep(3)
+                        for _ in range(16):
+                            time.sleep(0.5)
+                            if iframe.evaluate(is_mandal_table_js):
+                                restored = True
+                                break
+                except Exception as e_sub:
+                    logger.debug("Submit reload fallback note: %s", e_sub)
 
             # Clear search input on restored Mandal table and re-expand page length to max
             try:
@@ -760,26 +779,39 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                 search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
                 if search_box.is_visible(timeout=600):
                     search_box.fill("")
-                time.sleep(0.4)
+                time.sleep(0.3)
             except Exception:
                 pass
 
         except Exception as drill_err:
             logger.warning("Error drilling down into %s: %s", m.mandal_name, drill_err)
             try:
-                back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
-                if back_btn.is_visible(timeout=1000):
-                    back_btn.click()
-                else:
-                    iframe.evaluate("""() => {
-                        const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
-                        const b = btns.find(el => {
-                            const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
-                            return txt === 'back' || txt.includes('back');
-                        });
-                        if (b) b.click();
-                    }""")
+                iframe.evaluate(r"""() => {
+                    const btns = Array.from(document.querySelectorAll("button, input[value*='Back' i], a, input[type='button'], input[type='submit']"));
+                    const b = btns.find(el => {
+                        const val = (el.value || '').trim().toLowerCase();
+                        const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+                        return /^(?:<|<<|←)?\s*back\s*$/i.test(val) || /^(?:<|<<|←)?\s*back\s*$/i.test(txt);
+                    });
+                    if (b) b.click();
+                    else if (window.history && window.history.length > 1) window.history.back();
+                }""")
                 time.sleep(1.5)
+
+                if not iframe.evaluate(is_mandal_table_js) and target_date_val:
+                    iframe.evaluate(f"""() => {{
+                        const sel = document.querySelector("select");
+                        if (sel) {{
+                            sel.value = "{target_date_val}";
+                            sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            if (window.$) window.$(sel).trigger('change');
+                        }}
+                    }}""")
+                    time.sleep(0.8)
+                    sub = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
+                    if sub.is_visible(timeout=3000):
+                        sub.click()
+                        time.sleep(3)
 
                 # Clear lingering search filter on recovery
                 iframe.evaluate("""() => {
@@ -793,9 +825,9 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     if (window.$ && window.$.fn && window.$.fn.dataTable) {
                         try {
                             if (window.$.fn.dataTable.tables) {
-                                window.$.fn.dataTable.tables({ api: true }).search('').draw(false);
+                                window.$.fn.dataTable.tables({ api: true }).search('').page.len(-1).draw(false);
                             } else {
-                                window.$('table.dataTable, table').DataTable().search('').draw(false);
+                                window.$('table.dataTable, table').DataTable().search('').page.len(-1).draw(false);
                             }
                         } catch(e) {}
                     }
