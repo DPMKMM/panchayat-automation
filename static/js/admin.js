@@ -1339,14 +1339,10 @@
       var pcDisplay = esc(m.pc_name || 'Unknown PC');
 
       var userBadge = '';
-      if (whoami || uName || regOwner) {
-        var primaryUser = whoami || uName || regOwner;
-        var subOwner = '';
-        if (regOwner && primaryUser.toLowerCase().indexOf(regOwner.toLowerCase()) === -1) {
-          subOwner = ' <span style="font-size:0.68rem; color:#64748b; font-weight:normal;" title="Registered Owner">(' + esc(regOwner) + ')</span>';
-        }
+      if (whoami || uName) {
+        var primaryUser = whoami || uName;
         userBadge = '<div style="font-size:0.75rem; color:#0369a1; font-weight:600; margin-top:3px; display:inline-flex; align-items:center; gap:4px; background:#f0f9ff; padding:2px 8px; border-radius:4px; border:1px solid #bae6fd;">' +
-                    '<span>👤</span> ' + esc(primaryUser) + subOwner + '</div>';
+                    '<span>👤</span> ' + esc(primaryUser) + '</div>';
       } else {
         userBadge = '<div style="font-size:0.70rem; color:#94a3b8; margin-top:2px;">👤 <em>Awaiting v1.0.1+ ping</em></div>';
       }
