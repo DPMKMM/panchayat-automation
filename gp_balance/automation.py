@@ -411,7 +411,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
             try:
                 iframe.evaluate("""(targetMandal) => {
                     if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                        try { window.$('table').DataTable().search(targetMandal).draw(); } catch(e) {}
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).search(targetMandal).draw();
+                            } else {
+                                window.$('table.dataTable, table').DataTable().search(targetMandal).draw();
+                            }
+                        } catch(e) {}
                     }
                     const inp = document.querySelector("input[type='search'], .dataTables_filter input");
                     if (inp) {
@@ -448,14 +454,16 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                         }
                         return c.replace(/[yeiua]+$/, '');
                     }
+                    const cleanTarget = clean(targetMandal);
                     const targetStem = stem(targetMandal);
                     const rows = document.querySelectorAll("table tbody tr");
                     for (const r of rows) {
                         const cells = r.querySelectorAll("td");
                         if (cells.length >= 2) {
                             const name = cells[1].innerText.trim();
-                            if (stem(name) === targetStem || clean(name).includes(targetStem) || targetStem.includes(clean(name))) {
-                                const link = r.querySelector("a");
+                            const cName = clean(name);
+                            if (cName === cleanTarget || cName.includes(cleanTarget) || cleanTarget.includes(cName) || stem(name) === targetStem) {
+                                const link = r.querySelector("a") || cells[1].querySelector("a");
                                 if (link) { link.click(); return true; }
                             }
                         }
@@ -464,14 +472,20 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                 }""", m.mandal_name)
 
             if clicked:
-                # Wait for GP Drilldown Table to load (confirmed by 'Panchayat' or 'Mandal:' and presence of Back button)
+                # Wait for GP Drilldown Table to load (confirmed by presence of Back button or GP indicators)
                 gp_table_loaded = False
                 for _ in range(24):
                     time.sleep(0.5)
                     gp_table_loaded = iframe.evaluate("""() => {
+                        const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
+                            .some(el => {
+                                const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                                return txt === 'back' || txt.includes('back');
+                            });
                         const text = document.body ? document.body.innerText : '';
-                        const hasBack = Boolean(document.querySelector("input[value='Back'], button:has-text('Back'), a:has-text('Back')"));
-                        return hasBack && (text.includes("Panchayat") || text.includes("Mandal:"));
+                        const hasGpIndicators = text.includes("Panchayat") || text.includes("Gram Panchayat") || text.includes("Mandal:");
+                        const hasRows = document.querySelectorAll("table tbody tr").length > 0;
+                        return (hasBack || hasGpIndicators) && hasRows;
                     }""")
                     if gp_table_loaded:
                         break
@@ -484,7 +498,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                 try:
                     iframe.evaluate("""() => {
                         if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try { window.$('table').DataTable().search('').page.len(-1).draw(); } catch(e) {}
+                            try {
+                                if (window.$.fn.dataTable.tables) {
+                                    window.$.fn.dataTable.tables({ api: true }).search('').page.len(-1).draw();
+                                } else {
+                                    window.$('table.dataTable, table').DataTable().search('').page.len(-1).draw();
+                                }
+                            } catch(e) {}
                         }
                         const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
                         for (const inp of inps) {
@@ -516,7 +536,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                             if (window.$) window.$(lenSel).trigger('change');
                         }
                         if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try { window.$('table').DataTable().page.len(-1).draw(false); } catch(e) {}
+                            try {
+                                if (window.$.fn.dataTable.tables) {
+                                    window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
+                                } else {
+                                    window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
+                                }
+                            } catch(e) {}
                         }
                     }""")
                     time.sleep(0.8)
@@ -582,7 +608,7 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                 # Step F: Click Back button to return to Mandal Abstract table
                 back_clicked = False
                 try:
-                    back_btn = iframe.locator("button:has-text('Back'), input[value='Back'], a:has-text('Back')").first
+                    back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
                     if back_btn.is_visible(timeout=1500):
                         back_btn.click()
                         back_clicked = True
@@ -590,21 +616,33 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                     pass
 
                 if not back_clicked:
-                    iframe.evaluate("""() => {
+                    back_clicked = iframe.evaluate("""() => {
                         const btns = Array.from(document.querySelectorAll("button, input[value='Back'], a, input[type='button'], input[type='submit']"));
-                        const b = btns.find(el => (el.innerText || el.value || "").trim().toLowerCase() === "back");
-                        if (b) b.click();
+                        const b = btns.find(el => {
+                            const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                            return txt === 'back' || txt.includes('back');
+                        });
+                        if (b) {
+                            b.click();
+                            return true;
+                        }
+                        return false;
                     }""")
 
-                # Confirm Mandal Abstract table is restored (no Back button, no Mandal: header, and table rows present)
+                # Confirm Mandal Abstract table is restored (no Back button, no GP-specific headers, and table rows present)
                 restored = False
                 for _ in range(20):
                     time.sleep(0.5)
                     restored = iframe.evaluate("""() => {
-                        const hasBack = Boolean(document.querySelector("input[value='Back'], button:has-text('Back'), a:has-text('Back')"));
-                        const hasMandal = (document.body ? document.body.innerText : '').includes("Mandal:");
+                        const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
+                            .some(el => {
+                                const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                                return txt === 'back' || txt.includes('back');
+                            });
+                        const text = document.body ? document.body.innerText : '';
+                        const hasGpSpecific = text.includes("Gram Panchayat") || text.includes("Panchayat Name");
                         const rowCount = document.querySelectorAll("table tbody tr").length;
-                        return !hasBack && !hasMandal && rowCount > 0;
+                        return !hasBack && !hasGpSpecific && rowCount > 0;
                     }""")
                     if restored:
                         break
@@ -616,10 +654,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                         for _ in range(20):
                             time.sleep(0.5)
                             restored = iframe.evaluate("""() => {
-                                const hasBack = Boolean(document.querySelector("input[value='Back'], button:has-text('Back'), a:has-text('Back')"));
-                                const hasMandal = (document.body ? document.body.innerText : '').includes("Mandal:");
+                                const hasBack = Array.from(document.querySelectorAll("button, input[type='button'], input[type='submit'], a"))
+                                    .some(el => {
+                                        const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                                        return txt === 'back' || txt.includes('back');
+                                    });
                                 const rowCount = document.querySelectorAll("table tbody tr").length;
-                                return !hasBack && !hasMandal && rowCount > 0;
+                                return !hasBack && rowCount > 0;
                             }""")
                             if restored:
                                 break
@@ -635,7 +676,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                             inp.dispatchEvent(new Event('change', { bubbles: true }));
                         }
                         if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try { window.$('table').DataTable().search('').draw(false); } catch(e) {}
+                            try {
+                                if (window.$.fn.dataTable.tables) {
+                                    window.$.fn.dataTable.tables({ api: true }).search('').draw(false);
+                                } else {
+                                    window.$('table.dataTable, table').DataTable().search('').draw(false);
+                                }
+                            } catch(e) {}
                         }
                     }""")
                     search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
@@ -659,7 +706,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                             if (window.$) window.$(lenSel).trigger('change');
                         }
                         if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                            try { window.$('table').DataTable().page.len(-1).draw(false); } catch(e) {}
+                            try {
+                                if (window.$.fn.dataTable.tables) {
+                                    window.$.fn.dataTable.tables({ api: true }).page.len(-1).draw(false);
+                                } else {
+                                    window.$('table.dataTable, table').DataTable().page.len(-1).draw(false);
+                                }
+                            } catch(e) {}
                         }
                     }""")
                     time.sleep(0.5)
@@ -669,13 +722,16 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
         except Exception as drill_err:
             logger.warning("Error drilling down into %s: %s", m.mandal_name, drill_err)
             try:
-                back_btn = iframe.locator("button:has-text('Back'), input[value='Back'], a:has-text('Back')").first
+                back_btn = iframe.locator("button:has-text('Back'), input[value*='Back' i], a:has-text('Back')").first
                 if back_btn.is_visible(timeout=1000):
                     back_btn.click()
                 else:
                     iframe.evaluate("""() => {
                         const btns = Array.from(document.querySelectorAll("button, input[value='Back'], a, input[type='button'], input[type='submit']"));
-                        const b = btns.find(el => (el.innerText || el.value || "").trim().toLowerCase() === "back");
+                        const b = btns.find(el => {
+                            const txt = (el.value || el.innerText || el.textContent || '').trim().toLowerCase();
+                            return txt === 'back' || txt.includes('back');
+                        });
                         if (b) b.click();
                     }""")
                 time.sleep(1.5)
@@ -690,7 +746,13 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                         inp.dispatchEvent(new Event('change', { bubbles: true }));
                     }
                     if (window.$ && window.$.fn && window.$.fn.dataTable) {
-                        try { window.$('table').DataTable().search('').draw(false); } catch(e) {}
+                        try {
+                            if (window.$.fn.dataTable.tables) {
+                                window.$.fn.dataTable.tables({ api: true }).search('').draw(false);
+                            } else {
+                                window.$('table.dataTable, table').DataTable().search('').draw(false);
+                            }
+                        } catch(e) {}
                     }
                 }""")
             except Exception:
