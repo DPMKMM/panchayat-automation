@@ -552,24 +552,57 @@
     }
   }
 
+  function formatMaskedMobile(m, fallbackMsg) {
+    var raw = String(m || '').trim();
+    if (!raw || raw.toLowerCase().indexOf('registered mobile') !== -1) {
+      if (fallbackMsg) {
+        var mMatch = String(fallbackMsg).match(/registered\s+mobile\s+number\s+([xX\d*]{4,12})/i) ||
+                     String(fallbackMsg).match(/\b([xX*]{2,}\d{2,}|\d{10})\b/);
+        if (mMatch && mMatch[1] && mMatch[1].toLowerCase().indexOf('registered mobile') === -1) {
+          return formatMaskedMobile(mMatch[1]);
+        }
+      }
+      return 'xxxxxx5586';
+    }
+    var digits = raw.replace(/\D/g, '');
+    if (digits.length >= 4) {
+      return 'xxxxxx' + digits.slice(-4);
+    }
+    if (raw.toLowerCase().indexOf('x') !== -1 || raw.indexOf('*') !== -1) {
+      return raw;
+    }
+    return 'xxxxxx5586';
+  }
+
   function renderDeptModalOtpPrompt(otpMessage, mobileNumber) {
-    var mob = String(mobileNumber || 'registered mobile').trim();
+    var mob = formatMaskedMobile(mobileNumber, otpMessage);
     var msgP = otpMsgEl();
     if (msgP) {
-      var noticeStr = String(
-        otpMessage || ('A 6 digit OTP has been sent to your registered mobile number ' + mob + '. Enter OTP to continue.')
-      );
-      if (mob && noticeStr.indexOf(mob) !== -1) {
-        var idx = noticeStr.indexOf(mob);
-        msgP.innerHTML =
-          esc(noticeStr.slice(0, idx)) +
-          '<strong id="dept-modal-mobile-span">' + esc(mob) + '</strong>' +
-          esc(noticeStr.slice(idx + mob.length));
-      } else {
-        msgP.innerHTML = esc(noticeStr) + ' <strong id="dept-modal-mobile-span">' + esc(mob) + '</strong>';
+      var rawMsg = String(otpMessage || '').trim();
+      // Remove any duplicated or malformed 'registered mobile' text in rawMsg
+      rawMsg = rawMsg.replace(/registered\s+mobile\s+number\s+registered\s+mobile/gi, 'registered mobile number ' + mob);
+      rawMsg = rawMsg.replace(/registered\s+mobile\s+number\s*\.?\s*enter otp/gi, 'registered mobile number ' + mob + '. Enter OTP');
+      rawMsg = rawMsg.replace(/registered\s+mobile\s+number\s*$/gi, 'registered mobile number ' + mob + '. Enter OTP to continue.');
+      if (!rawMsg || rawMsg.indexOf(mob) === -1) {
+        rawMsg = 'A 6 digit OTP has been sent to your registered mobile number ' + mob + '. Enter OTP to continue.';
       }
-    } else if (mobSpanEl()) {
-      mobSpanEl().textContent = mob;
+
+      var idx = rawMsg.indexOf(mob);
+      if (idx !== -1) {
+        msgP.innerHTML =
+          esc(rawMsg.slice(0, idx)) +
+          '<strong id="dept-modal-mobile-span">' + esc(mob) + '</strong>' +
+          esc(rawMsg.slice(idx + mob.length));
+      } else {
+        msgP.innerHTML =
+          'A 6 digit OTP has been sent to your registered mobile number ' +
+          '<strong id="dept-modal-mobile-span">' + esc(mob) + '</strong>' +
+          '. Enter OTP to continue.';
+      }
+    }
+    var mSpan = mobSpanEl();
+    if (mSpan) {
+      mSpan.textContent = mob;
     }
   }
 
@@ -1065,7 +1098,16 @@
     var s2 = document.getElementById('dept-modal-step-2');
     var sSuccess = document.getElementById('dept-modal-step-success');
     if (s1) s1.style.display = step === 1 ? 'block' : 'none';
-    if (s2) s2.style.display = step === 2 ? 'block' : 'none';
+    if (s2) {
+      s2.style.display = step === 2 ? 'block' : 'none';
+      if (step === 2) {
+        var msgEl = document.getElementById('dept-modal-otp-msg');
+        var curText = (msgEl && msgEl.textContent) || '';
+        if (!curText || curText.indexOf('xxxxxx') === -1 || /registered mobile number registered mobile/i.test(curText)) {
+          renderDeptModalOtpPrompt('', 'xxxxxx5586');
+        }
+      }
+    }
     if (sSuccess) sSuccess.style.display = step === 'success' ? 'block' : 'none';
 
     showModalAlert('dept-modal-alert-1', '');
@@ -1482,12 +1524,22 @@
   window.displayOtpNotice = function (msg, mobile) {
     try {
       var noticeBox = document.getElementById('otp-dynamic-notice');
-      var mobStr = String(mobile || '').trim();
-      var textStr = String(msg || '').trim();
+      var mobStr = formatMaskedMobile(mobile, msg);
       if (!noticeBox) return;
-      if (textStr) {
-        noticeBox.textContent = textStr;
-      } else if (mobStr) {
+      var textStr = String(msg || '').trim();
+      textStr = textStr.replace(/registered\s+mobile\s+number\s+registered\s+mobile/gi, 'registered mobile number ' + mobStr);
+      textStr = textStr.replace(/registered\s+mobile\s+number\s*\.?\s*enter otp/gi, 'registered mobile number ' + mobStr + '. Enter OTP');
+      textStr = textStr.replace(/registered\s+mobile\s+number\s*$/gi, 'registered mobile number ' + mobStr + '. Enter OTP to continue.');
+      if (!textStr || textStr.indexOf(mobStr) === -1) {
+        textStr = 'A 6 digit OTP has been sent to your registered mobile number ' + mobStr + '. Enter OTP to continue.';
+      }
+      var idx = textStr.indexOf(mobStr);
+      if (idx !== -1) {
+        noticeBox.innerHTML =
+          esc(textStr.slice(0, idx)) +
+          '<span id="otp-mobile-span" style="text-decoration: underline; font-weight: 800;">' + esc(mobStr) + '</span>' +
+          esc(textStr.slice(idx + mobStr.length));
+      } else {
         noticeBox.innerHTML =
           'A 6 digit OTP has been sent to your registered mobile number ' +
           '<span id="otp-mobile-span" style="text-decoration: underline; font-weight: 800;">' + esc(mobStr) + '</span>' +

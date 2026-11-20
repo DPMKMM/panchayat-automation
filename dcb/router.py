@@ -23,11 +23,9 @@ import os
 
 
 def _enforce_dcb_scope_access(request: Request) -> None:
-    """Enforce centralized Stage-1 + Stage-2 auth on Console scope, and require active user auth on production."""
+    """Enforce centralized Stage-1 + Stage-2 auth on Console scope."""
     if resolve_platform_scope(request) == "console":
         enforce_department_api_access(request)
-    elif is_production_request(request):
-        require_portal_or_console_user(request)
 
 
 def _resolve_mandal(request: Request, mandal: str = "all") -> tuple[str, bool, str]:

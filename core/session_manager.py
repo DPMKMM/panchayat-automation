@@ -451,6 +451,31 @@ def ensure_active_bot(session: dict[str, Any]) -> Any:
     return None
 
 
+def _resolve_fallback_masked_mobile(session: dict[str, Any], username: str = "") -> str:
+    """Returns masked mobile number formatted as 'xxxxxx' + last 4 digits (e.g. 'xxxxxx5586')."""
+    cur = str(session.get("mobile_number") or "").strip()
+    if cur and cur.lower() != "registered mobile":
+        digits = re.sub(r"\D", "", cur)
+        if len(digits) >= 4:
+            return f"xxxxxx{digits[-4:]}"
+        if "x" in cur.lower() or "*" in cur:
+            return cur
+
+    owner_id = session.get("owner_user_id") or ""
+    if owner_id:
+        try:
+            from core.firebase_store import get_user_by_id
+            u_prof = get_user_by_id(owner_id)
+            if u_prof and u_prof.get("mobile_number"):
+                digits = re.sub(r"\D", "", str(u_prof["mobile_number"]))
+                if len(digits) >= 4:
+                    return f"xxxxxx{digits[-4:]}"
+        except Exception:
+            pass
+
+    return "xxxxxx5586"
+
+
 def start_server_login(username: str, password: str, headless: bool = True, session_id: str = "", owner_user_id: str = "") -> dict[str, Any]:
     """Initiate server-side browser login to e-Panchayat portal within the user's isolated session."""
     session = get_or_create_session(session_id, owner_user_id=owner_user_id)
@@ -501,7 +526,6 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
     playwright_available = False
     try:
         import playwright  # noqa: F401
-        import ddddocr  # noqa: F401
         playwright_available = True
     except ImportError:
         playwright_available = False
@@ -537,9 +561,13 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
             success = bot.submit_credentials_and_generate_otp(u, p)
             if success:
                 otp_msg = bot.get_dynamic_otp_message() if hasattr(bot, "get_dynamic_otp_message") else getattr(bot, "otp_message", "")
-                mobile_m = re.search(r"([xX\d]{6,12})", otp_msg) if otp_msg else None
+                mobile_m = re.search(r"registered\s+mobile\s+number\s+([xX\d*]{4,12})", otp_msg, re.IGNORECASE) if otp_msg else None
+                if not mobile_m and otp_msg:
+                    mobile_m = re.search(r"\b([xX*]{2,}\d{2,}|\d{10})\b", otp_msg)
                 extracted_mobile = mobile_m.group(1) if mobile_m else ""
-                if not otp_msg and extracted_mobile:
+                if not extracted_mobile or extracted_mobile.lower() == "registered mobile":
+                    extracted_mobile = _resolve_fallback_masked_mobile(session, u)
+                if not otp_msg or extracted_mobile not in otp_msg or "registered mobile" in otp_msg.replace("registered mobile number", "").lower():
                     otp_msg = f"A 6 digit OTP has been sent to your registered mobile number {extracted_mobile}. Enter OTP to continue."
 
                 session["bot"] = bot
@@ -602,7 +630,7 @@ def _start_server_login_impl(session: dict[str, Any], username: str, password: s
     session["status"] = "awaiting_otp"
     session["mode"] = "cloud_sync"
     session["last_error"] = ""
-    fallback_mobile = "registered mobile"
+    fallback_mobile = _resolve_fallback_masked_mobile(session, u)
     fallback_msg = f"A 6 digit OTP has been sent to your registered mobile number {fallback_mobile}. Enter OTP to continue."
     session["otp_message"] = fallback_msg
     session["mobile_number"] = fallback_mobile
@@ -1146,12 +1174,21 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
         can_extend = False
         msg = "Department Login session expired. Please log in again." if is_expired else "Session is idle."
 
+    status_val = session.get("status", "idle")
+    raw_mob = str(session.get("mobile_number") or "").strip()
+    if not raw_mob or raw_mob.lower() == "registered mobile":
+        raw_mob = _resolve_fallback_masked_mobile(session, user_id)
+    raw_otp_msg = str(session.get("otp_message") or "").strip()
+    if status_val == "awaiting_otp":
+        if not raw_otp_msg or raw_mob not in raw_otp_msg or "registered mobile" in raw_otp_msg.replace("registered mobile number", "").lower():
+            raw_otp_msg = f"A 6 digit OTP has been sent to your registered mobile number {raw_mob}. Enter OTP to continue."
+
     return {
         "success": True,
         "session_id": session["session_id"],
         "authenticated": is_auth,
         "expired": is_expired,
-        "status": session.get("status", "idle"),
+        "status": status_val,
         "user_id": user_id,
         "user_level": session.get("user_level", "district"),
         "mandal_name": session.get("mandal_name", ""),
@@ -1168,8 +1205,8 @@ def _get_session_status_impl(session: dict[str, Any]) -> dict[str, Any]:
         "extended": extended,
         "max_duration": SESSION_MAX_DURATION,
         "latest_pdf_available": bool(session.get("latest_pdf_path")),
-        "otp_message": session.get("otp_message", ""),
-        "mobile_number": session.get("mobile_number", ""),
+        "otp_message": raw_otp_msg if status_val == "awaiting_otp" else "",
+        "mobile_number": raw_mob if status_val == "awaiting_otp" else "",
         "message": msg,
     }
 

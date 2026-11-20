@@ -352,42 +352,45 @@ class EPTSAutomation:
                 if (!document.body) return '';
                 const pvals = document.getElementById('pvals');
                 if (pvals && /registered mobile/i.test(pvals.innerText || '')) {
-                    return pvals.innerText.trim();
+                    const pt = (pvals.innerText || '').trim().replace(/\\s+/g, ' ');
+                    if (/[xX\\d*]{4,}/.test(pt)) return pt;
                 }
-                const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-                let node;
-                while ((node = walker.nextNode())) {
-                    const val = (node.nodeValue || '').trim();
-                    if (/OTP has been sent to your registered mobile/i.test(val)) {
-                        return val;
-                    }
+                const bodyText = (document.body.innerText || '').replace(/\\s+/g, ' ');
+                const m = bodyText.match(/A\\s+\\d+\\s+digit\\s+OTP\\s+has\\s+been\\s+sent\\s+to\\s+your\\s+registered\\s+mobile\\s+number\\s+([xX\\d*]+)\\.?\\s*(?:Enter\\s+OTP\\s+to\\s+continue\\.?)?/i);
+                if (m) {
+                    return m[0].trim();
                 }
-                const allEls = document.querySelectorAll('p, div, span, font, b, strong, label, h4, h5');
+                const m2 = bodyText.match(/registered\\s+mobile\\s+number\\s+([xX\\d*]{4,12})/i);
+                if (m2) {
+                    return `A 6 digit OTP has been sent to your registered mobile number ${m2[1]}. Enter OTP to continue.`;
+                }
+                const allEls = document.querySelectorAll('p, div, span, font, b, strong, label, h4, h5, td');
                 for (const el of allEls) {
-                    const t = (el.innerText || '').trim();
-                    if (/OTP has been sent to your registered mobile/i.test(t)) {
+                    const t = (el.innerText || '').replace(/\\s+/g, ' ').trim();
+                    if (/OTP has been sent to your registered mobile/i.test(t) && /[xX\\d*]{4,}/.test(t)) {
                         return t;
                     }
                 }
-                const bodyText = document.body ? document.body.innerText : '';
-                const m = bodyText.match(/A \\d+ digit OTP has been sent to your registered mobile number [^\\.\\n\\r<]+\\.?\\s*(?:Enter OTP to continue\\.?)?/i);
-                return m ? m[0] : '';
+                return '';
             }""")
-            if text:
+            if text and ("xxxxxx" in text.lower() or re.search(r"[xX\d*]{4,}", text)):
                 return text.strip()
 
             content = self.page.content()
             m = re.search(
-                r"A\s+\d+\s+digit\s+OTP\s+has\s+been\s+sent\s+to\s+your\s+registered\s+mobile\s+number\s+([xX\d]+)\.?\s*(?:Enter\s+OTP\s+to\s+continue\.?)?",
+                r"A\s+\d+\s+digit\s+OTP\s+has\s+been\s+sent\s+to\s+your\s+registered\s+mobile\s+number(?:[^\w\d<]*|<[^>]+>)*\s*([xX\d*]+)\.?\s*(?:Enter\s+OTP\s+to\s+continue\.?)?",
                 content,
                 re.IGNORECASE,
             )
             if m:
-                return m.group(0).strip()
+                mob = m.group(1).strip()
+                return f"A 6 digit OTP has been sent to your registered mobile number {mob}. Enter OTP to continue."
 
-            m2 = re.search(r"registered mobile number\s+([xX\d]{6,12})", content, re.IGNORECASE)
+            m2 = re.search(r"registered\s+mobile\s+number(?:[^\w\d<]*|<[^>]+>)*\s*([xX\d*]{4,12})", content, re.IGNORECASE)
             if m2:
                 return f"A 6 digit OTP has been sent to your registered mobile number {m2.group(1)}. Enter OTP to continue."
+
+            return ""
         except Exception as exc:
             print(f"[!] Note extracting dynamic OTP text: {exc}", flush=True)
         return ""
