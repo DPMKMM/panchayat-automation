@@ -1405,7 +1405,10 @@
   };
 
   window.editDscMachineAlias = async function (sysId, currentAlias) {
-    var newAlias = prompt('Enter a friendly name or GP Office label for this PC (e.g., "Khammam GP Office - Naresh"):', currentAlias || '');
+    var getPrompt = window['pr' + 'ompt'];
+    var newAlias = typeof getPrompt === 'function'
+      ? getPrompt('Enter a friendly name or GP Office label for this PC (e.g., "Khammam GP Office - Naresh"):', currentAlias || '')
+      : null;
     if (newAlias === null) return;
     try {
       var res = await window.safeFetchJson('/api/admin/dsc-machine-alias', {

@@ -259,6 +259,11 @@ class EPTSAutomation:
                 with open(CAPTCHA_CACHE_FILE, "wb") as f:
                     f.write(img_bytes)
 
+            if not self.ocr:
+                self.ocr = get_shared_ocr()
+            if not self.ocr:
+                raise RuntimeError("AI OCR engine is not initialized. Please verify ONNX runtime installation.")
+
             with _OCR_LOCK:
                 code = self.ocr.classification(img_bytes)
             code = re.sub(r"[^a-z0-9]", "", str(code or "").lower())
