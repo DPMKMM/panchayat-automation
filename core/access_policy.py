@@ -322,14 +322,24 @@ def get_access_policy(force_refresh: bool = False) -> dict[str, Any]:
     return policy
 
 
-def is_module_enabled(module_key: str) -> bool:
-    """Return True unless explicitly disabled by an administrator."""
+def is_module_enabled(module_key: str, user: Optional[dict[str, Any]] = None) -> bool:
+    """Return True unless explicitly disabled by an administrator.
+
+    Administrators always have access for testing purposes even when a module is paused.
+    """
+    if user and (user.get("is_admin") or user.get("role") == "admin"):
+        return True
     policy = get_access_policy()["flags"]
     return bool(policy.get(module_key, True))
 
 
-def is_module_visible(module_key: str) -> bool:
-    """Return True unless explicitly hidden by an administrator."""
+def is_module_visible(module_key: str, user: Optional[dict[str, Any]] = None) -> bool:
+    """Return True unless explicitly hidden by an administrator.
+
+    Administrators always have access for testing purposes even when a module is hidden.
+    """
+    if user and (user.get("is_admin") or user.get("role") == "admin"):
+        return True
     policy = get_access_policy()["flags"]
     vis_key = f"visible_{module_key}"
     if vis_key in policy:
@@ -337,7 +347,13 @@ def is_module_visible(module_key: str) -> bool:
     return bool(policy.get(module_key, True))
 
 
-def is_platform_enabled(scope: str) -> bool:
+def is_platform_enabled(scope: str, user: Optional[dict[str, Any]] = None) -> bool:
+    """Return True if the platform scope is enabled.
+
+    Administrators always have access for testing purposes even when a platform scope is paused.
+    """
+    if user and (user.get("is_admin") or user.get("role") == "admin"):
+        return True
     policy = get_access_policy()["flags"]
     if str(scope).strip().lower() == "console":
         return bool(policy.get("console_enabled", True))
@@ -345,8 +361,15 @@ def is_platform_enabled(scope: str) -> bool:
 
 
 def can_user_access_automated_reports(user: dict[str, Any] | None) -> bool:
-    """Return whether user can open Automated Reports Console."""
-    if not user or not bool(user.get("can_access_console", True)):
+    """Return whether user can open Automated Reports Console.
+
+    Administrators always have access for testing purposes.
+    """
+    if not user:
+        return False
+    if user.get("is_admin") or user.get("role") == "admin":
+        return True
+    if not bool(user.get("can_access_console", True)):
         return False
     policy = get_access_policy()["flags"]
     if not policy.get("console_enabled", True):

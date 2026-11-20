@@ -122,7 +122,8 @@ def analyze_multiday_dsr(
     files: list[UploadFile] = File(...),
     include_time_matrix: bool = Form(default=True),
 ) -> JSONResponse:
-    if not is_module_enabled("module_dsr_multiday"):
+    current_user = get_current_user_optional(request)
+    if not is_module_enabled("module_dsr_multiday", user=current_user):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
     if is_production_request(request):
         require_portal_or_console_user(request)
@@ -173,7 +174,8 @@ def analyze_multiday_dsr(
 
 
 def _download_artifact_response(request: Request, job_id: str, kind: str, level: str = "district", inline: bool = False) -> Response:
-    if not is_module_enabled("module_dsr_multiday"):
+    current_user = get_current_user_optional(request)
+    if not is_module_enabled("module_dsr_multiday", user=current_user):
         raise HTTPException(status_code=403, detail="Multiple Days DSR reporting is currently paused by administrator policy.")
     if is_production_request(request):
         require_portal_or_console_user(request)

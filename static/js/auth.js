@@ -742,7 +742,8 @@
     module_trade_licences: ['card-policy-module_trade_licences'],
     module_dcb_live: ['card-policy-module_dcb_live', 'console-tax-card'],
     module_excel_studio: ['card-tool-excel', 'card-policy-module_excel_studio'],
-    module_pdf_studio: ['card-tool-pdf', 'card-policy-module_pdf_studio']
+    module_pdf_studio: ['card-tool-pdf', 'card-policy-module_pdf_studio'],
+    module_softwares_hub: ['card-choose-softwares', 'card-policy-module_softwares_hub']
   };
 
   var DEFAULT_BADGE_LABELS = {
@@ -758,6 +759,7 @@
     module_gp_inspections: '● Live',
     module_excel_studio: '● Live',
     module_pdf_studio: '● Live',
+    module_softwares_hub: '● Live',
     module_citizen_services: '',
     module_trade_licences: 'Upcoming'
   };
@@ -766,9 +768,17 @@
     module_trade_licences: 'Upcoming'
   };
 
-  window.applyAccessPolicyUi = function (policy) {
+  window.applyAccessPolicyUi = function (policy, currentUser) {
     var flags = policy && policy.flags ? policy.flags : policy || {};
     window.currentAccessPolicy = Object.assign({}, flags);
+
+    var u = currentUser || (typeof window.getScopedUser === 'function' ? window.getScopedUser() : null);
+    var isAdmin = Boolean(
+      (u && u.is_admin) ||
+      (typeof window.isCurrentOfficerAdmin === 'function' && window.isCurrentOfficerAdmin()) ||
+      (window.currentUser && window.currentUser.is_admin) ||
+      (window.portalUser && window.portalUser.is_admin)
+    );
 
     // Apply Module Visibility (Hide / Show) across Officer Workspace
     Object.keys(MODULE_CARD_MAP).forEach(function (mKey) {
@@ -784,12 +794,19 @@
       cardIds.forEach(function (cid) {
         var cardEl = document.getElementById(cid);
         if (cardEl) {
-          if (!isVisible) {
+          // If admin is logged in, disabled/hidden modules REMAIN VISIBLE for testing
+          if (!isVisible && !isAdmin) {
             cardEl.style.display = 'none';
             cardEl.setAttribute('data-admin-hidden', 'true');
+            cardEl.removeAttribute('data-admin-preview');
           } else {
             cardEl.style.display = '';
             cardEl.removeAttribute('data-admin-hidden');
+            if (!isVisible && isAdmin) {
+              cardEl.setAttribute('data-admin-preview', 'hidden');
+            } else {
+              cardEl.removeAttribute('data-admin-preview');
+            }
           }
         }
       });
@@ -802,7 +819,7 @@
       if (allCards.length > 0) {
         var hiddenCount = secEl.querySelectorAll('.module-card[data-admin-hidden="true"]').length;
         var placeholder = secEl.querySelector('.admin-all-modules-hidden-notice');
-        if (hiddenCount >= allCards.length) {
+        if (hiddenCount >= allCards.length && !isAdmin) {
           if (!placeholder) {
             placeholder = document.createElement('div');
             placeholder.className = 'admin-all-modules-hidden-notice';
@@ -823,18 +840,33 @@
     policyKeys.forEach(function (key) {
       var isUpcoming = Object.prototype.hasOwnProperty.call(UPCOMING_BADGE_LABELS, key) || key === 'module_trade_licences';
       var enabled = flags[key] !== false;
+      var visKey = 'visible_' + key;
+      var isVis = Object.prototype.hasOwnProperty.call(flags, visKey) ? (flags[visKey] !== false) : true;
       var card = document.getElementById('card-policy-' + key);
       var badge = document.getElementById('badge-policy-' + key);
+
+      // If user is Admin, module is ALWAYS visible and enabled for testing!
+      var canInteract = enabled || isAdmin;
+
       if (card) {
-        card.classList.toggle('policy-disabled', !enabled);
+        card.classList.toggle('policy-disabled', !canInteract);
+        if (isAdmin && (!enabled || !isVis)) {
+          card.classList.add('admin-testing-module');
+          card.style.outline = '2px dashed #f59e0b';
+          card.style.outlineOffset = '2px';
+        } else {
+          card.classList.remove('admin-testing-module');
+          card.style.outline = '';
+          card.style.outlineOffset = '';
+        }
         var btns = card.querySelectorAll('button, a.btn');
         btns.forEach(function (b) {
           if (b.tagName === 'BUTTON') {
-            b.disabled = !enabled;
+            b.disabled = !canInteract;
           } else {
-            b.style.pointerEvents = enabled ? '' : 'none';
-            b.style.opacity = enabled ? '' : '0.6';
-            if (enabled) {
+            b.style.pointerEvents = canInteract ? '' : 'none';
+            b.style.opacity = canInteract ? '' : '0.6';
+            if (canInteract) {
               b.removeAttribute('aria-disabled');
               b.removeAttribute('tabindex');
             } else {
@@ -844,19 +876,49 @@
           }
         });
       }
+
       if (badge) {
         if (!enabled) {
           badge.style.display = 'inline-flex';
+          if (isAdmin) {
+            badge.className = 'badge-pill-soon';
+            badge.style.background = '#fef3c7';
+            badge.style.color = '#92400e';
+            badge.style.border = '1px solid #fde68a';
+            badge.innerHTML = '⏸ Paused (Admin Testing Mode)';
+            badge.title = 'This module is paused for regular users, but accessible to Admin for testing.';
+          } else {
+            badge.className = 'badge-pill-soon';
+            badge.style.background = '';
+            badge.style.color = '';
+            badge.style.border = '';
+            badge.innerHTML = '⏸ Paused by Admin';
+            badge.title = '';
+          }
+        } else if (!isVis && isAdmin) {
+          badge.style.display = 'inline-flex';
           badge.className = 'badge-pill-soon';
-          badge.innerHTML = '⏸ Paused by Admin';
+          badge.style.background = '#f3e8ff';
+          badge.style.color = '#6b21a8';
+          badge.style.border = '1px solid #e9d5ff';
+          badge.innerHTML = '👁 Hidden (Admin Testing Mode)';
+          badge.title = 'This module is hidden from regular users, but visible to Admin for testing.';
         } else if (isUpcoming) {
           badge.style.display = 'inline-flex';
           badge.className = 'badge-pill-soon auto-soon-pill';
+          badge.style.background = '';
+          badge.style.color = '';
+          badge.style.border = '';
           badge.innerHTML = 'Upcoming';
+          badge.title = '';
         } else if (DEFAULT_BADGE_LABELS[key]) {
           badge.style.display = 'inline-flex';
           badge.className = 'badge-pill-live auto-live-pill';
+          badge.style.background = '';
+          badge.style.color = '';
+          badge.style.border = '';
           badge.innerHTML = '<span class="auto-pill-dot"></span> Live';
+          badge.title = '';
         } else {
           badge.style.display = 'none';
           badge.innerHTML = '';
@@ -866,38 +928,44 @@
 
     var consoleTaxCard = document.getElementById('console-tax-card');
     if (consoleTaxCard) {
-      var liveEnabled = flags.module_dcb_live !== false;
+      var liveEnabled = (flags.module_dcb_live !== false) || isAdmin;
       consoleTaxCard.classList.toggle('policy-disabled', !liveEnabled);
       consoleTaxCard.querySelectorAll('button').forEach(function (b) {
         b.disabled = !liveEnabled;
       });
+      if (isAdmin && flags.module_dcb_live === false) {
+        consoleTaxCard.style.outline = '2px dashed #f59e0b';
+        consoleTaxCard.style.outlineOffset = '2px';
+      } else {
+        consoleTaxCard.style.outline = '';
+        consoleTaxCard.style.outlineOffset = '';
+      }
     }
 
     var badgeAutoMode = document.getElementById('badge-automated-mode-access');
     var noteAutoSub = document.getElementById('automated-subscription-note');
     var subRequired = flags.automated_subscription_required === true;
-    var u = typeof window.getScopedUser === 'function' ? window.getScopedUser() : null;
     var hasSub = Boolean(u && (u.has_automated_subscription || u.subscription_status === 'active'));
     if (badgeAutoMode) {
       if (flags.console_enabled === false) {
         badgeAutoMode.style.display = 'inline-flex';
         badgeAutoMode.className = 'badge-pill-soon';
-        badgeAutoMode.textContent = '⏸ Paused by Admin';
-      } else if (subRequired && !hasSub) {
+        badgeAutoMode.textContent = isAdmin ? '⏸ Paused (Admin Testing)' : '⏸ Paused by Admin';
+      } else if (subRequired && !hasSub && !isAdmin) {
         badgeAutoMode.style.display = 'inline-flex';
         badgeAutoMode.className = 'badge-pill-soon';
         badgeAutoMode.textContent = '🔒 Subscription Required';
-      } else if (subRequired && hasSub) {
+      } else if ((subRequired && hasSub) || isAdmin) {
         badgeAutoMode.style.display = 'inline-flex';
         badgeAutoMode.className = 'badge-pill-live';
-        badgeAutoMode.textContent = '● Subscription Active';
+        badgeAutoMode.textContent = isAdmin ? '● Admin Testing Access' : '● Subscription Active';
       } else {
         badgeAutoMode.style.display = 'none';
         badgeAutoMode.textContent = '';
       }
     }
     if (noteAutoSub) {
-      if (subRequired && !hasSub) {
+      if (subRequired && !hasSub && !isAdmin) {
         noteAutoSub.style.display = 'block';
         noteAutoSub.style.background = '#fef2f2';
         noteAutoSub.style.borderColor = '#fca5a5';
@@ -908,6 +976,7 @@
         noteAutoSub.textContent = '';
       }
     }
+  };
   };
 
   // ---------------------------------------------------------------------------
@@ -2200,6 +2269,9 @@
       if (btnFeedback) btnFeedback.style.display = 'inline-flex';
       window.applyScreenVisualState('state-home-login', null);
     }
+    if (typeof window.applyAccessPolicyUi === 'function') {
+      window.applyAccessPolicyUi(window.currentAccessPolicy, user);
+    }
   };
 
   window.showWorkspaceModeSelector = function () {
@@ -2423,7 +2495,17 @@
 
   window.isCurrentOfficerAdmin = function () {
     var u = (typeof window.getScopedUser === 'function') ? window.getScopedUser() : null;
-    return Boolean(u && u.is_admin);
+    if (u && u.is_admin) return true;
+    if (window.currentUser && window.currentUser.is_admin) return true;
+    if (window.portalUser && window.portalUser.is_admin) return true;
+    try {
+      var raw = sessionStorage.getItem('epts_auth_user') || localStorage.getItem('epts_auth_user');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.is_admin) return true;
+      }
+    } catch (e) {}
+    return false;
   };
 
   window.switchFeedbackTab = function (tab) {

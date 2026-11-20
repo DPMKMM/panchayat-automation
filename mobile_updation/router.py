@@ -62,7 +62,8 @@ def generate_pending_mobile_assessments(
     demand_file: UploadFile = File(..., description="House Tax Demand Register (.xls / .xlsx)"),
     updated_file: UploadFile = File(..., description="Mobile Numbers Updated Report (.xlsx)"),
 ) -> JSONResponse:
-    if not is_module_enabled("module_mobile_updation"):
+    current_user = get_current_user_optional(request)
+    if not is_module_enabled("module_mobile_updation", user=current_user):
         raise HTTPException(
             status_code=403,
             detail="The Updation of Mobile Numbers to Assessments module is currently paused by administrator policy.",
@@ -130,7 +131,8 @@ def generate_pending_mobile_assessments(
 
 
 def _deliver_download(request: Request, job_id: str, kind: str) -> Response:
-    if not is_module_enabled("module_mobile_updation"):
+    current_user = get_current_user_optional(request)
+    if not is_module_enabled("module_mobile_updation", user=current_user):
         raise HTTPException(
             status_code=403,
             detail="The Updation of Mobile Numbers to Assessments module is currently paused by administrator policy.",

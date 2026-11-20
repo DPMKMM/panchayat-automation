@@ -661,7 +661,8 @@ def create_web_report(
     include_sections: str = Form(default="all"),
     requested_by: str = Form(default="", alias="RequestedBy"),
 ) -> JSONResponse:
-    if not is_module_enabled("module_dsr_excel"):
+    current_user = get_current_user_optional(request)
+    if not is_module_enabled("module_dsr_excel", user=current_user):
         raise HTTPException(
             status_code=403,
             detail="Daily PS Attendance & DSR manual upload is currently paused by administrator policy.",
@@ -669,7 +670,6 @@ def create_web_report(
     if is_production_request(request):
         require_portal_or_console_user(request)
     _check_web_upload_rate_limit(request)
-    current_user = get_current_user_optional(request)
     owner_user_id = str(current_user.get("user_id", "")) if current_user else ""
     filename = _clean_filename(file.filename)
     raw = _read_upload(file, MAX_UPLOAD_BYTES)
@@ -738,7 +738,8 @@ def create_multiday_web_report(
     cutoff_time: str = Form(default="09:00"),
     requested_by: str = Form(default="", alias="RequestedBy"),
 ) -> JSONResponse:
-    if not is_module_enabled("module_dsr_multiday"):
+    current_user = get_current_user_optional(request)
+    if not is_module_enabled("module_dsr_multiday", user=current_user):
         raise HTTPException(
             status_code=403,
             detail="Multiple Days DSR reporting is currently paused by administrator policy.",
@@ -749,7 +750,6 @@ def create_multiday_web_report(
     if not files:
         raise HTTPException(status_code=400, detail="Please upload one or more GM-R 1.2.7 attendance files.")
 
-    current_user = get_current_user_optional(request)
     owner_user_id = str(current_user.get("user_id", "")) if current_user else ""
 
     daily_sources: list[tuple[str, bytes]] = []
