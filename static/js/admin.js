@@ -1302,6 +1302,48 @@
     }
   };
 
+  function formatDscTimeIST(val, ts) {
+    if (!val && !ts) return '—';
+    try {
+      var d = null;
+      if (typeof ts === 'number' && ts > 0) {
+        d = new Date(ts * 1000);
+      } else if (typeof val === 'string' && val.trim()) {
+        var s = val.trim();
+        if (/UTC/i.test(s)) {
+          d = new Date(s.replace(/ UTC$/i, 'Z').replace(' ', 'T'));
+        } else if (/IST/i.test(s)) {
+          var match = s.match(/^(\d{4}-\d{2}-\d{2})\s+(.+)$/);
+          if (match) {
+            return '<div style="white-space:nowrap;">' + esc(match[1]) + '</div><div style="font-size:0.73rem; white-space:nowrap; margin-top:2px;">' + esc(match[2]) + '</div>';
+          }
+          return esc(s);
+        } else {
+          d = new Date(s);
+        }
+      }
+      if (!d || isNaN(d.getTime())) return esc(String(val || '—'));
+
+      var parts = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }).formatToParts(d);
+      var p = {};
+      for (var i = 0; i < parts.length; i++) { p[parts[i].type] = parts[i].value; }
+      var dateStr = (p.year || '') + '-' + (p.month || '') + '-' + (p.day || '');
+      var timeStr = (p.hour || '') + ':' + (p.minute || '') + ':' + (p.second || '') + ' ' + (p.dayPeriod || '').toUpperCase() + ' IST';
+      return '<div style="white-space:nowrap;">' + esc(dateStr) + '</div><div style="font-size:0.73rem; white-space:nowrap; margin-top:2px;">' + esc(timeStr) + '</div>';
+    } catch (e) {
+      return esc(String(val || '—'));
+    }
+  }
+
   window.renderAdminDscRows = function (machines) {
     var tbody = document.getElementById('admin-dsc-tbody');
     var countEl = document.getElementById('admin-dsc-count');
@@ -1374,8 +1416,8 @@
           '<td><span class="' + statusClass + '">' + esc(m.deployment_status || 'ACTIVE') + '</span>' +
             (m.details ? '<div style="font-size:0.72rem; color:#64748b; margin-top:2px;">' + esc(m.details) + '</div>' : '') +
           '</td>' +
-          '<td style="font-size:0.78rem; color:#64748b;">' + esc(m.first_seen_at || '—') + '</td>' +
-          '<td style="font-size:0.78rem; font-weight:600; color:#1e293b;">' + esc(m.last_seen_at || '—') + '</td>' +
+          '<td style="font-size:0.78rem; color:#64748b;">' + formatDscTimeIST(m.first_seen_at, m.first_seen_ts) + '</td>' +
+          '<td style="font-size:0.78rem; font-weight:600; color:#1e293b;">' + formatDscTimeIST(m.last_seen_at, m.last_seen_ts) + '</td>' +
           '<td class="text-center"><span class="badge-pill-live" style="background:#e0f2fe; color:#0284c7; border:none; padding:2px 8px;">' + esc(m.ping_count || 1) + '</span></td>' +
         '</tr>'
       );

@@ -2928,7 +2928,9 @@ def _normalize_os_name(os_name: str, os_version: str) -> str:
 def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[str, Any]:
     """Upsert a machine's heartbeat / installation telemetry into local disk & Firestore."""
     now_ts = time.time()
-    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
+    now_dt = datetime.fromtimestamp(now_ts, tz=ist_tz)
+    now_iso = now_dt.strftime("%Y-%m-%d %I:%M:%S %p IST")
 
     raw_sys_id = str(payload.get("system_id") or "").strip()
     pc_name = str(payload.get("pc_name") or "").strip()
@@ -3035,6 +3037,7 @@ def get_dsc_telemetry_summary() -> dict[str, Any]:
         logger.debug("Non-fatal Firestore dsc_bundle_telemetry read skip: %s", exc)
 
     machines_list = list(machines_map.values())
+    ist_tz = timezone(timedelta(hours=5, minutes=30))
     for m in machines_list:
         cv = str(m.get("config_version") or "").strip()
         if cv.startswith("2026.11"):
@@ -3042,6 +3045,23 @@ def get_dsc_telemetry_summary() -> dict[str, Any]:
         else:
             m["config_version"] = re.sub(r"^[vV]+", "", cv) or "1.0.0"
         m["os_name"] = _normalize_os_name(m.get("os_name", ""), m.get("os_version", ""))
+
+        for time_key, ts_key in (("first_seen_at", "first_seen_ts"), ("last_seen_at", "last_seen_ts")):
+            ts_val = m.get(ts_key)
+            time_val = str(m.get(time_key) or "").strip()
+            if ts_val and float(ts_val) > 0:
+                try:
+                    dt = datetime.fromtimestamp(float(ts_val), tz=ist_tz)
+                    m[time_key] = dt.strftime("%Y-%m-%d %I:%M:%S %p IST")
+                except Exception:
+                    pass
+            elif "UTC" in time_val:
+                try:
+                    dt_utc = datetime.strptime(time_val, "%Y-%m-%d %H:%M:%S UTC").replace(tzinfo=timezone.utc)
+                    m[time_key] = dt_utc.astimezone(ist_tz).strftime("%Y-%m-%d %I:%M:%S %p IST")
+                except Exception:
+                    pass
+
     machines_list.sort(key=lambda m: float(m.get("last_seen_ts") or 0), reverse=True)
 
     active_24h = sum(1 for m in machines_list if float(m.get("last_seen_ts") or 0) >= cutoff_24h)
