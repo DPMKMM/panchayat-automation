@@ -2828,3 +2828,174 @@ def get_user_billing_summary(user_id: str) -> dict[str, Any]:
         "subscriptions": subs[:20],
         "payments": pays[:20],
     }
+
+
+# ==============================================================================
+# DSC Signer Bundle & Desktop Software Telemetry Store
+# ==============================================================================
+COL_DSC_TELEMETRY = "dsc_bundle_telemetry"
+_DSC_TELEMETRY_FILE = get_data_dir() / "dsc_telemetry.json"
+_DSC_TELEMETRY_LOCK = threading.Lock()
+_GH_DOWNLOADS_CACHE: dict[str, Any] = {"ts": 0.0, "data": {"cloud_lite": 0, "offline_suite": 0, "total": 0}}
+
+
+def _load_all_local_dsc_machines() -> dict[str, dict[str, Any]]:
+    with _DSC_TELEMETRY_LOCK:
+        if not _DSC_TELEMETRY_FILE.is_file():
+            return {}
+        try:
+            raw = json.loads(_DSC_TELEMETRY_FILE.read_text(encoding="utf-8"))
+            if isinstance(raw, dict):
+                return raw
+        except Exception as exc:
+            logger.debug("Could not parse local dsc_telemetry.json: %s", exc)
+        return {}
+
+
+def _save_local_dsc_machine(system_id: str, doc: dict[str, Any]) -> None:
+    with _DSC_TELEMETRY_LOCK:
+        try:
+            _DSC_TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            current = {}
+            if _DSC_TELEMETRY_FILE.is_file():
+                try:
+                    current = json.loads(_DSC_TELEMETRY_FILE.read_text(encoding="utf-8"))
+                    if not isinstance(current, dict):
+                        current = {}
+                except Exception:
+                    current = {}
+            current[system_id] = doc
+            _DSC_TELEMETRY_FILE.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            logger.warning("Could not persist dsc machine %s: %s", system_id, exc)
+
+
+def _get_local_dsc_machine(system_id: str) -> Optional[dict[str, Any]]:
+    machines = _load_all_local_dsc_machines()
+    return machines.get(system_id)
+
+
+def _get_github_release_downloads() -> dict[str, int]:
+    """Fetch cached GitHub release asset download counts with a 5-minute TTL."""
+    now = time.time()
+    if now - float(_GH_DOWNLOADS_CACHE.get("ts") or 0) < 300:
+        return dict(_GH_DOWNLOADS_CACHE.get("data") or {"cloud_lite": 0, "offline_suite": 0, "total": 0})
+
+    cloud_lite = 0
+    offline = 0
+    try:
+        import urllib.request
+        url = "https://api.github.com/repos/DPMKMM/panchayat-automation/releases/tags/sofotware_bundle"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "PanchayatAutomation-Portal",
+                "Accept": "application/vnd.github.v3+json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for asset in data.get("assets", []):
+                name = str(asset.get("name") or "")
+                cnt = int(asset.get("download_count") or 0)
+                if "Offline" in name:
+                    offline += cnt
+                elif "DSC.Signer.Bundle" in name or "DSC Signer" in name:
+                    cloud_lite += cnt
+        res = {"cloud_lite": cloud_lite, "offline_suite": offline, "total": cloud_lite + offline}
+        _GH_DOWNLOADS_CACHE["ts"] = now
+        _GH_DOWNLOADS_CACHE["data"] = res
+        return res
+    except Exception as exc:
+        logger.debug("Non-fatal GitHub release stats pull error: %s", exc)
+        return dict(_GH_DOWNLOADS_CACHE.get("data") or {"cloud_lite": 0, "offline_suite": 0, "total": 0})
+
+
+def record_dsc_telemetry(payload: dict[str, Any], client_ip: str = "") -> dict[str, Any]:
+    """Upsert a machine's heartbeat / installation telemetry into local disk & Firestore."""
+    now_ts = time.time()
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    raw_sys_id = str(payload.get("system_id") or "").strip()
+    pc_name = str(payload.get("pc_name") or "").strip()
+    if not raw_sys_id:
+        raw_sys_id = f"SYS_{pc_name}" if pc_name else f"SYS_UNKNOWN_{int(now_ts)}"
+
+    clean_sys_id = re.sub(r"[^A-Za-z0-9_\-\.]", "_", raw_sys_id)[:64]
+    os_name = str(payload.get("os_name") or "")[:64]
+    os_version = str(payload.get("os_version") or "")[:64]
+    cfg_version = str(payload.get("config_version") or "")[:32]
+    status = str(payload.get("deployment_status") or "ACTIVE")[:64]
+    details = str(payload.get("details") or "")[:500]
+
+    existing = _get_local_dsc_machine(clean_sys_id)
+    ping_count = int((existing or {}).get("ping_count") or 0) + 1
+    first_seen_at = (existing or {}).get("first_seen_at") or now_iso
+    first_seen_ts = float((existing or {}).get("first_seen_ts") or now_ts)
+
+    machine_doc = {
+        "system_id": clean_sys_id,
+        "pc_name": pc_name or (existing or {}).get("pc_name") or "Unknown PC",
+        "os_name": os_name or (existing or {}).get("os_name") or "Windows",
+        "os_version": os_version or (existing or {}).get("os_version") or "",
+        "config_version": cfg_version or (existing or {}).get("config_version") or "1.0.0",
+        "deployment_status": status,
+        "details": details,
+        "client_ip": str(client_ip or (existing or {}).get("client_ip") or "")[:45],
+        "first_seen_at": first_seen_at,
+        "first_seen_ts": first_seen_ts,
+        "last_seen_at": now_iso,
+        "last_seen_ts": now_ts,
+        "ping_count": ping_count,
+    }
+
+    _save_local_dsc_machine(clean_sys_id, machine_doc)
+
+    try:
+        _db().collection(COL_DSC_TELEMETRY).document(clean_sys_id).set(machine_doc)
+    except Exception as exc:
+        logger.debug("Non-fatal Firestore dsc_bundle_telemetry skip: %s", exc)
+
+    return machine_doc
+
+
+def get_dsc_telemetry_summary() -> dict[str, Any]:
+    """Aggregate all distinct machines, active 24h / 7d counts, and GitHub release downloads."""
+    now_ts = time.time()
+    cutoff_24h = now_ts - 86400
+    cutoff_7d = now_ts - 7 * 86400
+
+    machines_map = _load_all_local_dsc_machines()
+
+    try:
+        for snap in _db().collection(COL_DSC_TELEMETRY).stream():
+            d = snap.to_dict()
+            if d and "system_id" in d:
+                sid = str(d["system_id"])
+                if sid not in machines_map or float(d.get("last_seen_ts") or 0) > float(machines_map[sid].get("last_seen_ts") or 0):
+                    machines_map[sid] = d
+    except Exception as exc:
+        logger.debug("Non-fatal Firestore dsc_bundle_telemetry read skip: %s", exc)
+
+    machines_list = list(machines_map.values())
+    machines_list.sort(key=lambda m: float(m.get("last_seen_ts") or 0), reverse=True)
+
+    active_24h = sum(1 for m in machines_list if float(m.get("last_seen_ts") or 0) >= cutoff_24h)
+    active_7d = sum(1 for m in machines_list if float(m.get("last_seen_ts") or 0) >= cutoff_7d)
+
+    os_breakdown: dict[str, int] = {}
+    for m in machines_list:
+        os_key = str(m.get("os_name") or "Windows").split("(")[0].strip() or "Windows"
+        os_breakdown[os_key] = os_breakdown.get(os_key, 0) + 1
+
+    gh_downloads = _get_github_release_downloads()
+
+    return {
+        "success": True,
+        "total_machines": len(machines_list),
+        "active_24h": active_24h,
+        "active_7d": active_7d,
+        "github_downloads": gh_downloads,
+        "os_breakdown": os_breakdown,
+        "machines": machines_list,
+    }

@@ -128,7 +128,7 @@
   };
 
   window.switchAdminTab = function (tab) {
-    var tabs = ['overview', 'tools', 'users', 'subscriptions', 'policy', 'visibility', 'feedback'];
+    var tabs = ['overview', 'tools', 'users', 'dsc', 'subscriptions', 'policy', 'visibility', 'feedback'];
     activeAdminTab = tabs.indexOf(tab) !== -1 ? tab : 'overview';
 
     tabs.forEach(function (t) {
@@ -141,6 +141,7 @@
     if (activeAdminTab === 'overview') window.loadAdminOverview();
     else if (activeAdminTab === 'tools') window.loadAdminToolUsage();
     else if (activeAdminTab === 'users') window.loadAdminUsers();
+    else if (activeAdminTab === 'dsc') window.loadAdminDscTelemetry();
     else if (activeAdminTab === 'subscriptions') window.loadAdminSubscriptions();
     else if (activeAdminTab === 'policy') window.loadAdminPolicy();
     else if (activeAdminTab === 'visibility') window.loadAdminModuleVisibility();
@@ -187,6 +188,17 @@
 
       el = document.getElementById('adm-kpi-feedback-num'); if (el) el.textContent = s.total_feedback != null ? s.total_feedback : '0';
       el = document.getElementById('adm-kpi-feedback'); if (el) el.textContent = 'Disabled Accounts: ' + (s.disabled_users != null ? s.disabled_users : 0);
+
+      var dsc = data.dsc_telemetry || {};
+      el = document.getElementById('adm-kpi-dsc-machines');
+      if (el) el.textContent = String(dsc.total_machines != null ? dsc.total_machines : 0);
+      el = document.getElementById('adm-tab-dsc-badge');
+      if (el) el.textContent = String(dsc.total_machines != null ? dsc.total_machines : 0);
+      el = document.getElementById('adm-kpi-dsc-sub');
+      if (el) {
+        var gh = dsc.github_downloads || {};
+        el.textContent = 'Active: ' + (dsc.active_24h || 0) + ' (24h) · Total DLs: ' + (gh.total || 0);
+      }
 
       var grid = document.getElementById('admin-breakdown-grid');
       if (!grid) return;
@@ -1259,5 +1271,91 @@
     } catch (err) {
       showAdminAlert('Failed to update module visibility: ' + err.message, 'error');
     }
+  };
+
+  // ==============================================================================
+  // Tab 8: DSC Signer Bundle Installed Machines & Telemetry Controller
+  // ==============================================================================
+  window._adminAllDscMachines = [];
+
+  window.loadAdminDscTelemetry = async function () {
+    try {
+      var data = await window.safeFetchJson('/api/admin/dsc-telemetry');
+      var machines = Array.isArray(data.machines) ? data.machines : [];
+      window._adminAllDscMachines = machines;
+
+      var gh = data.github_downloads || {};
+      var el;
+      el = document.getElementById('admin-dsc-total-machines'); if (el) el.textContent = String(data.total_machines || 0);
+      el = document.getElementById('admin-dsc-active-24h'); if (el) el.textContent = String(data.active_24h || 0);
+      el = document.getElementById('admin-dsc-active-7d'); if (el) el.textContent = String(data.active_7d || 0);
+      el = document.getElementById('adm-tab-dsc-badge'); if (el) el.textContent = String(data.total_machines || 0);
+
+      el = document.getElementById('admin-dsc-total-downloads');
+      if (el) el.textContent = String(gh.total || 0);
+      el = document.getElementById('admin-dsc-downloads-sub');
+      if (el) el.textContent = 'Offline: ' + (gh.offline_suite || 0) + ' · Cloud Lite: ' + (gh.cloud_lite || 0);
+
+      window.renderAdminDscRows(machines);
+    } catch (err) {
+      showAdminAlert('Failed to load DSC machines telemetry: ' + err.message, 'error');
+    }
+  };
+
+  window.renderAdminDscRows = function (machines) {
+    var tbody = document.getElementById('admin-dsc-tbody');
+    var countEl = document.getElementById('admin-dsc-count');
+    if (!tbody) return;
+    if (countEl) countEl.textContent = String(machines.length);
+
+    if (machines.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:24px; color:#64748b;">No DSC Signer bundle installations recorded yet. As Gram Panchayat operators run the installer or self-heal, their verified hardware fingerprints and computer names will appear here automatically.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = machines.map(function (m) {
+      var statusClass = 'badge-status-active';
+      var st = (m.deployment_status || '').toUpperCase();
+      if (st.indexOf('SUCCESS') !== -1 || st.indexOf('VERIFIED') !== -1 || st.indexOf('OPTIMAL') !== -1) {
+        statusClass = 'badge-sub-active';
+      } else if (st.indexOf('REPAIR') !== -1 || st.indexOf('DRIFT') !== -1 || st.indexOf('WARN') !== -1) {
+        statusClass = 'badge-status-disabled';
+      }
+
+      return (
+        '<tr>' +
+          '<td><strong>' + esc(m.pc_name || 'Unknown PC') + '</strong>' +
+            (m.client_ip ? '<div style="font-size:0.72rem; color:#94a3b8;">IP: ' + esc(m.client_ip) + '</div>' : '') +
+          '</td>' +
+          '<td><code style="font-size:0.75rem; background:#f1f5f9; padding:2px 6px; border-radius:4px;">' + esc(m.system_id || '—') + '</code></td>' +
+          '<td>' + esc(m.os_name || 'Windows') + (m.os_version ? ' <span style="font-size:0.75rem; color:#64748b;">(' + esc(m.os_version) + ')</span>' : '') + '</td>' +
+          '<td><span style="font-size:0.78rem; font-weight:700; color:#0369a1;">v' + esc(m.config_version || '1.0.0') + '</span></td>' +
+          '<td><span class="' + statusClass + '">' + esc(m.deployment_status || 'ACTIVE') + '</span>' +
+            (m.details ? '<div style="font-size:0.72rem; color:#64748b; margin-top:2px;">' + esc(m.details) + '</div>' : '') +
+          '</td>' +
+          '<td style="font-size:0.78rem; color:#64748b;">' + esc(m.first_seen_at || '—') + '</td>' +
+          '<td style="font-size:0.78rem; font-weight:600; color:#1e293b;">' + esc(m.last_seen_at || '—') + '</td>' +
+          '<td class="text-center"><span class="badge-pill-live" style="background:#e0f2fe; color:#0284c7; border:none; padding:2px 8px;">' + esc(m.ping_count || 1) + '</span></td>' +
+        '</tr>'
+      );
+    }).join('');
+  };
+
+  window.filterAdminDscRows = function () {
+    var search = ((document.getElementById('admin-dsc-search') && document.getElementById('admin-dsc-search').value) || '').trim().toLowerCase();
+    var all = window._adminAllDscMachines || [];
+    if (!search) {
+      window.renderAdminDscRows(all);
+      return;
+    }
+    var filtered = all.filter(function (m) {
+      return (
+        (m.pc_name || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.system_id || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.os_name || '').toLowerCase().indexOf(search) !== -1 ||
+        (m.deployment_status || '').toLowerCase().indexOf(search) !== -1
+      );
+    });
+    window.renderAdminDscRows(filtered);
   };
 })();

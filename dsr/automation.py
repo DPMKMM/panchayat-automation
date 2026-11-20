@@ -18,7 +18,10 @@ import threading
 import time
 from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-import ddddocr
+try:
+    import ddddocr
+except Exception:
+    ddddocr = None
 
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
@@ -55,10 +58,15 @@ _SHARED_OCR = None
 def get_shared_ocr():
     """Return a cached thread-safe DdddOcr instance so logins skip the ~4s cold ONNX load."""
     global _SHARED_OCR
+    if ddddocr is None:
+        return None
     if _SHARED_OCR is None:
         with _OCR_LOCK:
             if _SHARED_OCR is None:
-                _SHARED_OCR = ddddocr.DdddOcr(show_ad=False)
+                try:
+                    _SHARED_OCR = ddddocr.DdddOcr(show_ad=False)
+                except Exception:
+                    _SHARED_OCR = None
     return _SHARED_OCR
 
 

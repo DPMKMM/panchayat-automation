@@ -10,7 +10,10 @@ import tempfile
 from typing import List, Optional
 
 import pymupdf  # PyMuPDF
-import pymupdf4llm
+try:
+    import pymupdf4llm
+except Exception:
+    pymupdf4llm = None
 from pdf2docx import Converter
 from PIL import Image
 
@@ -456,6 +459,8 @@ async def api_pdf_to_word(file: UploadFile = File(...)):
 async def api_pdf_to_markdown(file: UploadFile = File(...)):
     content = await file.read()
     doc = pymupdf.open(stream=content, filetype="pdf")
+    if pymupdf4llm is None:
+        raise HTTPException(status_code=500, detail="PyMuPDF4LLM is not available on this platform.")
     md_text = pymupdf4llm.to_markdown(doc)
     doc.close()
     

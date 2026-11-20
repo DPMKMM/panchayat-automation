@@ -14,6 +14,7 @@ from core.billing import get_razorpay_status
 from core.config import ENVIRONMENT, TEMP_RETENTION_HOURS
 from core.firebase_app import get_firebase_runtime_status
 from core.firebase_store import (
+    get_dsc_telemetry_summary,
     get_recent_feedback,
     get_tool_usage_analytics,
     get_usage_stats,
@@ -45,10 +46,17 @@ router = APIRouter(
 def admin_overview(admin_user: dict[str, Any] = Depends(require_admin_user)) -> dict[str, Any]:
     stats = get_usage_stats(days=30)
     policy = get_access_policy()
+    dsc_summary = get_dsc_telemetry_summary()
     return {
         "success": True,
         "admin": serialize_user_payload(admin_user),
         "stats": stats,
+        "dsc_telemetry": {
+            "total_machines": dsc_summary.get("total_machines", 0),
+            "active_24h": dsc_summary.get("active_24h", 0),
+            "active_7d": dsc_summary.get("active_7d", 0),
+            "github_downloads": dsc_summary.get("github_downloads", {}),
+        },
         "access_policy": policy,
         "firebase": get_firebase_runtime_status(),
         "razorpay": get_razorpay_status(),
@@ -56,6 +64,12 @@ def admin_overview(admin_user: dict[str, Any] = Depends(require_admin_user)) -> 
         "environment": os.getenv("ENVIRONMENT", ENVIRONMENT).strip().lower() or "development",
         "temp_retention_hours": float(os.getenv("TEMP_RETENTION_HOURS", str(TEMP_RETENTION_HOURS))),
     }
+
+
+@router.get("/dsc-telemetry", include_in_schema=False)
+def admin_dsc_telemetry(admin_user: dict[str, Any] = Depends(require_admin_user)) -> dict[str, Any]:
+    """Return aggregated machine telemetry, unique installations, and GitHub downloads for DSC Signer Bundle."""
+    return get_dsc_telemetry_summary()
 
 
 @router.get("/users", include_in_schema=False)

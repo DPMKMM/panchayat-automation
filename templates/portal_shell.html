@@ -2726,6 +2726,7 @@
         <button type="button" class="admin-tab-btn active" id="admin-tab-overview" onclick="switchAdminTab('overview')">📊 Overview</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-tools" onclick="switchAdminTab('tools')">🧰 Tool Analytics</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-users" onclick="switchAdminTab('users')">👥 Users (<span id="adm-tab-users-badge">0</span>)</button>
+        <button type="button" class="admin-tab-btn" id="admin-tab-dsc" onclick="switchAdminTab('dsc')">💻 DSC Machines (<span id="adm-tab-dsc-badge">0</span>)</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-subscriptions" onclick="switchAdminTab('subscriptions')">💳 Subscriptions &amp; Razorpay</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-policy" onclick="switchAdminTab('policy')">🎛️ Access Policy</button>
         <button type="button" class="admin-tab-btn" id="admin-tab-visibility" onclick="switchAdminTab('visibility')">👁️ Module Visibility (Hide / View)</button>
@@ -2744,6 +2745,11 @@
             <div class="metric-label">Active Users</div>
             <div class="metric-value" id="adm-kpi-active">—</div>
             <div class="metric-sub" id="adm-kpi-online-sub">Online Now: — &middot; 24h: —</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-label">DSC Installed Machines</div>
+            <div class="metric-value" id="adm-kpi-dsc-machines">0</div>
+            <div class="metric-sub" id="adm-kpi-dsc-sub">Active: 0 (24h) &middot; Total DLs: 0</div>
           </div>
           <div class="metric-card info">
             <div class="metric-label">Tools &amp; Reports Run (30d)</div>
@@ -3127,6 +3133,62 @@
                 </tr>
               </thead>
               <tbody id="admin-feedback-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 8: DSC Signer Bundle Installed Machines & Telemetry -->
+      <div id="admin-pane-dsc" style="display:none;">
+        <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); margin-bottom:18px;">
+          <div class="metric-card success">
+            <div class="metric-label">Unique Installed Machines</div>
+            <div class="metric-value" id="admin-dsc-total-machines">0</div>
+            <div class="metric-sub">Verified hardware fingerprints</div>
+          </div>
+          <div class="metric-card accent">
+            <div class="metric-label">Active Last 24 Hours</div>
+            <div class="metric-value" id="admin-dsc-active-24h">0</div>
+            <div class="metric-sub">Pings / installations today</div>
+          </div>
+          <div class="metric-card info">
+            <div class="metric-label">Active Last 7 Days</div>
+            <div class="metric-value" id="admin-dsc-active-7d">0</div>
+            <div class="metric-sub">Distinct active machines this week</div>
+          </div>
+          <div class="metric-card warning">
+            <div class="metric-label">GitHub Release Downloads</div>
+            <div class="metric-value" id="admin-dsc-total-downloads">0</div>
+            <div class="metric-sub" id="admin-dsc-downloads-sub">Offline: 0 · Cloud Lite: 0</div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-header">
+            <div>
+              <div class="table-title">DSC Signer Bundle Field Deployments (<span id="admin-dsc-count">0</span>)</div>
+              <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">Real-time hardware pings, computer names, OS versions, and deployment statuses from Gram Panchayat PCs</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="text" id="admin-dsc-search" placeholder="Search by PC, Hardware ID, OS..." oninput="window.filterAdminDscRows()" style="padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; font-size:0.8rem; background:#fff; min-width:220px;" />
+              <button type="button" class="btn btn-white btn-sm" onclick="loadAdminDscTelemetry()">🔄 Refresh</button>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Computer Name</th>
+                  <th>Hardware ID</th>
+                  <th>Operating System</th>
+                  <th>Bundle Version</th>
+                  <th>Status</th>
+                  <th>First Installed</th>
+                  <th>Last Seen</th>
+                  <th class="text-center">Pings</th>
+                </tr>
+              </thead>
+              <tbody id="admin-dsc-tbody"></tbody>
             </table>
           </div>
         </div>

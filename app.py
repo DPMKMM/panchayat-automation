@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from core.branding import CONSOLE_NAME, PLATFORM_NAME, TAGLINE
 from core.config import BASE_DIR, LOG_LEVEL
 from core.dependencies import auth_cookie_domain, resolve_sso_session
-from core.firebase_store import log_usage
+from core.firebase_store import log_usage, record_dsc_telemetry
 from dcb.router import router as dcb_router
 from dsr import service as automation_service
 from dsr.router import router as dsr_router
@@ -303,6 +303,23 @@ def create_app() -> FastAPI:
         if file_name in RELEASE_CDN_FALLBACK:
             return RedirectResponse(RELEASE_CDN_FALLBACK[file_name], status_code=307)
         raise HTTPException(status_code=404, detail="Software file not found.")
+
+    @app.post("/api/ubd/telemetry", include_in_schema=False)
+    async def ubd_telemetry_webhook(request: Request):
+        """Receive silent background heartbeat & installation receipts from DSC Signer desktop app."""
+        payload: dict[str, Any] = {}
+        try:
+            payload = await request.json()
+        except Exception:
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"success": False, "error": "Invalid JSON"}, status_code=400)
+
+        client_ip = request.headers.get("x-forwarded-for") or (request.client.host if request.client else "")
+        if client_ip and "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+
+        record = record_dsc_telemetry(payload, client_ip=client_ip)
+        return {"success": True, "system_id": record.get("system_id")}
 
     # Progressive Web App (PWA) Manifest & Service Worker Endpoints
     @app.get("/manifest.json", include_in_schema=False)
