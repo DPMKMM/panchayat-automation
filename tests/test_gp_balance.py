@@ -365,3 +365,102 @@ def test_pmagy_option_in_ui_and_api():
     console_js = client.get("/static/js/console.js").text
     assert "isBalancePmagyIncluded" in console_js
     assert "include_pmagy" in console_js
+
+
+def test_yerrupalem_live_portal_drilldown_gatla_gowraram_and_jamalapuram():
+    """Verify exact live portal screenshot scenario for Yerrupalem Mandal:
+    Row 6: Choppakatla Palem -> Entered=1, Not Entered=0, all active Yes, PMAGY No -> NOT pending
+    Row 7: Gatla Gowraram -> Entered=0, Not Entered=1, all accounts No -> PENDING
+    Row 8: Gosaveedu -> Entered=1, Not Entered=0 -> NOT pending
+    Row 9: Guntupalli Gopavaram -> Entered=1, Not Entered=0 -> NOT pending
+    Row 10: Inagali -> Entered=1, Not Entered=0 -> NOT pending
+    Row 11: Jamalapuram -> Entered=0, Not Entered=1, all accounts No -> PENDING
+    Row 12: Kacharam -> Entered=1, Not Entered=0 -> NOT pending
+
+    Must identify EXACTLY Gatla Gowraram and Jamalapuram as pending,
+    strictly NEVER falling back to arbitrary alphabetical GPs like Ayyavarigudem or Banigandlapadu.
+    """
+    sample_scraped_rows = [
+        {"s_no": 6, "panchayat_name": "Choppakatla Palem", "entered": True, "not_entered": False, "gp_pd": "Yes", "tgbpass": "Yes", "fc15_tied": "Yes", "fc15_untied": "Yes", "pmagy": "No", "vwsc": "Yes", "mgnregs": "Yes"},
+        {"s_no": 7, "panchayat_name": "Gatla Gowraram", "entered": False, "not_entered": True, "gp_pd": "No", "tgbpass": "No", "fc15_tied": "No", "fc15_untied": "No", "pmagy": "No", "vwsc": "No", "mgnregs": "No"},
+        {"s_no": 8, "panchayat_name": "Gosaveedu", "entered": True, "not_entered": False, "gp_pd": "Yes", "tgbpass": "Yes", "fc15_tied": "Yes", "fc15_untied": "Yes", "pmagy": "No", "vwsc": "Yes", "mgnregs": "Yes"},
+        {"s_no": 9, "panchayat_name": "Guntupalli Gopavaram", "entered": True, "not_entered": False, "gp_pd": "Yes", "tgbpass": "Yes", "fc15_tied": "Yes", "fc15_untied": "Yes", "pmagy": "No", "vwsc": "Yes", "mgnregs": "Yes"},
+        {"s_no": 10, "panchayat_name": "Inagali", "entered": True, "not_entered": False, "gp_pd": "Yes", "tgbpass": "Yes", "fc15_tied": "Yes", "fc15_untied": "Yes", "pmagy": "No", "vwsc": "Yes", "mgnregs": "Yes"},
+        {"s_no": 11, "panchayat_name": "Jamalapuram", "entered": False, "not_entered": True, "gp_pd": "No", "tgbpass": "No", "fc15_tied": "No", "fc15_untied": "No", "pmagy": "No", "vwsc": "No", "mgnregs": "No"},
+        {"s_no": 12, "panchayat_name": "Kacharam", "entered": True, "not_entered": False, "gp_pd": "Yes", "tgbpass": "Yes", "fc15_tied": "Yes", "fc15_untied": "Yes", "pmagy": "No", "vwsc": "Yes", "mgnregs": "Yes"},
+    ]
+
+    m = MandalBalanceSummary(
+        s_no=20,
+        mandal_name="Yerrupalem",
+        total_gps=31,
+        entered_gps=29,
+        not_entered_gps=2,
+        gp_pd_updated=29,
+        tgbpass_updated=29,
+        fc15_tied_updated=29,
+        fc15_untied_updated=29,
+        vwsc_updated=29,
+        mgnregs_updated=29,
+    )
+    m.calculate_metrics(include_pmagy=False)
+    assert m.has_pending is True
+
+    m.pending_gps = []
+    m.all_gps = []
+    for r in sample_scraped_rows:
+        gp = GPBalanceDetail(
+            s_no=r["s_no"],
+            mandal_name=m.mandal_name,
+            panchayat_name=r["panchayat_name"],
+            entered=r["entered"],
+            gp_pd=r["gp_pd"],
+            tgbpass=r["tgbpass"],
+            fc15_tied=r["fc15_tied"],
+            fc15_untied=r["fc15_untied"],
+            pmagy=r["pmagy"],
+            vwsc=r["vwsc"],
+            mgnregs=r["mgnregs"],
+        )
+        gp.evaluate_pending(include_pmagy=False)
+        m.all_gps.append(gp)
+        if gp.is_pending:
+            m.pending_gps.append(gp)
+
+    assert len(m.pending_gps) == 2
+    pending_names = [g.panchayat_name for g in m.pending_gps]
+    assert pending_names == ["Gatla Gowraram", "Jamalapuram"]
+    assert "Ayyavarigudem" not in pending_names
+    assert "Banigandlapadu" not in pending_names
+
+    # Ensure populate_pending_gps_from_directory does NOT touch already-populated mandals
+    populate_pending_gps_from_directory([m], district_name="Khammam")
+    assert len(m.pending_gps) == 2
+    assert [g.panchayat_name for g in m.pending_gps] == ["Gatla Gowraram", "Jamalapuram"]
+
+    # Verify report totals and pending list
+    report = DistrictBalanceReport(
+        district_name="Khammam District",
+        report_date_str="19-11-2026",
+        generated_at="20-Nov-2026 08:20 AM",
+        mandals=[m],
+    )
+    report.compute_totals()
+    assert len(report.pending_gps_all) == 2
+    assert [g.panchayat_name for g in report.pending_gps_all] == ["Gatla Gowraram", "Jamalapuram"]
+
+    # Check Excel generation has exact names
+    excel_bytes = generate_balance_excel(report)
+    wb = openpyxl.load_workbook(io.BytesIO(excel_bytes))
+    ws2 = wb["Pending_GPs_Action_List"]
+    found_gatla = False
+    found_jamala = False
+    for row in ws2.iter_rows(values_only=True):
+        if "Gatla Gowraram" in str(row):
+            found_gatla = True
+        if "Jamalapuram" in str(row):
+            found_jamala = True
+        assert "Ayyavarigudem" not in str(row)
+        assert "Banigandlapadu" not in str(row)
+    assert found_gatla is True
+    assert found_jamala is True
