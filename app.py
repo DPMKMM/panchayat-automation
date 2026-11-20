@@ -338,6 +338,18 @@ def create_app() -> FastAPI:
         record = record_dsc_telemetry(payload, client_ip=client_ip)
         return {"success": True, "system_id": record.get("system_id")}
 
+    @app.get("/version.json", include_in_schema=False)
+    @app.get("/api/version.json", include_in_schema=False)
+    def dsc_bundle_version_manifest():
+        v_file = BASE_DIR / "version.json"
+        if v_file.is_file():
+            return FileResponse(
+                path=str(v_file),
+                media_type="application/json",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
+        return {"version": "1.0.1", "status": "latest"}
+
     # Progressive Web App (PWA) Manifest & Service Worker Endpoints
     @app.get("/manifest.json", include_in_schema=False)
     def web_manifest():

@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "downloadUrl": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Stable Release v1.0.0: Automatic in-app background updater, silent HyperPKI & WatchData ProxKey setup, ActiveX IE runner, and unattended e-GramSwaraj (eGS) & UBD Portal configuration."
+  "releaseNotes": "Update v1.0.1: Live launch heartbeat telemetry, automatic offline queue drainage, streamlined UI audit checklist, and enhanced UBD Portal & e-GramSwaraj compatibility."
 }
