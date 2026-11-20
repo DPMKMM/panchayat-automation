@@ -2,5 +2,5 @@
   "version": "1.0.2",
   "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Update v1.0.2: Bundled Edge & WebView2 detection with strict clean-install protection, Windows 7 SChannel & EdgeUpdate compatibility, automatic entry-point error suppression, and whoami username identification."
+  "releaseNotes": "Update v1.0.2: Edge & WebView2 v109 Windows 7 automated compatibility, strict clean-install protection, NICDSign 3.1.3 runtime verification, and whoami username identification."
 }
