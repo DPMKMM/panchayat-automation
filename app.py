@@ -257,22 +257,17 @@ def create_app() -> FastAPI:
     def health_check() -> dict[str, str]:
         commit_hash = "unknown"
         try:
-            head_file = Path(__file__).resolve().parent / ".git" / "HEAD"
-            if head_file.exists():
-                ref = head_file.read_text(encoding="utf-8").strip()
-                if ref.startswith("ref:"):
-                    ref_path = Path(__file__).resolve().parent / ".git" / ref[5:].strip()
-                    if ref_path.exists():
-                        commit_hash = ref_path.read_text(encoding="utf-8").strip()[:7]
-                    else:
-                        packed = Path(__file__).resolve().parent / ".git" / "packed-refs"
-                        if packed.exists():
-                            for line in packed.read_text(encoding="utf-8").splitlines():
-                                if ref[5:].strip() in line:
-                                    commit_hash = line.split()[0][:7]
-                                    break
-                else:
-                    commit_hash = ref[:7]
+            import subprocess
+            commit_hash = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=str(Path(__file__).resolve().parent),
+                    stderr=subprocess.DEVNULL,
+                    timeout=2,
+                )
+                .decode()
+                .strip()
+            )
         except Exception:
             pass
         return {

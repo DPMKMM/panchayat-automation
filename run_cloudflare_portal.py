@@ -170,8 +170,8 @@ def main():
     # 3. Launch Cloudflare Tunnel
     if TUNNEL_TOKEN:
         print("[*] Launching permanent Cloudflare Zero Trust tunnel with your connector token...")
-        # Remotely managed Zero Trust tunnels require clean 'tunnel run --token <TOKEN>'
-        cf_cmd = [str(CLOUDFLARED_EXE), "tunnel", "run", "--token", TUNNEL_TOKEN]
+        # Remotely managed Zero Trust tunnels require clean 'tunnel run --protocol http2 --token <TOKEN>'
+        cf_cmd = [str(CLOUDFLARED_EXE), "tunnel", "run", "--protocol", "http2", "--token", TUNNEL_TOKEN]
         cf_proc = subprocess.Popen(
             cf_cmd,
             cwd=str(BASE_DIR),
