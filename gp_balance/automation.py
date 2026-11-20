@@ -385,12 +385,24 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
 
             clicked = False
 
-            # Ensure search box is clear on Mandal Abstract table
+            # Ensure search box is clear on Mandal Abstract table for all mandals
             try:
+                iframe.evaluate("""() => {
+                    const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
+                    for (const inp of inps) {
+                        inp.value = "";
+                        inp.dispatchEvent(new Event('input', { bubbles: true }));
+                        inp.dispatchEvent(new Event('keyup', { bubbles: true }));
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                        try { window.$('table').DataTable().search('').draw(false); } catch(e) {}
+                    }
+                }""")
                 search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
                 if search_box.is_visible(timeout=800):
                     search_box.fill("")
-                    time.sleep(0.3)
+                time.sleep(0.3)
             except Exception:
                 pass
 
@@ -600,12 +612,24 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                             if restored:
                                 break
 
-                # Clear search input on restored Mandal table and re-expand page length to max
+                # Clear search input on restored Mandal table for all mandals and re-expand page length to max
                 try:
+                    iframe.evaluate("""() => {
+                        const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
+                        for (const inp of inps) {
+                            inp.value = "";
+                            inp.dispatchEvent(new Event('input', { bubbles: true }));
+                            inp.dispatchEvent(new Event('keyup', { bubbles: true }));
+                            inp.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                            try { window.$('table').DataTable().search('').draw(false); } catch(e) {}
+                        }
+                    }""")
                     search_box = iframe.locator("input[type='search'], .dataTables_filter input").first
-                    if search_box.is_visible(timeout=1000):
+                    if search_box.is_visible(timeout=800):
                         search_box.fill("")
-                        time.sleep(0.5)
+                    time.sleep(0.4)
 
                     iframe.evaluate("""() => {
                         const lenSel = document.querySelector(".dataTables_length select, select[name*='length' i], select[name*='entries' i]");
@@ -643,8 +667,20 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                         if (b) b.click();
                     }""")
                 time.sleep(1.5)
-            except Exception:
-                pass
+
+                # Clear lingering search filter on recovery across all mandals
+                iframe.evaluate("""() => {
+                    const inps = document.querySelectorAll("input[type='search'], .dataTables_filter input");
+                    for (const inp of inps) {
+                        inp.value = "";
+                        inp.dispatchEvent(new Event('input', { bubbles: true }));
+                        inp.dispatchEvent(new Event('keyup', { bubbles: true }));
+                        inp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    if (window.$ && window.$.fn && window.$.fn.dataTable) {
+                        try { window.$('table').DataTable().search('').draw(false); } catch(e) {}
+                    }
+                }""")
             except Exception:
                 pass
 
