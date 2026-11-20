@@ -18,7 +18,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 try:
     from gp_balance.models import (
@@ -121,7 +121,12 @@ def fetch_available_thursday_dates(bot) -> list[str]:
     return dates
 
 
-def run_balance_automation(bot, target_date: str = "", include_pmagy: bool = False) -> DistrictBalanceReport:
+def run_balance_automation(
+    bot,
+    target_date: str = "",
+    include_pmagy: bool = False,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> DistrictBalanceReport:
     """Executes the full automated scraping pipeline for GM-R 14.2."""
     page = bot.page
 
@@ -135,7 +140,13 @@ def run_balance_automation(bot, target_date: str = "", include_pmagy: bool = Fal
 
     page.on("dialog", on_dialog)
     try:
-        return _scrape_balance_report(bot, page, target_date=target_date, include_pmagy=include_pmagy)
+        return _scrape_balance_report(
+            bot,
+            page,
+            target_date=target_date,
+            include_pmagy=include_pmagy,
+            progress_callback=progress_callback,
+        )
     finally:
         try:
             page.remove_listener("dialog", on_dialog)
@@ -143,49 +154,81 @@ def run_balance_automation(bot, target_date: str = "", include_pmagy: bool = Fal
             pass
 
 
-def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool = False) -> DistrictBalanceReport:
+def _scrape_balance_report(
+    bot,
+    page,
+    target_date: str = "",
+    include_pmagy: bool = False,
+    progress_callback: Optional[Callable[[int, str], None]] = None,
+) -> DistrictBalanceReport:
+    def notify(pct: int, msg: str):
+        if progress_callback:
+            try:
+                progress_callback(pct, msg)
+            except Exception:
+                pass
+        print(f"[{pct}%] {msg}", flush=True)
+
+    notify(5, "Connecting to e-Panchayat GM-R 14.2 portal...")
     district_name = "District"
-    # 1. Select GP Monitoring
-    print("[*] Navigating to GP Monitoring -> GM-R 14.2...", flush=True)
-    bot.select_menu("GP Monitoring")
-    time.sleep(2.5)
 
     iframe = get_my_iframe(page)
-    if not iframe:
+    already_on_14_2 = False
+    if iframe:
+        try:
+            already_on_14_2 = iframe.evaluate("""() => {
+                const txt = (document.body ? document.body.innerText : '').toLowerCase();
+                const hasDateSelect = document.querySelector("select") !== null;
+                return (txt.includes("14.2") || txt.includes("data entered gps") || txt.includes("balance updated date")) && hasDateSelect;
+            }""")
+        except Exception:
+            pass
+
+    if not already_on_14_2:
+        # 1. Select GP Monitoring
+        print("[*] Navigating to GP Monitoring -> GM-R 14.2...", flush=True)
+        bot.select_menu("GP Monitoring")
         time.sleep(2)
+
         iframe = get_my_iframe(page)
-    if not iframe:
-        raise RuntimeError("Could not locate 'my-iframe' in portal.")
-
-    try:
-        iframe.wait_for_load_state("domcontentloaded", timeout=10000)
-    except Exception:
-        pass
-
-    # 2. Click Enlarge All
-    try:
-        enlarge_btn = iframe.locator("text='Enlarge All'").first
-        if enlarge_btn.is_visible(timeout=3000):
-            enlarge_btn.click()
-            time.sleep(1)
-    except Exception:
-        pass
-
-    # 3. Expand GM-R 14
-    try:
-        gmr14_header = iframe.locator("xpath=//*[contains(text(), 'Reports on Balances')] | text=Reports on Balances").first
-        if gmr14_header.is_visible(timeout=3000):
-            gmr14_header.click()
+        if not iframe:
             time.sleep(1.5)
-    except Exception:
-        pass
+            iframe = get_my_iframe(page)
+        if not iframe:
+            raise RuntimeError("Could not locate 'my-iframe' in portal.")
 
-    # 4. Click GM-R 14.2
-    link_14_2 = iframe.locator("a:has-text('14.2'), a:has-text('Report on Data Entered GPs')").first
-    link_14_2.wait_for(state="visible", timeout=12000)
-    link_14_2.click()
-    time.sleep(3)
+        try:
+            iframe.wait_for_load_state("domcontentloaded", timeout=8000)
+        except Exception:
+            pass
 
+        # 2. Click Enlarge All
+        try:
+            enlarge_btn = iframe.locator("text='Enlarge All'").first
+            if enlarge_btn.is_visible(timeout=2000):
+                enlarge_btn.click()
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+        # 3. Expand GM-R 14
+        try:
+            gmr14_header = iframe.locator("xpath=//*[contains(text(), 'Reports on Balances')] | text=Reports on Balances").first
+            if gmr14_header.is_visible(timeout=2000):
+                gmr14_header.click()
+                time.sleep(1)
+        except Exception:
+            pass
+
+        # 4. Click GM-R 14.2
+        link_14_2 = iframe.locator("a:has-text('14.2'), a:has-text('Report on Data Entered GPs')").first
+        link_14_2.wait_for(state="visible", timeout=12000)
+        link_14_2.click()
+        time.sleep(2)
+    else:
+        print("[*] Already on GM-R 14.2 form. Reusing view...", flush=True)
+
+    notify(15, "Selecting Thursday Balance Date...")
     # 5. Handle Thursday Date Selection
     available_dates = iframe.evaluate("""() => {
         const sel = document.querySelector("select");
@@ -208,7 +251,6 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
 
         selected_date_text = chosen_opt["text"]
         target_date_val = chosen_opt["value"]
-        val = target_date_val
         print(f"[+] Selecting Thursday Balance Date: {selected_date_text} (value={target_date_val})", flush=True)
 
         iframe.evaluate(f"""() => {{
@@ -218,16 +260,17 @@ def _scrape_balance_report(bot, page, target_date: str = "", include_pmagy: bool
                 sel.dispatchEvent(new Event('change', {{ bubbles: true }}));
             }}
         }}""")
-        time.sleep(1)
+        time.sleep(0.6)
     else:
         selected_date_text = target_date or datetime.now().strftime("%d-%m-%Y")
 
     # 6. Click Submit
+    notify(20, f"Loading Mandal Abstract for {selected_date_text}...")
     print("[*] Clicking 'Submit' button...", flush=True)
     submit_btn = iframe.locator("button:has-text('Submit'), input[value='Submit'], input[type='submit']").first
     submit_btn.wait_for(state="visible", timeout=10000)
     submit_btn.click()
-    time.sleep(4)
+    time.sleep(2.5)
 
     # 7. Ensure table entries dropdown shows all (select 32, 50, 100 or -1 All)
     try:

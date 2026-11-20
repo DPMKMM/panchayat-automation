@@ -308,6 +308,8 @@ def create_app() -> FastAPI:
         "AdbeRdr11007_en_US.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip",
         "DSC.Signer.Bundle.Softwares.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.exe",
         "DSC.Signer.Bundle.Softwares.Offline.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe",
+        "MicrosoftEdgeWebview2Setup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/MicrosoftEdgeWebview2Setup.exe",
+        "MicrosoftEdgeSetup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/MicrosoftEdgeSetup.exe",
     }
 
     @app.api_route("/download/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
