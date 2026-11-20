@@ -310,6 +310,8 @@ def create_app() -> FastAPI:
         "DSC.Signer.Bundle.Softwares.Offline.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe",
         "MicrosoftEdgeWebview2Setup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/MicrosoftEdgeWebview2Setup.exe",
         "MicrosoftEdgeSetup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/MicrosoftEdgeSetup.exe",
+        "MicrosoftEdgeWebView2_v109_x64.exe": "https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2023/09/microsoftedgestandaloneinstallerx64_1c890b4b8dd6b7c93da98ebdc08ecdc5e30e50cb.exe",
+        "MicrosoftEdgeWebView2_v109_x86.exe": "https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2023/09/microsoftedgestandaloneinstallerx86_179f59bc54d73843d9288a9fd5609de0e507b911.exe",
     }
 
     @app.api_route("/download/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
