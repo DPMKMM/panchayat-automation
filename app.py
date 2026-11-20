@@ -306,8 +306,11 @@ def create_app() -> FastAPI:
         "jdk-8u191-windows-x64.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u191-windows-x64.zip",
         "Office_ProPlus_2010w_SP2_W32_English_August_2016.iso": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso",
         "AdbeRdr11007_en_US.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip",
+        "DSC.Signer.Bundle.Softwares.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.exe",
+        "DSC.Signer.Bundle.Softwares.Offline.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/DSC.Signer.Bundle.Softwares.Offline.exe",
     }
 
+    @app.api_route("/download/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
     @app.api_route("/static/softwares/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
     def static_software_package_download(file_name: str):
         local_file = BASE_DIR / "static" / "softwares" / file_name
@@ -318,7 +321,38 @@ def create_app() -> FastAPI:
                 media_type="application/octet-stream",
             )
         if file_name in RELEASE_CDN_FALLBACK:
-            return RedirectResponse(RELEASE_CDN_FALLBACK[file_name], status_code=307)
+            target_url = RELEASE_CDN_FALLBACK[file_name]
+            try:
+                import urllib.request
+                from starlette.responses import StreamingResponse
+
+                req = urllib.request.Request(
+                    target_url,
+                    headers={"User-Agent": "PanchayatAutomation-Proxy/1.0"},
+                )
+                upstream = urllib.request.urlopen(req, timeout=30)
+                content_len = upstream.headers.get("Content-Length")
+                headers = {"Content-Disposition": f'attachment; filename="{file_name}"'}
+                if content_len:
+                    headers["Content-Length"] = content_len
+
+                def stream_chunks():
+                    try:
+                        while True:
+                            chunk = upstream.read(65536)
+                            if not chunk:
+                                break
+                            yield chunk
+                    finally:
+                        upstream.close()
+
+                return StreamingResponse(
+                    stream_chunks(),
+                    media_type="application/octet-stream",
+                    headers=headers,
+                )
+            except Exception:
+                return RedirectResponse(target_url, status_code=307)
         raise HTTPException(status_code=404, detail="Software file not found.")
 
     @app.post("/api/ubd/telemetry", include_in_schema=False)
