@@ -104,11 +104,16 @@ async function ensureReady() {
 async function consumeRedirectSignIn() {
   if (!firebaseAuth) return null;
   try {
-    const result = await getRedirectResult(firebaseAuth);
-    if (result && result.user) {
-      const idToken = await result.user.getIdToken(true);
-      return { idToken, user: result.user };
-    }
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+    const redirectPromise = (async () => {
+      const result = await getRedirectResult(firebaseAuth);
+      if (result && result.user) {
+        const idToken = await result.user.getIdToken(true);
+        return { idToken, user: result.user };
+      }
+      return null;
+    })();
+    return await Promise.race([redirectPromise, timeoutPromise]);
   } catch (err) {
     if (err && err.code && err.code !== 'auth/no-auth-event') {
       throw err;

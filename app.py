@@ -323,7 +323,7 @@ def create_app() -> FastAPI:
 
     @app.api_route("/download/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
     @app.api_route("/static/softwares/{file_name}", methods=["GET", "HEAD"], include_in_schema=False)
-    def static_software_package_download(file_name: str):
+    def static_software_package_download(file_name: str, request: Request):
         local_file = BASE_DIR / "static" / "softwares" / file_name
         if local_file.is_file():
             return FileResponse(
@@ -334,6 +334,8 @@ def create_app() -> FastAPI:
         lookup_name = file_name if file_name in RELEASE_CDN_FALLBACK else file_name.replace(" ", ".")
         if lookup_name in RELEASE_CDN_FALLBACK:
             target_url = RELEASE_CDN_FALLBACK[lookup_name]
+            if request.method == "HEAD":
+                return RedirectResponse(target_url, status_code=307)
             try:
                 import urllib.request
                 from starlette.responses import StreamingResponse
@@ -342,7 +344,7 @@ def create_app() -> FastAPI:
                     target_url,
                     headers={"User-Agent": "PanchayatAutomation-Proxy/1.0"},
                 )
-                upstream = urllib.request.urlopen(req, timeout=30)
+                upstream = urllib.request.urlopen(req, timeout=10)
                 content_len = upstream.headers.get("Content-Length")
                 headers = {"Content-Disposition": f'attachment; filename="{file_name}"'}
                 if content_len:
@@ -422,7 +424,7 @@ def create_app() -> FastAPI:
             )
         raise HTTPException(status_code=404, detail="Service worker not found.")
 
-    @app.get("/favicon.ico", include_in_schema=False)
+    @app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
     def favicon():
         fav_file = BASE_DIR / "static" / "favicon.ico"
         if fav_file.is_file():
@@ -431,6 +433,14 @@ def create_app() -> FastAPI:
         if fav_icon_file.is_file():
             return FileResponse(path=str(fav_icon_file), media_type="image/x-icon")
         raise HTTPException(status_code=404, detail="Favicon not found.")
+
+    @app.api_route("/apple-touch-icon.png", methods=["GET", "HEAD"], include_in_schema=False)
+    @app.api_route("/apple-touch-icon-precomposed.png", methods=["GET", "HEAD"], include_in_schema=False)
+    def apple_touch_icon():
+        icon_file = BASE_DIR / "static" / "icons" / "apple-touch-icon.png"
+        if icon_file.is_file():
+            return FileResponse(path=str(icon_file), media_type="image/png")
+        raise HTTPException(status_code=404, detail="Touch icon not found.")
 
     # Mount static files directory
     static_dir = BASE_DIR / "static"

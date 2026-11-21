@@ -671,6 +671,15 @@
         dashTitle: PLATFORM_NAME + ' · Tools & Utility Studios',
         dashSub: 'Launch spreadsheet converters, cleaners, banking formatters, and PDF utilities directly inside your workspace.',
       },
+      softwares: {
+        docTitle: 'Official Softwares & Drivers Hub | ' + PLATFORM_NAME,
+        chipText: 'Softwares & Drivers Hub',
+        showChip: true,
+        heroName: 'Official Softwares & Drivers Hub',
+        loginSub: 'Sign in with your Google account to access official software and driver tools',
+        dashTitle: PLATFORM_NAME + ' · Official Softwares & Drivers Hub',
+        dashSub: 'Official device drivers, biometric RD services, Java DSC environments, Telugu typing software, and government desktop utilities.',
+      },
     };
     var cfg = brandingMap[section] || {
       docTitle: PLATFORM_NAME,
@@ -682,7 +691,14 @@
       dashSub: 'Select a reporting module below to upload spreadsheets, analyze metrics, and generate official PDF and Excel outputs.',
     };
 
-    document.title = cfg.docTitle;
+    if (section === 'softwares') {
+      var currentTitle = (document.title || '').trim();
+      if (!currentTitle || currentTitle === PLATFORM_NAME || currentTitle === 'Panchayat Automation') {
+        document.title = cfg.docTitle;
+      }
+    } else {
+      document.title = cfg.docTitle;
+    }
     var displayInline = cfg.showChip ? 'inline-flex' : 'none';
     ['hero-console-chip', 'login-console-badge'].forEach(function (id) {
       var el = document.getElementById(id);

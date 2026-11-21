@@ -22,8 +22,27 @@
   <link rel="shortcut icon" href="/favicon.ico">
 
   <link rel="stylesheet" href="/static/css/common.css?v=17">
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1398778605171697"
-     crossorigin="anonymous"></script>
+  <!-- Google AdSense: Lazy-loaded after window.load so ad auctions and network connections never block the page load lifecycle or cause perpetual tab buffering -->
+  <script>
+    (function () {
+      function loadAdSense() {
+        if (window.__adsenseLoaded) return;
+        window.__adsenseLoaded = true;
+        var s = document.createElement('script');
+        s.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1398778605171697";
+        s.async = true;
+        s.crossOrigin = "anonymous";
+        document.head.appendChild(s);
+      }
+      if (document.readyState === 'complete') {
+        setTimeout(loadAdSense, 800);
+      } else {
+        window.addEventListener('load', function () {
+          setTimeout(loadAdSense, 800);
+        });
+      }
+    })();
+  </script>
   <style>
     /* Software Card Direct-Link Highlight Pulse Animation */
     @keyframes softwareCardGlow {
@@ -1101,7 +1120,7 @@
 
           <!-- Officer Profile Display (NO User Level) -->
           <div id="ribbon-officer-pill" class="ribbon-officer-pill" style="display:none; cursor:pointer;" onclick="window.openChangeDesignationModal()" title="Click to change your official designation">
-            <img id="ribbon-user-avatar" src="" alt="Officer Profile" class="ribbon-user-avatar" style="display:none;" onerror="this.style.display='none'; document.getElementById('ribbon-user-icon').style.display='inline';">
+            <img id="ribbon-user-avatar" alt="Officer Profile" class="ribbon-user-avatar" style="display:none;" onerror="this.style.display='none'; document.getElementById('ribbon-user-icon').style.display='inline';">
             <span id="ribbon-user-icon" class="ribbon-user-icon">👤</span>
             <div class="ribbon-user-info">
               <div class="ribbon-user-name-line">
@@ -1249,7 +1268,7 @@
           </div>
           <div class="mobile-officer-profile-card">
             <div class="mobile-officer-avatar-box">
-              <img id="mobile-user-avatar" src="" alt="Officer" style="display:none;" onerror="this.style.display='none'; document.getElementById('mobile-user-icon').style.display='inline';">
+              <img id="mobile-user-avatar" alt="Officer" style="display:none;" onerror="this.style.display='none'; document.getElementById('mobile-user-icon').style.display='inline';">
               <span id="mobile-user-icon" style="font-size:1.3rem;">👤</span>
             </div>
             <div class="mobile-officer-text-box">
@@ -5881,6 +5900,7 @@
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
       var cardTitle = card.getAttribute('data-software-title') || 'Selected Software';
+      document.title = cardTitle + ' | e-Panchayat Automation';
       window.showSoftwareToast('Viewing: ' + cardTitle);
 
       setTimeout(function () {

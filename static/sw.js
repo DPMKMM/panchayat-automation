@@ -1,14 +1,14 @@
 // Panchayat Automation Service Worker (PWA)
-const CACHE_NAME = 'panchayat-pwa-v1';
+const CACHE_NAME = 'panchayat-pwa-v2';
 const PRECACHE_ASSETS = [
   '/',
-  '/static/css/common.css',
-  '/static/manifest.json',
+  '/static/css/common.css?v=17',
+  '/manifest.json',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/apple-touch-icon.png',
   '/static/icons/favicon-32x32.png',
-  '/static/favicon.ico'
+  '/favicon.ico'
 ];
 
 // Install: Cache essential app shell

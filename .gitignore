@@ -59,9 +59,18 @@ scratch/
 *.pdf
 *.pptx
 *.ppt
+# Image exclusions with explicit static assets whitelist
 *.png
 *.jpg
 *.jpeg
+!static/icons/**
+!static/gov_assets/**
+!static/**/*.png
+!static/**/*.jpg
+!static/**/*.jpeg
+!static/**/*.svg
+!static/**/*.ico
+
 *.zip
 !static/softwares/*.zip
 !static/softwares/
