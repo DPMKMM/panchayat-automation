@@ -17,6 +17,61 @@ TOOLS_SECTION_NAME = "e-Panchayat Tools & Utilities Studio"
 SOFTWARES_SECTION_NAME = "e-Panchayat Official Softwares & Utilities"
 ADMIN_SECTION_NAME = "e-Panchayat Admin Control Center"
 
+SOFTWARE_SLUG_TITLES: dict[str, str] = {
+    "dscbundle": "DSC Signer Bundle Softwares",
+    "dsc-bundle": "DSC Signer Bundle Softwares",
+    "dsc": "DSC Signer Bundle Softwares",
+    "bundle": "DSC Signer Bundle Softwares",
+    "java": "Java Runtime Environment 8 (JRE)",
+    "jre": "Java Runtime Environment 8 (JRE)",
+    "java8": "Java Runtime Environment 8 (JRE)",
+    "jre8": "Java Runtime Environment 8 (JRE)",
+    "epass2003": "ePass2003 / HYP2003 PKI Client",
+    "epass": "ePass2003 / HYP2003 PKI Client",
+    "hyp2003": "ePass2003 / HYP2003 PKI Client",
+    "hyp": "ePass2003 / HYP2003 PKI Client",
+    "proxkey": "WatchData ProxKey Token Driver",
+    "watchdata": "WatchData ProxKey Token Driver",
+    "wdproxkey": "WatchData ProxKey Token Driver",
+    "nicdsign": "NIC nicDSign Component (eGramSwaraj)",
+    "digisigner": "UBD NIC DigiSigner Component",
+    "ubd": "UBD NIC DigiSigner Component",
+    "telugu": "Google Input Tools Telugu",
+    "telugu-ime": "Google Input Tools Telugu",
+    "googleinputtelugu": "Google Input Tools Telugu",
+    "fonts": "Official Telugu Fonts Pack",
+    "telugu-fonts": "Official Telugu Fonts Pack",
+    "acrobat": "Adobe Acrobat Reader DC",
+    "adobe": "Adobe Acrobat Reader DC",
+    "reader": "Adobe Acrobat Reader DC",
+    "openie": "Open Internet Explorer Utility",
+    "ie": "Open Internet Explorer Utility",
+    "internetexplorer": "Open Internet Explorer Utility",
+    "office": "Microsoft Office 2010 Pro Plus",
+    "office2010": "Microsoft Office 2010 Pro Plus",
+    "mantra": "Mantra MFS100 RD Service & Driver",
+    "mfs100": "Mantra MFS100 RD Service & Driver",
+    "morpho": "Morpho Safran MSO 1300 RD Service",
+    "safran": "Morpho Safran MSO 1300 RD Service",
+    "startek": "Startek FM220 / FM220U RD Service",
+    "fm220": "Startek FM220 / FM220U RD Service",
+    "secugen": "SecuGen Hamster Pro 20 RD Service",
+    "hamster": "SecuGen Hamster Pro 20 RD Service",
+}
+
+
+def _resolve_software_slug_title(path: str) -> str:
+    """Extract and resolve software title for deep-link /softwares/{slug} routes."""
+    clean = (path or "").strip().lower()
+    for prefix in ("/softwares/", "/software/"):
+        if clean.startswith(prefix):
+            slug = clean[len(prefix):].split("/")[0].strip()
+            if slug in SOFTWARE_SLUG_TITLES:
+                return SOFTWARE_SLUG_TITLES[slug]
+            if slug:
+                return slug.replace("-", " ").replace("_", " ").title()
+    return ""
+
 
 def _request_host_and_path(request: Any = None) -> tuple[str, str]:
     if request is None:
@@ -56,6 +111,8 @@ def is_softwares_host_request(request: Any = None) -> bool:
         or host.startswith("software.")
         or host.startswith("www.software.")
         or path in ("/softwares", "/software")
+        or path.startswith("/softwares/")
+        or path.startswith("/software/")
     )
 
 
@@ -254,16 +311,26 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
         )
 
     if is_softwares_host_request(request):
+        _, path = _request_host_and_path(request)
+        soft_title = _resolve_software_slug_title(path)
+        doc_title = f"{soft_title} | {PLATFORM_NAME}" if soft_title else f"Official Softwares | {PLATFORM_NAME}"
+        hero_brand = f"Official Software &bull; {soft_title}" if soft_title else SOFTWARES_SECTION_NAME
+        hero_dash = f"{PLATFORM_NAME} · {soft_title}" if soft_title else f"{PLATFORM_NAME} · Official Softwares &amp; Drivers"
+
         return _replace_pairs(
             html,
             (
                 (
+                    '<title id="doc-page-title">Panchayat Automation</title>',
+                    f'<title id="doc-page-title">{doc_title}</title>',
+                ),
+                (
                     '<title id="doc-page-title">e-Panchayat Automation</title>',
-                    f'<title id="doc-page-title">Official Softwares | {PLATFORM_NAME}</title>',
+                    f'<title id="doc-page-title">{doc_title}</title>',
                 ),
                 (
                     '<h1 class="gov-portal-main-brand" id="hero-platform-name">Welcome to Panchayat Automation</h1>',
-                    f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{SOFTWARES_SECTION_NAME}</h1>',
+                    f'<h1 class="gov-portal-main-brand" id="hero-platform-name">{hero_brand}</h1>',
                 ),
                 (
                     '<span id="hero-console-chip" style="display:none;',
@@ -283,7 +350,7 @@ def apply_portal_branding(html: str, request: Any = None) -> str:
                 ),
                 (
                     '<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">e-Panchayat Automation · Executive Report Modules</h1>',
-                    f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{PLATFORM_NAME} · Official Softwares &amp; Drivers</h1>',
+                    f'<h1 class="hero-title" id="dash-hero-title" style="margin-bottom:6px;">{hero_dash}</h1>',
                 ),
             ),
         )

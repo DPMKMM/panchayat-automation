@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <title id="doc-page-title">Panchayat Automation</title>
+  <meta name="description" id="meta-page-desc" content="Official software downloads, biometric RD services, Java DSC environments, Telugu typing tools, and government desktop utilities for Telangana e-Panchayat and eGramSwaraj.">
+  <meta property="og:title" id="og-page-title" content="Panchayat Automation">
+  <meta property="og:description" id="og-page-desc" content="Official software downloads, biometric RD services, Java DSC environments, and government desktop utilities.">
+  <meta property="og:type" content="website">
 
   <!-- Progressive Web App (PWA) Manifest & App Identity -->
   <link rel="manifest" href="/manifest.json">
@@ -21,6 +25,55 @@
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1398778605171697"
      crossorigin="anonymous"></script>
   <style>
+    /* Software Card Direct-Link Highlight Pulse Animation */
+    @keyframes softwareCardGlow {
+      0% {
+        box-shadow: 0 0 0 0 rgba(2, 132, 199, 0.7), 0 4px 20px rgba(0, 0, 0, 0.08);
+        transform: translateY(0);
+      }
+      50% {
+        box-shadow: 0 0 0 10px rgba(2, 132, 199, 0.25), 0 8px 30px rgba(2, 132, 199, 0.35);
+        transform: translateY(-4px);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(2, 132, 199, 0), 0 4px 20px rgba(0, 0, 0, 0.08);
+        transform: translateY(0);
+      }
+    }
+    .software-card.highlighted-target {
+      animation: softwareCardGlow 1.6s ease-in-out 3;
+      border: 2px solid #0284c7 !important;
+      position: relative;
+    }
+    .software-share-btn {
+      transition: all 0.2s ease-in-out;
+      cursor: pointer;
+    }
+    .software-share-btn:hover {
+      background: #e0f2fe !important;
+      border-color: #7dd3fc !important;
+      color: #0369a1 !important;
+    }
+    .software-quick-share-btn {
+      cursor: pointer;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: #475569;
+      font-size: 0.76rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .software-quick-share-btn:hover {
+      background: #e0f2fe;
+      border-color: #7dd3fc;
+      color: #0284c7;
+    }
+
     /* Fixed Top Navigation Ribbon: Executive Government Forest Emerald (#064e3b) + Elegant Accent Stripe */
     .site-top-ribbon {
       position: fixed;
@@ -2299,11 +2352,16 @@
 
           <div class="modules-grid" id="softwares-grid">
             <!-- 0. DSC Signer Bundle Softwares (All-In-One Suite) -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="dsc signer bundle softwares all-in-one automated installer epass2003 hyp2003 proxkey watchdata java jre 8 ubd pfms egramswaraj nicdsign adobe acrobat auto-updater" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.12);">
+            <div class="module-card featured software-card" id="software-card-dscbundle" data-software-slug="dscbundle" data-software-title="DSC Signer Bundle Softwares" data-category="dsc" data-keywords="dsc signer bundle softwares all-in-one automated installer epass2003 hyp2003 proxkey watchdata java jre 8 ubd pfms egramswaraj nicdsign adobe acrobat auto-updater" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.12);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔑</div>
-                  <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● All-In-One DSC Bundle</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">🔑</div>
+                    <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● All-In-One DSC Bundle</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('dscbundle', 'DSC Signer Bundle Softwares', this)" title="Copy direct link for DSC Bundle">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>DSC Signer Bundle Softwares</h3>
                 <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2325,14 +2383,22 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('dsc_bundle')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
                   📖 What's Included &amp; Setup Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('dscbundle', 'DSC Signer Bundle Softwares', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
             <!-- 1. Java Runtime Environment 8 (JRE) -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="java jre 8 runtime environment dsc digital signature pfms egramswaraj 32bit 64bit x86 x64 i586 jdk-8u351 jdk-8u191" style="border-color:#ea580c; box-shadow:0 6px 20px rgba(234,88,12,0.10);">
+            <div class="module-card featured software-card" id="software-card-java" data-software-slug="java" data-software-title="Java Runtime Environment 8 (JRE)" data-category="dsc" data-keywords="java jre 8 runtime environment dsc digital signature pfms egramswaraj 32bit 64bit x86 x64 i586 jdk-8u351 jdk-8u191" style="border-color:#ea580c; box-shadow:0 6px 20px rgba(234,88,12,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fff7ed; color:#ea580c;">☕</div>
-                  <span class="badge-pill-live" style="background:#fff7ed; color:#c2410c; border-color:#ffedd5;">● DSC Token Essential</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fff7ed; color:#ea580c;">☕</div>
+                    <span class="badge-pill-live" style="background:#fff7ed; color:#c2410c; border-color:#ffedd5;">● DSC Token Essential</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('java', 'Java Runtime Environment 8 (JRE)', this)" title="Copy direct link for Java JRE">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Java Runtime Environment 8 (JRE)</h3>
                 <div style="font-size:0.74rem; color:#ea580c; background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2354,15 +2420,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('java')" style="color:#ea580c; border-color:#fed7aa; background:#fff7ed;">
                   📖 Java Exception Sites &amp; DSC Setup Steps
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('java', 'Java Runtime Environment 8 (JRE)', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 6. ePass2003 / HYP2003 PKI Token Driver -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="epass2003 hyp2003 epass2003auto pki client token driver dsc digital signature dongle fips140-3 vsign" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
+            <div class="module-card featured software-card" id="software-card-epass2003" data-software-slug="epass2003" data-software-title="ePass2003 / HYP2003 PKI Client" data-category="dsc" data-keywords="epass2003 hyp2003 epass2003auto pki client token driver dsc digital signature dongle fips140-3 vsign" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fdf2f8; color:#db2777;">🔑</div>
-                  <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● DSC Token Middleware</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fdf2f8; color:#db2777;">🔑</div>
+                    <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● DSC Token Middleware</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('epass2003', 'ePass2003 / HYP2003 PKI Client', this)" title="Copy direct link for ePass2003">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>ePass2003 / HYP2003 PKI Client</h3>
                 <div style="font-size:0.74rem; color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2379,15 +2453,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('epass')" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8;">
                   📖 ePass2003 / HYP2003 Setup Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('epass2003', 'ePass2003 / HYP2003 PKI Client', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 7. WatchData ProxKey Token Driver -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="watchdata proxkey token driver dsc digital signature pfms egramswaraj fips140-3 vsign" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
+            <div class="module-card featured software-card" id="software-card-proxkey" data-software-slug="proxkey" data-software-title="WatchData ProxKey Token Driver" data-category="dsc" data-keywords="watchdata proxkey token driver dsc digital signature pfms egramswaraj fips140-3 vsign" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fdf2f8; color:#db2777;">🔑</div>
-                  <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● DSC Token Middleware</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fdf2f8; color:#db2777;">🔑</div>
+                    <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● DSC Token Middleware</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('proxkey', 'WatchData ProxKey Token Driver', this)" title="Copy direct link for WatchData ProxKey">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>WatchData ProxKey Token Driver</h3>
                 <div style="font-size:0.74rem; color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2407,15 +2489,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('proxkey')" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8;">
                   📖 ProxKey Configuration Steps
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('proxkey', 'WatchData ProxKey Token Driver', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 8. NIC nicDSign Component (eGramSwaraj DSC) -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="nicdsign nic dsign egramswaraj dsc digital signature component zip token signer fto voucher" style="border-color:#ea580c; box-shadow:0 6px 20px rgba(234,88,12,0.10);">
+            <div class="module-card featured software-card" id="software-card-nicdsign" data-software-slug="nicdsign" data-software-title="NIC nicDSign Component (eGramSwaraj)" data-category="dsc" data-keywords="nicdsign nic dsign egramswaraj dsc digital signature component zip token signer fto voucher" style="border-color:#ea580c; box-shadow:0 6px 20px rgba(234,88,12,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fff7ed; color:#ea580c;">🔑</div>
-                  <span class="badge-pill-live" style="background:#fff7ed; color:#c2410c; border-color:#ffedd5;">● eGramSwaraj DSC Signer</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fff7ed; color:#ea580c;">🔑</div>
+                    <span class="badge-pill-live" style="background:#fff7ed; color:#c2410c; border-color:#ffedd5;">● eGramSwaraj DSC Signer</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('nicdsign', 'NIC nicDSign Component (eGramSwaraj)', this)" title="Copy direct link for nicDSign">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>NIC nicDSign Component (eGramSwaraj)</h3>
                 <div style="font-size:0.74rem; color:#ea580c; background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2432,15 +2522,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('nicdsign')" style="color:#ea580c; border-color:#fed7aa; background:#fff7ed;">
                   📖 nicDSign Setup &amp; Service Restart Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('nicdsign', 'NIC nicDSign Component (eGramSwaraj)', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 10. NIC DigiSigner Component (UBD_newdigisigncomp.zip) -->
-            <div class="module-card featured software-card" data-category="dsc" data-keywords="nic digisigner new-nic-ap-digisigner ubd_newdigisigncomp msi dsc digital signature certificate signer epanchayat" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
+            <div class="module-card featured software-card" id="software-card-digisigner" data-software-slug="digisigner" data-software-title="UBD NIC DigiSigner Component" data-category="dsc" data-keywords="nic digisigner new-nic-ap-digisigner ubd_newdigisigncomp msi dsc digital signature certificate signer epanchayat" style="border-color:#db2777; box-shadow:0 6px 20px rgba(219,39,119,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fdf2f8; color:#db2777;">✍️</div>
-                  <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● UBD Drivers</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fdf2f8; color:#db2777;">✍️</div>
+                    <span class="badge-pill-live" style="background:#fdf2f8; color:#be185d; border-color:#fbcfe8;">● UBD Drivers</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('digisigner', 'UBD NIC DigiSigner Component', this)" title="Copy direct link for UBD DigiSigner">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>UBD NIC DigiSigner Component</h3>
                 <div style="font-size:0.74rem; color:#db2777; background:#fdf2f8; border:1px solid #fbcfe8; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2457,15 +2555,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('digisigner')" style="color:#db2777; border-color:#fbcfe8; background:#fdf2f8;">
                   📖 DigiSigner Setup Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('digisigner', 'UBD NIC DigiSigner Component', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 11. Google Input Tools Telugu -->
-            <div class="module-card featured software-card" data-category="telugu" data-keywords="google input tools telugu typing ime offline phonetic keyboard googleinputtelugu" style="border-color:#16a34a; box-shadow:0 6px 20px rgba(22,163,74,0.10);">
+            <div class="module-card featured software-card" id="software-card-telugu" data-software-slug="telugu" data-software-title="Google Input Tools Telugu" data-category="telugu" data-keywords="google input tools telugu typing ime offline phonetic keyboard googleinputtelugu" style="border-color:#16a34a; box-shadow:0 6px 20px rgba(22,163,74,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#f0fdf4; color:#16a34a;">⌨️</div>
-                  <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● Telugu Typing IME</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#f0fdf4; color:#16a34a;">⌨️</div>
+                    <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● Telugu Typing IME</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('telugu', 'Google Input Tools Telugu', this)" title="Copy direct link for Telugu IME">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Google Input Tools Telugu (Offline Installer)</h3>
                 <div style="font-size:0.74rem; color:#16a34a; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2482,15 +2588,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('telugu_ime')" style="color:#16a34a; border-color:#bbf7d0; background:#f0fdf4;">
                   📖 Offline Telugu IME Setup &amp; Shortcuts
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('telugu', 'Google Input Tools Telugu', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 12. Official Telugu Fonts Pack -->
-            <div class="module-card featured software-card" data-category="telugu" data-keywords="telugu fonts pothana2000 gautami unicode vani suranna ttf download" style="border-color:#16a34a; box-shadow:0 6px 20px rgba(22,163,74,0.10);">
+            <div class="module-card featured software-card" id="software-card-fonts" data-software-slug="fonts" data-software-title="Official Telugu Fonts Pack" data-category="telugu" data-keywords="telugu fonts pothana2000 gautami unicode vani suranna ttf download" style="border-color:#16a34a; box-shadow:0 6px 20px rgba(22,163,74,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#f0fdf4; color:#16a34a;">🔤</div>
-                  <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● Unicode Fonts Pack</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#f0fdf4; color:#16a34a;">🔤</div>
+                    <span class="badge-pill-live" style="background:#f0fdf4; color:#15803d; border-color:#bbf7d0;">● Unicode Fonts Pack</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('fonts', 'Official Telugu Fonts Pack', this)" title="Copy direct link for Telugu Fonts">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Official Telugu Fonts Pack (Pothana &amp; Gautami)</h3>
                 <div style="font-size:0.74rem; color:#16a34a; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2504,15 +2618,23 @@
                 <button type="button" class="btn btn-primary" onclick="openSoftwareHelpModal('fonts')" style="width:100%; text-align:center; background:linear-gradient(135deg, #16a34a 0%, #15803d 100%);">
                   📖 Font Installation &amp; Windows Setup Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('fonts', 'Official Telugu Fonts Pack', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 13. Adobe Acrobat Reader DC -->
-            <div class="module-card featured software-card" data-category="system" data-keywords="adobe acrobat reader dc adberdr11007 pdf dsc green tick signature verify certificate" style="border-color:#dc2626; box-shadow:0 6px 20px rgba(220,38,38,0.10);">
+            <div class="module-card featured software-card" id="software-card-acrobat" data-software-slug="acrobat" data-software-title="Adobe Acrobat Reader DC" data-category="system" data-keywords="adobe acrobat reader dc adberdr11007 pdf dsc green tick signature verify certificate" style="border-color:#dc2626; box-shadow:0 6px 20px rgba(220,38,38,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fef2f2; color:#dc2626;">📄</div>
-                  <span class="badge-pill-live" style="background:#fef2f2; color:#b91c1c; border-color:#fecaca;">● PDF &amp; DSC Verification</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fef2f2; color:#dc2626;">📄</div>
+                    <span class="badge-pill-live" style="background:#fef2f2; color:#b91c1c; border-color:#fecaca;">● PDF &amp; DSC Verification</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('acrobat', 'Adobe Acrobat Reader DC', this)" title="Copy direct link for Adobe Acrobat Reader">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Adobe Acrobat Reader DC</h3>
                 <div style="font-size:0.74rem; color:#dc2626; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2529,15 +2651,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('acrobat')" style="color:#dc2626; border-color:#fecaca; background:#fef2f2;">
                   📖 Digital Signature Green Tick Setup Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('acrobat', 'Adobe Acrobat Reader DC', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 14. Open Internet Explorer Utility (OpenInternetExplorer.zip) -->
-            <div class="module-card featured software-card" data-category="system" data-keywords="open internet explorer openinternetexplorer ie mode legacy activex java windows 10 windows 11 desktop utility" style="border-color:#2563eb; box-shadow:0 6px 20px rgba(37,99,235,0.10);">
+            <div class="module-card featured software-card" id="software-card-openie" data-software-slug="openie" data-software-title="Open Internet Explorer Utility" data-category="system" data-keywords="open internet explorer openinternetexplorer ie mode legacy activex java windows 10 windows 11 desktop utility" style="border-color:#2563eb; box-shadow:0 6px 20px rgba(37,99,235,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#eff6ff; color:#2563eb;">🌐</div>
-                  <span class="badge-pill-live" style="background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">● Legacy Browser Utility</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#eff6ff; color:#2563eb;">🌐</div>
+                    <span class="badge-pill-live" style="background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">● Legacy Browser Utility</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('openie', 'Open Internet Explorer Utility', this)" title="Copy direct link for Internet Explorer Utility">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Open Internet Explorer Utility (Windows 10 / 11)</h3>
                 <div style="font-size:0.74rem; color:#2563eb; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2554,15 +2684,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('open_ie')" style="color:#2563eb; border-color:#bfdbfe; background:#eff6ff;">
                   📖 Internet Explorer Utility Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('openie', 'Open Internet Explorer Utility', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 15. Microsoft Office 2010 Professional Plus (SP2) -->
-            <div class="module-card featured software-card" data-category="system" data-keywords="microsoft office 2010 pro plus professional sp2 service pack 2 word excel powerpoint access outlook offline iso installer august 2016 32bit w32" style="border-color:#d97706; box-shadow:0 6px 20px rgba(217,119,6,0.10);">
+            <div class="module-card featured software-card" id="software-card-office2010" data-software-slug="office2010" data-software-title="Microsoft Office 2010 Pro Plus" data-category="system" data-keywords="microsoft office 2010 pro plus professional sp2 service pack 2 word excel powerpoint access outlook offline iso installer august 2016 32bit w32" style="border-color:#d97706; box-shadow:0 6px 20px rgba(217,119,6,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#fffbeb; color:#d97706;">📑</div>
-                  <span class="badge-pill-live" style="background:#fffbeb; color:#b45309; border-color:#fde68a;">● Office &amp; Productivity</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#fffbeb; color:#d97706;">📑</div>
+                    <span class="badge-pill-live" style="background:#fffbeb; color:#b45309; border-color:#fde68a;">● Office &amp; Productivity</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('office2010', 'Microsoft Office 2010 Pro Plus', this)" title="Copy direct link for MS Office 2010">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Microsoft Office 2010 Pro Plus (SP2)</h3>
                 <div style="font-size:0.74rem; color:#d97706; background:#fffbeb; border:1px solid #fde68a; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2579,15 +2717,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('office_2010')" style="color:#d97706; border-color:#fde68a; background:#fffbeb;">
                   📖 ISO Mount &amp; Installation Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('office2010', 'Microsoft Office 2010 Pro Plus', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 11. Mantra MFS100 -->
-            <div class="module-card featured software-card" data-category="biometric" data-keywords="mantra mfs100 rd service driver biometric fingerprint aadhaar ekyc" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+            <div class="module-card featured software-card" id="software-card-mantra" data-software-slug="mantra" data-software-title="Mantra MFS100 RD Service & Driver" data-category="biometric" data-keywords="mantra mfs100 rd service driver biometric fingerprint aadhaar ekyc" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
-                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                    <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('mantra', 'Mantra MFS100 RD Service & Driver', this)" title="Copy direct link for Mantra MFS100">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Mantra MFS100 RD Service &amp; Driver</h3>
                 <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2604,15 +2750,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('mantra')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
                   📖 Installation &amp; Service Restart Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('mantra', 'Mantra MFS100 RD Service & Driver', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 12. Morpho Safran MSO 1300 -->
-            <div class="module-card featured software-card" data-category="biometric" data-keywords="morpho safran mso 1300 e2 e3 idemia rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+            <div class="module-card featured software-card" id="software-card-morpho" data-software-slug="morpho" data-software-title="Morpho Safran MSO 1300 RD Service" data-category="biometric" data-keywords="morpho safran mso 1300 e2 e3 idemia rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
-                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                    <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('morpho', 'Morpho Safran MSO 1300 RD Service', this)" title="Copy direct link for Morpho Safran MSO 1300">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Morpho Safran MSO 1300 E2/E3 RD Service</h3>
                 <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2629,15 +2783,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('morpho')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
                   📖 Morpho Setup &amp; Test Steps
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('morpho', 'Morpho Safran MSO 1300 RD Service', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 13. Startek FM220 -->
-            <div class="module-card featured software-card" data-category="biometric" data-keywords="startek acpl fm220 fm220u rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+            <div class="module-card featured software-card" id="software-card-startek" data-software-slug="startek" data-software-title="Startek FM220 RD Service" data-category="biometric" data-keywords="startek acpl fm220 fm220u rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
-                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                    <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('startek', 'Startek FM220 RD Service', this)" title="Copy direct link for Startek FM220">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>Startek FM220 / FM220U RD Service</h3>
                 <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2654,15 +2816,23 @@
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('startek')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
                   📖 Startek Setup Guide
                 </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('startek', 'Startek FM220 RD Service', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
+                </button>
               </div>
             </div>
 
             <!-- 14. SecuGen Hamster Pro 20 -->
-            <div class="module-card featured software-card" data-category="biometric" data-keywords="secugen hamster pro 20 rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
+            <div class="module-card featured software-card" id="software-card-secugen" data-software-slug="secugen" data-software-title="SecuGen Hamster Pro 20 RD Service" data-category="biometric" data-keywords="secugen hamster pro 20 rd service driver biometric" style="border-color:#0284c7; box-shadow:0 6px 20px rgba(2,132,199,0.10);">
               <div>
-                <div class="module-card-header">
-                  <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
-                  <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                <div class="module-card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="module-icon" style="background:#e0f2fe; color:#0284c7;">👆</div>
+                    <span class="badge-pill-live" style="background:#e0f2fe; color:#0369a1; border-color:#bae6fd;">● Biometric RD Service</span>
+                  </div>
+                  <button type="button" class="software-quick-share-btn" onclick="shareSoftwareLink('secugen', 'SecuGen Hamster Pro 20 RD Service', this)" title="Copy direct link for SecuGen Hamster Pro 20">
+                    🔗 Share
+                  </button>
                 </div>
                 <h3>SecuGen Hamster Pro 20 RD Service</h3>
                 <div style="font-size:0.74rem; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px; padding:4px 8px; margin:6px 0 10px; font-weight:700; display:inline-block;">
@@ -2678,6 +2848,9 @@
                 </a>
                 <button type="button" class="btn btn-outline btn-sm" onclick="openSoftwareHelpModal('secugen')" style="color:#0284c7; border-color:#bae6fd; background:#f0f9ff;">
                   📖 SecuGen Setup Guide
+                </button>
+                <button type="button" class="btn btn-outline btn-sm software-share-btn" onclick="shareSoftwareLink('secugen', 'SecuGen Hamster Pro 20 RD Service', this)" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:0.76rem; padding:7px 10px; border-radius:6px; border-color:#cbd5e1; color:#334155; background:#f8fafc; font-weight:700;">
+                  <span>🔗</span> <span>Share Direct Link</span>
                 </button>
               </div>
             </div>
@@ -5267,7 +5440,7 @@
 
   <script type="module" src="/static/js/firebase_auth.js?v=1"></script>
   <script src="/static/js/dept_session.js?v=6"></script>
-  <script src="/static/js/auth.js?v=31"></script>
+  <script src="/static/js/auth.js?v=32"></script>
   <script src="/static/js/console.js?v=28"></script>
   <script src="/static/js/admin.js?v=8"></script>
   <script>
@@ -5519,6 +5692,213 @@
       var modal = document.getElementById('software-help-modal');
       if (modal) modal.style.display = 'none';
     };
+
+    // Software Direct-Link Mapping & Aliases
+    var SOFTWARE_SLUG_MAP = {
+      'dscbundle': 'dscbundle',
+      'dsc-bundle': 'dscbundle',
+      'dsc': 'dscbundle',
+      'bundle': 'dscbundle',
+      'signer': 'dscbundle',
+
+      'java': 'java',
+      'jre': 'java',
+      'java8': 'java',
+      'jre8': 'java',
+
+      'epass2003': 'epass2003',
+      'epass': 'epass2003',
+      'hyp2003': 'epass2003',
+      'hyp': 'epass2003',
+
+      'proxkey': 'proxkey',
+      'watchdata': 'proxkey',
+      'wdproxkey': 'proxkey',
+
+      'nicdsign': 'nicdsign',
+      'egramswaraj': 'nicdsign',
+      'dsign': 'nicdsign',
+
+      'digisigner': 'digisigner',
+      'ubd': 'digisigner',
+      'newdigisigncomp': 'digisigner',
+
+      'telugu': 'telugu',
+      'telugu-ime': 'telugu',
+      'googleinputtelugu': 'telugu',
+      'telugutyping': 'telugu',
+
+      'fonts': 'fonts',
+      'telugu-fonts': 'fonts',
+      'pothana': 'fonts',
+      'gautami': 'fonts',
+
+      'acrobat': 'acrobat',
+      'adobe': 'acrobat',
+      'reader': 'acrobat',
+      'pdf': 'acrobat',
+
+      'openie': 'openie',
+      'ie': 'openie',
+      'internetexplorer': 'openie',
+
+      'office': 'office2010',
+      'office2010': 'office2010',
+      'msoffice': 'office2010',
+
+      'mantra': 'mantra',
+      'mfs100': 'mantra',
+
+      'morpho': 'morpho',
+      'safran': 'morpho',
+      'mso1300': 'morpho',
+
+      'startek': 'startek',
+      'fm220': 'startek',
+      'fm220u': 'startek',
+
+      'secugen': 'secugen',
+      'hamster': 'secugen'
+    };
+
+    window.showSoftwareToast = function (msg) {
+      var toast = document.getElementById('software-copy-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'software-copy-toast';
+        toast.style.cssText = 'position:fixed; top:70px; left:50%; transform:translateX(-50%); background:#0f172a; color:#f8fafc; font-size:0.86rem; font-weight:700; padding:10px 20px; border-radius:30px; box-shadow:0 10px 25px rgba(0,0,0,0.3); z-index:999999; display:flex; align-items:center; gap:8px; opacity:0; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events:none;';
+        document.body.appendChild(toast);
+      }
+      toast.innerHTML = '<span>🔗</span> <span>' + (msg || 'Link copied to clipboard!') + '</span>';
+      toast.style.opacity = '1';
+      toast.style.top = '78px';
+      clearTimeout(window._softToastTimer);
+      window._softToastTimer = setTimeout(function () {
+        toast.style.opacity = '0';
+        toast.style.top = '70px';
+      }, 3000);
+    };
+
+    window.shareSoftwareLink = async function (slug, title, btn) {
+      var origin = window.location.origin;
+      if (typeof window.isProdCustomDomain === 'function' && window.isProdCustomDomain()) {
+        origin = 'https://www.panchayatautomation.in';
+      }
+      var directUrl = origin + '/softwares/' + encodeURIComponent(slug);
+      var shareTitle = (title || 'Official Software') + ' | Panchayat Automation';
+      var shareText = 'Download ' + (title || 'Official Software') + ' directly from Panchayat Automation Hub:';
+
+      var copied = false;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(directUrl);
+          copied = true;
+        } catch (e) {}
+      }
+      if (!copied) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = directUrl;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          copied = true;
+        } catch (e) {}
+      }
+
+      if (btn) {
+        var origHtml = btn.innerHTML;
+        var origBg = btn.style.background;
+        var origColor = btn.style.color;
+        var origBorder = btn.style.borderColor;
+
+        btn.innerHTML = '<span>✅</span> <span>Link Copied!</span>';
+        btn.style.background = '#dcfce7';
+        btn.style.color = '#15803d';
+        btn.style.borderColor = '#86efac';
+
+        setTimeout(function () {
+          btn.innerHTML = origHtml;
+          btn.style.background = origBg;
+          btn.style.color = origColor;
+          btn.style.borderColor = origBorder;
+        }, 2500);
+      }
+
+      window.showSoftwareToast('Direct link copied: ' + directUrl);
+
+      if (navigator.share && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+        try {
+          await navigator.share({
+            title: shareTitle,
+            text: shareText,
+            url: directUrl
+          });
+        } catch (err) {}
+      }
+    };
+
+    window.handleSoftwareDirectLink = function () {
+      var path = (window.location.pathname || '').toLowerCase();
+      var rawSlug = '';
+      var prefixes = ['/softwares/', '/software/'];
+      for (var i = 0; i < prefixes.length; i++) {
+        var p = prefixes[i];
+        if (path.indexOf(p) === 0) {
+          rawSlug = path.substring(p.length).split('/')[0].trim();
+          break;
+        }
+      }
+      if (!rawSlug) {
+        var sp = new URLSearchParams(window.location.search || '');
+        rawSlug = (sp.get('software') || sp.get('soft') || sp.get('app') || '').trim().toLowerCase();
+      }
+      if (!rawSlug) return false;
+
+      var targetSlug = SOFTWARE_SLUG_MAP[rawSlug] || rawSlug;
+      var card = document.getElementById('software-card-' + targetSlug) ||
+                 document.querySelector('[data-software-slug="' + targetSlug + '"]');
+      if (!card) return false;
+
+      var allBtn = document.querySelector('#software-category-filters button[data-cat="all"]');
+      if (typeof window.filterSoftwaresCategory === 'function') {
+        window.filterSoftwaresCategory('all', allBtn);
+      }
+      var searchInp = document.getElementById('software-search-input');
+      if (searchInp && searchInp.value) {
+        searchInp.value = '';
+        if (typeof window.filterSoftwaresGrid === 'function') window.filterSoftwaresGrid();
+      }
+
+      document.querySelectorAll('.software-card.highlighted-target').forEach(function (c) {
+        c.classList.remove('highlighted-target');
+      });
+
+      card.classList.add('highlighted-target');
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      var cardTitle = card.getAttribute('data-software-title') || 'Selected Software';
+      window.showSoftwareToast('Viewing: ' + cardTitle);
+
+      setTimeout(function () {
+        card.classList.remove('highlighted-target');
+      }, 5000);
+
+      return true;
+    };
+
+    window.addEventListener('DOMContentLoaded', function () {
+      window.handleSoftwareDirectLink();
+    });
+    window.addEventListener('load', function () {
+      window.handleSoftwareDirectLink();
+    });
+    window.addEventListener('popstate', function () {
+      window.handleSoftwareDirectLink();
+    });
 
     // Automatic telemetry for Software and Driver downloads
     document.addEventListener('click', function (ev) {

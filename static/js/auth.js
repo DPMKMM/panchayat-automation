@@ -96,7 +96,7 @@
     }
     if (path === '/manualreports') return 'manual';
     if (path === '/tools' || path.indexOf('/tools/') === 0) return 'tools';
-    if (path === '/softwares' || path.indexOf('/softwares/') === 0 || path === '/software') return 'softwares';
+    if (path === '/softwares' || path.indexOf('/softwares/') === 0 || path === '/software' || path.indexOf('/software/') === 0) return 'softwares';
     return null;
   };
 
@@ -2145,7 +2145,8 @@
       var btnSwitchMode = document.getElementById('btn-switch-workspace-mode');
       var toolsSec = document.getElementById('tools-modules-section');
       var softwaresSec = document.getElementById('softwares-modules-section');
-      if (!profileDone) {
+      var onSoftwaresRoute = (typeof window.getDedicatedPageSection === 'function' && window.getDedicatedPageSection() === 'softwares');
+      if (!profileDone && !onSoftwaresRoute) {
         if (btnDeptLogin) btnDeptLogin.style.display = 'none';
         if (btnDisconn) btnDisconn.style.display = 'none';
         if (globalBar) globalBar.style.display = 'none';
@@ -2159,6 +2160,25 @@
         if (dcbSec) dcbSec.style.display = 'none';
         if (dash) dash.style.display = 'none';
         window.applyScreenVisualState('state-home-login', user);
+      } else if (!profileDone && onSoftwaresRoute) {
+        if (btnDeptLogin) btnDeptLogin.style.display = 'none';
+        if (btnDisconn) btnDisconn.style.display = 'none';
+        if (globalBar) globalBar.style.display = 'none';
+        if (officerBanner) officerBanner.style.display = 'none';
+        if (modeSel) modeSel.style.display = 'none';
+        if (btnSwitchMode) btnSwitchMode.style.display = 'none';
+        if (portalSec) portalSec.style.display = 'none';
+        if (consoleSec) consoleSec.style.display = 'none';
+        if (toolsSec) toolsSec.style.display = 'none';
+        if (dcbSec) dcbSec.style.display = 'none';
+        if (heroCard) heroCard.style.display = 'none';
+        if (dash) dash.style.display = 'block';
+        if (softwaresSec) softwaresSec.style.display = 'block';
+        if (dashBadge) dashBadge.textContent = '💻 Official Softwares & Drivers';
+        window.applyScreenVisualState('state-softwares-page', user);
+        if (typeof window.handleSoftwareDirectLink === 'function') {
+          setTimeout(function () { window.handleSoftwareDirectLink(); }, 120);
+        }
       } else {
         if (globalBar) globalBar.style.display = 'flex';
         var activeMode = window.currentWorkspaceMode;
@@ -2224,6 +2244,9 @@
           if (btnDeptLogin) btnDeptLogin.style.display = sessionStorage.getItem('epts_portal_auth') === 'true' ? 'inline-flex' : 'none';
           if (dashBadge) dashBadge.textContent = '💻 Official Softwares & Drivers';
           window.applyScreenVisualState('state-softwares-page', user);
+          if (typeof window.handleSoftwareDirectLink === 'function') {
+            setTimeout(function () { window.handleSoftwareDirectLink(); }, 100);
+          }
         } else {
           if (modeSel) modeSel.style.display = 'block';
           if (portalSec) portalSec.style.display = 'none';
@@ -2352,8 +2375,12 @@
     }
     try {
       if (window.history && typeof window.history.pushState === 'function' && !(options && options.fromInit)) {
-        var path = m === 'automated' ? '/autoreports' : (m === 'tools' ? '/tools' : (m === 'softwares' ? '/softwares' : '/manualreports'));
-        window.history.pushState(null, '', path);
+        var currentPath = (window.location.pathname || '').toLowerCase();
+        var isSoftwareSub = m === 'softwares' && (currentPath.indexOf('/softwares/') === 0 || currentPath.indexOf('/software/') === 0);
+        if (!isSoftwareSub) {
+          var path = m === 'automated' ? '/autoreports' : (m === 'tools' ? '/tools' : (m === 'softwares' ? '/softwares' : '/manualreports'));
+          window.history.pushState(null, '', path);
+        }
       }
     } catch (e) {}
     var isDirectClick = Boolean(options && options.isDirectClick);

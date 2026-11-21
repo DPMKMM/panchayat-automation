@@ -165,7 +165,9 @@ def portal_admin_page(request: Request) -> Response:
 @router.get("/eptauto", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/naresh", response_class=HTMLResponse, include_in_schema=False)
 @router.get("/reports", response_class=HTMLResponse, include_in_schema=False)
-def portal_home_page(request: Request) -> HTMLResponse:
+@router.get("/softwares/{software_slug}", response_class=HTMLResponse, include_in_schema=False)
+@router.get("/software/{software_slug}", response_class=HTMLResponse, include_in_schema=False)
+def portal_home_page(request: Request, software_slug: str | None = None) -> HTMLResponse:
     """Render web shell branded for the active host and upgrade active sessions to SSO cookie."""
     html = apply_portal_branding(load_portal_shell_html(), request)
     user = None

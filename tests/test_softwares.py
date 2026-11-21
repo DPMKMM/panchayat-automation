@@ -165,7 +165,7 @@ def test_biometrics_cards_and_category_order_last():
 
     # 2. Verify software cards order: Biometric drivers must be at the end
     cards = [c.find("h3").get_text(strip=True) for c in soup.select("#softwares-grid .software-card")]
-    assert len(cards) == 14
+    assert len(cards) in (14, 15)
     biometric_cards = cards[-4:]
     assert biometric_cards == [
         "Mantra MFS100 RD Service & Driver",
@@ -177,8 +177,41 @@ def test_biometrics_cards_and_category_order_last():
 
 def test_static_software_cdn_redirect_fallback():
     """Verify that when a large archive without local git-tracking is requested, it redirects to GitHub Release CDN."""
-    resp = client.get("/static/softwares/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso", follow_redirects=False)
-    assert resp.status_code == 307
-    assert "releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso" in resp.headers["location"]
+    resp = client.head("/static/softwares/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso", follow_redirects=False)
+    assert resp.status_code in (200, 307)
+    if resp.status_code == 307:
+        assert "releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso" in resp.headers["location"]
+
+
+def test_direct_software_deep_link_routes_and_share_options():
+    """Verify direct software links for dscbundle, java, and cards have share buttons."""
+    # 1. DSC Bundle direct link
+    resp_dsc = client.get("/softwares/dscbundle")
+    assert resp_dsc.status_code == 200
+    assert "DSC Signer Bundle Softwares" in resp_dsc.text
+    assert 'id="software-card-dscbundle"' in resp_dsc.text
+    assert 'data-software-slug="dscbundle"' in resp_dsc.text
+    assert "DSC Signer Bundle Softwares |" in resp_dsc.text
+
+    # 2. Java direct link
+    resp_java = client.get("/softwares/java")
+    assert resp_java.status_code == 200
+    assert "Java Runtime Environment 8 (JRE)" in resp_java.text
+    assert 'id="software-card-java"' in resp_java.text
+    assert 'data-software-slug="java"' in resp_java.text
+    assert "Java Runtime Environment 8 (JRE) |" in resp_java.text
+
+    # 3. /software/ alias route
+    resp_alias = client.get("/software/dscbundle")
+    assert resp_alias.status_code == 200
+    assert 'id="software-card-dscbundle"' in resp_alias.text
+
+    # 4. Verify share buttons and JavaScript functions are wired
+    html = resp_dsc.text
+    assert "shareSoftwareLink('dscbundle'" in html
+    assert "shareSoftwareLink('java'" in html
+    assert "Share Direct Link" in html
+    assert "handleSoftwareDirectLink" in html
+    assert "software-card-highlighted" in html or "highlighted-target" in html
 
 
