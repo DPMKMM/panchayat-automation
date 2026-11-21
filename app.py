@@ -306,6 +306,8 @@ def create_app() -> FastAPI:
         "jdk-8u191-windows-x64.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/jdk-8u191-windows-x64.zip",
         "Office_ProPlus_2010w_SP2_W32_English_August_2016.iso": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/Office_ProPlus_2010w_SP2_W32_English_August_2016.iso",
         "AdbeRdr11007_en_US.zip": "https://github.com/DPMKMM/panchayat-automation/releases/download/softwares-v1/AdbeRdr11007_en_US.zip",
+        "dotNetFx40_Full_x86_x64.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/dotNetFx40_Full_x86_x64.exe",
+        "dotNetFx40_Full_setup.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/dotNetFx40_Full_x86_x64.exe",
         "ndp48-web.exe": "https://github.com/DPMKMM/panchayat-automation/releases/download/sofotware_bundle/ndp48-web.exe",
         "ndp48-offline.exe": "https://download.microsoft.com/download/f/3/a/f3a6af84-da23-40a5-8d1c-49cc10c8e76f/NDP48-x86-x64-AllOS-ENU.exe",
         "NDP48-x86-x64-AllOS-ENU.exe": "https://download.microsoft.com/download/f/3/a/f3a6af84-da23-40a5-8d1c-49cc10c8e76f/NDP48-x86-x64-AllOS-ENU.exe",
