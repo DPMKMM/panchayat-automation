@@ -1,6 +1,6 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Update v1.0.5: Native Win32 Universal Bootstrapper. Opens instantly on Windows 7, 8, 10, and 11 without requiring any .NET Framework pre-installed. Automatically provisions Microsoft .NET Framework 4.8 seamlessly."
+  "releaseNotes": "Update v1.0.6: Native Win32 Universal Bootstrapper. Zero .NET prerequisite on startup. Strictly preserves all existing DSC signers, NICD signers, eGramSwaraj, and PFMS tools on the computer. Never uninstalls or removes third-party signers, folders, services, or shortcuts."
 }
