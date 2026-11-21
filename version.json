@@ -1,6 +1,6 @@
 {
   "version": "1.0.7",
-  "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
-  "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
+  "downloadUrl": "http://www.panchayatautomation.in/download/DSC_Signer_Bundle_Softwares.exe",
+  "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC_Signer_Bundle_Softwares_Offline.exe",
   "releaseNotes": "Update v1.0.7: Re-targeted managed core payload for pure .NET Framework 4.0 (v4.0.30319) with native Win32 bootstrapper. Native bootstrapper checks for .NET 4.0 and provisions dotNetFx40_Full_x86_x64.exe on vanilla Windows 7 out-of-the-box. Strictly preserves all existing DSC signers, NICD signers, eGramSwaraj, and PFMS tools on the computer."
 }
