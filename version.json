@@ -1,6 +1,6 @@
 {
-  "version": "1.0.4",
+  "version": "1.0.5",
   "downloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.exe",
   "offlineDownloadUrl": "http://www.panchayatautomation.in/download/DSC.Signer.Bundle.Softwares.Offline.exe",
-  "releaseNotes": "Update v1.0.4: Streamlined UBD Digital Signer Edition (Telangana). Removed NICDSign 3.1.3, Edge & WebView2 for lightweight, rock-solid UBD Portal digital signature operations."
+  "releaseNotes": "Update v1.0.5: Native Win32 Universal Bootstrapper. Opens instantly on Windows 7, 8, 10, and 11 without requiring any .NET Framework pre-installed. Automatically provisions Microsoft .NET Framework 4.8 seamlessly."
 }
